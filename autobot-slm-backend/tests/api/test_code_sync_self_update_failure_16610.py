@@ -28,6 +28,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _code_sync_import import import_code_sync  # noqa: E402
 
@@ -193,3 +195,44 @@ def test_reconcile_keeps_the_self_update_failure_reason() -> None:
     assert stage.message == _SUMMARY, "the reconcile step overwrote the self-update's reason"
     assert job.failure_reason == _SUMMARY
     fleet.assert_not_awaited()
+
+
+def test_a_wait_cut_by_the_slm_restart_keeps_the_plan_and_the_stage() -> None:
+    """#19139: the waiter's -SIGTERM is this process restarting, not the run failing."""
+    job = _new_job()
+    cut = AsyncMock(
+        return_value={"success": False, "output": "", "returncode": -15, "timed_out": False, "detached": True}
+    )
+
+    mocks = _run_self_update(_fire_slm_stage(job), cut)
+
+    assert _get_stage(job, "slm_self_update").status == _StageStatus.RUNNING
+    assert job.status == "running"
+    mocks.clear_plan.assert_not_awaited()
+    mocks.summarize.assert_not_called()
+    mocks.version.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("returncode", "timed_out", "detached"),
+    [(2, False, True), (-9, True, True), (-1, False, True), (-15, True, True), (-15, False, False)],
+    ids=["unit-exit-code", "timeout-kill", "refused", "sigterm-on-timeout", "attached-sigterm"],
+)
+def test_a_real_failure_still_clears_the_plan_and_fails_the_stage(returncode, timed_out, detached) -> None:
+    """An ATTACHED run (no detach possible) is ansible itself dying on the SIGTERM -- a real failure."""
+    job = _new_job()
+    failed = AsyncMock(
+        return_value={
+            "success": False,
+            "output": _REFUSAL_OUTPUT,
+            "returncode": returncode,
+            "timed_out": timed_out,
+            "detached": detached,
+        }
+    )
+
+    mocks = _run_self_update(_fire_slm_stage(job), failed)
+
+    assert _get_stage(job, "slm_self_update").status == _StageStatus.FAILED
+    assert job.status == "failed"
+    mocks.clear_plan.assert_awaited_once()

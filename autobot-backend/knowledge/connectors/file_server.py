@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_file_names import is_secret_file_name
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -27,27 +28,15 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from utils.file_categorization import SKIP_DIRS
+from utils.file_types import TEXT_FILE_EXTENSIONS
 from utils.text_chunking import chunk_text
 
 logger = get_logger(__name__)
 
-# File extensions this connector can read as plain text
-_SUPPORTED_EXTENSIONS = {
-    ".txt",
-    ".md",
-    ".json",
-    ".csv",
-    ".py",
-    ".html",
-    ".htm",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".rst",
-    ".xml",
-}
+# File extensions this connector can read as plain text: the canonical text set
+# (utils.file_types). Binary office formats are NOT in it; see _SKIP_EXTENSIONS.
+_SUPPORTED_EXTENSIONS = TEXT_FILE_EXTENSIONS
 
 # Extensions we recognise but skip with an explicit warning
 _SKIP_EXTENSIONS = {".pdf", ".docx", ".doc", ".xls", ".xlsx", ".pptx"}
@@ -89,14 +78,14 @@ class FileServerConnector(AbstractConnector):
         super().__init__(config)
         cfg = config.config
         self._base_path = Path(cfg.get("base_path", ""))
-        self._include_patterns: List[str] = cfg.get(
-            "include_patterns",
-            ["**/*.txt", "**/*.md", "**/*.json", "**/*.csv", "**/*.py", "**/*.html"],
-        )
-        self._exclude_patterns: List[str] = cfg.get(
-            "exclude_patterns",
-            ["**/node_modules/**", "**/.git/**", "**/__pycache__/**"],
-        )
+        # Default discovery follows the canonical text set, so every readable suffix is found (#19339).
+        default_include = [f"*{ext}" for ext in sorted(_SUPPORTED_EXTENSIONS)]  # fnmatch * spans /, root too
+        self._include_patterns: List[str] = cfg.get("include_patterns", default_include)
+        # Default excludes: the canonical skip dirs (as whole path components, so a
+        # root-level `node_modules/` is caught too) and minified bundles. An explicit
+        # `exclude_patterns` replaces both: the operator then owns the list (#19339).
+        self._exclude_patterns: List[str] = cfg.get("exclude_patterns", ["*.min.*"])
+        self._skip_dirs = frozenset() if "exclude_patterns" in cfg else SKIP_DIRS
         self._max_size_bytes: int = int(cfg.get("max_file_size_mb", 10)) * 1024 * 1024
 
     # ------------------------------------------------------------------
@@ -167,7 +156,13 @@ class FileServerConnector(AbstractConnector):
         return any(fnmatch.fnmatch(rel_path, pat) for pat in self._include_patterns)
 
     def _matches_exclude(self, rel_path: str) -> bool:
-        """Return True if rel_path matches any exclude pattern."""
+        """Return True if rel_path is under a skipped dir, names a secret, or matches an exclude pattern.
+
+        A secret-shaped file name is skipped always, even under an explicit exclude list: default
+        discovery reads every text suffix, so ``credentials.json`` would otherwise be ingested (#19339).
+        """
+        if self._skip_dirs.intersection(Path(rel_path).parts[:-1]) or is_secret_file_name(Path(rel_path).name):
+            return True
         return any(fnmatch.fnmatch(rel_path, pat) for pat in self._exclude_patterns)
 
     def _build_source_id(self, file_path: Path) -> str:

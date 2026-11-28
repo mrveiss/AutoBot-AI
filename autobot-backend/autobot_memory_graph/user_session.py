@@ -21,6 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
+from .owner_scope import UNSCOPED_ALL_USERS, OwnerScope
 
 logger = get_logger(__name__)
 
@@ -61,12 +62,17 @@ class UserSessionMixin:
         user_id: str,
         username: str,
         metadata: Dict[str, Any] | None = None,
+        *,
+        org_id: str | None = None,
     ) -> Dict[str, Any]:
         """Create or get a user entity. Issue #620."""
         self.ensure_initialized()
 
         try:
-            existing = await self.search_entities(query=user_id, entity_type="user", limit=1)
+            owner = OwnerScope.for_user(
+                user_id, org_id
+            )  # #18825: a user entity belongs to that user (in the principal's org)
+            existing = await self.search_entities(query=user_id, entity_type="user", limit=1, owner=owner)
             if existing:
                 logger.debug("User entity already exists for %s", username)
                 return existing[0]
@@ -78,6 +84,7 @@ class UserSessionMixin:
                 observations=[f"User account created: {username}"],
                 metadata=user_metadata,
                 tags=["user", "account"],
+                owner=owner,
             )
             logger.info("Created user entity for %s (id: %s)", username, user_id)
             return entity
@@ -147,6 +154,8 @@ class UserSessionMixin:
         title: str | None = None,
         collaborators: List[str] | None = None,
         metadata: Dict[str, Any] | None = None,
+        *,
+        org_id: str | None = None,
     ) -> Dict[str, Any]:
         """Create a chat session entity with user ownership tracking.
 
@@ -172,6 +181,7 @@ class UserSessionMixin:
                 observations=[f"Session created by user {owner_id}"],
                 metadata=session_metadata,
                 tags=["session", "chat"],
+                owner=OwnerScope.for_user(owner_id, org_id),  # #18825
             )
             await self._create_session_owner_relations(owner_id, entity["id"])
             await self._create_collaborator_relations(entity["id"], collaborators)
@@ -233,6 +243,8 @@ class UserSessionMixin:
         user_id: str,
         activity_type: str,
         secrets_used: List[str] | None,
+        *,
+        org_id: str | None = None,
     ) -> None:
         """Issue #665: Create secret usage relationships and audit trail."""
         if not secrets_used:
@@ -248,6 +260,7 @@ class UserSessionMixin:
                 user_id=user_id,
                 activity_type=activity_type,
                 activity_id=entity_id,
+                org_id=org_id,
             )
 
     async def create_activity_entity(
@@ -258,6 +271,8 @@ class UserSessionMixin:
         content: str,
         secrets_used: List[str] | None = None,
         metadata: Dict[str, Any] | None = None,
+        *,
+        org_id: str | None = None,
     ) -> Dict[str, Any]:
         """Create an activity entity within a chat session.
 
@@ -285,9 +300,12 @@ class UserSessionMixin:
                 observations=[content],
                 metadata=activity_metadata,
                 tags=["activity", activity_type.replace("_activity", "")],
+                owner=OwnerScope.for_user(
+                    user_id, org_id
+                ),  # #18825: the acting principal, never an unvetted body field
             )
             await self._create_activity_relations(session_id, entity["id"], user_id)
-            await self._create_secret_usage_relations(entity["id"], user_id, activity_type, secrets_used)
+            await self._create_secret_usage_relations(entity["id"], user_id, activity_type, secrets_used, org_id=org_id)
             logger.info("Created %s entity for session %s", activity_type, session_id)
             return entity
 
@@ -303,7 +321,8 @@ class UserSessionMixin:
         """
         Get all sessions for a user.
 
-        Issue #608: Returns both owned sessions and collaborative sessions.
+        Issue #608: Returns both owned sessions and collaborative sessions. A graph
+        failure is logged and re-raised, never turned into an empty list (#18825).
 
         Args:
             user_id: User ID to query
@@ -313,37 +332,45 @@ class UserSessionMixin:
             List of session entities
         """
         self.ensure_initialized()
-
         try:
-            sessions = []
-
-            owned_relations = await self.get_relations(
-                entity_id=user_id,
-                relation_types=["owns", "has_session"],
-                direction="outgoing",
-            )
-
-            for rel in owned_relations.get("relations", []):
-                session = await self.get_entity(entity_id=rel["to"])
-                if session and session.get("metadata", {}).get("session_id"):
-                    sessions.append(session)
-
+            sessions = await self._owned_sessions(user_id)
             if include_collaborative:
-                collab_sessions = await self.search_entities(
-                    query=user_id,
-                    entity_type="chat_session",
-                    limit=100,
-                )
-                for session in collab_sessions:
-                    collaborators = session.get("metadata", {}).get("collaborators", [])
-                    if user_id in collaborators and session not in sessions:
-                        sessions.append(session)
-
+                sessions.extend(await self._collaborative_sessions(user_id, sessions))
             return sessions
-
         except Exception as e:
             logger.error("Failed to get user sessions: %s", e)
-            return []
+            raise
+
+    async def _owned_sessions(self: AutoBotMemoryGraphCore, user_id: str) -> List[Dict[str, Any]]:
+        """Sessions reached over the user's own owns/has_session edges; the edge is the authorization."""
+        owned_relations = await self.get_relations(
+            entity_id=user_id,
+            relation_types=["owns", "has_session"],
+            direction="outgoing",
+            owner=UNSCOPED_ALL_USERS,  # the user's own edges; the edge is the authorization
+        )
+        sessions = []
+        for rel in owned_relations.get("relations", []):
+            session = await self.get_entity(entity_id=rel["to"], owner=UNSCOPED_ALL_USERS)
+            if session and session.get("metadata", {}).get("session_id"):
+                sessions.append(session)
+        return sessions
+
+    async def _collaborative_sessions(
+        self: AutoBotMemoryGraphCore, user_id: str, already: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Sessions listing ``user_id`` as a collaborator, not already in ``already``.
+
+        Authorised by the explicit collaborators check, not by ownership, so this one
+        read is deliberately unscoped (#18825).
+        """
+        candidates = await self.search_entities(
+            query=user_id,
+            entity_type="chat_session",
+            limit=100,
+            owner=UNSCOPED_ALL_USERS,
+        )
+        return [s for s in candidates if user_id in s.get("metadata", {}).get("collaborators", []) and s not in already]
 
     def _activity_matches_filters(
         self: AutoBotMemoryGraphCore,
@@ -397,11 +424,13 @@ class UserSessionMixin:
             entity_id=session_id,
             relation_types=["has_activity"],
             direction="outgoing",
+            owner=UNSCOPED_ALL_USERS,  # edges of a session the caller already resolved
         )
 
         activities = []
         for rel in relations.get("relations", []):
-            activity = await self.get_entity(entity_id=rel["to"])
+            # Following has_activity edges of a session the caller already resolved: the edge is the authorization.
+            activity = await self.get_entity(entity_id=rel["to"], owner=UNSCOPED_ALL_USERS)
             if not activity:
                 continue
 
@@ -447,5 +476,6 @@ class UserSessionMixin:
             return activities
 
         except Exception as e:
+            # Re-raised: an empty list here read as "no activities" while the graph was down (#18825).
             logger.error("Failed to get session activities: %s", e)
-            return []
+            raise

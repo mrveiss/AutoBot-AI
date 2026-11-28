@@ -10,7 +10,7 @@ October 2025 until #16275, although ``.gitignore`` listed it. Three gaps let it
 through, and the assertions below close one each:
 
 * **The CI step never read the root.** It grepped three shapes inside three
-  directories. The ``secret-detection`` job in ``security.yml`` now scans every
+  directories. The ``secret-detection`` job in ``_gate-security.yml`` now scans every
   tracked file on every event, ungated by any path filter.
 * **The scanner that should have run never did.** ``.secrets.baseline`` sat in
   the tree with no hook and no workflow behind it. The detect-secrets hook is
@@ -59,7 +59,7 @@ _FLOOR_GATE = _REPO_ROOT / "pipeline-scripts" / "secrets_rescan_floor.py"
 _FLOOR_HEADROOM = 100
 _PRE_COMMIT = _REPO_ROOT / ".pre-commit-config.yaml"
 _BASELINE = _REPO_ROOT / ".secrets.baseline"
-_SECURITY_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "security.yml"
+_SECURITY_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "_gate-security.yml"
 _COMMITTED_KEY = ".infra_encryption_key"
 _HOOK_REPO_URL = "https://github.com/Yelp/detect-secrets"
 _RELEASE_TAG = re.compile(r"^v?(\d+\.\d+\.\d+)$")
@@ -83,24 +83,14 @@ def _tracked(root: Path) -> list[str]:
 #:
 #: The floor's job is to catch a COLLAPSED enumeration (a broken glob, an
 #: inherited GIT_DIR, an empty tree) rather than to track growth, so it sits far
-#: below the live population on purpose, mid-window: roughly as many files may
-#: be deleted before it bites as may be added before `growth` does.
+#: below the live population on purpose; it is computed from the base commit (#19676).
 #:
-#: `growth` is how far the population may grow before reach_declarations_test
-#: asks for the floor to be raised -- a maintenance interval chosen by judgement,
-#: not measured. No `skips`: the tree holds no symlink or gitlink in this
+#: `growth` is how far a PR may shrink the population below the base before the
+#: floor fails -- an allowance chosen by judgement, not measured. No `skips`: the tree holds no symlink or gitlink in this
 #: enumeration, so every listed path is a file the sweep reads.
-#:
-#: NO MEASURED NUMBERS IN THIS COMMENT, deliberately (#17384): a population
-#: written here survives the merge that changes it, and a floor comment that
-#: accumulates one paragraph per re-pin is how four of these files ended up
-#: describing branches that no longer exist. The arithmetic for the current pin
-#: is in the commit message, which cannot drift from the tree it describes.
-#: Re-derive rather than trusting any figure written here.
 REACH = declare(
     "tracked-key-material",
     discover=_tracked,
-    floor=10_400,
     growth=800,
     what="tracked files of any extension",
 )
@@ -238,7 +228,7 @@ def test_the_scanner_is_one_version_everywhere() -> None:
     rev, _hook = _detect_secrets_entry()
     baseline_version = json.loads(_BASELINE.read_text(encoding="utf-8"))["version"]
     ci_pins = re.findall(r"detect-secrets==(\d+\.\d+\.\d+)", _SECURITY_WORKFLOW.read_text(encoding="utf-8"))
-    assert ci_pins, "security.yml no longer installs a pinned detect-secrets"
+    assert ci_pins, "_gate-security.yml no longer installs a pinned detect-secrets"
     release = _RELEASE_TAG.match(rev)
     hook_version = release.group(1) if release else rev
     assert {hook_version, *ci_pins} == {baseline_version}, (hook_version, ci_pins, baseline_version)
@@ -299,7 +289,7 @@ def test_findings_are_counted_from_a_planted_baseline() -> None:
 def test_ci_scans_every_tracked_file_on_every_event() -> None:
     """Ungated: a path filter keyed on file types would skip an extensionless dotfile."""
     job = yaml.safe_load(_SECURITY_WORKFLOW.read_text(encoding="utf-8"))["jobs"].get("secret-detection")
-    assert job is not None, "security.yml has no secret-detection job"
+    assert job is not None, "_gate-security.yml has no secret-detection job"
     assert "needs" not in job and "if" not in job, "secret-detection must run on every event, ungated"
     runs = "\n".join(step.get("run", "") for step in job["steps"])
     assert "git ls-files -z | python3 pipeline-scripts/tracked_key_material.py" in runs

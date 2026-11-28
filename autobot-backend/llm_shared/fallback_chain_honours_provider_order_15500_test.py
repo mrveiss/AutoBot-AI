@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 from autobot_shared.llm_provider_order import ORDER_ENV_VAR
+from autobot_shared.ssot_claude_models import CLAUDE_OPUS
 from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 
 
@@ -95,9 +96,9 @@ def test_the_shipped_cross_provider_chain_still_reaches_ollama_by_default(
     """No behaviour change to the chains the manager ships with."""
     manager = FallbackChainManager()
 
-    assert manager.get_next_fallback("claude-opus-4-cross") == ("gpt-4o", "openai")
+    assert manager.get_next_fallback(f"{CLAUDE_OPUS}-cross") == ("gpt-4o", "openai")
 
-    chain = manager.get_chain("claude-opus-4-cross")
+    chain = manager.get_chain(f"{CLAUDE_OPUS}-cross")
     assert chain is not None
     assert chain.get_next_fallback("gpt-4o") == ("ollama/llama3", "ollama")
 
@@ -115,7 +116,7 @@ def test_the_shipped_cross_provider_chain_loses_its_local_tail_under_full_provid
     monkeypatch.setenv(ORDER_ENV_VAR, "anthropic,openai")
     manager = FallbackChainManager()
 
-    chain = manager.get_chain("claude-opus-4-cross")
+    chain = manager.get_chain(f"{CLAUDE_OPUS}-cross")
     assert chain is not None
     assert chain.get_next_fallback("gpt-4o") == ("ollama/llama3", "ollama")
     assert manager._first_permitted(chain, "gpt-4o") is None

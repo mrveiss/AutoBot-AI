@@ -181,3 +181,23 @@ def report_dead_surface(dead: list, pin: str = None) -> list:
             fh.write(_summary_markdown(dead, split, gui, pin_lines))
 
     return lines
+
+
+def baseline_health_lines(health: dict) -> list:
+    """Lines reporting what the unwired-call baseline is absorbing (#12738); non-gating, the exit code is unchanged."""
+    rematch, resolved, absent = health["rematch"], health["resolved"], health["absent"]
+    namespace_only = health["namespace_only"]
+    lines = [
+        f"\n== BASELINE HEALTH: {len(rematch)} renamed, "
+        f"{len(namespace_only)} namespace-only, "
+        f"{len(resolved)} resolved, {len(absent)} no-longer-called =="
+    ]
+    for path, suggestions in rematch:
+        lines.append(f"  RENAMED ENDPOINT (rewire the caller)  {path}")
+        lines += [f"      ->  now served by {suggestion}" for suggestion in suggestions]
+    for path, suggestions in namespace_only:
+        lines.append(f"  NAMESPACE ALIVE, NO MATCHING ROUTE  {path}")
+        lines += [f"      ~  nearest, NOT a rename: {suggestion}" for suggestion in suggestions]
+    lines += [f"  RESOLVED (prune from baseline)  {path}" for path, _ in resolved]
+    lines += [f"  NO LONGER CALLED (prune from baseline)  {path}" for path, _ in absent]
+    return lines

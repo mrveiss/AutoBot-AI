@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -105,10 +106,11 @@ onMounted(fetchGoals)
   <div class="p-4 max-w-5xl mx-auto">
     <h1 class="text-2xl font-bold text-autobot-text-primary mb-6">{{ t('llc.goals.title') }}</h1>
 
-    <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
-      {{ error }}
-      <button class="ml-4 underline" @click="fetchGoals">{{ t('llc.goals.retry') }}</button>
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error">
+      <template #actions>
+        <button class="underline" @click="fetchGoals">{{ t('llc.goals.retry') }}</button>
+      </template>
+    </BaseAlert>
 
     <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.goals.loading') }}</div>
 

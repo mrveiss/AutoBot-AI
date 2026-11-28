@@ -9,7 +9,7 @@ Provides endpoints for LLM agents to access system context and capabilities
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
@@ -26,11 +26,15 @@ from api.schemas_agent import (
     QueryAnalysisRequest,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_self_awareness import get_llm_self_awareness
 
-router = APIRouter()
+# #16375: no user-scoped data and no frontend caller — this is the operator's view
+# of what the platform can do, plus a prompt-context injector and an exporter that
+# writes to disk and returns the path. Admin, matching api/error_monitoring.py.
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for context level validation (Issue #326)

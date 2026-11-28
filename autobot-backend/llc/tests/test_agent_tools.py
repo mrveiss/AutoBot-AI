@@ -93,13 +93,24 @@ async def test_create_task_calls_work_item_service_with_authed_actor():
     item = MagicMock(id=uuid.uuid4())
     svc = MagicMock()
     svc.create = AsyncMock(return_value=item)
-    with p, patch("llc.services.work_item_service.WorkItemService", return_value=svc):
+    with p, patch("llc.services.accessors.get_work_item_service", return_value=svc):
         out = await dispatch_llc_tool("create_task", {"title": "Write Q3 report", "priority": "high"}, _COMPANY, _USER)
     assert out["status"] == "success" and out["entity_type"] == "work_item"
     assert svc.create.await_args.kwargs["company_id"] == _COMPANY
     assert svc.create.await_args.kwargs["title"] == "Write Q3 report"
     # #11501 review: audit actor = authenticated user, not LLM params.
     assert svc.create.await_args.kwargs["created_by_user_id"] == _USER
+
+
+@pytest.mark.asyncio
+async def test_create_task_malformed_hierarchy_id_is_tool_error():
+    """A malformed project_id/parent_id (UUID parse ValueError) is a structured tool error."""
+    p, _ = _patch_session()
+    svc = MagicMock()
+    svc.create = AsyncMock(side_effect=ValueError("badly formed hexadecimal UUID string"))
+    with p, patch("llc.services.work_item_service.WorkItemService", return_value=svc):
+        with pytest.raises(LLCToolError, match="invalid project_id or parent_id"):
+            await dispatch_llc_tool("create_task", {"title": "T", "parent_id": "not-a-uuid"}, _COMPANY, _USER)
 
 
 @pytest.mark.asyncio

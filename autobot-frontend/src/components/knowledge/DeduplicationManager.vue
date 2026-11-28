@@ -191,7 +191,7 @@ import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeDeduplication } from '@/composables/knowledge/useKnowledgeDeduplication'
 
@@ -322,12 +322,14 @@ const cleanupOrphans = async () => {
   color: var(--text-secondary);
 }
 
-.scanning-state i,
-.error-state i,
-.initial-state i {
-  font-size: var(--text-5xl);
+.scanning-state .icon,
+.error-state .icon,
+.initial-state .icon {
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   display: block;
+  margin-inline: auto;
 }
 
 .error-state {
@@ -470,7 +472,7 @@ const cleanupOrphans = async () => {
   color: var(--color-success);
 }
 
-.kept-fact i {
+.kept-fact .icon {
   color: var(--color-success);
 }
 

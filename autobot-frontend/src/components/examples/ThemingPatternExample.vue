@@ -1,14 +1,14 @@
 /**
  * AutoBot - Theming Pattern Example Component
  * Copyright (c) 2025 mrveiss
- * 
+ *
  * Issue #7453: Tech-debt(frontend/css) — Canonical theming pattern audit
- * 
+ *
  * This component demonstrates the canonical CSS theming pattern:
  * 1. Use Tailwind utilities for layout (flex, grid, p-4, etc.)
  * 2. Use CSS design tokens for all colors, spacing, typography
  * 3. Use scoped styles for component-specific behavior only
- * 
+ *
  * DO NOT USE THIS COMPONENT IN PRODUCTION
  * This is a documentation/reference component only.
  */
@@ -220,12 +220,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-8);
-  
+
   /* Spacing and colors from tokens */
   padding: var(--spacing-6);
   background: var(--bg-primary);
   color: var(--text-primary);
-  
+
   /* Typography from tokens */
   font-family: var(--font-sans);
   line-height: var(--leading-normal);
@@ -267,12 +267,12 @@
 .card {
   /* Spacing from tokens */
   padding: var(--card-padding);
-  
+
   /* Colors from tokens */
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
-  
+
   /* Elevation from tokens */
   box-shadow: var(--card-shadow);
 }
@@ -282,7 +282,7 @@
   padding-bottom: var(--spacing-4);
   margin-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--border-subtle);
-  
+
   /* Typography from tokens */
   color: var(--text-primary);
 }
@@ -344,17 +344,17 @@
   /* Sizing from tokens */
   height: var(--btn-height-md);
   padding: 0 var(--btn-padding-x-md);
-  
+
   /* Typography from tokens */
   font-size: var(--btn-font-size-md);
   font-weight: var(--font-medium);
   font-family: inherit;
-  
+
   /* Styling from tokens */
   border: none;
   border-radius: var(--btn-radius);
   cursor: pointer;
-  
+
   /* Transitions from tokens */
   transition: var(--transition-colors);
 }
@@ -382,7 +382,7 @@
 }
 
 .btn-danger {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -549,17 +549,17 @@
   /* Sizing from tokens */
   height: var(--input-height-md);
   padding: 0 var(--input-padding-x);
-  
+
   /* Colors and borders from tokens */
   background: var(--input-bg);
   color: var(--text-primary);
   border: 1px solid var(--input-border);
   border-radius: var(--input-radius);
-  
+
   /* Typography from tokens */
   font-family: inherit;
   font-size: var(--text-base);
-  
+
   /* Transitions from tokens */
   transition: var(--transition-colors);
 }

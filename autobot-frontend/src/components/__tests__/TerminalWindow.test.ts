@@ -255,8 +255,8 @@ describe('TerminalWindow', () => {
       // i18n keys are returned as-is since no messages are loaded in the
       // default test i18n; check for the key fallback text
       expect(screen.getByText(/terminal\.window\.titlePrefix/)).toBeInTheDocument()
-      expect(screen.getByText(/🛑 KILL/)).toBeInTheDocument()
-      expect(screen.getByText(/⚡ INT/)).toBeInTheDocument()
+      expect(screen.getByTestId('emergency-kill-button')).toBeInTheDocument()
+      expect(screen.getByTestId('interrupt-button')).toBeInTheDocument()
       expect(screen.getByText('🔄')).toBeInTheDocument()
       expect(screen.getByText('🗑️')).toBeInTheDocument()
     })
@@ -274,15 +274,15 @@ describe('TerminalWindow', () => {
       renderTerminal()
 
       // Kill button disabled because no running processes
-      const killButton = screen.getByText(/🛑 KILL/)
+      const killButton = screen.getByTestId('emergency-kill-button')
       expect(killButton.closest('button')).toBeDisabled()
 
       // Interrupt button disabled because no active process
-      const intButton = screen.getByText(/⚡ INT/)
+      const intButton = screen.getByTestId('interrupt-button')
       expect(intButton.closest('button')).toBeDisabled()
 
       // Pause button disabled because no automated workflow
-      const pauseButton = screen.getByText(/⏸️ PAUSE/)
+      const pauseButton = screen.getByTestId('takeover-button')
       expect(pauseButton.closest('button')).toBeDisabled()
     })
 
@@ -361,21 +361,21 @@ describe('TerminalWindow', () => {
     it('kill button is disabled when no processes are running', () => {
       renderTerminal()
 
-      const killButton = screen.getByText(/🛑 KILL/).closest('button')
+      const killButton = screen.getByTestId('emergency-kill-button').closest('button')
       expect(killButton).toBeDisabled()
     })
 
     it('interrupt button is disabled when no active process', () => {
       renderTerminal()
 
-      const intButton = screen.getByText(/⚡ INT/).closest('button')
+      const intButton = screen.getByTestId('interrupt-button').closest('button')
       expect(intButton).toBeDisabled()
     })
 
     it('pause button is disabled when no automated workflow', () => {
       renderTerminal()
 
-      const pauseButton = screen.getByText(/⏸️ PAUSE/).closest('button')
+      const pauseButton = screen.getByTestId('takeover-button').closest('button')
       expect(pauseButton).toBeDisabled()
     })
 
@@ -466,21 +466,21 @@ describe('TerminalWindow', () => {
     it('kill button has emergency kill title', () => {
       renderTerminal()
 
-      const killButton = screen.getByText(/🛑 KILL/).closest('button')
+      const killButton = screen.getByTestId('emergency-kill-button').closest('button')
       expect(killButton).toHaveAttribute('title', 'terminal.window.emergencyKillTitle')
     })
 
     it('interrupt button has interrupt title', () => {
       renderTerminal()
 
-      const intButton = screen.getByText(/⚡ INT/).closest('button')
+      const intButton = screen.getByTestId('interrupt-button').closest('button')
       expect(intButton).toHaveAttribute('title', 'terminal.window.interruptProcess')
     })
 
     it('pause button has pause automation title', () => {
       renderTerminal()
 
-      const pauseButton = screen.getByText(/⏸️ PAUSE/).closest('button')
+      const pauseButton = screen.getByTestId('takeover-button').closest('button')
       expect(pauseButton).toHaveAttribute('title', 'terminal.window.pauseAutomation')
     })
 
@@ -531,14 +531,14 @@ describe('TerminalWindow', () => {
     it('applies correct classes to control buttons', () => {
       renderTerminal()
 
-      const killButton = screen.getByText(/🛑 KILL/).closest('button')
+      const killButton = screen.getByTestId('emergency-kill-button').closest('button')
       expect(killButton?.classList.contains('emergency-kill')).toBe(true)
       expect(killButton?.classList.contains('control-button')).toBe(true)
 
-      const intButton = screen.getByText(/⚡ INT/).closest('button')
+      const intButton = screen.getByTestId('interrupt-button').closest('button')
       expect(intButton?.classList.contains('interrupt')).toBe(true)
 
-      const pauseButton = screen.getByText(/⏸️ PAUSE/).closest('button')
+      const pauseButton = screen.getByTestId('takeover-button').closest('button')
       expect(pauseButton?.classList.contains('takeover')).toBe(true)
 
       const closeButton = screen.getByText('✕').closest('button')

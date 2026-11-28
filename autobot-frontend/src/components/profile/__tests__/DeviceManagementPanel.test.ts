@@ -120,4 +120,18 @@ describe('DeviceManagementPanel pairing entry point', () => {
     // Without this the newly paired device never appears until a manual reload.
     expect(fetchDevices.mock.calls.length).toBe(callsAfterMount + 1)
   })
+
+  it('shows how long ago a device was seen with its number, from the kit (#19606)', async () => {
+    // The translated keys read "Minutes ago" with no number; the kit's relative time carries it.
+    const seen = (msAgo: number) => new Date(Date.now() - msAgo).toISOString()
+    devices.value = [
+      { id: 'd1', device_name: 'Phone', platform: 'ios', created_at: '2026-01-01T00:00:00Z', last_seen_at: seen(5 * 60_000) },
+      { id: 'd2', device_name: 'Tablet', platform: 'ios', created_at: '2026-01-01T00:00:00Z', last_seen_at: seen(3 * 3_600_000) },
+    ]
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('5m ago')
+    expect(wrapper.text()).toContain('3h ago')
+    expect(wrapper.text()).not.toMatch(/Minutes ago|Hours ago/)
+  })
 })

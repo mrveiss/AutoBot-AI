@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ChatController } from '../ChatController'
+import { RequestTimeoutError } from '@autobot/ui'
 import * as chatRepository from '@/models/repositories'
 import { useChatStore } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
@@ -319,6 +320,59 @@ describe('ChatController', () => {
       expect(setGlobalError).toHaveBeenCalledWith(
         i18n.global.t('chat.errors.networkFailed')
       )
+    })
+
+    it('surfaces the timeout message for the kit client RequestTimeoutError', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        sendReadyStore() as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      // The message is replaced so only the class can mark it as the client's timeout.
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockRejectedValue(
+        Object.assign(new RequestTimeoutError(30000), { message: 'slow' })
+      )
+      ;(controller as unknown as { retryDelay: number }).retryDelay = 0
+
+      await expect(controller.sendMessage('hello')).rejects.toBeInstanceOf(RequestTimeoutError)
+
+      expect(setGlobalError).toHaveBeenCalledWith(i18n.global.t('chat.errors.timeout'))
+    })
+
+    it('does not report a plain Error whose message says timeout as a timeout', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        sendReadyStore() as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockRejectedValue(new Error('timeout'))
+      ;(controller as unknown as { retryDelay: number }).retryDelay = 0
+
+      await expect(controller.sendMessage('hello')).rejects.toBeTruthy()
+
+      expect(setGlobalError).toHaveBeenCalledTimes(1)
+      expect(setGlobalError).not.toHaveBeenCalledWith(i18n.global.t('chat.errors.timeout'))
+    })
+
+    it('surfaces the timeout message for a TimeoutError carried as the cause of a re-wrapped rejection', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        sendReadyStore() as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      // A rejection that is not an Error instance is re-wrapped by the retry loop; its type must survive as cause.
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockRejectedValue({ name: 'TimeoutError' })
+      ;(controller as unknown as { retryDelay: number }).retryDelay = 0
+
+      await expect(controller.sendMessage('hello')).rejects.toBeTruthy()
+
+      expect(setGlobalError).toHaveBeenCalledWith(i18n.global.t('chat.errors.timeout'))
     })
   })
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from .inventory import get_inventory_reporter
 from .port_scanner import get_listening_ports
 
 
@@ -62,6 +63,7 @@ def build_heartbeat_payload(
     code_version: str | None,
     role_detector: Any,
     definitions_loaded: bool,
+    heartbeat_interval_s: int | None = None,
 ) -> Dict:
     """
     Build the complete heartbeat payload.
@@ -72,6 +74,8 @@ def build_heartbeat_payload(
         code_version: Current code version hash.
         role_detector: Detector used to build the role report.
         definitions_loaded: Whether role definitions have been fetched yet.
+        heartbeat_interval_s: This agent's heartbeat interval; the SLM sizes its
+            self-heartbeat stand-down window from it (#19292).
 
     Returns:
         Dictionary payload matching HeartbeatRequest schema.
@@ -84,6 +88,8 @@ def build_heartbeat_payload(
         "uptime_seconds": health.get("uptime_seconds", 0),
         "hostname": health.get("hostname"),
     }
+    if heartbeat_interval_s:
+        extra_data["heartbeat_interval_s"] = int(heartbeat_interval_s)
     # #16280: forwarded only when the collector probed, so an absent key keeps
     # meaning "this agent does not report GPUs" and [] keeps meaning "none present".
     if "gpu" in health:
@@ -94,6 +100,8 @@ def build_heartbeat_payload(
         extra_data["total_ram_mb"] = health["total_ram_mb"]
         extra_data["npu_present"] = health["npu_present"]
         extra_data["free_disk_model_dir_mb"] = health["free_disk_model_dir_mb"]
+    # #22277: the inventory hash always; the full package/command list only when it changed or is due.
+    extra_data.update(get_inventory_reporter().report())
     return {
         "cpu_percent": health.get("cpu_percent", 0.0),
         "memory_percent": health.get("memory_percent", 0.0),
@@ -105,3 +113,8 @@ def build_heartbeat_payload(
         "listening_ports": build_listening_ports_list(),  # Issue #779
         "extra_data": extra_data,
     }
+
+
+def confirm_inventory(payload: Dict[str, Any], response: Dict[str, Any]) -> None:
+    """Tell the inventory reporter the SLM accepted *payload*; ``inventory_ack`` in *response* says it stored it."""
+    get_inventory_reporter().confirm(payload["extra_data"], True, response.get("inventory_ack"))

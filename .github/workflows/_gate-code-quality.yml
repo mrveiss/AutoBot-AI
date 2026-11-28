@@ -1,0 +1,745 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# GitHub Actions workflow for code quality enforcement
+# Runs on every push and pull request
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Code Quality (reusable body)
+
+on:
+  workflow_call:
+    secrets:
+      CONVENTIONS_DENYLIST:
+        description: "Org-internal convention denylist, read by the conventions step"
+        required: false
+    outputs:
+      ok:
+        description: "'true' only when every step of the audit passed"
+        value: ${{ jobs.audit.outputs.ok }}
+
+permissions:
+  contents: read
+  # #15333: the open-alert ceiling below reads code-scanning alerts.
+  security-events: read
+
+jobs:
+  audit:
+    name: Code Quality Audit
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    # It is the slowest job in the set (~601s self-hosted, unmeasured hosted --
+    # #15395 tracks recording the delta) and single unsharded, so it gives up
+    # no parallelism either way.
+    runs-on: ubuntu-latest
+    # Fail fast rather than GitHub's ~360min default (#11077).
+    #
+    # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
+    # runner against a small diff, and it does not generalise: this job's work
+    # scales with the number of changed files, and self-hosted hardware is slower
+    # than the hosted image. The release PR (2195 files) was CANCELLED at exactly
+    # 30m19s — a self-inflicted failure that looked like a real one.
+    #
+    # 60 still fails fast against GitHub's ~360min default, while leaving room for
+    # a full release-sized diff. Revisit from a measurement on THIS runner class
+    # and a large diff, not from a hosted small-diff number.
+    # 180 is a MEASUREMENT BOUND, not a considered limit — see below before
+    # lowering it to a number that feels tidier.
+    #
+    # This value has been wrong twice. 30 came from a ~601s average measured on a
+    # GitHub-hosted runner against a small diff; the release PR was cancelled at
+    # 30m19s. 60 was the same mistake with a bigger number; it was cancelled again
+    # at 60m00s. Both readings were taken from a workload that does not resemble
+    # the one that fails.
+    #
+    # What the evidence actually shows is two populations, not one:
+    #
+    #   push on main, small diff    10m54s   success
+    #   pull_request into release, 2195 files >60m     cancelled (twice)
+    #
+    # This job's cost scales with the number of changed files, so normal work
+    # finishes in ~11 minutes and only a release-sized promotion is pathological.
+    # The true ceiling for that case is unknown, because the job has never been
+    # allowed to finish.
+    #
+    # 180 exists to let exactly one release run complete and produce that number.
+    # Once it does, set this from THAT measurement — on this runner class, against
+    # a release-sized diff — and record it here. Do not re-derive it from a small
+    # diff again.
+    timeout-minutes: 180
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        # Required, not cosmetic (#13880). The default fetch-depth: 1 leaves the
+        # PR base commit out of the clone, so every changed-files step here
+        # diffed against a missing object, treated the fatal as "no changes",
+        # and went green having scanned nothing. Those steps now hard-fail on an
+        # unresolvable ref, so without this the job would fail outright.
+        #
+        # 2, not 0: on a pull_request the checkout is the merge commit, so depth
+        # 2 supplies both parents — HEAD^1 (base tip) and HEAD^2 (PR head) —
+        # which is all any step here needs. fetch-depth: 0 would clone 12k
+        # commits / ~511 MiB per run, and would also make `origin/<base>`
+        # resolvable, silently widening these scans to include whatever other
+        # PRs merged onto the base in the meantime.
+        fetch-depth: 2
+
+    # #15313: routed through the shared composite action rather than a raw
+    # actions/setup-python step, so this job works unchanged whichever runner
+    # type it lands on -- self-hosted skips the tool-cache download that has
+    # no build for this runner OS release and uses the interpreter already on
+    # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
+    # fixes this step's own name, which named 3.12 while requesting 3.14 --
+    # harmless, but sent debugging here to the wrong version first (#15313 aside).
+    - name: Set up Python
+      uses: ./.github/actions/setup-python-ci
+      with:
+        # python-version omitted on purpose: the composite reads .python-version
+        # when it is empty (#13842). Passing python-version-file here is not the
+        # same thing -- that input belongs to actions/setup-python, and this
+        # composite does not declare it, so actionlint rejects it.
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Pin versions to match .pre-commit-config.yaml (Issue #2128)
+        python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
+        # #17610 review: this job installs its tools explicitly and never the
+        # application's dependencies, so a checker needing `packaging` cannot
+        # assume it. tools/lint/check_ci_plane_unenforced_pins.py parses
+        # requirement specifiers and environment markers with it, and
+        # check_requirements_ci_drift.py compares constraint semantics with it.
+        # Both degrade rather than crash without it -- and degrading silently is
+        # the failure this branch exists to remove, so it is installed.
+        python -m pip install packaging
+        # mypy and stubs (GH#7105).
+        #
+        # This version is pinned in two places -- here and as the mirrors-mypy
+        # rev in .pre-commit-config.yaml. repo_tests/mypy_pin_parity_test.py
+        # fails if they diverge, so a bump either moves both or is rejected by
+        # name; the same test pins the stub list below (#15134).
+        #
+        # What the version is NOT is load-bearing. Measured on python 3.14.6
+        # against autobot_shared/: mypy 1.16.0, 2.1.0 and 2.3.0 report the same
+        # findings for the same installed packages. What changes the result is
+        # the dependency set -- this step installs stubs only, so every type
+        # flowing from redis or sqlalchemy is Any here and errors that a local
+        # CI-parity venv sees are invisible to this gate. #15134 fixed the
+        # seven that were hiding behind that; read it before widening the
+        # install list, which would surface more of them at once.
+        python -m pip install \
+          mypy==1.16.0 \
+          pydantic-settings \
+          types-redis \
+          types-requests \
+          types-PyYAML \
+          types-setuptools \
+          opentelemetry-api \
+          opentelemetry-sdk
+
+    - name: Check code formatting with Black
+      run: |
+        python3 -m black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "Black formatting check failed"
+          echo "Run 'python3 -m black --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
+          exit 1
+        }
+
+    - name: Check import sorting with isort
+      run: |
+        # Use --settings-path to read pyproject.toml (profile, src_paths, known_first_party) (#2679)
+        python3 -m isort --check-only --settings-path=. --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "isort check failed"
+          echo "Run 'python3 -m isort --settings-path=. --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
+          exit 1
+        }
+
+    - name: Lint with flake8
+      run: |
+        # Uses .flake8 config for consistency with pre-commit (Issue #2128)
+        python3 -m flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "⚠️ flake8 linting issues found"
+          exit 1
+        }
+
+    - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        HEAD_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        # Pre-commit covers local dev — this CI step closes the bypass gap
+        # (devs without pre-commit installed, or `--no-verify` users).
+        # Changed-files-only mode mirrors pre-commit semantics: doesn't block
+        # on the pre-existing violations tracked by #5263 (22 in 10 files as of
+        # #13880 — the "59" this comment used to claim was long stale).
+        # After #5263 closes, swap to full-scan mode (no argv).
+        #
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        base=$(git_scope_resolve_base "$HEAD_SHA" "${BASE_SHA:-}")
+        git_scope_require_commits "$base" "$HEAD_SHA"
+        raw_files=$(git_scope_diff_names "$base" "$HEAD_SHA" -- '*.py')
+        # git names deleted paths too; `|| true` normalises the filter's EOF
+        # status under `set -e` and is scoped to the filter only, since git's
+        # own status is checked inside git_scope_diff_names.
+        files=$(printf '%s\n' "$raw_files" | git_scope_existing_files || true)
+        if [ -z "$files" ]; then
+          echo "No changed Python files — skipping #5178 regression check."
+          exit 0
+        fi
+        echo "Checking $(echo "$files" | wc -l) changed .py file(s) for banned patterns..."
+        echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
+
+    - name: Block hardcoded value regressions (#694, #6725)
+      # --changed-lines-only (#13950): this hook reads each changed file whole,
+      # so editing one line of a legacy module made the PR answerable for that
+      # file's entire backlog — four PRs in one session failed on violations
+      # blame attributes to other commits. Scoped to added lines here; the
+      # pre-commit stage and a direct run still scan whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-hardcoded-values
+
+    - name: Block hardcoded-IP fallback regressions (#6783, #6991)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_hardcoded_ip_fallbacks.py --ext py
+
+    - name: Block live-install sys.path default regressions (#14544)
+      run: |
+        # 18 sys.path bootstraps across 17 files open-coded the project root
+        # as `os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source")`
+        # instead of the canonical `autobot_shared.paths.project_root()` walk.
+        # With the env var unset -- the normal case in a checkout -- that put
+        # the LIVE DEPLOYED INSTALL first on sys.path, so a script run from a
+        # working tree silently imported the deployed copy of every
+        # first-party module it named. #14544 swept all 18; this blocks a new
+        # one from copying the pattern forward.
+        bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
+
+    - name: Block direct redis client regressions (#1086, #6785, #18553)
+      # The hook runs tools/lint/check_no_direct_redis.py against the frozen baseline: the same
+      # matcher and baseline as repo_tests/redis_direct_constructor_18553_test.py (one guard).
+      # --ext py,sh: the matcher reads .sh too; the wrapper's default pathspec has no .sh, so a
+      # shell-only change would otherwise never reach it.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis --ext py,sh
+
+    - name: Block print/console regressions (#1082, #6785)
+      # --changed-lines-only (#14051, same treatment #13950 gave the
+      # hardcoded-value guard): without it, a PR that edits one line of a
+      # legacy file is blamed for that file's entire print()/console.*
+      # backlog. Combined with the hook's own multi-line-noqa fix (#14051),
+      # this closes the class rather than one shape of it — the pre-commit
+      # stage and a direct run of the hook still scan whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
+
+    - name: Block new local BaseModel definitions in API files (#6056, #16178)
+      # --changed-lines-only (#16178), and unlike the two scoped steps above, the
+      # pre-commit stage is scoped too: this hook had no baseline and no blocking
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
+      # its whole-file read blocked the commit itself, failing a change for a
+      # model it neither added nor could move (every original domain schemas_*.py
+      # is frozen at its size ceiling). With --python the wrapper cannot parse the
+      # validator's output, so it hands over the base it resolved and the hook
+      # scopes itself. A direct run of the hook still reads whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only --python tools/lint/check_no_local_schemas.py --ext py
+
+    - name: Check repo conventions — third-party names, doc cross-links (#13876)
+      env:
+        CONVENTIONS_DENYLIST_CONTENT: ${{ secrets.CONVENTIONS_DENYLIST }}
+        # Bound through env rather than interpolated into the script body.
+        # These are GitHub-generated SHAs, but keeping every ${{ }} out of
+        # `run:` is the rule that does not need a per-field risk judgement.
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        # PR_HEAD_SHA and PR_NUMBER removed: neither was read by this step's
+        # body (PR_BASE_SHA above is, at git_scope_resolve_base). Verified
+        # unreferenced here and in scripts/lib/ and pipeline-scripts/ -- the
+        # PR_NUMBER hits there belong to pr-queue-open-list.sh, a different
+        # workflow's variable of the same name.
+      run: |
+        set -euo pipefail
+        # The denylist of third-party product names is NOT stored in this repo:
+        # committing it would violate the anonymisation rule it enforces. It
+        # arrives as a masked secret and is written to a runner-local temp file.
+        #
+        # When the secret is absent the name check reports SKIPPED, never PASSED
+        # — a guard that silently no-ops is worse than no guard. The doc
+        # cross-link and commit-format checks need no secret and always run.
+        # Once the secret is configured this step hardens automatically.
+        # actions/checkout defaults to fetch-depth: 1, and on a pull_request
+        # event it checks out the MERGE commit — so neither base.sha nor
+        # head.sha from the event payload is present. Resolve through HEAD's
+        # own parents instead, which needs no payload and no merge-base:
+        #   HEAD^1 = base tip, HEAD^2 = PR head, HEAD = their merge.
+        # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
+        # whatever other PRs landed on the base meanwhile.
+        #
+        # The job now checks out with fetch-depth: 2 (#13880), so both parents
+        # of the merge commit are present and no fetching is needed here.
+        # No fetching here. A `git fetch --depth=N` against a complete clone
+        # makes the repository SHALLOW again (verified: 5 commits -> 1,
+        # is-shallow-repository false -> true), which would silently strip the
+        # history that later steps in this same job depend on. fetch-depth: 2
+        # on the checkout already provides both parents.
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        BASE_REF=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}")
+        git_scope_require_commits "$BASE_REF" HEAD
+        RANGE="${BASE_REF}...HEAD"
+        # Counted with the SAME three-dot semantics lint-conventions.sh applies
+        # to this range, so the anti-no-op guard below measures the scope that
+        # will actually be scanned rather than a neighbouring one.
+        CHANGED=$(git_scope_diff_names_symmetric "$BASE_REF" HEAD | grep -c . || true)
+        echo "conventions scope: $RANGE ($CHANGED file(s))"
+        # Anti-no-op guard. The original defect was a broken range yielding
+        # "0 file(s) in scope" and three green checks. Any change set reaches
+        # this job with at least one file, so 0 means the range is wrong —
+        # fail red rather than pass having scanned nothing.
+        git_scope_require_nonempty "$CHANGED" "$RANGE"
+        if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
+          CONVENTIONS_DENYLIST=$(mktemp)
+          export CONVENTIONS_DENYLIST
+          printf '%s\n' "$CONVENTIONS_DENYLIST_CONTENT" > "$CONVENTIONS_DENYLIST"
+          trap 'rm -f "$CONVENTIONS_DENYLIST"' EXIT
+          scripts/lint-conventions.sh --range "$RANGE" --require-denylist
+        else
+          echo "::warning::CONVENTIONS_DENYLIST secret not configured — the third-party-name check is SKIPPED, not passed. Configure it to harden this gate."
+          scripts/lint-conventions.sh --range "$RANGE"
+        fi
+
+    - name: Block developer absolute-path regressions (#13409, #13149)
+      run: |
+        set -euo pipefail
+        # An absolute /home/<developer>/... path in tracked source only ever
+        # resolves on the machine it was written on. #13409 fixed four such
+        # files: one was a guard test that raised FileNotFoundError on every
+        # CI run, three pointed into a worktree that had been deleted.
+        # Full-tree scan (not changed-files-only): the tree is clean as of
+        # #13409, so any new hit is a genuine regression.
+        #
+        # ALLOWED_HOMES — deployment/CI service accounts that legitimately
+        # appear as absolute paths in playbooks, units and container images.
+        # Templated homes (/home/{{ ansible_user }}, /home/$USER) never match
+        # the username character class and need no exemption.
+        # autobot-vnc (#14319): VNC's own dedicated service account (real
+        # home directory, unlike the other nologin/no-home per-service
+        # accounts) — its default password-file path is a genuine SSOT
+        # default, the same category as autobot below, not a developer
+        # machine path.
+        ALLOWED_HOMES='autobot|autobot-vnc|kali|user|ubuntu|runner|vagrant|sandbox|node'
+        # ALLOWED_FILES — synthetic fixtures only. The generated third-party
+        # config that used to sit here was untracked instead (#13429), which is
+        # the right fix: exemptions for real files become permanent.
+        # Do NOT extend this list to work around a violation.
+        ALLOWED_FILES='^(autobot-frontend/src/components/audit/AuditTimeline\.stories\.ts|pipeline-scripts/test_audit_unwired_trackers\.py):'
+        PATTERN="(^|[^A-Za-z0-9_])/home/(?!(?:${ALLOWED_HOMES})[/\"'[:space:]]|\{)[A-Za-z0-9._-]+/"
+        set +e
+        raw=$(git grep -nIP "$PATTERN" -- \
+          '*.py' '*.sh' '*.bash' '*.ts' '*.tsx' '*.vue' '*.js' '*.mjs' '*.cjs' \
+          '*.yml' '*.yaml' '*.json' '*.toml' '*.ini' '*.cfg' '*.j2' '*.conf')
+        rc=$?
+        set -e
+        if [ "$rc" -gt 1 ]; then
+          echo "git grep failed (exit $rc) — PCRE (-P) support missing or bad pattern"
+          exit 1
+        fi
+        violations=""
+        if [ -n "$raw" ]; then
+          violations=$(printf '%s\n' "$raw" | grep -vE "${ALLOWED_FILES}" || true)
+        fi
+        if [ -n "$violations" ]; then
+          echo "$violations"
+          echo ""
+          echo "⚠️ Hardcoded developer absolute path(s) detected in tracked source"
+          echo "Resolve paths from __file__ instead, e.g."
+          echo "  Path(__file__).resolve().parents[N] / 'sub' / 'dir'"
+          echo "Do NOT use autobot_shared.ssot_config.PROJECT_ROOT for this — its"
+          echo ".env marker-walk escapes git worktrees and resolves to the wrong"
+          echo "checkout (#13357)."
+          exit 1
+        fi
+        echo "No hardcoded developer absolute paths found."
+
+    - name: Check design-token contrast meets WCAG AA (#12730)
+      run: python3 scripts/check_token_contrast.py
+
+    - name: Check script exec bits agree with how the docs invoke them (#13355)
+      run: python3 scripts/check_script_exec_bits.py
+
+    - name: Check nosec annotations reach bandit intact (#13521, #13528)
+      run: python3 scripts/check_nosec_format.py
+
+    - name: Check for unused imports with autoflake
+      run: |
+        python3 -m autoflake --check --recursive \
+          --remove-all-unused-imports \
+          --remove-unused-variables \
+          --expand-star-imports \
+          --ignore-init-module-imports \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "⚠️ Unused imports/variables detected"
+          exit 1
+        }
+
+    - name: Audit the .bandit exclude_dirs anchoring (#14489)
+      run: |
+        # bandit tests each exclude_dirs entry as a raw SUBSTRING of the full
+        # path, with no path-component boundary -- broader than #14419's flake8
+        # defect. A bare entry like `temp` or `archive` silently excluded 34
+        # tracked production files (all of autobot-backend/workflow_templates/
+        # among them) that named no real directory anywhere in the repo. This
+        # has to run in a REQUIRED check because of the direction it fails in:
+        # re-adding a bare name excludes MORE files, so bandit reports FEWER
+        # findings and this job goes greener.
+        python3 tools/lint/check_bandit_exclude_anchoring.py --audit-excludes
+
+    - name: Security check with bandit
+      run: |
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ autobot-npu-worker/ || {
+          echo "⚠️ Security issues detected - review bandit output"
+          exit 1
+        }
+
+    - name: Check developer docs reference existing files (#3425)
+      run: |
+        python3 pipeline-scripts/check-doc-references.py || {
+          echo "One or more developer docs reference files that no longer exist."
+          echo "Update the doc to point to the current file path."
+          exit 1
+        }
+
+    - name: Sweep the whole tree for unregistered AUTOBOT_* env vars (#15807)
+      run: |
+        # The pre-commit hook only sees staged files, so a variable whose read
+        # landed in one commit and whose registration was dropped in another --
+        # the additive merge conflict in env_registry_backend.py produces exactly
+        # that -- was never inspected by anything. With no arguments this now
+        # sweeps every tracked .py file, and fails if the sweep itself reaches
+        # too few of them.
+        python3 pipeline-scripts/check_env_var_registry.py || {
+          echo "An AUTOBOT_* env var is read somewhere but not registered."
+          exit 1
+        }
+
+    - name: Type-check autobot_shared (required)
+      run: |
+        # autobot_shared is the shared library and must be strictly typed.
+        # Errors in the backends are tracked in GH#15345 (#7105 is closed --
+        # it tracked wiring mypy in, not the errors it found).
+        python3 -m mypy autobot_shared/ || {
+          echo "mypy found type errors in autobot_shared/"
+          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#15345'"
+          exit 1
+        }
+
+    - name: Type-check autobot-backend (informational)
+      run: |
+        # Non-blocking: surfaces new regressions in trend output.
+        # 4133 pre-existing errors tracked for resolution in GH#15345 (#7105 is closed).
+        python3 -m mypy autobot-backend/ 2>&1 | tail -5 || true
+
+    - name: Type-check autobot-slm-backend (informational)
+      run: |
+        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#15345 (#7105 is closed).
+        python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
+
+    - name: Enforce extension/skill/plugin import boundaries (#7372)
+      run: |
+        # Scan all extension, skill, and plugin Python files for layer-boundary violations.
+        # Rules: no core-backend imports, no sibling cross-imports.
+        # See docs/developer/plugin-boundaries.md and
+        #     security/semgrep/extension-import-boundaries.yaml
+        # Scans only tracked source directories — no user-supplied input.
+        find autobot-backend/middleware/builtin \
+             autobot-backend/skills/builtin \
+             plugins/core-plugins \
+             -name "*.py" -print0 \
+          | xargs -0 python3 tools/lint/check_extension_import_boundaries.py
+
+    - name: Audit the extension-import baseline for drift (#14329)
+      run: |
+        # Fails on grandfathered entries whose import no longer exists. A dormant
+        # exemption naming a moved file exempts nothing and hides that it does.
+        python3 tools/lint/check_extension_import_boundaries.py --audit-baseline
+
+    - name: Audit the .flake8 exclude anchoring (#14419)
+      run: |
+        # A bare directory name in `exclude` prunes that name at ANY depth, not
+        # only at the repo root; 973 tracked .py files were unlinted that way,
+        # three production `monitoring` packages among them. This has to run in
+        # a REQUIRED check because of the direction it fails in: re-adding a
+        # bare name lints FEWER files, so every lint step above reports fewer
+        # violations and goes greener. The pytest copy of these assertions runs
+        # in `python-suite`, which gates nothing (#14353).
+        python3 tools/lint/check_flake8_exclude_anchoring.py --audit-excludes
+
+    - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
+      run: |
+        # Three trees are excluded by the pre-commit flake8 hook, named by no CI
+        # flake8 invocation that can fail (security.yml runs `|| true`), and listed
+        # in .flake8's own exclude. Nothing linted them; 12 operator scripts
+        # accumulated 103 undefined names -- live NameErrors, not style. #14405 fixed
+        # all 12 and scoped a second pre-commit hook to ONE of the three trees.
+        #
+        # #15914 is what that scoping cost: five classes in a SECOND excluded tree
+        # (`autobot-backend/code_analysis/`) each kept a `self.config = config` whose
+        # import had been dropped, so every construction raised NameError for six to
+        # nine months and `CodeQualityDashboard` was never runnable. A guard bounded
+        # by the exclusion that caused the defect finds only the instance already
+        # known about, so the sweep is now every tracked *.py and the hook carries no
+        # scope at all.
+        #
+        # This has to run in a REQUIRED check for the same directional reason as
+        # #14419 and #14489: re-widening an exclusion lints FEWER files, so every
+        # lint step reports fewer violations and goes greener. It re-proves both
+        # halves -- the repo is F821-clean AND a pre-commit hook reaches every
+        # tracked file -- and fails below a discovery floor, because a sweep handed
+        # an empty file list reports a comfortable zero. The file list comes from
+        # `git ls-files`, not from the lint config, so the two can disagree.
+        # There is no exemption list, deliberately.
+        python3 tools/lint/check_undefined_names.py --audit
+
+    - name: Audit unexpanded shell placeholders in Python string constants (#14517)
+      run: |
+        # A pasted `${AUTOBOT_PROJECT_ROOT:-...}` inside a PLAIN Python string
+        # literal is never expanded, so the value names a directory that cannot
+        # exist: reads return empty and writes create a junk tree actually named
+        # after the expression. #14405/#14504 could only see the f-string form,
+        # which produces an F821; a plain literal is reported by no flake8 code,
+        # no bandit check and no type checker, and 32 sites accumulated that way
+        # (#14517). This has to run in a REQUIRED check for the same directional
+        # reason as #14419/#14405/#14489: every one of these sites fails quietly,
+        # so a run that stops looking at them goes greener rather than redder.
+        # It fails below a discovery floor, because a sweep handed an empty file
+        # list reports a comfortable zero, and it re-proves the three deliberate
+        # literals (#13658) by path, anchor symbol and exact count, so a rename
+        # cannot strand an exemption. There is no growable baseline.
+        python3 tools/lint/check_no_shell_placeholder_paths.py --audit
+
+    - name: Audit documentation for fleet node addressing (#15208)
+      run: |
+        # #3315 replaced the fleet's literal node addresses in docs/architecture/ with
+        # role placeholders. Nothing watched the rest of the tree: the same addressing --
+        # role-to-host mappings and database endpoints, which together read as a network
+        # map -- survived in docs/archives/plans/ one folder across, because
+        # HV_SCAN_EXTENSIONS in `scripts/lib/hardcoded-value-rules.sh` is
+        # py|ts|vue|js|sh|yml|yaml and Markdown is not in it. This has to run in a
+        # REQUIRED check for the same directional reason as #14419/#14405/#14489: a
+        # document that stops being scanned reports fewer findings, so the failure goes
+        # greener rather than redder. It parses its pattern out of the shared rule set
+        # rather than restating it, aborts if that cannot be read, and fails below a
+        # discovery floor -- #15208 exists because a sweep that never looked at
+        # docs/archives/ reported a comfortable zero. Deliberate counter-examples are
+        # exempted by an in-document block marker, and a marker covering no address is
+        # itself a finding, so no exemption outlives its reason.
+        python3 tools/lint/check_docs_no_fleet_addressing.py --audit
+
+    - name: Audit fleet addressing in the file kinds nothing else scans (#17440)
+      run: |
+        # #15208 closed docs/**.md. This closes its complement, and the complement
+        # was most of it: of every fleet-range literal in tracked files, 54 sit in an
+        # extension the hardcoded-value hook scans, 6 in the Markdown #15208 guards,
+        # and 549 in neither -- roughly nine in ten unguarded, in a PUBLIC repository.
+        # READMEs outside docs/ held 311 of them and committed .json another 148,
+        # including captured connectivity results, which are reachability maps rather
+        # than prose. Both the pattern and the extension list are parsed from the one
+        # shared rule set, so this guard's population is DEFINED as what the others do
+        # not reach: widen HV_SCAN_EXTENSIONS and files leave this baseline instead of
+        # being guarded twice. The baseline is path -> count and stores no address,
+        # because this guard is as public as the files it guards.
+        python3 tools/lint/check_fleet_addressing_uncovered.py --audit
+
+    - name: Audit MCP tool permission coverage (#14494)
+      run: |
+        # The under-grant guard used to infer "this tool mutates state" from a
+        # hand-written verb list matched against the tool's NAME (write, delete,
+        # click, ...). #14469 found `select`/`select_index` inheriting their
+        # bridge's read-level default because neither name matched a verb -- the
+        # guard's reach was decided by a list nobody revisits, while the set of
+        # real tools grows independently of it. This has to run in a REQUIRED
+        # check for the same directional reason as #14419/#14405/#14489: an
+        # under-declared tool makes the audit report FEWER problems, not more, so
+        # it goes greener by doing nothing. The pytest copy of this same guard
+        # runs in `python-suite`, which gates nothing (#14353). Fails below a
+        # discovery floor too, because a bridge scan that reaches zero tools
+        # (this pass found one: `sequential_thinking_mcp`'s only tool was
+        # declared in a source shape the original scanner never matched) reads
+        # as clean having asserted nothing.
+        python3 tools/lint/check_mcp_tool_permission_coverage.py --audit
+
+    - name: Audit the python-file-size ceilings for drift (#14236, #14547)
+      run: |
+        # The pre-commit hook only sees staged files, so a grandfathered entry
+        # whose file shrank, moved, or was deleted would sit there exempting
+        # nothing until somebody happened to touch it. This applies the ratchet
+        # to every entry: over its ceiling, under it, or already compliant all
+        # fail. #14547: the audit used to iterate KNOWN_LARGE's own keys, so it
+        # could only re-check a file someone had already added — it had no way
+        # to discover one that crossed 600 lines and was never added at all
+        # (autobot-slm-backend/services/reconciler.py reached 2000+ lines this
+        # way). It now walks every in-scope tracked *.py file instead, and the
+        # run reports how many files that walk reached.
+        python3 scripts/check_python_file_size.py --audit-ceilings
+
+    - name: Audit the shell-file-size ceilings for drift (#17353)
+      run: |
+        # Same reasoning as the Python audit above: the pre-commit hook only
+        # sees staged files, so an entry whose file shrank, moved or was
+        # deleted would sit there exempting nothing until somebody happened to
+        # touch it. This walks every in-scope tracked *.sh file.
+        #
+        # Shell is gated NARROWER than Python in one direction and WIDER in
+        # another: `autobot-infrastructure/` stays in scope here, because that
+        # is where shell lives and excluding it would leave the gate checking
+        # 4 of the 10 oversized files.
+        python3 scripts/check_shell_file_size.py --audit-ceilings
+
+    - name: Audit the frontend-file-size ceilings for drift (#17885)
+      run: |
+        # Same reasoning as the two audits above. `.ts`/`.vue` had NO length
+        # measurement of any kind before #17885 -- not per file, not per
+        # function -- so 184 of 1779 in-scope tracked files sat over the limit
+        # an equivalent .py file would have been refused at, with nothing in
+        # the tree asking. This walks every in-scope tracked *.ts/*.vue file.
+        #
+        # Scope note: the two src/types/generated/ trees are excluded by a
+        # recorded prefix (OpenAPI-derived clients, 178894 and 26584 lines).
+        # The gate measures .ts and .vue only -- frontend .js is NOT measured,
+        # and repo_tests/frontend_file_size_ratchet_test.py records that gap
+        # with its own sweep rather than leaving it to be inferred.
+        python3 scripts/check_frontend_file_size.py --audit-ceilings
+
+    - name: Audit requirements-ci for silent drift from production (#14551)
+      run: |
+        # autobot-backend/requirements.txt and autobot-slm-backend/requirements.txt
+        # declare production; requirements-ci.txt is a hand-maintained mirror
+        # setup-python-suite actually installs. A package present in one and not
+        # the other produces no error -- pytesseract sat undeclared in CI for
+        # months this way (#13885) while every OCR test skipped. This compares
+        # the two sets against repo_tests/requirements_ci_drift_baseline.txt,
+        # which only ever shrinks: a new undeclared omission, or a baseline entry
+        # that no longer describes a real one, both fail.
+        python3 tools/lint/check_requirements_ci_drift.py --audit
+
+    - name: Audit protobuf-style pins declared in both requirements files (#15070)
+      run: |
+        # autobot-backend/requirements.txt `-r`-includes requirements.txt and
+        # still re-declares four packages. pip resolves a doubly-declared
+        # package against the INTERSECTION of the two specifiers, so a diverged
+        # pair either silently tightens the constraint or fails the install with
+        # a traceback naming neither file. #15070: the protobuf note said the
+        # cap was <7.0 while the line said <8.0.0, so the obvious "fix" was to
+        # revert one file into exactly that state. Fails on any shared package
+        # whose specifiers differ -- and on an empty comparison (#15087).
+        python3 tools/lint/check_requirements_pin_parity.py --audit
+
+    - name: Audit CI system-package provisioning against ansible (#14550)
+      run: |
+        # ansible installs apt packages on every backend host (GUI/VNC, audio,
+        # TTS, OCR, pg_dump) that setup-python-suite never provisions. A test
+        # that skip-gates on one of those binaries via shutil.which(...) has
+        # been silently skipping in CI rather than passing -- indistinguishable
+        # in the job summary. This fails on any such gate whose package is not
+        # installed in .github/actions/setup-python-suite/action.yml.
+        python3 tools/lint/check_ci_system_package_provisioning.py --audit
+
+    - name: Audit composite-action step keys against GitHub's own schema (#14550)
+      run: |
+        # A composite action's own steps accept only run/shell/working-directory/
+        # env/id/if/name(/uses/with) -- `timeout-minutes` looked plausible on a
+        # step but is job/workflow-step-only, and adding it here made GitHub's
+        # template validator reject the WHOLE action.yml before a single step
+        # ran, breaking every shard that used it (#14550 post-merge incident).
+        # code-quality installs no YAML-schema validator for GitHub's own
+        # template engine (and neither does actionlint, scoped to
+        # .github/workflows/** only, per #14632) -- this re-implements the
+        # small, stable allowed-key set directly so a push never reaches a
+        # runner with an invalid composite action again.
+        python3 tools/lint/check_composite_action_step_keys.py --audit
+
+    - name: Audit the runner watchdog schedule (#15309)
+      run: |
+        # Both self-hosted runners had no watchdog scheduled anywhere: the
+        # only entry was an untracked cron line on a host that no longer ran
+        # a runner, and its log redirect was unwritable there too -- a gap
+        # that produced zero signal for months. This cannot observe a live
+        # host from CI, so it verifies the half that IS in the repo: the
+        # runner inventory lists at least one runner (a reach floor -- an
+        # emptied inventory must fail, not pass having asserted nothing), each
+        # entry's systemd service name actually names its own runner rather
+        # than a stale one (#15309 fault #2's exact shape), the systemd
+        # templates operators are told to install actually exist, and no
+        # entry's last-verified date has gone stale past its floor -- forcing
+        # periodic re-confirmation against `gh api .../actions/runners`
+        # rather than trusting a doc nobody revisits.
+        python3 tools/lint/check_runner_watchdog_schedule.py --audit
+
+    - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
+      run: |
+        # This job only runs at all when the `changes` job's dorny/paths-filter
+        # reports a `backend` path touched -- a job that is SKIPPED satisfies
+        # branch protection the same as one that PASSED. The two audits above
+        # read files (the ansible task list, the setup-python-suite action)
+        # that the filter did not originally cover, so a PR touching only one
+        # of them skipped code-quality entirely and neither audit ever ran.
+        # Re-derives each checker's own GUARD_INPUT_PATHS and asserts the
+        # filter covers all of them, so the next guard input added without a
+        # matching filter entry fails loudly instead of silently going dark.
+        python3 tools/lint/check_code_quality_guard_reach.py --audit
+
+    - name: The open CodeQL alert backlog may not grow (#15333, #17300)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # #18123 review: on pull_request GITHUB_SHA is the MERGE commit, which analyses are
+        # recorded against -- but check runs attach to the PR HEAD. The check-run reads use this.
+        CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        set -euo pipefail
+        # BLOCKING, and in this job rather than in codeql.yml on purpose: this is
+        # a REQUIRED check, and CodeQL itself is not. An alert therefore has to be
+        # adjudicated -- fixed, or dismissed with a written reason -- before a PR
+        # can merge, which is the step that was missing when 111 of them
+        # accumulated and an arbitrary file write hid among them (#17300).
+        #
+        # Fails closed on a missing token or an API error: "could not look" must
+        # never render as "found nothing".
+        ./pipeline-scripts/check_codeql_alert_ceiling.sh
+
+    - name: Code quality summary
+      if: always()
+      run: |
+        echo "Code Quality Check Complete"
+        echo ""
+        echo "All checks enforce strict mode — failures will block the pipeline."
+
+    - name: Cleanup virtual environment
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+    # Positive evidence for the `code-quality` gate in ci.yml (#18208): this step is
+    # reached only when every step above it succeeded, so the output below is
+    # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+    - name: Record that every step passed
+      id: done
+      shell: bash
+      run: echo "ok=true" >> "$GITHUB_OUTPUT"

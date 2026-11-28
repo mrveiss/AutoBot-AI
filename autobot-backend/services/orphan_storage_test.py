@@ -80,7 +80,7 @@ class TestListAllCandidates:
 
         assert listing.candidates == []
         assert listing.statuses == [
-            orphan_storage.ProviderStatus(provider="broken", available=False, error="RuntimeError")
+            orphan_storage.OrphanDetectorStatus(provider="broken", available=False, error="RuntimeError")
         ]
 
     async def test_a_failed_detectors_status_never_carries_the_raw_exception_text(self):

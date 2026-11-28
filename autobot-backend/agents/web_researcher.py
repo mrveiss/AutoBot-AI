@@ -24,11 +24,11 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from agents.browser_fingerprint import BrowserFingerprint
+from autobot_shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.url_safety import host_matches
-from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
 from services.captcha_human_loop import get_captcha_human_loop
 
@@ -64,14 +64,14 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ResearchRequest(BaseModel):
+class WebResearchRequest(BaseModel):
     query: str
     focus: str = "general"
     max_results: int = 5
     include_installation: bool = False
 
 
-class ResearchResult(BaseModel):
+class WebSearchHit(BaseModel):
     title: str
     url: str
     content: str
@@ -79,10 +79,10 @@ class ResearchResult(BaseModel):
     source_type: str  # "documentation", "tutorial", "forum", "official"
 
 
-class ResearchResponse(BaseModel):
+class WebResearchResponse(BaseModel):
     success: bool
     query: str
-    results: List[ResearchResult]
+    results: List[WebSearchHit]
     summary: str
     execution_time: float
     sources_count: int
@@ -147,7 +147,7 @@ _TOOL_REFERENCE_DATA: Dict[str, Dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 
-class CaptchaSolver:
+class RecaptchaServiceClient:
     """Integration with CAPTCHA solving services."""
 
     def __init__(self, config: Dict[str, Any]):
@@ -221,56 +221,6 @@ class CaptchaSolver:
         return None
 
 
-class BrowserFingerprint:
-    """Manages browser fingerprinting and randomization."""
-
-    USER_AGENTS = SecurityConstants.USER_AGENT_POOL
-
-    VIEWPORTS = [
-        {"width": 1920, "height": 1080},
-        {"width": 1920, "height": 1080},
-        {"width": 1536, "height": 864},
-        {"width": 1440, "height": 900},
-        {"width": 1366, "height": 768},
-        {"width": 1280, "height": 720},
-    ]
-
-    def __init__(self):
-        """Initialize with randomized browser fingerprint."""
-        self.current_fingerprint = self._generate_fingerprint()
-
-    def _generate_fingerprint(self) -> Dict[str, Any]:
-        """Generate randomized browser fingerprint."""
-        return {
-            # Browser fingerprint sampling, not cryptographic.
-            "user_agent": random.choice(self.USER_AGENTS),  # nosec B311
-            "viewport": random.choice(self.VIEWPORTS),  # nosec B311  # non-crypto viewport selection
-            "timezone": random.choice(  # nosec B311  # non-crypto timezone selection
-                [
-                    "America/New_York",
-                    "America/Los_Angeles",
-                    "Europe/London",
-                    "Europe/Berlin",
-                ]
-            ),
-            # Non-crypto language selection.
-            "language": random.choice(["en-US,en", "en-GB,en", "en-CA,en"]),  # nosec B311
-            # Non-crypto platform selection.
-            "platform": random.choice(["Win32", "MacIntel", "Linux x86_64"]),  # nosec B311
-            # Non-crypto vendor selection.
-            "webgl_vendor": random.choice(["Intel Inc.", "NVIDIA Corporation", "AMD"]),  # nosec B311
-            "hardware_concurrency": random.choice([4, 8, 12, 16]),  # nosec B311  # non-crypto concurrency selection
-        }
-
-    def get_fingerprint(self) -> Dict[str, Any]:
-        """Get current fingerprint."""
-        return self.current_fingerprint
-
-    def randomize(self):
-        """Generate new random fingerprint."""
-        self.current_fingerprint = self._generate_fingerprint()
-
-
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
@@ -291,7 +241,7 @@ class WebResearcher:
 
         # Browser engine
         self.fingerprint = BrowserFingerprint()
-        self.captcha_solver = CaptchaSolver(self.config.get("captcha", {}))
+        self.captcha_solver = RecaptchaServiceClient(self.config.get("captcha", {}))
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
         self._domain_rate_limiter: Dict[str, float] = {}
@@ -310,8 +260,6 @@ class WebResearcher:
         # id(self) so independently-constructed WebResearcher instances
         # (e.g. security_scanner_agent.py) keep isolated budgets, matching
         # the retired local RateLimiter's per-instance semantics exactly.
-        self._rl_max_requests = self.config.get("rate_limit_requests", 5)
-        self._rl_window_seconds = self.config.get("rate_limit_window", 60)
         self._rl_key = f"researcher:{id(self)}"
         self.rate_limiter = _SharedRateLimiter(scope_prefix="web_researcher")
 
@@ -320,11 +268,17 @@ class WebResearcher:
         self._cache_ttl = self.config.get("cache_ttl", 3600)
         self._cache_lock = asyncio.Lock()
 
-        # Settings
+        self.apply_settings(self.config)
+        self.quality_threshold = 0.7
+
+    def apply_settings(self, config: Dict[str, Any]) -> None:
+        """Take saved web research settings on this running instance, no restart (#19226)."""
+        self.config.update(config)
         self.enabled = self.config.get("enabled", False)
         self.timeout_seconds = self.config.get("timeout_seconds", 30)
         self.max_results_default = self.config.get("max_results", 5)
-        self.quality_threshold = 0.7
+        self._rl_max_requests = self.config.get("rate_limit_requests", 5)
+        self._rl_window_seconds = self.config.get("rate_limit_window", 60)
 
     # -------------------------------------------------------------------
     # Browser lifecycle
@@ -1001,7 +955,7 @@ class WebResearcher:
     # Research API (from ResearchAgent)
     # -------------------------------------------------------------------
 
-    async def perform_research(self, request: ResearchRequest) -> ResearchResponse:
+    async def perform_research(self, request: WebResearchRequest) -> WebResearchResponse:
         """Perform web research and return structured response."""
         start_time = time.time()
         logger.info(
@@ -1013,7 +967,7 @@ class WebResearcher:
             search_results = await self.search_web(request.query, request.max_results)
             results = self._convert_to_research_results(search_results)
             summary = self._generate_research_summary(results, request.query)
-            return ResearchResponse(
+            return WebResearchResponse(
                 success=True,
                 query=request.query,
                 results=results,
@@ -1023,7 +977,7 @@ class WebResearcher:
             )
         except Exception as e:
             logger.error("Research failed for '%s': %s", request.query, e)
-            return ResearchResponse(
+            return WebResearchResponse(
                 success=False,
                 query=request.query,
                 results=[],
@@ -1032,14 +986,14 @@ class WebResearcher:
                 sources_count=0,
             )
 
-    def _convert_to_research_results(self, search_results: Dict[str, Any]) -> List[ResearchResult]:
-        """Convert raw search results to ResearchResult models."""
+    def _convert_to_research_results(self, search_results: Dict[str, Any]) -> List[WebSearchHit]:
+        """Convert raw search results to WebSearchHit models."""
         results = []
         if search_results.get("status") != "success":
             return results
         for item in search_results.get("results", []):
             results.append(
-                ResearchResult(
+                WebSearchHit(
                     title=item.get("title", ""),
                     url=item.get("url", ""),
                     content=item.get("snippet", item.get("content", "")),
@@ -1049,7 +1003,7 @@ class WebResearcher:
             )
         return results
 
-    async def research_specific_tools(self, request: ResearchRequest) -> Dict[str, Any]:
+    async def research_specific_tools(self, request: WebResearchRequest) -> Dict[str, Any]:
         """Research specific tools with installation info."""
         query_lower = request.query.lower()
         try:
@@ -1144,8 +1098,8 @@ class WebResearcher:
     # Summary generation
     # -------------------------------------------------------------------
 
-    def _generate_research_summary(self, results: List[ResearchResult], query: str) -> str:
-        """Generate summary from ResearchResult list."""
+    def _generate_research_summary(self, results: List[WebSearchHit], query: str) -> str:
+        """Generate summary from WebSearchHit list."""
         if not results:
             return f"No relevant results found for '{query}'"
         high_q = [r for r in results if r.relevance_score > 0.8]
@@ -1387,14 +1341,15 @@ _global_researcher_lock = threading.Lock()
 
 
 def _load_web_research_config() -> Dict[str, Any]:
-    """Load web research config from config manager."""
+    """Load the web research section, every setting filled in (services/web_research_config.py)."""
     try:
         from config import config_manager
+        from services.web_research_config import researcher_config
 
-        return config_manager.get_nested("web_research", {})
+        return researcher_config(config_manager)
     except Exception as e:
         logger.warning("Could not load web research config: %s", e)
-        return {}
+        return {}  # unreadable config: the researcher starts disabled (enabled=False), fail closed
 
 
 def get_web_researcher(

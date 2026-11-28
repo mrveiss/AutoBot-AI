@@ -126,9 +126,9 @@ class _ProviderRouter:
             logger.error("Built-in provider search failed: %s", exc)
             return []
 
-    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
+    async def get_entity(self, entity_id: str, *, owner: Any = None) -> Dict[str, Any] | None:
         try:
-            return await self.built_in.get_entity(entity_id)
+            return await self.built_in.get_entity(entity_id, owner=owner)
         except Exception as exc:
             logger.error("Error getting entity: %s", exc)
             return None
@@ -752,7 +752,7 @@ class MemoryManager:
             logger.warning("Task not found for completion: %s", task_id)
             return False
         completed_at = datetime.now(tz=timezone.utc)
-        duration = (completed_at - task.started_at).total_seconds() if task.started_at else None
+        duration = task.elapsed_seconds(completed_at)  # #13344: None, never a clamped zero
         result = self._run_sync(
             self.update_task_status(
                 task_id, final_status, completed_at=completed_at, duration_seconds=duration, outputs=outputs

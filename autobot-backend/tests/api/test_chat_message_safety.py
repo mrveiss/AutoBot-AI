@@ -431,6 +431,9 @@ class TestResumeChatGraphWiring:
         with (
             patch("api.chat.get_chat_workflow_manager", AsyncMock(return_value=workflow_manager)),
             patch("api.chat._stream_graph_resume", return_value=iter(())),
+            patch("api.chat_streaming.attachments_allowed", AsyncMock(return_value=False)),
+            patch("chat_workflow.attachment_context.checkpoint_carries_floor", AsyncMock(return_value=False)),
+            patch("chat_workflow.attachment_floor.chat_used_attachment", AsyncMock(return_value=False)),
         ):
             response = await resume_chat_graph(
                 chat_id="chat-1",
@@ -540,9 +543,11 @@ class TestSendChatMessageByIdWiring:
         from api.chat import send_chat_message_by_id
 
         with (
-            patch("api.chat.get_chat_history_manager"),
+            patch("api.chat.get_chat_history_manager") as mock_get_history,
             patch("api.chat.get_chat_workflow_manager", new_callable=AsyncMock) as mock_get_workflow,
         ):
+            # #22258: the route reads the conversation's stored thinking toggle; get_session is async.
+            mock_get_history.return_value.get_session = AsyncMock(return_value=None)
             await send_chat_message_by_id(  # must not raise
                 chat_id="chat-1",
                 current_user={"user_id": "u1", "role": "user"},

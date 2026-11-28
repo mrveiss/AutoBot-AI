@@ -50,9 +50,9 @@ from autobot_shared.redis_client import get_redis_client
 # attribute-style access (e.g. config.redis_host); `get_nested()` dotted-path
 # lookups below require `config_manager`. Using `config` here previously raised
 # AttributeError: 'AutoBotConfig' object has no attribute 'get_nested' (#11971).
-from config import config_manager as global_config_manager
+from config import config_manager
 from events.bus import PersistStrategy, publish_event
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 from security_layer import SecurityLayer
 from services.llm_service import get_llm_service
 from system_integration import SystemIntegration
@@ -84,11 +84,11 @@ if sys.platform.startswith("linux"):
         GUI_AUTOMATION_SUPPORTED = True
     except Exception as e:  # noqa: BLE001 - see comment above; unbounded Xlib/X11 import-time surface
         logger.warning("Real GUIController unavailable on this Linux node (%s); using dummy.", e)
-        from gui_controller_dummy import GUIController
+        from gui_controller_dummy import DummyGUIController as GUIController
 
         GUI_AUTOMATION_SUPPORTED = False
 else:
-    from gui_controller_dummy import GUIController
+    from gui_controller_dummy import DummyGUIController as GUIController
 
     GUI_AUTOMATION_SUPPORTED = False
 
@@ -104,7 +104,7 @@ class WorkerNode:
         """
         self.worker_id = f"worker_{os.getpid()}"
 
-        self.task_transport_type = global_config_manager.get_nested("task_transport.type", "local")
+        self.task_transport_type = config_manager.get_nested("task_transport.type", "local")
         self.redis_client = None
         if self.task_transport_type == "redis":
             # Use centralized Redis client utility
@@ -119,13 +119,21 @@ class WorkerNode:
         # Initialize modules that worker might need for task execution
         # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
         self.llm_service = get_llm_service()
-        self.knowledge_base = KnowledgeBase()
+        # #18122: resolved lazily from the canonical instance (see resolve_knowledge_base)
+        self.knowledge_base = None
         self.gui_controller = GUIController()
         self.system_integration = SystemIntegration()
         self.security_layer = SecurityLayer()
 
         # Initialize the task executor with Strategy Pattern
         self.task_executor = TaskExecutor(self)
+
+    async def resolve_knowledge_base(self):
+        """Return the canonical KnowledgeBase (an injected one wins); raise while it is unavailable."""
+        kb = self.knowledge_base or await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+        return kb
 
     def detect_capabilities(self) -> Dict[str, Any]:
         """Detects and returns hardware and software capabilities."""
@@ -267,9 +275,9 @@ class WorkerNode:
 
         # #6983: post-LLMService migration, openai_api_key is no longer exposed on the
         # service surface. Read from config directly — same effective check.
-        if global_config_manager.get_nested("llm_config.openai.api_key"):
+        if config_manager.get_nested("llm_config.openai.api_key"):
             backends.append("openai")
-        if global_config_manager.get_nested("llm_config.transformers.model_path"):
+        if config_manager.get_nested("llm_config.transformers.model_path"):
             backends.append("transformers")
 
         return {"llm_backends_supported": backends}

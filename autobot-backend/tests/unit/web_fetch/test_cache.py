@@ -54,23 +54,53 @@ class TestTTLResolver:
 
 class TestCacheKey:
     def test_deterministic(self) -> None:
-        k1 = _content_cache_key("https://example.com", "auto")
-        k2 = _content_cache_key("https://example.com", "auto")
+        k1 = _content_cache_key("https://example.com", "auto", "document")
+        k2 = _content_cache_key("https://example.com", "auto", "document")
         assert k1 == k2
 
     def test_differs_by_url(self) -> None:
-        k1 = _content_cache_key("https://a.com", "auto")
-        k2 = _content_cache_key("https://b.com", "auto")
+        k1 = _content_cache_key("https://a.com", "auto", "document")
+        k2 = _content_cache_key("https://b.com", "auto", "document")
         assert k1 != k2
 
     def test_differs_by_mode(self) -> None:
-        k1 = _content_cache_key("https://example.com", "auto")
-        k2 = _content_cache_key("https://example.com", "playwright")
+        k1 = _content_cache_key("https://example.com", "auto", "document")
+        k2 = _content_cache_key("https://example.com", "playwright", "document")
         assert k1 != k2
 
     def test_prefix(self) -> None:
-        key = _content_cache_key("https://example.com", "fast")
+        key = _content_cache_key("https://example.com", "fast", "document")
         assert key.startswith("web_fetch:content:")
+
+    def test_differs_by_profile(self) -> None:
+        """#18826: a result extracted under one profile is never served for another."""
+        k1 = _content_cache_key("https://example.com", "auto", "document")
+        k2 = _content_cache_key("https://example.com", "auto", "media")
+        assert k1 != k2
+
+    def test_differs_by_extractor_version(self) -> None:
+        """#18826: bumping EXTRACTOR_VERSION retires every entry the previous extractor cached."""
+        key = _content_cache_key("https://example.com", "auto", "document")
+        with patch("web_fetch.cache.EXTRACTOR_VERSION", "next"):
+            assert _content_cache_key("https://example.com", "auto", "document") != key
+
+    def test_extractor_version_is_the_html_extractors_constant(self) -> None:
+        from media.document.html_extraction import EXTRACTOR_VERSION
+        from web_fetch import cache
+
+        assert cache.EXTRACTOR_VERSION is EXTRACTOR_VERSION
+
+    @pytest.mark.asyncio
+    async def test_old_format_key_is_never_read(self) -> None:
+        """#18826: an entry cached under the pre-profile ``url|mode`` key (markdownify output) is a miss."""
+        import hashlib
+
+        old_key = "web_fetch:content:" + hashlib.sha256(b"https://example.com|auto").hexdigest()
+        store = {old_key: json.dumps({"url": "https://example.com", "success": True, "markdown": "# old"})}
+        redis = AsyncMock()
+        redis.get = AsyncMock(side_effect=lambda key: store.get(key))
+        assert await get_cached_result("https://example.com", "auto", "document", redis) is None
+        assert redis.get.await_args.args[0] != old_key
 
 
 class TestGetCachedResult:
@@ -78,7 +108,7 @@ class TestGetCachedResult:
     async def test_miss_returns_none(self) -> None:
         redis = AsyncMock()
         redis.get = AsyncMock(return_value=None)
-        result = await get_cached_result("https://example.com", "auto", redis)
+        result = await get_cached_result("https://example.com", "auto", "document", redis)
         assert result is None
 
     @pytest.mark.asyncio
@@ -86,21 +116,21 @@ class TestGetCachedResult:
         payload = {"url": "https://example.com", "success": True, "markdown": "# Hello"}
         redis = AsyncMock()
         redis.get = AsyncMock(return_value=json.dumps(payload).encode("utf-8"))
-        result = await get_cached_result("https://example.com", "auto", redis)
+        result = await get_cached_result("https://example.com", "auto", "document", redis)
         assert result is not None
         assert result["success"] is True
         assert result["markdown"] == "# Hello"
 
     @pytest.mark.asyncio
     async def test_none_redis_returns_none(self) -> None:
-        result = await get_cached_result("https://example.com", "auto", None)
+        result = await get_cached_result("https://example.com", "auto", "document", None)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_redis_exception_returns_none(self) -> None:
         redis = AsyncMock()
         redis.get = AsyncMock(side_effect=Exception("connection lost"))
-        result = await get_cached_result("https://example.com", "auto", redis)
+        result = await get_cached_result("https://example.com", "auto", "document", redis)
         assert result is None
 
 
@@ -110,7 +140,7 @@ class TestSetCachedResult:
         redis = AsyncMock()
         redis.setex = AsyncMock()
         payload = {"url": "https://example.com", "success": True, "markdown": "text"}
-        await set_cached_result("https://example.com", "auto", payload, redis)
+        await set_cached_result("https://example.com", "auto", "document", payload, redis)
         redis.setex.assert_called_once()
         call_args = redis.setex.call_args[0]
         assert call_args[1] == _WEB_FETCH_CACHE_TTL
@@ -118,14 +148,14 @@ class TestSetCachedResult:
     @pytest.mark.asyncio
     async def test_none_redis_is_noop(self) -> None:
         # Should not raise
-        await set_cached_result("https://example.com", "auto", {"url": "x"}, None)
+        await set_cached_result("https://example.com", "auto", "document", {"url": "x"}, None)
 
     @pytest.mark.asyncio
     async def test_redis_exception_swallowed(self) -> None:
         redis = AsyncMock()
         redis.setex = AsyncMock(side_effect=Exception("connection lost"))
         # Should not raise
-        await set_cached_result("https://example.com", "auto", {"url": "x"}, redis)
+        await set_cached_result("https://example.com", "auto", "document", {"url": "x"}, redis)
 
 
 class TestMaxBytesResolver:
@@ -165,7 +195,7 @@ class TestGetCachedResultStringValue:
         redis = AsyncMock()
         # Return string (not bytes) to exercise the non-bytes decode path
         redis.get = AsyncMock(return_value=json.dumps(payload))
-        result = await get_cached_result("https://example.com", "auto", redis)
+        result = await get_cached_result("https://example.com", "auto", "document", redis)
         assert result is not None
         assert result["markdown"] == "# Test"
 
@@ -186,7 +216,7 @@ class TestCacheRoundTrip:
         redis.get = mock_get
 
         payload = {"url": "https://example.com", "success": True, "markdown": "content"}
-        await set_cached_result("https://example.com", "auto", payload, redis)
-        result = await get_cached_result("https://example.com", "auto", redis)
+        await set_cached_result("https://example.com", "auto", "document", payload, redis)
+        result = await get_cached_result("https://example.com", "auto", "document", redis)
         assert result is not None
         assert result["markdown"] == "content"

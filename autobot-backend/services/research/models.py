@@ -24,7 +24,7 @@ class ResearchRequest(BaseModel):
     options: Dict[str, Any] = Field(default_factory=dict)
 
 
-class Citation(BaseModel):
+class ResearchFactCitation(BaseModel):
     """One source citation backing a synthesized statement."""
 
     fact_id: str
@@ -45,7 +45,7 @@ class ResearchResponse(BaseModel):
     """``POST /research`` response body — the full contract from #12622."""
 
     answer: str
-    citations: List[Citation] = Field(default_factory=list)
+    citations: List[ResearchFactCitation] = Field(default_factory=list)
     facts: List[ResearchFactOut] = Field(default_factory=list)
     # Phase 0 has no N-source corroborator (#12623 lands it) so this is
     # structurally present but always empty until Phase 1's corroborator can

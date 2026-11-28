@@ -130,9 +130,10 @@ class WorkflowSession:
 
 Key behaviors:
 
-- **Redis key format:** `chat:conversation:{session_id}` with 24-hour TTL
-- **File transcripts:** `data/conversation_transcripts/{session_id}.json`
-- **History window:** Last 10 exchanges are kept in memory; older entries are in file only
+- **System of record:** the chat session (`chat_history`, `chat:session:{session_id}` + session file) is the one durable home of every turn (#18293)
+- **Redis key format:** `chat:conversation:{session_id}` with 24-hour TTL, a cache of the LLM-context projection of the chat session
+- **Legacy transcripts:** `data/conversation_transcripts/{session_id}.json` is no longer written; it is read only for sessions with no turns in the chat session
+- **History window:** Last 10 completed exchanges, projected from the chat session; the full history stays in the chat session
 - **Inactive cleanup:** `cleanup_inactive_sessions(max_age_seconds=3600)` removes stale sessions
 - **Thread safety:** All session operations use `asyncio.Lock`
 - **Global singleton:** `get_chat_workflow_manager()` returns a thread-safe singleton
@@ -180,7 +181,7 @@ backend:
       # gpu_models:
       #   - "qwen3.5:9b"
       #   - "mistral:7b-instruct"
-      #   - "codellama:13b"
+      #   - "dolphin-llama3:8b"
 
 # Infrastructure host overrides
 # Fallback path for _get_ollama_endpoint_fallback() via get_host("ollama")
@@ -230,7 +231,7 @@ ollama_port = config.port.ollama         # Returns configured port (11434)
 ollama_url = f"http://{ollama_host}:{ollama_port}"
 ```
 
-The `ConfigManager` (instantiated as `global_config_manager` in `dependencies.py`)
+The `ConfigManager` (the `config_manager` instance exported by the `config` package)
 wraps all three layers. Its `get_host()` and `get_port()` methods implement the
 priority chain described below.
 
@@ -296,7 +297,7 @@ first successful result is used.
      |
      v
 [3] config.yaml endpoint (_get_ollama_endpoint)
-     |  Reads: backend.llm.ollama.endpoint via global_config_manager.get_nested()
+     |  Reads: backend.llm.ollama.endpoint via config_manager.get_nested()
      |  Validates URL starts with http:// or https://
      |
      +-- If valid -> append /api/generate -> DONE
@@ -322,7 +323,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks."""
         try:
-            endpoint = global_config_manager.get_nested(
+            endpoint = config_manager.get_nested(
                 "backend.llm.ollama.endpoint", None
             )
             if endpoint and endpoint.startswith(("http://", "https://")):
@@ -346,7 +347,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_for_model(self, model_name: str) -> str:
         """Get Ollama endpoint routed by model name (#1070)."""
         try:
-            base_url = global_config_manager.get_ollama_endpoint_for_model(
+            base_url = config_manager.get_ollama_endpoint_for_model(
                 model_name
             )
             if base_url and base_url.startswith(("http://", "https://")):
@@ -440,8 +441,8 @@ one more fallback layer:
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
-            default_model = global_config_manager.get_default_llm_model()
-            selected = global_config_manager.get_nested(
+            default_model = config_manager.get_default_llm_model()
+            selected = config_manager.get_nested(
                 "backend.llm.ollama.selected_model", default_model
             )
             if selected and isinstance(selected, str):
@@ -462,7 +463,7 @@ in addition to the nested legacy key.
 **Method 1: Environment variable**
 
 ```bash
-export AUTOBOT_DEFAULT_LLM_MODEL=llama3.2:latest
+export AUTOBOT_DEFAULT_LLM_MODEL=llama3.2:1b
 ```
 
 **Method 2: config.yaml (flat key -- preferred)**
@@ -473,7 +474,7 @@ backend:
   llm:
     ollama:
       endpoint: http://127.0.0.1:11434
-      selected_model: "llama3.2:latest"
+      selected_model: "llama3.2:1b"
 ```
 
 **Method 3: config.yaml (legacy nested key)**
@@ -485,7 +486,7 @@ backend:
     local:
       providers:
         ollama:
-          selected_model: "llama3.2:latest"
+          selected_model: "llama3.2:1b"
 ```
 
 **Method 4: Runtime API**
@@ -494,15 +495,15 @@ backend:
 curl -sk -X POST https://localhost:8443/api/settings/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${TOKEN}" \
-  -d '{"backend": {"llm": {"local": {"providers": {"ollama": {"selected_model": "mistral:latest"}}}}}}'
+  -d '{"backend": {"llm": {"local": {"providers": {"ollama": {"selected_model": "mistral:7b-instruct"}}}}}}'
 ```
 
 **Method 5: Programmatic update**
 
 ```python
-from dependencies import global_config_manager
+from config import config_manager
 
-global_config_manager.update_llm_model("llama3.2:latest")
+config_manager.update_llm_model("llama3.2:1b")
 # Writes to both settings.json and config.yaml
 ```
 
@@ -1019,7 +1020,7 @@ backend:
       gpu_models:
         - "qwen3.5:9b"
         - "mistral:7b-instruct"
-        - "codellama:13b"
+        - "dolphin-llama3:8b"
 ```
 
 ### How It Works
@@ -1399,7 +1400,7 @@ journalctl -u autobot-backend --since "1 minute ago" | grep "Using model"
 **Fixes:**
 
 - Pull the model: `ollama pull <model_name>`
-- Verify the model name matches exactly (including tag): `qwen3.5:9b` vs `mistral:latest`
+- Verify the model name matches exactly (including tag): `mistral:7b-instruct` (provisioned) vs `mistral:latest` (not provisioned): different tags pull different models
 - Update config to use an installed model
 
 ### Slow Responses
@@ -1419,7 +1420,7 @@ free -h      # Check available memory
 
 **Fixes:**
 
-- Use a smaller model (e.g., `qwen3.5:9b` instead of `llama3.2:70b`)
+- Use a smaller model (e.g., `phi3:mini` instead of `qwen3.5:9b`)
 - Enable GPU acceleration if available (Ollama auto-detects CUDA GPUs)
 - Configure GPU routing in `config.yaml` (see [GPU Model Routing](#8-gpu-model-routing))
 - Increase system RAM or GPU VRAM

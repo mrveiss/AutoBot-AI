@@ -12,7 +12,7 @@ Endpoints:
     DELETE /api/admin/retention-policies/{type}      - Delete policy by type
     GET    /api/admin/retention-settings             - Active config + per-type storage counts
 
-Access: admin/superadmin role required (RBAC enforced via require_role dependency).
+Access: admin/superadmin role required (the one admin gate, ``check_admin_permission``).
 """
 
 import uuid
@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/admin")
 async def list_retention_policies(
     request: Request,
     user_id: uuid.UUID | None = Query(None, description="Filter by user_id (NULL = global)"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyListResponse:
     """
@@ -73,7 +73,7 @@ async def list_retention_policies(
 async def create_or_update_retention_policy(
     request: Request,
     policy: RetentionPolicyCreate,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -118,7 +118,7 @@ async def get_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -162,7 +162,7 @@ async def delete_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """
@@ -215,24 +215,11 @@ async def _count_redis_keys(pattern: str) -> int:
 
 
 async def _count_audit_entries() -> int:
-    """Return total entries across all audit: sorted sets."""
+    """Return the number of records in the canonical audit trail (#17225); 0 = unavailable."""
     try:
-        from autobot_shared.redis_client import get_async_redis_client
+        from services.audit.audit import count_since
 
-        redis = await get_async_redis_client(database="main")
-        if redis is None:
-            return 0
-        total = 0
-        cursor: int = 0
-        while True:
-            cursor, keys = await redis.scan(cursor, match="audit:*", count=500)
-            for key in keys:
-                key_type = await redis.type(key)
-                if key_type == "zset":
-                    total += await redis.zcard(key)
-            if cursor == 0:
-                break
-        return total
+        return await count_since(0) or 0
     except Exception as exc:
         logger.debug("_count_audit_entries failed: %s", exc)
         return 0
@@ -262,11 +249,18 @@ async def _count_kb_facts() -> int:
         return 0
 
 
+def _audit_retention_table() -> Dict[str, int]:
+    """The audit retention policy table, category -> days (#17225 D5)."""
+    from services.audit.retention import RETENTION_DAYS
+
+    return {category.value: days for category, days in RETENTION_DAYS.items()}
+
+
 @router.get("/retention-settings", response_model=Dict[str, Any])
 @with_error_handling()
 async def get_retention_settings(
     request: Request,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Return active retention configuration and per-type storage counts (GH#8995).
 
@@ -286,6 +280,7 @@ async def get_retention_settings(
             "chat_retention_days": ssot_config.chat_retention_days,
             "file_retention_days": ssot_config.file_retention_days,
             "audit_retention_days": ssot_config.audit_retention_days,
+            "audit_retention_days_by_category": _audit_retention_table(),
             "kb_retention_days": ssot_config.kb_retention_days,
         },
         "storage_counts": {

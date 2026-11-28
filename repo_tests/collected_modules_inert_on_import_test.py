@@ -44,6 +44,9 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._main_guard import is_main_guard
+
 _REPO_ROOT = repo_root()
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
@@ -113,7 +116,7 @@ def _parse_module(path: Path) -> ast.Module:
     says how to take it out of the sweep on purpose.
     """
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except SyntaxError as exc:
         relative = path.relative_to(_REPO_ROOT)
         raise AssertionError(
@@ -128,13 +131,6 @@ def _parse_module(path: Path) -> ast.Module:
         ) from exc
 
 
-def _is_main_guard(node: ast.AST) -> bool:
-    if not isinstance(node, ast.If):
-        return False
-    source = ast.unparse(node.test)
-    return "__name__" in source and "__main__" in source
-
-
 def _exit_calls(tree: ast.Module, *, guarded: bool) -> list[tuple[str, int]]:
     """Interpreter-killing statements reachable at import time.
 
@@ -143,12 +139,12 @@ def _exit_calls(tree: ast.Module, *, guarded: bool) -> list[tuple[str, int]]:
     live rather than merely written down.
     """
     found: list[tuple[str, int]] = []
-    stack: list[ast.AST] = [node for node in tree.body if _is_main_guard(node) is guarded]
+    stack: list[ast.AST] = [node for node in tree.body if is_main_guard(node) is guarded]
     while stack:
         node = stack.pop()
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
             continue
-        if not guarded and _is_main_guard(node):
+        if not guarded and is_main_guard(node):
             continue
         if isinstance(node, ast.Raise):
             raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
@@ -184,7 +180,6 @@ def _collectable_modules(root: Path = _REPO_ROOT) -> list[Path]:
 REACH = declare(
     "collectable-modules-inert-on-import",
     discover=_collectable_modules,
-    floor=2730,
     growth=200,
     skips=0,
     what="modules matching pytest's python_files patterns",
@@ -239,17 +234,19 @@ def test_the_detector_catches_a_planted_exit_and_spares_a_guarded_one() -> None:
     its own rule — a fixture quoting a pattern is still an instance of it.
     """
     call = "sys." + "exit" + "(0)"
-    fatal = ast.parse("import sys\nprint('hi')\n" + call + "\n")
+    fatal = parse_cache.parse("import sys\nprint('hi')\n" + call + "\n")
     assert _exit_calls(fatal, guarded=False), "the detector missed a bare module-level exit"
 
-    inert = ast.parse('import sys\n\n\ndef main():\n    return 0\n\n\nif __name__ == "__main__":\n    ' + call + "\n")
+    inert = parse_cache.parse(
+        'import sys\n\n\ndef main():\n    return 0\n\n\nif __name__ == "__main__":\n    ' + call + "\n"
+    )
     assert not _exit_calls(inert, guarded=False), (
         "a __main__-guarded exit was reported — that spelling is correct and "
         "flagging it would get this guard disabled"
     )
     assert _exit_calls(inert, guarded=True), "the guarded-exit walk found nothing to exempt"
 
-    nested = ast.parse("import sys\n\n\ndef teardown():\n    " + call + "\n")
+    nested = parse_cache.parse("import sys\n\n\ndef teardown():\n    " + call + "\n")
     assert not _exit_calls(
         nested, guarded=False
     ), "an exit inside a function body was reported — pytest never runs it on import"

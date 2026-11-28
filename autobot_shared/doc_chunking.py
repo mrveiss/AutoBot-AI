@@ -5,19 +5,19 @@
 """
 Markdown section-chunking helpers — single-sourced (Issue #12663).
 
-Previously duplicated verbatim across two entrypoints:
+Previously duplicated verbatim across two entrypoints; the standalone CLI was
+retired into a shim over the service (#18129), so the one consumer is:
   - autobot-backend/services/knowledge/doc_indexer.py (async service, #1385)
-  - autobot-infrastructure/shared/tools/index_documentation.py (standalone CLI, #250)
-
-Both entrypoints chunk markdown by H2/H3 section boundaries the same way; only
-the surrounding orchestration (async vs sync, ChromaDB client wiring, doc-type
-inference) legitimately differs between the service and the CLI. This module
+ This module
 has zero AutoBot-specific dependencies (stdlib only) so it can be imported by
 the standalone CLI without pulling in the full backend dependency graph.
 """
 
 import re
 from typing import Any, Dict, List
+
+DEFAULT_CHUNK_MAX_TOKENS = 800
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
 
 
 def estimate_tokens(text: str) -> int:
@@ -55,15 +55,16 @@ def chunk_large_content(
     category: str,
     doc_title: str,
     chunks: List[Dict[str, Any]],
+    max_tokens: int = DEFAULT_CHUNK_MAX_TOKENS,
 ) -> None:
-    """Split large content into paragraph-based chunks (~800 tokens)."""
+    """Split large content into paragraph-based chunks (~``max_tokens`` tokens)."""
     paragraphs = full_content.split("\n\n")
     current_chunk: List[str] = []
     current_size = 0
 
     for para in paragraphs:
         para_tokens = estimate_tokens(para)
-        if current_size + para_tokens > 800 and current_chunk:
+        if current_size + para_tokens > max_tokens and current_chunk:
             chunks.append(
                 create_chunk(
                     "\n\n".join(current_chunk),
@@ -186,3 +187,45 @@ def process_h2_sections(
             doc_title,
             chunks,
         )
+
+
+def _split_oversized(paragraph: str, max_tokens: int) -> List[str]:
+    """Break one paragraph larger than the budget: sentences first, then word windows.
+
+    ``chunk_large_content`` only splits *between* paragraphs, so a transcript
+    that is a single unbroken block (#17830) would otherwise stay one chunk.
+    """
+    if estimate_tokens(paragraph) <= max_tokens:
+        return [paragraph]
+    pieces: List[str] = []
+    for sentence in _SENTENCE_BOUNDARY.split(paragraph):
+        if estimate_tokens(sentence) <= max_tokens:
+            pieces.append(sentence)
+            continue
+        words = sentence.split()
+        window = max(1, max_tokens * 4 // 6)  # ~6 chars per word incl. space
+        pieces.extend(" ".join(words[i : i + window]) for i in range(0, len(words), window))
+    return [part for piece in pieces for part in _hard_cap(piece, max_tokens)]
+
+
+def _hard_cap(piece: str, max_tokens: int) -> List[str]:
+    """Cut a piece that is still over budget (one token with no whitespace, e.g. base64) by characters."""
+    limit = max(1, max_tokens * 4)
+    if estimate_tokens(piece) <= max_tokens:
+        return [piece]
+    return [piece[i : i + limit] for i in range(0, len(piece), limit)]
+
+
+def chunk_plain_text(text: str, max_tokens: int = DEFAULT_CHUNK_MAX_TOKENS) -> List[str]:
+    """Split unstructured text (transcript, extracted PDF) into ~``max_tokens`` chunks.
+
+    Reuses :func:`chunk_large_content` for the packing; only paragraphs larger
+    than the whole budget are pre-split (sentences re-joined as paragraphs).
+    Text within the budget is returned whole and unmodified.
+    """
+    if estimate_tokens(text) <= max_tokens:
+        return [text]
+    paragraphs = [p for para in text.split("\n\n") for p in _split_oversized(para, max_tokens)]
+    chunks: List[Dict[str, Any]] = []
+    chunk_large_content("\n\n".join(paragraphs), "", None, "", "", "", "", chunks, max_tokens=max_tokens)
+    return [c["content"] for c in chunks if c["content"].strip()]

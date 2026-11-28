@@ -114,13 +114,13 @@ class _FakeManager:
         # #13292: production reads ctx.selected_model/rag_citations/used_knowledge
         # at the _persist_workflow_messages call site — a bare object() no longer
         # satisfies that attribute access.
-        return SimpleNamespace(selected_model="", rag_citations=[], used_knowledge=False)
+        return SimpleNamespace(selected_model="", rag_citations=[], used_knowledge=False, execution_history=[])
 
     async def _execute_llm_continuation_loop(self, ctx):
         # Model echoed the internal prompt then produced the real answer.
         yield ([f"{ECHO}\n\n{REAL_ANSWER}"], None, False)
 
-    async def _persist_conversation(self, session_id, session, message, llm_response):
+    async def _persist_conversation(self, session_id, session, message, llm_response, model=None):
         self.persisted["conversation"] = llm_response
 
     async def _persist_workflow_messages(self, session_id, workflow_messages, all_llm_responses, **_kwargs):

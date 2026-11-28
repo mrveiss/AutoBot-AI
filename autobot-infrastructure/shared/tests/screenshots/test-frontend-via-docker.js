@@ -1,12 +1,14 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 const axios = require('axios');
 
 // Test frontend navigation using the Docker Playwright service
 async function testFrontendViaDocker() {
   console.log('🚀 Starting frontend navigation test via Docker Playwright...');
 
-  const playwrightUrl = 'http://localhost:3000';
+  const playwrightUrl = `http://localhost:${BROWSER_PORT}`;
   const frontendUrl = 'http://localhost:5173';
 
   try {

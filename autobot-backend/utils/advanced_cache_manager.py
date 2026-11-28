@@ -180,7 +180,7 @@ class CacheStrategy(Enum):
 
 
 @dataclass
-class CacheConfig:
+class CacheEntryPolicy:
     """Configuration for cache behavior"""
 
     strategy: CacheStrategy
@@ -207,26 +207,26 @@ class AdvancedCacheManager:
         # Cache configurations for different data types
         self.cache_configs = {
             # Static data - long TTL
-            "templates": CacheConfig(CacheStrategy.STATIC, ttl=TTL_1_HOUR),  # 1 hour
-            "configurations": CacheConfig(CacheStrategy.STATIC, ttl=1800),  # 30 min
-            "model_info": CacheConfig(CacheStrategy.STATIC, ttl=900),  # 15 min
+            "templates": CacheEntryPolicy(CacheStrategy.STATIC, ttl=TTL_1_HOUR),  # 1 hour
+            "configurations": CacheEntryPolicy(CacheStrategy.STATIC, ttl=1800),  # 30 min
+            "model_info": CacheEntryPolicy(CacheStrategy.STATIC, ttl=900),  # 15 min
             # Dynamic data - medium TTL
-            "system_status": CacheConfig(CacheStrategy.DYNAMIC, ttl=TTL_5_MINUTES),  # 5 min
-            "project_status": CacheConfig(CacheStrategy.DYNAMIC, ttl=180),  # 3 min
-            "health_checks": CacheConfig(CacheStrategy.DYNAMIC, ttl=60),  # 1 min
+            "system_status": CacheEntryPolicy(CacheStrategy.DYNAMIC, ttl=TTL_5_MINUTES),  # 5 min
+            "project_status": CacheEntryPolicy(CacheStrategy.DYNAMIC, ttl=180),  # 3 min
+            "health_checks": CacheEntryPolicy(CacheStrategy.DYNAMIC, ttl=60),  # 1 min
             # User-scoped data - medium TTL
-            "user_preferences": CacheConfig(CacheStrategy.USER_SCOPED, ttl=TTL_1_HOUR),
-            "user_history": CacheConfig(CacheStrategy.USER_SCOPED, ttl=1800),
+            "user_preferences": CacheEntryPolicy(CacheStrategy.USER_SCOPED, ttl=TTL_1_HOUR),
+            "user_history": CacheEntryPolicy(CacheStrategy.USER_SCOPED, ttl=1800),
             # Computed results - long TTL for expensive operations
-            "code_analysis": CacheConfig(CacheStrategy.COMPUTED, ttl=7200),  # 2 hours
-            "search_results": CacheConfig(CacheStrategy.COMPUTED, ttl=1800),  # 30 min
-            "ai_responses": CacheConfig(CacheStrategy.COMPUTED, ttl=900),  # 15 min
+            "code_analysis": CacheEntryPolicy(CacheStrategy.COMPUTED, ttl=7200),  # 2 hours
+            "search_results": CacheEntryPolicy(CacheStrategy.COMPUTED, ttl=1800),  # 30 min
+            "ai_responses": CacheEntryPolicy(CacheStrategy.COMPUTED, ttl=900),  # 15 min
             # Temporary data - short TTL
-            "session_data": CacheConfig(CacheStrategy.TEMPORARY, ttl=TTL_5_MINUTES),
-            "api_rate_limits": CacheConfig(CacheStrategy.TEMPORARY, ttl=60),
+            "session_data": CacheEntryPolicy(CacheStrategy.TEMPORARY, ttl=TTL_5_MINUTES),
+            "api_rate_limits": CacheEntryPolicy(CacheStrategy.TEMPORARY, ttl=60),
             # Knowledge base data - medium TTL with size limits
-            "knowledge_queries": CacheConfig(CacheStrategy.KNOWLEDGE, ttl=TTL_5_MINUTES, max_size=1000),  # 5 min
-            "knowledge_embeddings": CacheConfig(CacheStrategy.KNOWLEDGE, ttl=TTL_1_HOUR, max_size=5000),  # 1 hour
+            "knowledge_queries": CacheEntryPolicy(CacheStrategy.KNOWLEDGE, ttl=TTL_5_MINUTES, max_size=1000),  # 5 min
+            "knowledge_embeddings": CacheEntryPolicy(CacheStrategy.KNOWLEDGE, ttl=TTL_1_HOUR, max_size=5000),  # 1 hour
         }
 
         if self.sync_redis_client:
@@ -255,7 +255,7 @@ class AdvancedCacheManager:
 
     def _make_cache_key(self, data_type: str, key: str, user_id: str | None = None) -> str:
         """Generate hierarchical cache key"""
-        config = self.cache_configs.get(data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
+        config = self.cache_configs.get(data_type, CacheEntryPolicy(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
 
         if config.strategy == CacheStrategy.USER_SCOPED and user_id:
             return f"{self.cache_prefix}{data_type}:user:{user_id}:{key}"
@@ -312,7 +312,7 @@ class AdvancedCacheManager:
 
         try:
             cache_key = self._make_cache_key(data_type, key, user_id)
-            config = self.cache_configs.get(data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
+            config = self.cache_configs.get(data_type, CacheEntryPolicy(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
             ttl = custom_ttl or config.ttl
 
             # Add metadata
@@ -740,7 +740,7 @@ class AdvancedCacheManager:
         """Manage cache size using LRU eviction.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
-        Implements max_size limits from CacheConfig.
+        Implements max_size limits from CacheEntryPolicy.
         """
         await self._ensure_redis_client()
         if not self.redis_client:
@@ -763,7 +763,7 @@ class AdvancedCacheManager:
             logger.error("Error managing cache size for %s: %s", data_type, e)
 
     # =========================================================================
-    # BACKWARD COMPATIBILITY METHODS (from backend/utils/cache_manager.py)
+    # BACKWARD COMPATIBILITY METHODS (from the retired utils/cache_manager.py)
     # =========================================================================
 
     async def simple_get(self, key: str) -> Any | None:
@@ -938,7 +938,7 @@ def get_knowledge_cache():
 
 class SimpleCacheManager:
     """
-    Backward compatibility wrapper for backend/utils/cache_manager.py.
+    Backward compatibility wrapper for the retired utils/cache_manager.py.
     Provides simple TTL-based caching API using AdvancedCacheManager backend.
     """
 
@@ -959,9 +959,8 @@ class SimpleCacheManager:
         return self._cache.redis_client is not None
 
     async def _ensure_redis_client(self):
-        """Ensure Redis client is initialized (backward compatibility)"""
-        # AdvancedCacheManager auto-initializes, so this is a no-op
-        # But we keep it for API compatibility
+        """Initialise the underlying async Redis client (idempotent, lock-guarded)."""
+        await self._cache._ensure_redis_client()
 
     async def get(self, key: str) -> Any | None:
         """Get cached value"""
@@ -1019,6 +1018,7 @@ class SimpleCacheManager:
         Get cache statistics.
         Backward compatibility for CacheManager.get_stats()
         """
+        await self._ensure_redis_client()
         if not self._cache.redis_client:
             return {"status": "disabled", "total_keys": 0}
 

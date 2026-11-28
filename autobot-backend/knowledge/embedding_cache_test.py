@@ -9,10 +9,12 @@ and cover cross-model isolation (same text, different models → no collision).
 """
 
 import asyncio
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 
+from autobot_shared.monotonic_clock import FakeClock
 from knowledge_base import EmbeddingCache, get_embedding_cache
 
 # Single model id used by the ARC-mechanics tests below. The cross-model
@@ -21,9 +23,15 @@ _MODEL = "test-embed-model"
 
 
 @pytest.fixture
-def cache():
+def clock():
+    """Injectable fake monotonic clock (#18888)"""
+    return FakeClock()
+
+
+@pytest.fixture
+def cache(clock):
     """Create a fresh embedding cache for each test"""
-    return EmbeddingCache(maxsize=3, ttl_seconds=2)
+    return EmbeddingCache(maxsize=3, ttl_seconds=2, clock=clock)
 
 
 @pytest_asyncio.fixture
@@ -186,24 +194,25 @@ class TestEmbeddingCache:
         assert isinstance(stats["t2_size"], int)
 
     @pytest.mark.asyncio
-    async def test_ttl_expiration(self, cache):
+    async def test_ttl_expiration(self, cache, clock):
         """Test that entries expire after TTL"""
         query = "expiring query"
         embedding = [0.1, 0.2, 0.3]
 
         await cache.put(query, embedding, model=_MODEL)
+        assert await cache.get(query, model=_MODEL) == embedding
 
-        # Immediately should be available
-        result = await cache.get(query, model=_MODEL)
-        assert result == embedding
+        clock.advance(2.1)  # past the 2 s TTL, no sleep (#18888)
 
-        # Wait for TTL to expire (2 seconds) - Issue #479: Use async sleep
-        # fixed sleep on purpose (#16255): TTL expiry via time.time() is the subject; no injectable clock
-        await asyncio.sleep(2.1)
+        assert await cache.get(query, model=_MODEL) is None
 
-        # Should be expired now
-        result = await cache.get(query, model=_MODEL)
-        assert result is None
+    @pytest.mark.asyncio
+    async def test_backward_wall_clock_step_does_not_extend_ttl(self, cache, clock):
+        """A backward time.time() step must not keep an entry alive (#18888)"""
+        await cache.put("q", [0.1], model=_MODEL)
+        clock.advance(2.1)
+        with patch("time.time", return_value=0.0):  # wall clock stepped far back
+            assert await cache.get("q", model=_MODEL) is None
 
     @pytest.mark.asyncio
     async def test_cache_clear(self, cache):

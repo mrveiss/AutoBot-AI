@@ -15,16 +15,8 @@
     mode: '0750'
   become: true
 
-- name: Deploy postgresql.conf
-  ansible.builtin.template:
-    src: postgresql.conf.j2
-    dest: "{{ postgresql_config_dir }}/postgresql.conf"
-    owner: postgres
-    group: postgres
-    mode: '0644'
-    backup: true
-  become: true
-  notify: Restart PostgreSQL
+- name: Render postgresql.conf (one definition, shared with the builtin updater, #19848)
+  ansible.builtin.include_tasks: config_file.yml
 
 # On a collapsed single-box deploy one Postgres instance serves several app
 # users (slm_app + autobot_app). Discover every existing login role so the

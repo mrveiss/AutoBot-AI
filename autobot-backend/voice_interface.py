@@ -21,6 +21,7 @@ from typing import Any, Dict
 import yaml
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import config
@@ -278,23 +279,15 @@ class VoiceInterface:
             logger.warning("No TTS backends available. Install pyttsx3, TTS (coqui), or gtts.")
 
     def _load_config(self, config_path: str) -> dict:
-        """Load YAML configuration from file path.
+        """Load YAML configuration from file path via the shared loader (#17855).
 
         Args:
             config_path: Path to configuration file.
 
         Returns:
-            Loaded configuration dictionary.
+            Loaded configuration dictionary (empty when absent or unreadable).
         """
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except FileNotFoundError:
-            logger.warning("Config file not found: %s, using defaults", config_path)
-            return {}
-        except Exception as e:
-            logger.error("Failed to load config from %s: %s", config_path, e)
-            return {}
+        return load_config_file(config_path, dict, "Voice interface").values
 
     def _init_tts_engine(self) -> pyttsx3.Engine | None:
         """Initialize pyttsx3 text-to-speech engine if available.

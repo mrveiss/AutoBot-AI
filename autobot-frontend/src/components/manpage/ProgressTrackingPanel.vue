@@ -1,10 +1,10 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="md">
+  <BaseCard scrollable v-if="show" variant="bordered" size="md">
     <template #header>
       <h3><Icon name="tasks" /> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline-solid"
+        variant="outline"
         @click="$emit('hide')"
       >
         <Icon name="times" />
@@ -64,10 +64,11 @@
         </span>
       </div>
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -83,8 +84,6 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 
 interface ProgressMessage {
@@ -213,7 +212,7 @@ const recentMessages = computed(() => props.state.messages.slice(-5))
   flex: 1;
 }
 
-.progress-message i {
+.progress-message .icon {
   margin-right: var(--spacing-2);
 }
 

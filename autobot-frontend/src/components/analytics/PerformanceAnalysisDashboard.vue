@@ -354,9 +354,8 @@ import { ref, computed, onMounted } from 'vue'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
-import api from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const logger = createLogger('PerformanceAnalysisDashboard')
@@ -532,9 +531,8 @@ async function runAnalysis() {
 
   loading.value = true
   try {
-    // Issue #701: Fixed api.get call to use params option and type assertion
-    const response = await api.get<ApiDataResponse>(`${getApiBase()}/performance/analyze`, {
-      params: { path: selectedPath.value }
+    const response = await apiClient.call('get', '/api/performance/analyze', {
+      query: { path: selectedPath.value }
     })
     // Issue #701: Response is returned directly, handle both response structures
     lastResult.value = ((response as ApiDataResponse).data as AnalysisResult | undefined) || response as unknown as AnalysisResult
@@ -557,10 +555,9 @@ async function runAnalysis() {
 
 async function loadPatterns() {
   try {
-    // Issue #701: Added type assertion for response
-    const response = await api.get<Pattern[] | ApiDataResponse>(`${getApiBase()}/performance/patterns`)
+    const response = await apiClient.call('get', '/api/performance/patterns')
     // Issue #701: Response could be array directly or wrapped in data
-    patterns.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Pattern[] | undefined) || [])
+    patterns.value = Array.isArray(response) ? (response as unknown as Pattern[]) : (((response as ApiDataResponse).data as Pattern[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
@@ -569,10 +566,9 @@ async function loadPatterns() {
 
 async function loadHotspots() {
   try {
-    // Issue #701: Added type assertion for response
-    const response = await api.get<Hotspot[] | ApiDataResponse>(`${getApiBase()}/performance/hotspots`)
+    const response = await apiClient.call('get', '/api/performance/hotspots')
     // Issue #701: Response could be array directly or wrapped in data
-    hotspots.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Hotspot[] | undefined) || [])
+    hotspots.value = Array.isArray(response) ? (response as unknown as Hotspot[]) : (((response as ApiDataResponse).data as Hotspot[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load hotspots:', error)
     hotspots.value = []
@@ -582,8 +578,11 @@ async function loadHotspots() {
 async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
-    // Issue #701: Fixed api.post call - data should be second arg, options third
-    await api.post<unknown>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
+    // The contract takes `enabled` as a query parameter (the old body was ignored).
+    await apiClient.call('post', '/api/performance/patterns/{pattern_id}/toggle', {
+      path: { pattern_id: pattern.id },
+      query: { enabled: newState },
+    })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)

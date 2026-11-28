@@ -18,22 +18,24 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.async_compat import fire_and_forget
-from autobot_shared.coordination.run_progress import record_progress
-from autobot_shared.logging_manager import get_logger
-from circuit_breaker import (
+from autobot_shared.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerOpenError,
     get_circuit_breaker_manager,
 )
+from autobot_shared.coordination.run_progress import record_progress
+from autobot_shared.logging_manager import get_logger
 from constants import CircuitBreakerDefaults
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse, LLMSettings
 from .observability import registry as obs_registry
-from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy, TokenExpiredError
+from .provider_auth import ProviderAuthError, ProviderAuthStrategy, StaticApiKeyAuth, TokenExpiredError
 from .provider_degradation import DegradationCause, get_degradation_store
+from .quota_headroom import get_quota_headroom_store
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
+from .rate_limit_headers import has_header_mapping, parse_rate_limit_headers
 from .structured_output import StructuredOutputMode, effective_mode, note_structured_output
 from .token_budget import get_token_budget_gate
 
@@ -103,21 +105,21 @@ class BaseProvider(ABC):
             settings: Optional dict of provider-specific configuration values.
                       Keys are provider-specific (e.g., ``api_key``,
                       ``base_url``, ``default_model``).
-            auth_strategy: Optional auth strategy (``ApiKeyAuth``, ``OAuthAuth``,
+            auth_strategy: Optional auth strategy (``StaticApiKeyAuth``, ``OAuthAuth``,
                            ``DeviceCodeAuth``, ``SessionAuth``).  When omitted, the
                            legacy ``settings["api_key"]`` path is used via
-                           ``ApiKeyAuth`` — fully backward-compatible.
+                           ``StaticApiKeyAuth`` — fully backward-compatible.
         """
         self.settings: Dict[str, Any] = settings or {}
         self._total_requests = 0
         self._total_errors = 0
-        # Resolve auth strategy: explicit arg wins; fall back to ApiKeyAuth when an
+        # Resolve auth strategy: explicit arg wins; fall back to StaticApiKeyAuth when an
         # api_key is present in settings; leave None for local providers (Ollama etc.)
         # that need no credential at all.
         if auth_strategy is not None:
             self._auth_strategy: Optional[ProviderAuthStrategy] = auth_strategy
         elif self.settings.get("api_key"):
-            self._auth_strategy = ApiKeyAuth(self.settings["api_key"])
+            self._auth_strategy = StaticApiKeyAuth(self.settings["api_key"])
         else:
             self._auth_strategy = None
         # GH#16527: per-provider in-flight concurrency cap. settings takes a
@@ -161,7 +163,7 @@ class BaseProvider(ABC):
         handler = get_backoff_handler()
 
         async def _attempt() -> LLMResponse:
-            start = time.monotonic()
+            entered = time.monotonic()
             try:
                 # #11498: if the completion breaker is OPEN and still cooling, fail
                 # fast BEFORE taking a shared cross-worker rate-limit token so a down
@@ -169,28 +171,12 @@ class BaseProvider(ABC):
                 # ready-to-probe is NOT rejecting, so it falls through and
                 # _guarded_completion transitions the breaker to HALF_OPEN to recover.
                 if self._completion_circuit_breaker().is_rejecting:
-                    return self._breaker_error_response(request, f"{provider_key} circuit breaker open", start)
+                    return self._breaker_error_response(request, f"{provider_key} circuit breaker open", entered)
                 # Issue #14211: only reached once the breaker guarantees a matching
                 # notify_response/notify_error below, so the recorder's in-flight
                 # gauge stays balanced.
                 self._notify_request_started(request, provider_key)
-                # GH#16527: bound in-flight concurrent requests to this provider
-                # instance before the rate-limit token, so a burst queues here first.
-                async with self._concurrency_semaphore:
-                    # Issue #8170: acquire a rate-limit token shared across all uvicorn
-                    # workers via Redis.  Falls back to allow-all when Redis unavailable.
-                    async with get_llm_rate_limiter().acquire(provider_key):
-                        try:
-                            response = await self._guarded_completion(request)
-                            latency_ms = (time.monotonic() - start) * 1000
-                            response.metadata.setdefault("request_type", self._request_type_label(request))
-                            self._notify_response(response, latency_ms)
-                            # GH#8502: raise so the backoff handler can retry.
-                            raise_if_rate_limited(response)
-                            return response
-                        except Exception as exc:
-                            self._notify_error(exc, request)
-                            raise
+                return await self._complete_in_slot(request, provider_key, entered)
             finally:
                 record_progress()  # every exit of every attempt is progress (#15950 AC4)
 
@@ -199,6 +185,37 @@ class BaseProvider(ABC):
         except Exception:
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
+            raise
+
+    async def _complete_in_slot(self, request: LLMRequest, provider_key: str, entered: float) -> LLMResponse:
+        """Wait for the concurrency slot and rate-limit token, then run the call (#21914).
+
+        ``queue_wait_ms`` (attempt entry until slot and token are both held) and
+        provider ``latency_ms`` are measured separately: the latency clock starts
+        only once both are held, so a long queue never reads as a slow provider.
+        The wait travels on the same observation as ``response.metadata["queue_wait_ms"]``.
+
+        #14211: the request-started notify already fired, so every exit yields exactly one terminal
+        event: notify_response on success, notify_error on a failure, a rate limit (#21929) or a
+        cancellation while still queued.
+        """
+        try:
+            # GH#16527: bound in-flight requests per provider before the rate-limit token.
+            async with self._concurrency_semaphore:
+                # Issue #8170: cross-worker Redis token; allow-all when Redis is unavailable.
+                async with get_llm_rate_limiter().acquire(provider_key):
+                    start = time.monotonic()
+                    response = await self._guarded_completion(request)
+                    latency_ms = (time.monotonic() - start) * 1000
+                    response.metadata.setdefault("request_type", self._request_type_label(request))
+                    response.metadata["queue_wait_ms"] = (start - entered) * 1000
+                    # GH#8502: raise so the backoff handler can retry. Checked before notify_response so a
+                    # rate-limited attempt ends in ONE terminal event, the notify_error below (#21929).
+                    raise_if_rate_limited(response)
+                    self._notify_response(response, latency_ms)
+                    return response
+        except (Exception, asyncio.CancelledError) as exc:
+            self._notify_error(exc, request)
             raise
 
     def applied_structured_output_mode(self, request: LLMRequest) -> StructuredOutputMode:
@@ -404,10 +421,65 @@ class BaseProvider(ABC):
         if self._auth_strategy.is_vault_backed():
             # A successful vault-backed resolve proves the credential is
             # valid again — clear any stale needs_reauth mark (#15022).
-            # No-op when nothing was marked; skipped for ApiKeyAuth, which
+            # No-op when nothing was marked; skipped for StaticApiKeyAuth, which
             # can never have raised TokenExpiredError in the first place.
             await get_degradation_store().clear(self.provider_name)
         return token
+
+    async def _signed_in_token(self) -> str | None:
+        """The signed-in OAuth token for the current call, or None to use the API key (#19241).
+
+        User's own token, then the org/system token; see
+        ``llm_shared.provider_oauth_credentials``. Always None for a provider
+        without sign-in, so callers can ask unconditionally.
+        """
+        from .provider_oauth_credentials import resolve_signed_in_token  # noqa: PLC0415  # lazy: DB stack
+
+        return await resolve_signed_in_token(self.provider_name)
+
+    def _headroom_http_client(self, default_client_cls: Any) -> Any | None:
+        """An SDK httpx client that harvests rate-limit headers off every response (#15026).
+
+        *default_client_cls* is the SDK's own ``DefaultAsyncHttpxClient`` so its
+        timeouts/limits are kept; only a ``response`` event hook is added. The
+        hook fires for success, 429 and streaming responses alike, and issues no
+        request of its own. Returns ``None`` -- the SDK builds its own client --
+        for a provider whose header spelling is unmapped or an SDK without the
+        class, so absence is "no harvesting", never a failure.
+        """
+        if default_client_cls is None or not has_header_mapping(self.provider_name):
+            return None
+
+        async def _on_response(response: Any) -> None:
+            self._harvest_headroom(response.headers)
+
+        return default_client_cls(event_hooks={"response": [_on_response]})
+
+    def _harvest_headroom(self, headers: Any) -> None:
+        """Record the headroom *headers* carry; never raises, never blocks the response.
+
+        The store write is scheduled fire-and-forget so the response path pays
+        only for parsing a handful of header lookups.
+        """
+        try:
+            observations = parse_rate_limit_headers(self.provider_name, headers)
+            if not observations:
+                return
+            fire_and_forget(self._record_headroom(observations), name="quota-headroom-harvest")
+        except Exception:
+            logger.debug("quota_headroom: harvest skipped for %s", self.provider_name, exc_info=True)
+
+    async def _record_headroom(self, observations: List[Any]) -> None:
+        store = get_quota_headroom_store()
+        for obs in observations:
+            await store.record(
+                self.provider_name,
+                obs.window,
+                limit=obs.limit,
+                remaining=obs.remaining,
+                resets_at=obs.resets_at,
+                source=obs.source,
+            )
 
     def _build_provider_metadata(
         self,

@@ -13,6 +13,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from llm_shared.models import LLMResponse
+from tests.helpers._llm_service_double import make_llm_service_double
+
 from .rl_router import (
     _CONFIDENCE_BASE,
     _CONFIDENCE_SCALE,
@@ -281,7 +284,7 @@ class TestConfidenceMapping:
 class TestAgentRouterRLIntegration:
     def _make_agent_router(self, rl_router=None):
         caps = {AgentType.CHAT: MagicMock(), AgentType.CODE_GENERATION: MagicMock()}
-        llm = AsyncMock()
+        llm = make_llm_service_double()  # #19649: chat_completion would raise
         router = AgentRouter(agent_capabilities=caps, llm_interface=llm)
         router._rl_router = rl_router
         return router
@@ -313,7 +316,7 @@ class TestAgentRouterRLIntegration:
             }
         )
         router = self._make_agent_router(rl_mock)
-        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
+        router.llm_interface.chat.return_value = LLMResponse(content=llm_response)
 
         result = await router.determine_routing("something ambiguous here please help me decide")
         # Should NOT be 'rl' source — LLM was used
@@ -335,7 +338,7 @@ class TestAgentRouterRLIntegration:
         )
         router = self._make_agent_router(rl_mock)
         router.rl_routing_enabled = False
-        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
+        router.llm_interface.chat.return_value = LLMResponse(content=llm_response)
 
         result = await router.determine_routing("something ambiguous here please help me decide")
         assert result.get("source") != "rl"
@@ -355,7 +358,7 @@ class TestAgentRouterRLIntegration:
             }
         )
         router = self._make_agent_router(rl_mock)
-        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
+        router.llm_interface.chat.return_value = LLMResponse(content=llm_response)
 
         # Should not raise — falls back to LLM silently
         result = await router.determine_routing("something ambiguous here please help me decide")

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Dict, Tuple
 from autobot_shared.logging_manager import get_logger
 
 from ..torch_loader import lazy_torch
+from .taxonomy import Dtype
 
 if TYPE_CHECKING:
     import torch
@@ -53,17 +54,6 @@ RTX_4070_VRAM_BYTES: int = 8 * 1024 * 1024 * 1024
 #: Recommended fraction of RTX 4070 VRAM to budget for KV caches.
 #: Leaves headroom for model weights, activations, and framework overhead.
 RTX_4070_KV_CACHE_FRACTION: float = 0.35
-
-#: Bytes per element for supported dtypes.
-_DTYPE_BYTES: Dict[str, int] = {
-    "fp16": 2,
-    "bf16": 2,
-    "fp32": 4,
-    "float16": 2,
-    "bfloat16": 2,
-    "float32": 4,
-}
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -106,13 +96,12 @@ class KVCacheConfig:
             raise ValueError(f"max_seq_len must be >= 1, got {self.max_seq_len}")
         if self.batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
-        if self.dtype not in _DTYPE_BYTES:
-            raise ValueError(f"Unsupported dtype '{self.dtype}'. " f"Choose from: {sorted(_DTYPE_BYTES)}")
+        Dtype.parse(self.dtype)
 
     @property
     def dtype_bytes(self) -> int:
         """Bytes per element for the configured dtype."""
-        return _DTYPE_BYTES[self.dtype]
+        return Dtype.parse(self.dtype).nbytes
 
 
 # ---------------------------------------------------------------------------

@@ -303,9 +303,6 @@ EXEMPT: dict[str, str] = {
 #: path -> occurrences permitted today. **This may only SHRINK.**
 #: No address appears here by design -- see the module docstring.
 BASELINE: dict[str, int] = {
-    ".claude/agents/frontend-engineer-agent.md": 4,
-    ".claude/skills/bugfix/SKILL.md": 3,
-    ".claude/skills/deploy/SKILL.md": 6,
     "CHANGELOG.md": 11,
     "autobot-backend/README.md": 1,
     "autobot-backend/resources/prompts/chat/installation_help.md": 1,
@@ -340,11 +337,10 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/autobot-slm-backend/README.md": 4,
     "autobot-infrastructure/autobot-slm-database/README.md": 3,
     "autobot-infrastructure/autobot-slm-frontend/README.md": 4,
-    "autobot-infrastructure/shared/config/environment-files.md": 3,
     "autobot-infrastructure/shared/config/grafana/dashboards/autobot-multi-machine.json": 44,
     "autobot-infrastructure/shared/config/grafana/grafana.ini": 1,
     "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/README.md": 3,
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/README.md": 5,
+    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/README.md": 3,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/correlate-unfinished-tasks.cjs": 1,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/generate-insights.cjs": 2,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/ingest-conversation.cjs": 1,
@@ -352,7 +348,6 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/validate-fixes.cjs": 7,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/README.md": 2,
     "autobot-infrastructure/shared/scripts/hooks/slm-post-commit": 1,
-    "autobot-infrastructure/shared/scripts/systemd/autobot-frontend.service": 2,
     "autobot-infrastructure/shared/scripts/systemd/slm-admin-ui.service": 1,
     "autobot-infrastructure/shared/scripts/utilities/README-SECURITY.md": 4,
     "autobot-infrastructure/shared/tests/KNOWLEDGE_MANAGER_TESTS_README.md": 1,
@@ -407,7 +402,7 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/scripts/README-remove-orphaned-node.md": 11,
     "autobot-slm-backend/services/inventory_placeholder_test.py": 1,
     "autobot-slm-frontend/README.md": 4,
-    "autobot-tts-worker/README.md": 2,
+    "autobot-tts-worker/README.md": 1,  # #17782: the second was an internal address in the arch diagram
     "changelog/v0.4.0.md": 9,
     "check-grafana-health.sh": 2,
     "context7.json": 2,

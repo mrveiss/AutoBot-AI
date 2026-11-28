@@ -1,0 +1,134 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Ansible Monitoring Role - Alertmanager Installation (#18556)
+#
+# Ported from the retired install-prometheus-stack.sh, which was the only thing
+# that installed Alertmanager. The role and the builtin updater are now the
+# single install path.
+---
+
+- name: Create alertmanager group
+  ansible.builtin.group:
+    name: "{{ alertmanager_group }}"
+    system: true
+    state: present
+
+- name: Create alertmanager user
+  ansible.builtin.user:
+    name: "{{ alertmanager_user }}"
+    group: "{{ alertmanager_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+# #18556: a host may run its own Alertmanager on these paths (the upstream tarball's layout).
+# Record each path this role is about to create, before creating it, so scripts/uninstall.sh
+# removes only what AutoBot made -- never an installation that was here first.
+- name: "Alertmanager | Note which of its paths are already on the host (#18556)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ alertmanager_owned_paths }}"
+  register: _alertmanager_preexisting
+
+- name: "Alertmanager | Record the paths this role creates, so uninstall may remove them (#18556)"
+  ansible.builtin.lineinfile:
+    path: "{{ autobot_install_record }}"
+    line: "created_path={{ item.item }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ _alertmanager_preexisting.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not item.stat.exists
+
+# A version bump replaces the installed binary, not only a missing one (#18556 review).
+- name: Check whether the pinned Alertmanager release is installed
+  ansible.builtin.include_tasks: release_binary.yml
+  vars:
+    release_binary: "{{ alertmanager_install_dir }}/alertmanager"
+    release_version: "{{ alertmanager_version }}"
+
+- name: Create alertmanager directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ alertmanager_user }}"
+    group: "{{ alertmanager_group }}"
+    mode: "0755"
+  loop:
+    - "{{ alertmanager_install_dir }}"
+    - "{{ alertmanager_config_dir }}"
+    - "{{ alertmanager_data_dir }}"
+
+- name: Download Alertmanager
+  ansible.builtin.get_url:
+    url: "https://{{ alertmanager_release_host }}/prometheus/alertmanager/releases/download/v{{ alertmanager_version }}/alertmanager-{{ alertmanager_version }}.linux-amd64.tar.gz"
+    dest: "{{ alertmanager_archive }}"
+    mode: "0644"
+  when: release_install_needed | bool
+
+- name: Extract Alertmanager
+  ansible.builtin.unarchive:
+    src: "{{ alertmanager_archive }}"
+    dest: "{{ alertmanager_install_dir }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    owner: "{{ alertmanager_user }}"
+    group: "{{ alertmanager_group }}"
+  when: release_install_needed | bool
+  notify: Restart alertmanager
+
+- name: Remove the Alertmanager tarball
+  ansible.builtin.file:
+    path: "{{ alertmanager_archive }}"
+    state: absent
+
+# Validated with the binary's own amtool before it replaces the live file, so a
+# bad routing config fails the play instead of taking alert delivery down.
+- name: Install Alertmanager config
+  ansible.builtin.copy:
+    src: "{{ alertmanager_config_src }}"
+    dest: "{{ alertmanager_config_dir }}/alertmanager.yml"
+    remote_src: true
+    owner: "{{ alertmanager_user }}"
+    group: "{{ alertmanager_group }}"
+    mode: "0644"
+    validate: "{{ alertmanager_install_dir }}/amtool check-config %s"
+  notify: Restart alertmanager
+
+- name: Create Alertmanager systemd service
+  ansible.builtin.template:
+    src: alertmanager.service.j2
+    dest: /etc/systemd/system/alertmanager.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart alertmanager
+
+- name: Enable and start Alertmanager
+  ansible.builtin.systemd:
+    name: alertmanager
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Ported from install-prometheus-stack.sh verify_installation: ask the server
+# rather than trust that the unit started. The pending restart is applied first
+# so the answer describes the config just installed.
+- name: "Alertmanager | Apply the pending restart before checking health (#18556)"
+  ansible.builtin.meta: flush_handlers
+
+- name: "Alertmanager | Ask the running server whether it is healthy (#18556)"
+  ansible.builtin.uri:
+    url: "http://{{ alertmanager_listen_address }}:{{ alertmanager_port }}/-/healthy"
+  register: _alertmanager_health
+  retries: "{{ alertmanager_health_check_retries }}"
+  delay: "{{ alertmanager_health_check_delay }}"
+  until: _alertmanager_health.status | default(0) == 200
+  changed_when: false

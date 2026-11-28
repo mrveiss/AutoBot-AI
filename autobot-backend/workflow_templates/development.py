@@ -13,7 +13,7 @@ from typing import List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _create_deployment_setup_steps() -> List[WorkflowStep]:
@@ -180,7 +180,7 @@ def create_code_review_template() -> WorkflowTemplate:
         id="code_review",
         name="Code Review",
         description="Automated code review with security and quality analysis",
-        category=TemplateCategory.DEVELOPMENT,
+        category=WorkflowTemplateCategory.DEVELOPMENT,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=25,
         agents_involved=[
@@ -205,7 +205,7 @@ def create_deployment_pipeline_template() -> WorkflowTemplate:
         id="deployment_pipeline",
         name="Deployment Pipeline",
         description="Automated deployment pipeline setup and execution",
-        category=TemplateCategory.DEVELOPMENT,
+        category=WorkflowTemplateCategory.DEVELOPMENT,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=45,
         agents_involved=[
@@ -310,7 +310,7 @@ def create_testing_strategy_template() -> WorkflowTemplate:
         id="testing_strategy",
         name="Testing Strategy",
         description="Comprehensive testing strategy development and implementation",
-        category=TemplateCategory.DEVELOPMENT,
+        category=WorkflowTemplateCategory.DEVELOPMENT,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=30,
         agents_involved=[

@@ -74,6 +74,15 @@ describe('makeAxiosCompatClient — envelope + routing', () => {
     })
   })
 
+  it('keeps the bare `HTTP <status>` message even when the response has a statusText', async () => {
+    mockRaw.mockResolvedValue({ ...makeResponse(409, { detail: 'conflict' }), statusText: 'Conflict' })
+    await expect(makeAxiosCompatClient().post('/secrets')).rejects.toMatchObject({
+      message: 'HTTP 409',
+      status: 409,
+      details: { detail: 'conflict' },
+    })
+  })
+
   it('serialises get params through withParams (arrays flag honoured)', async () => {
     mockRaw.mockResolvedValue(makeResponse(200, {}))
     const client = makeAxiosCompatClient({ arrays: true })

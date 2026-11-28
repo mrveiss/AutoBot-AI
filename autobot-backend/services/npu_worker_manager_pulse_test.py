@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from models.npu_models import NPUWorkerConfig, NPUWorkerStatus, WorkerStatus
+from models.npu_models import NPUWorkerDefinition, NPUWorkerStatus, WorkerStatus
 from services.npu_worker_manager import NPUWorkerManager
 
 # ---------------------------------------------------------------------------
@@ -27,8 +27,8 @@ from services.npu_worker_manager import NPUWorkerManager
 # ---------------------------------------------------------------------------
 
 
-def _make_worker_config(worker_id: str = "test-worker-1") -> NPUWorkerConfig:
-    return NPUWorkerConfig(
+def _make_worker_config(worker_id: str = "test-worker-1") -> NPUWorkerDefinition:
+    return NPUWorkerDefinition(
         id=worker_id,
         name="Test Worker",
         url="http://127.0.0.1:8099",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default

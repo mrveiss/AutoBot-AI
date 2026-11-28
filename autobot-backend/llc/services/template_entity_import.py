@@ -1,0 +1,43 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Library and built-in template import: projects and work items, via the one shared import (#20472)."""
+
+import uuid
+from typing import Any, Dict, List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
+
+from ..exceptions import refusal_text_keeping_public_reason
+from .portability import TemplateImportError
+from .work_item_import import KIND_LIBRARY, import_template_work
+
+logger = get_logger(__name__)
+
+
+async def import_template_entities(
+    session: AsyncSession, template_json: Dict[str, Any], company_id: uuid.UUID, counts: Dict[str, int]
+) -> List[Dict[str, Any]]:
+    """Create the template's projects and work items; update ``counts`` to what was created.
+
+    Runs in a savepoint, and an invalid value in the template (a bad type or priority) rolls it back and
+    raises ``TemplateImportError``, as ``PortabilityService.execute_import`` does. Returns the skipped items.
+    """
+    created: Dict[str, Any] = {"projects": [], "work_items": []}
+    template_json = {"export_kind": KIND_LIBRARY, **template_json}  # a stored kind, if any, stays
+    sp = await session.begin_nested()
+    try:
+        skipped_items = await import_template_work(session, template_json, company_id, created, {"work_items": []}, [])
+        await sp.commit()
+    except ValueError as exc:  # an invalid enum value in the template; a programming error propagates
+        await sp.rollback()
+        logger.warning("Template entity import rolled back: %s: %s", type(exc).__name__, safe_log_text(exc))
+        raise TemplateImportError(
+            refusal_text_keeping_public_reason(exc, "Import rolled back: the template holds an invalid value")
+        ) from exc
+    counts.update({key: len(ids) for key, ids in created.items()})
+    return skipped_items

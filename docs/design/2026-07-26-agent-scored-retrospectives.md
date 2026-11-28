@@ -9,7 +9,7 @@ umbrella: 12617
 
 ## Overview
 
-The sprint retrospective summarizes *work product*, not *agent performance over time*. The raw per-agent signal already exists in the LLC but is never aggregated or surfaced. This design adds a **per-agent scorecard** — success rate, throughput, and spend — computed from data the LLC already writes, and shown in the retrospective.
+The sprint retrospective summarizes *work product*, not *agent performance over time*. The raw per-agent signal already exists in the Company OS but is never aggregated or surfaced. This design adds a **per-agent scorecard** — success rate, throughput, and spend — computed from data the Company OS already writes, and shown in the retrospective.
 
 **Scope:** aggregation + presentation. No new data collection.
 

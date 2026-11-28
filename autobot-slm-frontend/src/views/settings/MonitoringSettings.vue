@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -10,8 +11,14 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
+
+const logger = createLogger('MonitoringSettings')
+const { t } = useI18n()
+const { showToast } = useToast()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -42,7 +49,7 @@ async function fetchSettings(): Promise<void> {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -57,20 +64,20 @@ async function saveSetting(key: string, value: string): Promise<void> {
     const ok = await upsertSetting(key, { value })
 
     if (!ok) {
-      throw new Error('Failed to save setting')
+      throw new Error(t('settings.monitoringSettings.failedToSaveSetting'))
     }
 
-    success.value = 'Setting saved successfully'
+    success.value = t('settings.monitoringSettings.settingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save setting'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToSaveSetting')
   } finally {
     saving.value = false
   }
 }
 
 async function deployMonitoringRole(): Promise<void> {
-  alert('Monitoring role deployment will be triggered via Ansible')
+  showToast(t('settings.monitoringSettings.deployViaAnsible'), 'info')
 }
 
 async function testPrometheusConnection(): Promise<void> {
@@ -81,13 +88,14 @@ async function testPrometheusConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getPrometheusUrl()}/-/healthy`)
     if (response.ok) {
-      success.value = 'Prometheus connection successful'
+      success.value = t('settings.monitoringSettings.prometheusConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Prometheus connection failed'
+      error.value = t('settings.monitoringSettings.prometheusFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Prometheus server'
+    logger.warn('Prometheus connection test failed:', e)
+    error.value = t('settings.monitoringSettings.prometheusUnreachable')
   }
 }
 
@@ -98,13 +106,14 @@ async function testGrafanaConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getGrafanaUrl()}/api/health`)
     if (response.ok) {
-      success.value = 'Grafana connection successful'
+      success.value = t('settings.monitoringSettings.grafanaConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Grafana connection failed'
+      error.value = t('settings.monitoringSettings.grafanaFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Grafana server'
+    logger.warn('Grafana connection test failed:', e)
+    error.value = t('settings.monitoringSettings.grafanaUnreachable')
   }
 }
 
@@ -115,7 +124,7 @@ onMounted(fetchSettings)
   <div class="p-6">
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -123,31 +132,27 @@ onMounted(fetchSettings)
 
     <template v-else>
       <!-- Messages -->
-      <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-        {{ error }}
-      </div>
-      <div v-if="success" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
+      <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Settings Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.monitoringSettings.monitoringConfiguration') }}</h2>
-        <p class="text-sm text-gray-500 mb-6">
+        <p class="text-sm text-autobot-text-tertiary mb-6">
           {{ $t('settings.monitoringSettings.configureWherePrometheusAnd') }}
         </p>
 
         <div class="space-y-6">
           <!-- Monitoring Location -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.monitoringLocation') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.chooseWhereMonitoringServices') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.monitoringLocation') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.chooseWhereMonitoringServices') }}</p>
             </div>
             <select
               v-model="settings.monitoring_location"
               @change="saveSetting('monitoring_location', settings.monitoring_location)"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="local">{{ $t('settings.monitoringSettings.localOnSLMHost') }}</option>
               <option value="external">{{ $t('settings.monitoringSettings.externalSeparateHost') }}</option>
@@ -155,20 +160,20 @@ onMounted(fetchSettings)
           </div>
 
           <!-- Prometheus URL -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.prometheusURL') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.uRLToAccessPrometheus') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.prometheusURL') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.uRLToAccessPrometheus') }}</p>
             </div>
             <div class="flex gap-2">
               <input
                 v-model="settings.prometheus_url"
                 type="text"
-                class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
               <button
                 @click="testPrometheusConnection"
-                class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                class="px-3 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
                 :title="$t('settings.monitoringSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +183,7 @@ onMounted(fetchSettings)
               <button
                 @click="saveSetting('prometheus_url', settings.prometheus_url)"
                 :disabled="saving"
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
               >
                 {{ $t('settings.monitoringSettings.save') }}
               </button>
@@ -186,20 +191,20 @@ onMounted(fetchSettings)
           </div>
 
           <!-- Grafana URL -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.grafanaURL') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.uRLToAccessGrafana') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.grafanaURL') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.uRLToAccessGrafana') }}</p>
             </div>
             <div class="flex gap-2">
               <input
                 v-model="settings.grafana_url"
                 type="text"
-                class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
               <button
                 @click="testGrafanaConnection"
-                class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                class="px-3 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
                 :title="$t('settings.monitoringSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,7 +214,7 @@ onMounted(fetchSettings)
               <button
                 @click="saveSetting('grafana_url', settings.grafana_url)"
                 :disabled="saving"
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
               >
                 {{ $t('settings.monitoringSettings.save') }}
               </button>
@@ -217,14 +222,14 @@ onMounted(fetchSettings)
           </div>
 
           <!-- Scrape Interval -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.scrapeInterval') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.howOftenPrometheusCollects') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.scrapeInterval') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.howOftenPrometheusCollects') }}</p>
             </div>
             <select
               v-model="settings.scrape_interval"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="10">{{ $t('settings.monitoringSettings.10Seconds') }}</option>
               <option value="15">{{ $t('settings.monitoringSettings.15Seconds') }}</option>
@@ -234,14 +239,14 @@ onMounted(fetchSettings)
           </div>
 
           <!-- Retention -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.dataRetention') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.howLongToKeep') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.dataRetention') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.howLongToKeep') }}</p>
             </div>
             <select
               v-model="settings.retention_days"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="7">{{ $t('settings.monitoringSettings.7Days') }}</option>
               <option value="15">{{ $t('settings.monitoringSettings.15Days') }}</option>
@@ -254,30 +259,23 @@ onMounted(fetchSettings)
           <!-- Alerting -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.alerting') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.enableAlertNotifications') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.monitoringSettings.alerting') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.monitoringSettings.enableAlertNotifications') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settings.alerting_enabled"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="settings.alerting_enabled" :label="$t('settings.monitoringSettings.alerting')" />
           </div>
         </div>
       </div>
 
       <!-- Deploy Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h3 class="font-semibold text-gray-900 mb-2">{{ $t('settings.monitoringSettings.deployMonitoringStack') }}</h3>
-        <p class="text-sm text-gray-500 mb-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+        <h3 class="font-semibold text-autobot-text-primary mb-2">{{ $t('settings.monitoringSettings.deployMonitoringStack') }}</h3>
+        <p class="text-sm text-autobot-text-tertiary mb-4">
           {{ $t('settings.monitoringSettings.useAnsibleToDeploy') }}
         </p>
         <button
           @click="deployMonitoringRole"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

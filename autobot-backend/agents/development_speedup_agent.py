@@ -46,7 +46,7 @@ class DuplicateCode:
 
 
 @dataclass
-class CodePattern:
+class SpeedupCodePattern:
     """Represents a recurring code pattern"""
 
     pattern_type: str
@@ -302,7 +302,7 @@ class DevelopmentSpeedupAgent:
             },
         ]
 
-    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> CodePattern | None:
+    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> SpeedupCodePattern | None:
         """Search for a single pattern and return result (Issue #398: extracted)."""
         try:
             results = await self.npu_code_search.search_code(
@@ -311,7 +311,7 @@ class DevelopmentSpeedupAgent:
                 max_results=50,
             )
             if results:
-                return CodePattern(
+                return SpeedupCodePattern(
                     pattern_type=pattern_config["name"],
                     description=f"Found {len(results)} occurrences of {pattern_config['name']}",
                     occurrences=[(r.file_path, r.line_number) for r in results],
@@ -551,7 +551,7 @@ class DevelopmentSpeedupAgent:
         code = re.sub(r"\s+", " ", code)
         return code.strip()
 
-    async def _analyze_import_patterns(self, root_path: str) -> List[CodePattern]:
+    async def _analyze_import_patterns(self, root_path: str) -> List[SpeedupCodePattern]:
         """Analyze import patterns for optimization opportunities"""
         patterns = []
 
@@ -565,7 +565,7 @@ class DevelopmentSpeedupAgent:
 
         if star_imports:
             patterns.append(
-                CodePattern(
+                SpeedupCodePattern(
                     pattern_type="Star Imports",
                     description=(f"Found {len(star_imports)} star imports that could pollute" f"namespace"),
                     occurrences=[(r.file_path, r.line_number) for r in star_imports],
@@ -766,8 +766,8 @@ class DevelopmentSpeedupAgent:
             "hash_signature": duplicate.hash_signature,
         }
 
-    def _pattern_to_dict(self, pattern: CodePattern) -> Dict[str, Any]:
-        """Convert CodePattern dataclass to serializable dictionary."""
+    def _pattern_to_dict(self, pattern: SpeedupCodePattern) -> Dict[str, Any]:
+        """Convert SpeedupCodePattern dataclass to serializable dictionary."""
         return {
             "pattern_type": pattern.pattern_type,
             "description": pattern.description,

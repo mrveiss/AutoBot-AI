@@ -24,9 +24,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import HTTPException
-
 from autobot_shared.logging_manager import get_logger
+from knowledge.upload_rejections import UploadRejection, UploadRejectionCode
 from media.document.zip_formats import verified_suffix
 
 logger = get_logger(__name__)
@@ -72,6 +71,10 @@ def extract_office_upload(filename: str, file_content: bytes, ext: str) -> str:
 
     if not metadata.get("extraction_success"):
         detail = metadata.get("extraction_error") or "no parser could read it"
-        raise HTTPException(status_code=400, detail=f"Failed to parse {ext.lstrip('.')} file: {detail}")
+        raise UploadRejection(
+            UploadRejectionCode.PARSE_FAILED,
+            f"Failed to parse {ext.lstrip('.')} file: {detail}",
+            format=ext.lstrip("."),
+        )
     logger.info("Parsed %s upload %s as %s (%d chars)", ext, filename, metadata.get("format"), len(text))
     return text

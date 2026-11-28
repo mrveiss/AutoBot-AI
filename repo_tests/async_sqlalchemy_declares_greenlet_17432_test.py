@@ -38,6 +38,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Names whose use implies SQLAlchemy's async engine, and therefore greenlet.
 #: `async_engine_from_config` was missing, and `run_async_migrations` in
 #: `autobot-backend/migrations/env.py` reaches the async engine through it and
@@ -54,9 +56,21 @@ _ASYNC_MARKERS = (
 )
 _SQLALCHEMY = re.compile(r"^sqlalchemy\b", re.IGNORECASE | re.MULTILINE)
 _GREENLET_SPEC = re.compile(r"^greenlet\s*(==|>=)\s*\d", re.IGNORECASE)
+_GREENLET_BARE = re.compile(r"^greenlet\s*$", re.IGNORECASE)
+_CONSTRAINT_INCLUDE = re.compile(r"^-c\s+\S*constraints/shared\.txt\b", re.MULTILINE)
 
 
-def _declares_greenlet_unconditionally(text: str) -> bool:
+def _floor_from_shared_constraints(root: pathlib.Path, text: str) -> bool:
+    """The file includes ``-c constraints/shared.txt`` and that file gives greenlet a floor (#18060)."""
+    shared = root / "constraints" / "shared.txt"
+    if not _CONSTRAINT_INCLUDE.search(text) or not shared.exists():
+        return False
+    return any(
+        _GREENLET_SPEC.match(ln.split("#", 1)[0].strip()) for ln in shared.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def _declares_greenlet_unconditionally(text: str, constraint_floor: bool = False) -> bool:
     """A greenlet line with a floor and **no environment marker** (#17433 review).
 
     The old check was a regex over the whole file and accepted
@@ -74,7 +88,7 @@ def _declares_greenlet_unconditionally(text: str) -> bool:
     """
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
-        if not _GREENLET_SPEC.match(line):
+        if not (_GREENLET_SPEC.match(line) or (constraint_floor and _GREENLET_BARE.match(line))):
             continue
         if ";" in line:
             continue  # carries an environment marker: conditional again
@@ -164,7 +178,7 @@ def _references_async_marker(text: str) -> bool:
     if not any(marker in text for marker in _ASYNC_MARKERS):
         return False
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except (SyntaxError, ValueError):
         # Unparseable: fall back to the substring answer rather than silently
         # reporting "no async usage", which would be a pass by failure to read.
@@ -182,7 +196,6 @@ def _references_async_marker(text: str) -> bool:
 SQLALCHEMY_DECLARATIONS = declare(
     "sqlalchemy-requirements-files",
     discover=_declares_sqlalchemy,
-    floor=3,
     growth=3,
     what="requirements files declaring SQLAlchemy (#17432)",
 )
@@ -205,7 +218,8 @@ def _violates(root: pathlib.Path, relative: str) -> bool:
         return False
     if not _uses_async_engine(root, (root / relative).parent):
         return False
-    return not _declares_greenlet_unconditionally((root / relative).read_text(encoding="utf-8"))
+    text = (root / relative).read_text(encoding="utf-8")
+    return not _declares_greenlet_unconditionally(text, _floor_from_shared_constraints(root, text))
 
 
 def _violations(root: pathlib.Path) -> List[str]:

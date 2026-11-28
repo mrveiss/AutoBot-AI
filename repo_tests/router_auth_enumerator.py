@@ -51,7 +51,6 @@ _AUTH_MODULE = re.compile(r"^from ([a-z_.]*(?:auth|security|permission|rbac)[a-z
 #: Exported names that match `_AUTH_MODULE` but do not gate a request. Path and
 #: crypto helpers live in the same modules and would otherwise read as auth --
 #: `validate_path` protects a filesystem argument, not an identity.
-#:
 #: This list exists because "derive the vocabulary" is necessary and not
 #: sufficient: derivation gets the NAMES from the tree, and purpose still has to
 #: be decided. Each entry is a decision, so each is recorded rather than filtered
@@ -73,6 +72,7 @@ NOT_A_GATE: frozenset[str] = frozenset(
         "hash_password",
         "role_value",
         "router",
+        "scan_chat_message",  # a content safety scan (#19786), not an identity check
         "security_scanner_agent",
         "validate_config_against_schema",
         "validate_path",
@@ -147,6 +147,10 @@ def _parse_cached(path: Path) -> ast.Module | None:
     return _PARSED[key]
 
 
+#: Canonical dependency LISTS: upper-case, so the export scan below skips them as classes (#18688).
+CANONICAL_GATE_LISTS: frozenset[str] = frozenset({"HUMAN_ADMIN_DEPENDENCIES"})
+
+
 def auth_vocabulary(root: Path) -> set[str]:
     """Names exported by auth-ish modules, minus the ones that do not gate.
 
@@ -167,7 +171,7 @@ def auth_vocabulary(root: Path) -> set[str]:
                 name = raw.strip()
                 if name and name.isidentifier() and not name[0].isupper():
                     names.add(name)
-    return names - NOT_A_GATE
+    return (names | CANONICAL_GATE_LISTS) - NOT_A_GATE
 
 
 def registered_routers(root: Path) -> list[tuple[str, str]]:
@@ -248,12 +252,9 @@ def _local_gates(tree: ast.Module, vocabulary: set[str]) -> set[str]:
     """Names defined IN THIS MODULE whose body reaches a known auth primitive.
 
     The vocabulary is derived from what auth-ish MODULES export, which misses a
-    gate defined where it is used: `api/service_messages.py` defines
-    `_check_admin`, calls `get_auth_middleware().get_user_from_request()` and
-    `is_admin_role()` inside it, and gates all three of its routes with
-    `Depends(_check_admin)`. Deriving by import path cannot see that, and the
-    first version of this module reported the file UNGATED -- a FALSE finding
-    published against a real security surface.
+    gate defined where it is used. Deriving by import path cannot see that, and
+    the first version of this module reported such a file UNGATED (api/service_messages.py,
+    before #18688) -- a FALSE finding published against a real security surface.
 
     One hop only, and deliberately: a dependency whose own body calls a
     vocabulary name is a gate. A dependency two modules away is not resolved
@@ -531,7 +532,7 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str], seen: fr
     # reach a known primitive, before asking which mechanism gates the routes.
     # Without this, a gate is invisible whenever it is spelled locally or lives
     # behind an import path that does not contain an auth-ish word (#15745).
-    local = vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)
+    local = (vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)) - NOT_A_GATE
 
     # What this module MOUNTS, and whether it also registers routes itself. Both
     # are asked, because a module can do both and the two need different verdicts

@@ -18,9 +18,10 @@ import threading
 from pathlib import Path
 from typing import Dict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.cancel_tokens import new_cancel_token, run_cancellable
@@ -34,7 +35,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Cache for analysis results (simple in-memory cache).
-# Issue #12330: Keyed by source_id (or "default") to prevent cross-project
+# Issue #12330: Keyed by source_id (never a shared sentinel, #20513) to prevent cross-project
 # leakage -- a single global "latest" entry returned one project's endpoint
 # coverage for every other selected source.
 _analysis_cache: Dict[str, APIEndpointAnalysis] = {}
@@ -42,9 +43,9 @@ _analysis_cache: Dict[str, APIEndpointAnalysis] = {}
 _analysis_cache_lock = asyncio.Lock()
 
 
-def _cache_key(source_id: str | None) -> str:
-    """Cache key for a source. Issue #12330: scope per project, not global."""
-    return source_id or "default"
+def _cache_key(source_id: str) -> str:
+    """Cache key for a source. Issue #12330: scope per project, not global (#20513: never a shared sentinel)."""
+    return require_source_id(source_id, "endpoint-analysis cache key")
 
 
 def _get_checker(
@@ -63,19 +64,20 @@ def _get_checker(
     return APIEndpointChecker(project_root=project_root, cancel_token=cancel_token)
 
 
-async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
+async def _get_or_run_analysis(source_id: str) -> APIEndpointAnalysis:
     """Return cached analysis for a source, or run it scoped to that source.
 
     Issue #12330: Both the cache lookup and a cache-miss analysis are scoped to
     the resolved source root so no two projects share results.
     """
     key = _cache_key(source_id)
+    # Resolve first: a source whose checkout is gone is a 404 even when a result is cached.
+    root = await resolve_scan_root(source_id)
     async with _analysis_cache_lock:
         cached = _analysis_cache.get(key)
     if cached is not None:
         return cached
 
-    root = await resolve_scan_root(source_id)
     cancel_token = new_cancel_token()
     checker = _get_checker(root, cancel_token=cancel_token)
     # Issue #14256: default executor (``None``), cancellably -- was a bare
@@ -100,7 +102,7 @@ async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
     error_code_prefix="CODEBASE",
 )
 async def get_api_endpoints(
-    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get all backend API endpoints.
@@ -121,6 +123,7 @@ async def get_api_endpoints(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(endpoints),
             "endpoints": [ep.model_dump() for ep in endpoints],
         }
@@ -135,7 +138,7 @@ async def get_api_endpoints(
     error_code_prefix="CODEBASE",
 )
 async def get_frontend_api_calls(
-    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get all frontend API calls.
@@ -156,6 +159,7 @@ async def get_frontend_api_calls(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(calls),
             "api_calls": [call.model_dump() for call in calls],
         }
@@ -170,7 +174,7 @@ async def get_frontend_api_calls(
     error_code_prefix="CODEBASE",
 )
 async def get_endpoint_coverage(
-    source_id: str | None = Query(None, description="#12330: scope coverage to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get full API endpoint coverage analysis.
@@ -191,6 +195,7 @@ async def get_endpoint_coverage(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "summary": {
                 "backend_endpoints": analysis.backend_endpoints,
                 "frontend_calls": analysis.frontend_calls,
@@ -212,7 +217,7 @@ async def get_endpoint_coverage(
     error_code_prefix="CODEBASE",
 )
 async def get_endpoint_analysis_full(
-    source_id: str | None = Query(None, description="#12330: scope analysis to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get complete API endpoint analysis with all details.
@@ -226,6 +231,7 @@ async def get_endpoint_analysis_full(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "analysis": analysis.model_dump(),
         }
     )
@@ -239,7 +245,7 @@ async def get_endpoint_analysis_full(
     error_code_prefix="CODEBASE",
 )
 async def get_orphaned_endpoints(
-    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get orphaned endpoints (defined but never called).
@@ -253,6 +259,7 @@ async def get_orphaned_endpoints(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(analysis.orphaned),
             "orphaned_endpoints": [ep.model_dump() for ep in analysis.orphaned],
         }
@@ -267,7 +274,7 @@ async def get_orphaned_endpoints(
     error_code_prefix="CODEBASE",
 )
 async def get_missing_endpoints(
-    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get missing endpoints (called but not defined).
@@ -281,6 +288,7 @@ async def get_missing_endpoints(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(analysis.missing),
             "missing_endpoints": [ep.model_dump() for ep in analysis.missing],
         }
@@ -295,7 +303,7 @@ async def get_missing_endpoints(
     error_code_prefix="CODEBASE",
 )
 async def get_used_endpoints(
-    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get actively used endpoints with their call counts.
@@ -315,6 +323,7 @@ async def get_used_endpoints(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(sorted_used),
             "used_endpoints": [
                 {
@@ -336,7 +345,7 @@ async def get_used_endpoints(
     error_code_prefix="CODEBASE",
 )
 async def refresh_endpoint_cache(
-    source_id: str | None = Query(None, description="#12330: refresh the selected source's cache entry"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Force refresh the endpoint analysis cache for a source.
@@ -363,6 +372,7 @@ async def refresh_endpoint_cache(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "message": "Endpoint cache refreshed",
             "summary": {
                 "backend_endpoints": analysis.backend_endpoints,

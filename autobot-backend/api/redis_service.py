@@ -20,16 +20,14 @@ from api.schemas_system import (
     ServiceStatusResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from services.redis_service_manager import RedisConnectionError, RedisServiceManager
+from security.human_admin import refuse_service_principal, require_human_operator
+from services.redis_service_manager import SLM_REFUSALS, RedisConnectionError, RedisServiceManager
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
-
-# Performance optimization: O(1) lookup for privileged roles (Issue #326)
-PRIVILEGED_ROLES = {"admin", "operator"}
 
 # Global service manager instance (singleton)
 _service_manager: RedisServiceManager | None = None
@@ -38,8 +36,6 @@ _service_manager_started: bool = False
 
 # Thread-safe lock for singleton
 import asyncio as _asyncio_lock
-
-from autobot_shared.auth.permissions import is_admin_role
 
 _service_manager_lock = _asyncio_lock.Lock()
 
@@ -71,52 +67,29 @@ async def get_service_manager() -> RedisServiceManager:
     return _service_manager
 
 
-def check_admin_permission(request: Request) -> str:
-    """
-    Check if user has admin permissions
-
-    Returns:
-        User ID if authorized
-
-    Raises:
-        HTTPException: If user lacks admin permissions
-    """
-    user_data = get_auth_middleware().get_user_from_request(request)
-
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Check if user has admin role
-    if not is_admin_role(user_data.get("role")):
-        raise HTTPException(status_code=403, detail="Admin role required for this operation")
-
-    return user_data.get("username", "unknown")
+def _operation_response(result) -> ServiceOperationResponse:
+    """The API answer for a start/stop/restart result."""
+    return ServiceOperationResponse(
+        success=result.success,
+        operation=result.operation,
+        message=result.message,
+        duration_seconds=result.duration_seconds,
+        timestamp=result.timestamp,
+        new_status=result.new_status,
+        error=result.error,
+    )
 
 
-def check_operator_permission(request: Request) -> str:
-    """
-    Check if user has operator or admin permissions
-
-    Returns:
-        User ID if authorized
-
-    Raises:
-        HTTPException: If user lacks operator/admin permissions
-    """
-    user_data = get_auth_middleware().get_user_from_request(request)
-
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Check if user has admin or operator role
-    role = user_data.get("role", "")
-    if role not in PRIVILEGED_ROLES:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin or operator role required for this operation",
-        )
-
-    return user_data.get("username", "unknown")
+def _operation_error(exc: Exception, failure: str) -> HTTPException:
+    """503 with the reason when the SLM cannot be asked (#22030) or Redis is unreachable; else 500 ``failure``."""
+    if isinstance(exc, SLM_REFUSALS):
+        logger.error("Redis service cannot reach the SLM: %s", exc)
+        return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, RedisConnectionError):
+        logger.error("Redis connection error: %s", exc)
+        return HTTPException(status_code=503, detail="Cannot connect to Redis VM")
+    logger.error("%s: %s", failure, exc)
+    return HTTPException(status_code=500, detail=failure)
 
 
 # API Endpoints
@@ -126,39 +99,31 @@ def check_operator_permission(request: Request) -> str:
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def start_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
+async def start_redis_service(
+    request: Request,
+    manager: RedisServiceManager = Depends(get_service_manager),
+    operator: dict = Depends(require_human_operator),
+):
     """
     Start Redis service on Redis VM
 
-    Requires: Admin or operator role
+    Requires: Admin or operator role; the internal service key is refused (403, #18688)
     """
     try:
-        # Check permissions
-        user_id = check_operator_permission(request)
+        # The canonical operator gate is the Depends above; the name is for the audit log only
+        user_id = operator.get("username", "unknown")
 
         logger.info("Starting Redis service, requested by user: %s", user_id)
 
         # Execute start operation
         result = await manager.start_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Start service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service start failed")
+        raise _operation_error(e, "Service start failed") from e
 
 
 @router.post("/stop", response_model=ServiceOperationResponse)
@@ -167,7 +132,13 @@ async def start_redis_service(request: Request, manager: RedisServiceManager = D
     operation="stop_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def stop_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
+async def stop_redis_service(
+    request: Request,
+    manager: RedisServiceManager = Depends(get_service_manager),
+    _human: None = Depends(refuse_service_principal),
+    admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Stop Redis service on Redis VM
 
@@ -176,32 +147,20 @@ async def stop_redis_service(request: Request, manager: RedisServiceManager = De
     Warning: Stopping Redis will affect all dependent services
     """
     try:
-        # Check permissions (admin only for stop)
-        user_id = check_admin_permission(request)
+        # Admin gate is the canonical Depends above; the name is for the audit log only
+        user_id = current_user.get("username", "unknown")
 
         logger.warning("Stopping Redis service, requested by admin: %s", user_id)
 
         # Execute stop operation
         result = await manager.stop_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Stop service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service stop failed")
+        raise _operation_error(e, "Service stop failed") from e
 
 
 @router.post("/restart", response_model=ServiceOperationResponse)
@@ -210,39 +169,31 @@ async def stop_redis_service(request: Request, manager: RedisServiceManager = De
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def restart_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
+async def restart_redis_service(
+    request: Request,
+    manager: RedisServiceManager = Depends(get_service_manager),
+    operator: dict = Depends(require_human_operator),
+):
     """
     Restart Redis service on Redis VM
 
-    Requires: Admin or operator role
+    Requires: Admin or operator role; the internal service key is refused (403, #18688)
     """
     try:
-        # Check permissions
-        user_id = check_operator_permission(request)
+        # The canonical operator gate is the Depends above; the name is for the audit log only
+        user_id = operator.get("username", "unknown")
 
         logger.info("Restarting Redis service, requested by user: %s", user_id)
 
         # Execute restart operation
         result = await manager.restart_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Restart service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service restart failed")
+        raise _operation_error(e, "Service restart failed") from e
 
 
 @router.get("/status", response_model=ServiceStatusResponse)
@@ -251,11 +202,13 @@ async def restart_redis_service(request: Request, manager: RedisServiceManager =
     operation="get_redis_status",
     error_code_prefix="REDIS_SERVICE",
 )
-async def get_redis_status(manager: RedisServiceManager = Depends(get_service_manager)):
+async def get_redis_status(
+    manager: RedisServiceManager = Depends(get_service_manager), current_user: dict = Depends(get_current_user)
+):
     """
     Get current Redis service status
 
-    No authentication required (public endpoint)
+    Requires an authenticated user; no caller depended on it being public (#18718).
     """
     try:
         status = await manager.get_service_status()
@@ -268,6 +221,9 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
             last_check=status.last_check,
         )
 
+    except SLM_REFUSALS as e:
+        logger.error("Get status error: %s", e)  # #16346: say what failed instead of answering 200 "unknown"
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Get status error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get status")
@@ -282,7 +238,7 @@ async def probe_redis_service(
     #12459: ``detail`` previously echoed the bare ``overall_status`` word
     ("degraded"), which is not diagnosable when Redis itself pings fine —
     the real cause (SLM couldn't confirm systemd state, connectivity down,
-    slow response, ...) lives in ``HealthStatus.recommendations`` but was
+    slow response, ...) lives in ``ServiceHealthReport.recommendations`` but was
     never surfaced. Join it into ``detail`` so a "degraded" result always
     says *which* check failed.
     """

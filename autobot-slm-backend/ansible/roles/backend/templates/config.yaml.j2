@@ -8,6 +8,7 @@
 ---
 
 deployment:
-  mode: "{{ backend_user_mode | default('single_company') }}"
+  # #19316: no "mode" here -- it held the USER mode, never a topology; AUTOBOT_DEPLOYMENT_MODE is the one
+  # home and unset means auto-detect (autobot_shared/deployment_profile.py).
   host: "{{ backend_redis_host | default('127.0.0.1') }}"
   port: {{ backend_port | default(8001) }}

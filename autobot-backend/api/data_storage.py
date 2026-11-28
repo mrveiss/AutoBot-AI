@@ -16,8 +16,14 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.data_storage_categories import (
+    LEGACY_TRANSCRIPTS_CATEGORY,
+    category_dir,
+    get_cleanable_categories,
+    get_protected_categories,
+)
 from api.schemas_system import (
     CleanupResult,
     StorageCategory,
@@ -36,11 +42,18 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import validate_relative_path
+from autobot_shared.store_authority import legacy_conversation_transcripts_dir
+from chat_history.file_io import is_session_lock_file
+from chat_history.legacy_transcripts import legacy_transcript_file
+from chat_history.session_lease import SessionLeaseError
 from utils.catalog_http_exceptions import raise_server_error
+from utils.chat_utils import get_chat_history_manager
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = get_logger(__name__)
 
+#: What delete_session removes besides the legacy ``chat_<id>.json``: the route reports each one it finds gone.
+_SESSION_FILE_SUFFIXES = ("_chat.json", "_terminal_transcript.txt", "_terminal.log")
 # Data directory path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
@@ -48,8 +61,11 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 def _safe_data_path(user_segment: str) -> Path:
     """Resolve a user-supplied path segment under DATA_DIR safely.
 
-    Uses shared path validator (#1721).
+    Uses shared path validator (#1721). The legacy transcript category is the one
+    that lives outside DATA_DIR (#18293).
     """
+    if user_segment == LEGACY_TRANSCRIPTS_CATEGORY:
+        return category_dir(DATA_DIR, LEGACY_TRANSCRIPTS_CATEGORY)
     return require_contained_relative_path(user_segment, DATA_DIR)
 
 
@@ -72,7 +88,7 @@ def get_dir_size(path: Path) -> tuple[int, int]:
 
     try:
         for entry in path.rglob("*"):
-            if entry.is_file():
+            if entry.is_file() and not is_session_lock_file(entry):
                 try:
                     total_size += entry.stat().st_size
                     file_count += 1
@@ -82,103 +98,6 @@ def get_dir_size(path: Path) -> tuple[int, int]:
         pass
 
     return total_size, file_count
-
-
-# =============================================================================
-# Storage Category Definitions (Issue #665)
-# =============================================================================
-
-
-def _get_protected_categories() -> list[dict]:
-    """
-    Get protected storage categories (cannot be cleaned up).
-
-    Issue #665: Extracted from get_storage_categories to reduce function length.
-    These are critical system data stores that should not be modified.
-    """
-    return [
-        {
-            "name": "ChromaDB Vectors",
-            "path": "chromadb",
-            "description": "Vector embeddings database for semantic search",
-        },
-        {
-            "name": "Knowledge Base ChromaDB",
-            "path": "chromadb_kb",
-            "description": "Knowledge base vector embeddings",
-        },
-        {
-            "name": "Knowledge Files",
-            "path": "knowledge",
-            "description": "Knowledge base configuration files",
-        },
-        {
-            "name": "Knowledge Base Data",
-            "path": "knowledge_base",
-            "description": "Knowledge base documents and embeddings",
-        },
-        {
-            "name": "System Knowledge",
-            "path": "system_knowledge",
-            "description": "System procedures, workflows, and tools",
-        },
-        {
-            "name": "Memory Storage",
-            "path": "memory",
-            "description": "Agent memory and context storage",
-        },
-        {
-            "name": "MCP Tools",
-            "path": "mcp_tools",
-            "description": "MCP tool configurations",
-        },
-    ]
-
-
-def _get_cleanable_categories() -> list[dict]:
-    """
-    Get cleanable storage categories (can be manually cleaned up).
-
-    Issue #665: Extracted from get_storage_categories to reduce function length.
-    These are user data and reports that can be safely removed.
-    """
-    return [
-        {
-            "name": "Conversation Transcripts",
-            "path": "conversation_transcripts",
-            "description": "Saved conversation history transcripts",
-        },
-        {
-            "name": "Chat Sessions",
-            "path": "chats",
-            "description": "Chat sessions and terminal transcripts",
-        },
-        {
-            "name": "Conversation Files",
-            "path": "conversation_files",
-            "description": "Files attached to conversations",
-        },
-        {
-            "name": "Anti-Pattern Reports",
-            "path": "anti_pattern_reports",
-            "description": "Code anti-pattern detection reports",
-        },
-        {
-            "name": "Reports",
-            "path": "reports",
-            "description": "Generated analysis reports",
-        },
-        {
-            "name": "File Manager Root",
-            "path": "file_manager_root",
-            "description": "File manager sandbox root directory",
-        },
-        {
-            "name": "Security Data",
-            "path": "security",
-            "description": "Security scan results and configurations",
-        },
-    ]
 
 
 def _build_storage_category(cat_def: dict, can_cleanup: bool) -> StorageCategory:
@@ -194,7 +113,7 @@ def _build_storage_category(cat_def: dict, can_cleanup: bool) -> StorageCategory
     Returns:
         StorageCategory with computed size and file count
     """
-    dir_path = DATA_DIR / cat_def["path"]
+    dir_path = category_dir(DATA_DIR, cat_def["path"])
     size_bytes, file_count = get_dir_size(dir_path)
 
     return StorageCategory(
@@ -219,11 +138,11 @@ def get_storage_categories() -> list[StorageCategory]:
     result = []
 
     # Add protected categories (can_cleanup=False)
-    for cat_def in _get_protected_categories():
+    for cat_def in get_protected_categories():
         result.append(_build_storage_category(cat_def, can_cleanup=False))
 
     # Add cleanable categories (can_cleanup=True)
-    for cat_def in _get_cleanable_categories():
+    for cat_def in get_cleanable_categories():
         result.append(_build_storage_category(cat_def, can_cleanup=True))
 
     return result
@@ -372,7 +291,7 @@ def _scan_and_remove_files(dir_path: Path, cutoff_time: float | None, dry_run: b
     bytes_freed = 0
     errors = []
     for item in dir_path.rglob("*"):
-        if item.is_file():
+        if item.is_file() and not is_session_lock_file(item):
             try:
                 stat = item.stat()
                 if cutoff_time and stat.st_mtime > cutoff_time:
@@ -500,6 +419,7 @@ async def cleanup_old_backups(
 )
 async def delete_conversation(
     conversation_id: str,
+    request: Request,
     _: None = Depends(check_admin_permission),
 ):
     """Delete a specific conversation and its associated files."""
@@ -507,28 +427,34 @@ async def delete_conversation(
         if "/" in conversation_id or "\\" in conversation_id or ".." in conversation_id:
             raise HTTPException(status_code=400, detail="Invalid conversation ID")
 
-        files_deleted = []
-        errors = []
+        files_deleted: list[str] = []
+        errors: list[str] = []
 
-        transcripts_base = DATA_DIR / "conversation_transcripts"
-        transcript_path = validate_relative_path(f"{conversation_id}.json", transcripts_base)
-        if transcript_path.exists():
-            try:
-                transcript_path.unlink()
-                files_deleted.append(str(transcript_path.name))
-            except (OSError, PermissionError):
-                errors.append("Error deleting transcript")
+        # #18293: a legacy transcript is protected exactly like its bulk category -- its
+        # disposal goes through the #17038 review queue, never through this route.
+        if legacy_transcript_file(conversation_id) is not None:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Conversation '{conversation_id}' has a protected legacy transcript; "
+                "its removal goes through the approval queue",
+            )
 
-        chats_dir = DATA_DIR / "chats"
-        for suffix in ["_chat.json", "_terminal_transcript.txt"]:
-            chat_file = validate_relative_path(f"{conversation_id}{suffix}", chats_dir)
-            if chat_file.exists():
-                try:
-                    chat_file.unlink()
-                    files_deleted.append(str(chat_file.name))
-                except (OSError, PermissionError) as e:
-                    logger.exception("Unexpected error: %s", e)
-                    errors.append("Error deleting chat file")
+        # #20862: the session files go through delete_session -- the one delete, which takes the session
+        # lease and is fenced like a save -- so a delete cannot race a write and be undone by it.
+        manager = get_chat_history_manager(request)
+        chats_dir = Path(manager.chats_directory())  # the directory delete_session itself works on
+        names = [f"{conversation_id}{suffix}" for suffix in _SESSION_FILE_SUFFIXES] + [f"chat_{conversation_id}.json"]
+        present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
+        try:
+            deleted = await manager.delete_session(conversation_id)
+            if not deleted and any(validate_relative_path(n, chats_dir).exists() for n in present):
+                errors.append("Error deleting chat file")  # the manager refused and a file is still there
+        except SessionLeaseError:
+            raise  # answered by the app-wide handler (initialization/session_lease_handlers.py)
+        except Exception:
+            logger.exception("Unexpected error deleting conversation files")
+            errors.append("Error deleting chat file")
+        files_deleted.extend(n for n in present if not validate_relative_path(n, chats_dir).exists())
 
         if not files_deleted and not errors:
             raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
@@ -540,7 +466,7 @@ async def delete_conversation(
             "success": len(errors) == 0,
         }
 
-    except HTTPException:
+    except (HTTPException, SessionLeaseError):
         raise
     except Exception:
         logger.exception("Error deleting conversation")
@@ -556,7 +482,7 @@ async def delete_conversation(
 async def get_conversations_summary():
     """Get summary of stored conversations."""
     try:
-        transcripts_dir = DATA_DIR / "conversation_transcripts"
+        transcripts_dir = legacy_conversation_transcripts_dir()
         chats_dir = DATA_DIR / "chats"
 
         transcripts_size, transcripts_count = get_dir_size(transcripts_dir)

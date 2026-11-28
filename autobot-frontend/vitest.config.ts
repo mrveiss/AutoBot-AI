@@ -22,6 +22,13 @@ export default mergeConfig(
   defineConfig({
     test: {
       // Test environment setup
+      // #18254: console output goes straight to the worker's stdout. With interception on, each
+      // console call is an `onUserConsoleLog` RPC to the main process, and a log made just before a
+      // file's environment is torn down fails the run with "Closing rpc while onUserConsoleLog was
+      // pending" although every test passed. Off, there is no RPC to race; the cost is the per-test
+      // "stdout | file > test" headers. The Vitest UI needs interception for its console-log
+      // previews, so `--ui` runs keep it; the race is a headless-run failure.
+      disableConsoleIntercept: !process.argv.includes('--ui'),
       environment: 'jsdom',
       environmentOptions: {
         jsdom: {
@@ -47,6 +54,8 @@ export default mergeConfig(
         ...configDefaults.exclude,
         'e2e/**',
         'tests/**',
+        // ESLint rule fixtures named *.test.ts, not vitest specs; the include globs above never matched them (#21509)
+        'eslint-tests/**',
         'src/test/e2e/**',
         '**/*.e2e.test.ts',
         '**/*.playwright.spec.ts',

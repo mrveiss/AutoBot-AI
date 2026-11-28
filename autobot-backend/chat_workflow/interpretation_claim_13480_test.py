@@ -14,16 +14,18 @@ Two paths interpreted the same result, and **both persist**:
 So an approved command with a watcher cost two LLM calls and put two
 explanations of one command in the conversation.
 
-The fix is a claim the polling turn holds. The dangerous half is releasing it:
-if the claim outlives the poller, the approve path keeps skipping while nobody
-is listening, and a late approval produces no interpretation at all — silently
-re-breaking #13479 in the exact case it exists for. Hence a `finally`, and hence
-the tests below covering timeout, early close and exception, not just the happy
-path.
+The fix is a claim the polling turn holds, now one compare-and-set token in
+Redis (#21202, `services.agent_terminal.interpretation_turn`) rather than a flag
+in one worker's copy of the session. The dangerous half is releasing it: if the
+token outlives the poller, the worker that ran the command waits for a turn that
+has gone. Hence a `finally`, and hence the tests below covering timeout, early
+close and exception, not just the happy path. The two-worker ordering tests live
+in `services/agent_terminal/closed_and_interpretation_21202_test.py`.
 """
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -46,151 +48,99 @@ def _handler(service):
 
 def _service():
     service = MagicMock()
-    service.set_live_turn_interpreting = AsyncMock()
+    service.begin_interpreting_turn = AsyncMock(return_value="tok-1")
+    service.take_turn_interpretation = AsyncMock(return_value=True)
+    service.end_interpreting_turn = AsyncMock()
     return service
 
 
-def _claims(service):
-    """(session_id, live) for every claim call, in order."""
-    return [c.args for c in service.set_live_turn_interpreting.call_args_list]
+async def _poll(handler, **kwargs):
+    kwargs.setdefault("max_wait_time", 0.02)
+    kwargs.setdefault("poll_interval", 0.01)
+    return [r async for r in handler._poll_for_approval("term-1", "ls -la", command_id="cmd-1", **kwargs)]
 
 
-# --- the session marker -----------------------------------------------------
-
-
-async def test_an_unmarked_approval_is_interpreted_by_the_approve_path():
-    """The safe default: absent marker means the approve path owns it.
-
-    Believing a turn is present when it has gone is the failure that leaves
-    nobody interpreting, so the default must lean the other way.
-    """
-    from services.agent_terminal.models import AgentTerminalSession
-    from services.command_approval_manager import AgentRole
-
-    s = AgentTerminalSession(session_id="s1", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id="c1")
-    s.pending_approval = {"command": "ls -la"}
-
-    assert s.has_live_turn_interpreting() is False
-
-
-async def test_marking_a_session_with_no_pending_approval_is_a_no_op():
-    """Creating the dict here would fabricate an approval nobody requested."""
-    from services.agent_terminal.models import AgentTerminalSession
-    from services.command_approval_manager import AgentRole
-
-    s = AgentTerminalSession(session_id="s1", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id="c1")
-    s.set_live_turn_interpreting(True)
-
-    assert s.pending_approval is None
-    assert s.has_live_turn_interpreting() is False
-
-
-async def test_the_marker_round_trips_on_a_pending_approval():
-    from services.agent_terminal.models import AgentTerminalSession
-    from services.command_approval_manager import AgentRole
-
-    s = AgentTerminalSession(session_id="s1", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id="c1")
-    s.pending_approval = {"command": "ls -la"}
-
-    s.set_live_turn_interpreting(True)
-    assert s.has_live_turn_interpreting() is True
-    s.set_live_turn_interpreting(False)
-    assert s.has_live_turn_interpreting() is False
-
-
-# --- claim lifecycle around the poller --------------------------------------
-
-
-async def test_the_turn_claims_interpretation_while_polling():
+async def test_the_turn_registers_while_polling():
     service = _service()
-    handler = _handler(service)
-
-    async for _ in handler._poll_for_approval("term-1", "ls -la", max_wait_time=0.02, poll_interval=0.01):
-        pass
-
-    assert ("term-1", True) in _claims(service), "the polling turn never claimed interpretation"
+    await asyncio.wait_for(_poll(_handler(service)), timeout=5)
+    service.begin_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1")
 
 
-async def test_the_claim_is_released_when_the_poll_times_out():
+async def test_the_token_is_released_when_the_poll_times_out():
     """The regression that would silently re-break #13479."""
     service = _service()
-    handler = _handler(service)
-
-    async for _ in handler._poll_for_approval("term-1", "ls -la", max_wait_time=0.02, poll_interval=0.01):
-        pass
-
-    assert _claims(service)[-1] == ("term-1", False), (
-        "a timed-out poller left its claim set — the approve path would keep "
-        "skipping while nobody is listening, so a late approval produces nothing"
-    )
+    await asyncio.wait_for(_poll(_handler(service)), timeout=5)
+    service.end_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
 
 
-async def test_the_claim_is_released_when_the_consumer_stops_early():
+async def test_the_token_is_released_when_the_consumer_stops_early():
     """`_handle_pending_approval` breaks out as soon as a decision lands.
 
-    Closing a generator raises GeneratorExit at the suspension point, so only a
-    `finally` releases here — code placed after the loop never runs.
+    Closing a generator raises GeneratorExit at the suspension point, so only a `finally` releases here.
     """
     service = _service()
-    handler = _handler(service)
-
-    gen = handler._poll_for_approval("term-1", "ls -la", max_wait_time=5, poll_interval=0.01)
-    await gen.__anext__()
+    gen = _handler(service)._poll_for_approval(
+        "term-1", "ls -la", max_wait_time=0.05, poll_interval=0.01, command_id="cmd-1"
+    )
+    await asyncio.wait_for(gen.__anext__(), timeout=5)
     await gen.aclose()
-
-    assert _claims(service)[-1] == ("term-1", False), "an early-closed poller leaked its claim"
-
-
-async def test_the_claim_is_released_even_if_claiming_never_worked():
-    """A service without the method must not break the turn or leak state."""
-    service = MagicMock(spec=[])  # no set_live_turn_interpreting
-    handler = _handler(service)
-
-    async for _ in handler._poll_for_approval("term-1", "ls -la", max_wait_time=0.02, poll_interval=0.01):
-        pass  # must simply not raise
+    service.end_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
 
 
-async def test_a_failing_claim_does_not_fail_the_turn():
-    """Losing the claim costs a duplicate interpretation, not the user's turn."""
+async def test_a_service_without_the_methods_does_not_break_the_turn():
+    service = MagicMock(spec=[])
+    await asyncio.wait_for(_poll(_handler(service)), timeout=5)  # must simply not raise
+
+
+async def test_a_failing_registration_does_not_fail_the_turn():
     service = _service()
-    service.set_live_turn_interpreting = AsyncMock(side_effect=RuntimeError("redis down"))
-    handler = _handler(service)
-
-    async for _ in handler._poll_for_approval("term-1", "ls -la", max_wait_time=0.02, poll_interval=0.01):
-        pass  # must not raise
+    service.begin_interpreting_turn = AsyncMock(side_effect=RuntimeError("redis down"))
+    await asyncio.wait_for(_poll(_handler(service)), timeout=5)
+    service.end_interpreting_turn.assert_not_awaited()  # there is no token to release
 
 
-# --- the approve path's half ------------------------------------------------
+async def _finish_with(handler, service, owned: bool):
+    service.take_turn_interpretation = AsyncMock(return_value=owned)
+    result = {"status": "success", "stdout": "x"}
+    handler._check_approval_completion = MagicMock(return_value=(result, {"s": 1}, True))
+    handler.terminal_tool.get_session_info = AsyncMock(return_value={"pending_approval": None})
+    await asyncio.wait_for(_poll(handler, max_wait_time=5), timeout=5)
+    return result
 
 
-async def test_the_approve_path_skips_when_a_turn_holds_the_claim():
-    from services.agent_terminal.service import AgentTerminalService
-
-    svc = AgentTerminalService.__new__(AgentTerminalService)
-    svc.chat_workflow_manager = MagicMock()
-    svc.chat_workflow_manager.interpret_terminal_command = AsyncMock()
-
-    session = MagicMock()
-    session.has_live_turn_interpreting.return_value = True
-
-    await svc._interpret_approved_command(session, "ls -la", {"stdout": "x"})
-
-    svc.chat_workflow_manager.interpret_terminal_command.assert_not_awaited()
+async def test_a_turn_that_wins_the_swap_interprets():
+    service = _service()
+    result = await _finish_with(_handler(service), service, owned=True)
+    service.take_turn_interpretation.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
+    assert "interpretation_owned_elsewhere" not in result
 
 
-async def test_the_approve_path_interprets_when_no_turn_holds_the_claim():
-    """The late-approval case — this is what #13479 depends on."""
-    from services.agent_terminal.service import AgentTerminalService
+async def test_a_turn_that_loses_the_swap_marks_the_result_interpreted_elsewhere():
+    service = _service()
+    result = await _finish_with(_handler(service), service, owned=False)
+    assert result["interpretation_owned_elsewhere"] is True
 
-    svc = AgentTerminalService.__new__(AgentTerminalService)
-    svc.chat_workflow_manager = MagicMock()
-    svc.chat_workflow_manager.interpret_terminal_command = AsyncMock()
 
-    session = MagicMock()
-    session.has_live_turn_interpreting.return_value = False
-    session.has_conversation.return_value = True
-    session.conversation_id = "conv-1"
+async def test_the_approved_command_handler_skips_interpretation_when_the_swap_was_lost():
+    handler = _handler(_service())
+    handler._interpret_command_results = MagicMock()
+    out = [
+        m
+        async for m in handler._handle_approved_command(
+            "ls", "h", {"status": "success", "interpretation_owned_elsewhere": True}, "ep", "model"
+        )
+    ]
+    handler._interpret_command_results.assert_not_called()
+    assert out[-1][1] == ""
 
-    await svc._interpret_approved_command(session, "ls -la", {"stdout": "x", "return_code": 0})
 
-    svc.chat_workflow_manager.interpret_terminal_command.assert_awaited_once()
+async def test_the_approved_command_handler_interprets_when_it_won():
+    handler = _handler(_service())
+
+    async def _chunks(*_a, **_k):
+        yield MagicMock(content="done")
+
+    handler._interpret_command_results = MagicMock(side_effect=_chunks)
+    out = [m async for m in handler._handle_approved_command("ls", "h", {"status": "success"}, "ep", "model")]
+    handler._interpret_command_results.assert_called_once()
+    assert out[-1][1] == "done"

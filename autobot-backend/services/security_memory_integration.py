@@ -19,6 +19,7 @@ from typing import Any, FrozenSet
 
 from autobot_memory_graph import RELATION_TYPES, AutoBotMemoryGraph, canonical_relation_type
 from autobot_shared.logging_manager import get_logger
+from services.security_memory_scope import PlatformGraphAccess
 
 # Issue #380: Module-level frozenset for security-related tags
 _SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
@@ -165,7 +166,7 @@ class SecurityFindingsIndex:
         return results
 
 
-class SecurityMemoryIntegration:
+class SecurityMemoryIntegration(PlatformGraphAccess):
     """
     Integrates security assessment data with Memory MCP.
 
@@ -253,7 +254,7 @@ class SecurityMemoryIntegration:
 
         Issue #620.
         """
-        return await self._memory_graph.create_entity(
+        return await self._create_platform_entity(
             entity_type="task",
             name=f"Security Assessment: {name}",
             observations=observations,
@@ -339,7 +340,7 @@ class SecurityMemoryIntegration:
 
         Issue #620.
         """
-        return await self._memory_graph.create_entity(
+        return await self._create_platform_entity(
             entity_type="context",
             name=f"Host: {ip}",
             observations=observations,
@@ -432,7 +433,7 @@ class SecurityMemoryIntegration:
 
         Issue #620.
         """
-        return await self._memory_graph.create_entity(
+        return await self._create_platform_entity(
             entity_type="context",
             name=entity_name,
             observations=observations,
@@ -583,7 +584,7 @@ class SecurityMemoryIntegration:
         Returns:
             dict[str, Any]: Created entity data from memory graph.
         """
-        return await self._memory_graph.create_entity(
+        return await self._create_platform_entity(
             entity_type="bug_fix",
             name=entity_name,
             observations=observations,
@@ -783,7 +784,7 @@ class SecurityMemoryIntegration:
         if severity:
             search_query += f" severity:{severity}"
 
-        results = await self._memory_graph.search_entities(
+        results = await self._search_all_owners(
             query=search_query,
             entity_type=entity_type,
             limit=limit,
@@ -817,7 +818,7 @@ class SecurityMemoryIntegration:
         await self.ensure_initialized()
 
         # Search for the host entity
-        host_results = await self._memory_graph.search_entities(
+        host_results = await self._search_all_owners(
             query=f"Host: {host_ip}",
             limit=1,
         )
@@ -828,9 +829,9 @@ class SecurityMemoryIntegration:
         host_entity = host_results[0]
 
         # Get related entities (services, vulnerabilities)
-        related = await self._memory_graph.traverse_relations(
+        related = await self._related_all_owners(
             entity_name=host_entity.get("name", f"Host: {host_ip}"),
-            depth=depth,
+            max_depth=depth,
         )
 
         return {
@@ -884,7 +885,7 @@ class SecurityMemoryIntegration:
             Summary with counts and key findings
         """
         await self.ensure_initialized()
-        all_results = await self._memory_graph.search_entities(query=f"assessment_id:{assessment_id}", limit=500)
+        all_results = await self._search_all_owners(query=f"assessment_id:{assessment_id}", limit=500)
         hosts, services, vulnerabilities, _ = self._categorize_assessment_entities(all_results)
         severity_counts = self._compute_severity_distribution(vulnerabilities)
         critical_vulns = [v for v in vulnerabilities if v.get("metadata", {}).get("severity") == "critical"][:5]
@@ -1005,10 +1006,7 @@ class SecurityMemoryIntegration:
         if entity_type:
             where["type"] = entity_type
         try:
-            results = await self._findings_index.search_findings(
-                query=query, n_results=10, where=where if where else None
-            )
-            return results
+            return await self._findings_index.search_findings(query=query, n_results=10, where=where if where else None)
         except Exception as e:
             logger.error("Failed to search findings in ChromaDB: %s", e)
             return {"ids": [], "documents": [], "metadatas": [], "distances": []}

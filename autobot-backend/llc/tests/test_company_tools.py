@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # resolves to a different singleton than the one under test, so patching it
 # there would be a no-op against production behaviour.
 from autobot_shared.tool_sdk.registry import get_tool_registry
+from llc.models.activity import LLCActivityLog
 from llc.models.company_tool import LLCCompanyTool
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
@@ -91,6 +92,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         "sqlite+aiosqlite:///:memory:"
     )
     tables = [
+        LLCActivityLog.__table__,
         Role.__table__,
         LLCCompanyMembership.__table__,
         LLCRoleTool.__table__,

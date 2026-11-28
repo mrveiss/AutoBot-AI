@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, get_db
+from transcriber.deps import authenticate, get_transcriber_db_from_request
 from transcriber.routes.transcripts import router
 
 
@@ -22,7 +22,7 @@ def _make_app(tmp_path, user_id: str = "u1"):
     async def override_db():
         return db
 
-    a.dependency_overrides[get_db] = override_db
+    a.dependency_overrides[get_transcriber_db_from_request] = override_db
     a.dependency_overrides[authenticate] = lambda: None
     a.include_router(router, prefix="/api/transcriber")
     a.state._db = db
@@ -145,7 +145,7 @@ async def test_create_and_delete_note(client, tmp_path):
 @pytest.mark.asyncio
 async def test_merge_speakers(client, tmp_path):
     app = client._transport.app  # type: ignore
-    db_dep = app.dependency_overrides[get_db]
+    db_dep = app.dependency_overrides[get_transcriber_db_from_request]
     db = await db_dep()
 
     rid = app.state._test_rid
@@ -176,7 +176,7 @@ async def test_merge_speakers(client, tmp_path):
 @pytest.mark.asyncio
 async def test_merge_speakers_from_different_recordings_fails(client, tmp_path):
     app = client._transport.app  # type: ignore
-    db_dep = app.dependency_overrides[get_db]
+    db_dep = app.dependency_overrides[get_transcriber_db_from_request]
     db = await db_dep()
 
     app.state._test_rid
@@ -215,7 +215,7 @@ async def test_update_speaker_forbidden_for_other_user(client_other_user):
 @pytest.mark.asyncio
 async def test_merge_speakers_forbidden_for_other_user(client_other_user):
     app = client_other_user._transport.app  # type: ignore
-    db_dep = app.dependency_overrides[get_db]
+    db_dep = app.dependency_overrides[get_transcriber_db_from_request]
     db = await db_dep()
     rid = app.state._test_rid
     sid1 = app.state._test_sid
@@ -404,7 +404,7 @@ async def test_get_transcript_for_non_existent_recording_returns_404(client):
 @pytest.mark.asyncio
 async def test_get_transcript_with_no_segments(client, tmp_path):
     app = client._transport.app  # type: ignore
-    db_dep = app.dependency_overrides[get_db]
+    db_dep = app.dependency_overrides[get_transcriber_db_from_request]
     db = await db_dep()
     pid = await db.create_project("Empty Project", "", "u1")
     rid = await db.create_recording(pid, "empty.wav", "/tmp/empty.wav", "u1")

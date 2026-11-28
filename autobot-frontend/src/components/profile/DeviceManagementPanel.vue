@@ -90,9 +90,11 @@ import Icon from '@/components/ui/Icon.vue'
 import PairDeviceDialog from '@/components/mobile/PairDeviceDialog.vue'
 import { useDevices } from '@/composables/useDevices'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
 
 const logger = createLogger('DeviceManagementPanel')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { confirm } = useConfirmDialog()
 
 const {
@@ -154,30 +156,15 @@ function formatPlatform(platform: string): string {
   return labels[platform] || platform
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date' })
 
-function formatRelativeTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-    if (seconds < 60) return t('devices.justNow', 'just now')
-    if (seconds < 3600) return t('devices.minutesAgo', `${Math.floor(seconds / 60)}m ago`)
-    if (seconds < 86400) return t('devices.hoursAgo', `${Math.floor(seconds / 3600)}h ago`)
-    if (seconds < 2592000) return t('devices.daysAgo', `${Math.floor(seconds / 86400)}d ago`)
-
-    return date.toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
+const formatRelativeTime = createRecencyFormatter({
+  justNow: () => t('devices.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+  olderThanMs: 30 * 86_400_000,
+})
 </script>
 
 <style scoped>
@@ -220,7 +207,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .section-header h3 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
@@ -259,7 +246,7 @@ function formatRelativeTime(dateStr: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -276,12 +263,12 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .device-platform {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .device-meta {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   display: flex;
   flex-wrap: wrap;
@@ -342,7 +329,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .error-alert p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Buttons */
@@ -353,7 +340,7 @@ function formatRelativeTime(dateStr: string): string {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid transparent;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -366,7 +353,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {

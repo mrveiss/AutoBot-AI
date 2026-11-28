@@ -13,7 +13,7 @@ import pytest
 from knowledge.pipeline.config import (
     DEFAULT_KNOWLEDGE_PIPELINE,
     _validate_stage_config,
-    get_default_config,
+    get_default_pipeline_config,
     load_pipeline_config,
 )
 
@@ -103,22 +103,22 @@ class TestTaskNameValidation:
 
 
 class TestGetDefaultConfig:
-    """Tests for get_default_config."""
+    """Tests for get_default_pipeline_config."""
 
     def test_returns_copy(self):
-        config1 = get_default_config()
-        config2 = get_default_config()
+        config1 = get_default_pipeline_config()
+        config2 = get_default_pipeline_config()
         assert config1 is not config2
 
     def test_default_has_required_fields(self):
-        config = get_default_config()
+        config = get_default_pipeline_config()
         assert "name" in config
         assert "extract" in config
         assert isinstance(config["extract"], list)
         assert config["batch_size"] == 10
 
     def test_default_has_three_extractors(self):
-        config = get_default_config()
+        config = get_default_pipeline_config()
         task_names = [t["task"] for t in config["extract"]]
         assert "classify_document" in task_names
         assert "chunk_text" in task_names

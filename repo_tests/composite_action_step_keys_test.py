@@ -12,6 +12,7 @@ paraphrasing the rule.
 from __future__ import annotations
 
 import importlib.util
+import sys
 
 from repo_tests._paths import repo_root
 
@@ -174,12 +175,25 @@ def test_setup_python_suite_has_no_timeout_minutes_on_any_step():
 
 
 def test_code_quality_runs_the_audit():
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
     assert "check_composite_action_step_keys.py --audit" in workflow, (
-        "code-quality.yml no longer runs the composite-action step-key audit — the guard would stop "
+        "_gate-code-quality.yml no longer runs the composite-action step-key audit — the guard would stop "
         "blocking merges while these tests kept passing (#14550)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
+
+
+#: Stdlib asked of the INTERPRETER, not listed by hand. The literal set this
+#: replaces enforced "these five names", not "stdlib" -- the same defect
+#: `ci_system_package_provisioning_test` already fixed and documented, where a
+#: hand-written list failed on `os` and `subprocess`, both stdlib and neither
+#: listed. These three were its unfixed siblings.
+#:
+#: `_scan_helpers` is allowed because it is the shared lint helper these
+#: checkers import, and it is itself kept dependency-free by
+#: `ci_system_package_provisioning_test.test_the_scan_helper_the_checker_leans
+#: _on_is_itself_dependency_free`. One guard for that property, not four.
+_ALLOWED_IMPORT_ROOTS = set(sys.stdlib_module_names) | {"_scan_helpers"}
 
 
 def test_the_checker_needs_no_third_party_import():
@@ -190,6 +204,6 @@ def test_the_checker_needs_no_third_party_import():
         for line in source.splitlines()
         if line.startswith(("import ", "from "))
         and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in {"argparse", "logging", "pathlib", "re", "sys"}
+        and line.split()[1].split(".")[0] not in _ALLOWED_IMPORT_ROOTS
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"

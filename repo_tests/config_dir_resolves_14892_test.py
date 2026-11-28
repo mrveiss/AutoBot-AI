@@ -17,6 +17,7 @@ was written.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
 import pytest
@@ -24,12 +25,13 @@ import pytest
 from autobot_shared.config_file_loading import SOURCE_BUILTIN_DEFAULTS, SOURCE_FILE, load_config_file
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_constants import PATH
+from tools.lint import _parse_cache as parse_cache
 
 #: Files a consumer reaches through ``CONFIG_DIR`` that are present in a checkout.
 #: Named individually so a rename fails here rather than silently shrinking the
 #: sweep to nothing.
 TRACKED_CONFIG_FILES = (
-    "error_messages.yaml",
+    "agents.yaml",
     "config.yaml",
     "security/compliance.yaml",
     "security/domain_security.yaml",
@@ -138,11 +140,14 @@ _KNOWN_ABSENT_CONFIG_FILES = {
 }
 
 
+@functools.lru_cache(maxsize=1)
 def _iter_named_config_files() -> list[tuple[Path, int, str]]:
     """Every config filename a consumer names literally through the constant.
 
     Parsed rather than grepped: this module and several consumers discuss these
     call shapes in prose, and a line regex cannot tell a docstring from a call.
+
+    Memoised (#20814): 3 tests read the same sweep.
     """
     root = project_root()
     found: list[tuple[Path, int, str]] = []
@@ -154,7 +159,7 @@ def _iter_named_config_files() -> list[tuple[Path, int, str]]:
             if "node_modules" in source.relative_to(scan_root).parts:
                 continue
             try:
-                tree_ast = ast.parse(source.read_text(encoding="utf-8"))
+                tree_ast = parse_cache.parse(source.read_text(encoding="utf-8"))
             except SyntaxError:  # pragma: no cover - a broken file is another gate's failure
                 continue
             for node in ast.walk(tree_ast):
@@ -193,8 +198,8 @@ def _named_config_file(node: ast.AST) -> str | None:
 class TestEveryNamedConfigFileExists:
     """#14892: a consumer must not name a config file that is not in the tree.
 
-    ``utils/service_discovery.py`` resolved ``CONFIG_DIR / "services.json"``,
-    stored it and never read it again. No commit on any branch has ever added a
+    The retired ``utils/service_discovery.py`` (#18639) resolved
+    ``CONFIG_DIR / "services.json"``, stored it and never read it again. No commit on any branch has ever added a
     ``services.json``. That is the failure this guard makes loud: a path to a
     file that has never existed reads exactly like live configuration, and
     fixing the constant under it changes nothing at all.
@@ -234,30 +239,6 @@ class TestEveryNamedConfigFileExists:
                 f"{relative} now exists — delete its entry from _KNOWN_ABSENT_CONFIG_FILES so the guard covers it"
             )
         assert len(_KNOWN_ABSENT_CONFIG_FILES) == 2, "this exemption is a ratchet: it may shrink, never grow"
-
-
-class TestServiceDiscoveryKeepsNoDeadConfigPath:
-    """#14892 AC3, the `services.json` consumer specifically.
-
-    Asserted on the class rather than on the file text so that reintroducing the
-    field under any spelling fails here.
-    """
-
-    def test_service_discovery_takes_no_config_file_argument(self) -> None:
-        import inspect
-
-        from utils.service_discovery import ServiceDiscovery
-
-        parameters = set(inspect.signature(ServiceDiscovery.__init__).parameters)
-        assert parameters == {"self"}, f"ServiceDiscovery.__init__ grew arguments again: {sorted(parameters)}"
-
-    def test_service_discovery_stores_no_config_file_attribute(self) -> None:
-        from utils.service_discovery import service_discovery
-
-        assert not hasattr(service_discovery, "config_file"), (
-            "ServiceDiscovery.config_file is back. It named "
-            "CONFIG_DIR/services.json, a file no commit has ever added, and nothing read it."
-        )
 
 
 class TestEventManagerDistinguishesAMiss:

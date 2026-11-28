@@ -6,13 +6,14 @@
 
 See docs/developer/PRIMITIVES.md for the full inventory and #5059/#5060
 for the extraction-first methodology.
+
+The back-off itself is `autobot_shared.retry_mechanism` (#17855): this keeps the primitive's
+contract (the last exception propagates unchanged, no jitter) over the one implementation.
 """
 
-import asyncio
-import logging
 from typing import Awaitable, Callable, Tuple, Type, TypeVar
 
-logger = logging.getLogger(__name__)
+from autobot_shared.retry_mechanism import RetryExhaustedError, RetryMechanism, RetryPolicy, RetryStrategy
 
 T = TypeVar("T")
 
@@ -42,28 +43,17 @@ async def retry_with_backoff(
             to ``(Exception,)`` — retry on any non-BaseException.
         label: Human-readable name used in log messages.
     """
-    last_exc: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            return await fn()
-        except retryable_exceptions as exc:
-            last_exc = exc
-            if attempt >= max_retries:
-                logger.error(
-                    "%s failed after %d attempt(s): %s",
-                    label,
-                    attempt + 1,
-                    exc,
-                )
-                break
-            delay = min(base_delay_s * (2**attempt), max_delay_s)
-            logger.warning(
-                "%s attempt %d/%d failed (%s) — retrying in %.1fs",
-                label,
-                attempt + 1,
-                max_retries + 1,
-                exc,
-                delay,
-            )
-            await asyncio.sleep(delay)
-    raise last_exc  # type: ignore[misc]
+    policy = RetryPolicy(
+        max_attempts=max_retries + 1,
+        base_delay=base_delay_s,
+        max_delay=max_delay_s,
+        backoff_multiplier=2.0,
+        jitter=False,
+        strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+        retryable_exceptions=retryable_exceptions,
+        non_retryable_exceptions=(),
+    )
+    try:
+        return await RetryMechanism(policy).execute_async(fn, operation_name=label)
+    except RetryExhaustedError as exhausted:
+        raise exhausted.last_exception from None

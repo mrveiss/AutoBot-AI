@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from autobot_shared.ssot_config import config
+from utils.file_categorization import SKIP_DIRS
 
 # Default Vue root: resolves relative to this file so any machine works.
 # Override with AUTOBOT_VUE_ROOT env var. Issue #1183.
@@ -470,10 +471,10 @@ class AccessibilityFixAgent:
 
         # Filter out node_modules, dist, etc.
         filtered_files = []
-        skip_dirs = {"node_modules", "dist", "build", ".nuxt", ".next", "coverage"}
 
         for vue_file in vue_files:
-            if not any(skip_dir in vue_file.parts for skip_dir in skip_dirs):
+            # Root-relative so a scan rooted in a worktree keeps its files (#13602).
+            if SKIP_DIRS.isdisjoint(vue_file.relative_to(self.root_path).parts):
                 filtered_files.append(vue_file)
 
         print(f"📄 Found {len(filtered_files)} Vue components to analyze")  # noqa: print

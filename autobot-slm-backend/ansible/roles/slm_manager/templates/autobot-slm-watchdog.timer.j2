@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Check the AutoBot SLM every minute (#20620)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ slm_watchdog_interval }}
+AccuracySec=5s
+Unit=autobot-slm-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -173,6 +173,20 @@ async def _run_sqlite_query(db_path: str, sql: str) -> List[Dict[str, Any]]:
     return await asyncio.to_thread(_run)
 
 
+def _mysql_connect_args(db_url: str) -> Dict[str, Any]:
+    """aiomysql's arguments; a URL's credentials are percent-encoded and the server wants the real ones (#20428)."""
+    from urllib.parse import unquote, urlparse
+
+    parsed = urlparse(db_url)
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port or 3306,
+        "user": unquote(parsed.username) if parsed.username else parsed.username,
+        "password": unquote(parsed.password) if parsed.password else parsed.password,
+        "db": parsed.path.lstrip("/"),
+    }
+
+
 async def _run_external_query(db_url: str, sql: str) -> List[Dict[str, Any]]:
     """
     Execute a read-only SQL query against a PostgreSQL or MySQL database.
@@ -198,18 +212,9 @@ async def _run_external_query(db_url: str, sql: str) -> List[Dict[str, Any]]:
 
     if db_url.startswith("mysql"):
         # Parse mysql URL (mysql://user:pass@host:port/db)
-        from urllib.parse import urlparse
-
         import aiomysql
 
-        parsed = urlparse(db_url)
-        conn = await aiomysql.connect(
-            host=parsed.hostname,
-            port=parsed.port or 3306,
-            user=parsed.username,
-            password=parsed.password,
-            db=parsed.path.lstrip("/"),
-        )
+        conn = await aiomysql.connect(**_mysql_connect_args(db_url))
         try:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(sql)
@@ -519,10 +524,10 @@ class NLDatabaseService:
             Extracted SQL string
         """
         try:
-            from services.llm_service import LLMService
+            from services.llm_service import get_llm_service
 
             if self._llm is None:
-                self._llm = LLMService()
+                self._llm = get_llm_service()
 
             llm_response = await self._llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.TASK)
             response = llm_response.content
@@ -670,18 +675,10 @@ class NLDatabaseService:
         Returns:
             DDL string for all user tables
         """
-        from urllib.parse import urlparse
 
         import aiomysql
 
-        parsed = urlparse(db_url)
-        conn = await aiomysql.connect(
-            host=parsed.hostname,
-            port=parsed.port or 3306,
-            user=parsed.username,
-            password=parsed.password,
-            db=parsed.path.lstrip("/"),
-        )
+        conn = await aiomysql.connect(**_mysql_connect_args(db_url))
         try:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute("SHOW TABLES")

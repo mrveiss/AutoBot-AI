@@ -41,7 +41,6 @@ export const PathConstants = {
   // Data subdirectories
   CONVERSATIONS_DIR: path.join(PROJECT_ROOT, 'data', 'conversations'),
   CHAT_HISTORY_DIR: path.join(PROJECT_ROOT, 'data', 'chat_history'),
-  SYSTEM_KNOWLEDGE_DIR: path.join(PROJECT_ROOT, 'data', 'system_knowledge'),
   SECURITY_DATA_DIR: path.join(PROJECT_ROOT, 'data', 'security'),
   CHECKPOINTS_DIR: path.join(PROJECT_ROOT, 'data', 'checkpoints'),
 

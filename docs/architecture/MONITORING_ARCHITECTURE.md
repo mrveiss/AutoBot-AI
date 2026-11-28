@@ -80,7 +80,7 @@ Location: `src/monitoring/`
 
 **Location**: <database-ip>:9090
 
-**Configuration**: `config/prometheus/prometheus.yml`
+**Configuration**: rendered by the Ansible monitoring role from `autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2` (fleet) or `autobot-monitoring/prometheus.yml` (Docker)
 
 ```yaml
 global:
@@ -376,7 +376,8 @@ type DashboardType =
 
 | File | Purpose |
 |------|---------|
-| `config/prometheus/prometheus.yml` | Prometheus scrape configuration |
+| `autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2` | Prometheus scrape configuration (fleet) |
+| `autobot-monitoring/prometheus.yml` | Prometheus scrape configuration (Docker) |
 | `config/prometheus/alerts/` | Alert rule files |
 | `config/grafana/provisioning/` | Grafana auto-provisioning |
 | `config/grafana/dashboards/` | Dashboard JSON definitions |

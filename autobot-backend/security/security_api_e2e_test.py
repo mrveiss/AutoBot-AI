@@ -17,6 +17,17 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from secure_command_executor import SecureCommandExecutor
 from security_layer import SecurityLayer
+from tests.fixtures.audit_trail import InMemoryAuditTrail
+
+
+@pytest.fixture
+def security_audit_trail():
+    """SecurityLayer's audit reads and writes go to an in-memory canonical trail (#17225 D6)."""
+    patchers = InMemoryAuditTrail().patched()
+    patchers.start()
+    yield
+    patchers.stop()
+
 
 # #13284: this module is an operator-facing e2e script, not a unit test. It
 # builds a live SecurityLayer and *actually executes* shell commands through it
@@ -33,7 +44,7 @@ from security_layer import SecurityLayer
 pytestmark = pytest.mark.integration
 
 
-async def test_security_layer():
+async def test_security_layer(security_audit_trail):
     """Test the enhanced security layer functionality"""
     print("🔒 Testing Enhanced Security Layer")  # noqa: print
     print("=" * 60)  # noqa: print
@@ -45,7 +56,6 @@ async def test_security_layer():
     print(f"   - Authentication enabled: {security.enable_auth}")  # noqa: print
     print(f"   - Command security enabled: {security.enable_command_security}")  # noqa: print  # noqa: print
     print(f"   - Docker sandbox enabled: {security.use_docker_sandbox}")  # noqa: print
-    print(f"   - Audit log file: {security.audit_log_file}")  # noqa: print
     print()  # noqa: print
 
     # Test permission checking
@@ -121,7 +131,7 @@ async def test_security_layer():
 
     # Test audit log
     print("📋 Testing Audit Log")  # noqa: print
-    history = security.get_command_history(limit=5)
+    history = await security.get_command_history(limit=5)
     print(f"   Found {len(history)} recent command entries:")  # noqa: print
     for entry in history[-3:]:
         timestamp = entry.get("timestamp", "unknown")[:19]

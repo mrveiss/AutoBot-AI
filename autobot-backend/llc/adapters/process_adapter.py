@@ -29,7 +29,6 @@ host commands from untrusted config. It is therefore hardened three ways:
   backend's DB/LLC credentials are never inherited.
 """
 
-import json
 import os
 import shlex
 
@@ -37,9 +36,11 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_base import SIGTERM_GRACE_SECONDS
 from .subprocess_support import (
     inject_agent_credentials,
     probe_pid_identity,
+    serialize_invoke_context,
     spawn_create_time,
     spawn_detached,
     terminate_pid,
@@ -48,7 +49,6 @@ from .subprocess_support import (
 logger = get_logger(__name__)
 
 _LOG_NAME = "ProcessAdapter"
-_SIGTERM_GRACE_SECONDS = 5
 
 # GH#11059 (P0 RCE): ProcessAdapter executes a tenant-writable command on the
 # backend host. It is DISABLED unless an operator explicitly enables it via this
@@ -94,12 +94,15 @@ def _build_minimal_env(env_extra: dict, context: dict) -> dict:
     env: dict = {k: os.environ[k] for k in _SAFE_ENV_PASSTHROUGH if k in os.environ}
     env.update(env_extra or {})
     inject_agent_credentials(env, context)
-    env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
     return env
 
 
-class ProcessAdapter:
+class LLCProcessAdapter:
     """Adapter that manages agent runs as OS subprocesses."""
+
+    # The role's credentials may be put in this adapter's child env (#20533).
+    injects_role_credentials = True
 
     async def invoke(self, agent_config: dict, context: dict) -> str:
         if not _process_adapter_enabled():
@@ -139,6 +142,6 @@ class ProcessAdapter:
         # anything (PR#16284 review) and returns True when no signal was sent
         # (already gone, or unverifiable) — match the original early-return
         # behavior: no further action needed either way.
-        already_gone = await terminate_pid(pid, _SIGTERM_GRACE_SECONDS, _LOG_NAME, create_time)
+        already_gone = await terminate_pid(pid, SIGTERM_GRACE_SECONDS, _LOG_NAME, create_time)
         if already_gone:
             return

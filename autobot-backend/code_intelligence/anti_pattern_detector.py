@@ -27,18 +27,22 @@ New facade: ~100 lines (92% reduction)
 # Backward compatibility: Expose commonly used regex patterns
 import re
 
-# GH#6757: canonical AntiPatternDetector + AntiPatternType live in
-# code_analysis.src.  This facade re-exports them so existing callers require
-# no import-path changes.  Fall back to the package-local implementations only
-# when code_analysis is unavailable (e.g., isolated test environments).
-try:
-    from code_analysis.src.anti_pattern_detector import AntiPatternDetector  # noqa: F401
-    from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401  — canonical SSOT enum (GH#6757)
-except ImportError:
-    from .anti_pattern_detection import (  # type: ignore[assignment]
-        AntiPatternDetector,
-        AntiPatternType,
-    )
+# GH#6757: the canonical AntiPatternDetector + AntiPatternType live in
+# code_analysis.src.  This facade re-exports them so existing callers require no
+# import-path changes.
+#
+# #12771: there used to be an `except ImportError` here falling back to the
+# package-local pair "when code_analysis is unavailable".  That fallback can no
+# longer be reached: `.anti_pattern_detection.types` now imports the canonical
+# enum itself, so the package and code_analysis.src share one precondition --
+# if the latter cannot import, neither can the former, and the handler would
+# raise from inside itself.  It was also substituting a *different* class for
+# AntiPatternDetector: the package's was the directory-walking suite analyzer
+# (now AntiPatternSuiteAnalyzer), which has no `analyze` or
+# `analyze_cross_file_only`, so anything that actually took that branch got an
+# object missing the methods the canonical name promises.
+from code_analysis.src.anti_pattern_detector import AntiPatternDetector  # noqa: F401
+from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401  — canonical SSOT enum (GH#6757)
 
 # Re-export remaining public API from the package for backward compatibility.
 # NOTE: AntiPatternType is intentionally NOT imported from here — the canonical
@@ -50,17 +54,17 @@ from .anti_pattern_detection import (  # Types and enums; Data models; Severity 
     DEFAULT_IGNORE_PATTERNS,
     SNAKE_CASE_RE,
     AnalysisReport,
+    AnalyzedClassInfo,
     AntiPatternResult,
     AntiPatternSeverity,
     BloaterDetector,
-    ClassInfo,
     CouplerDetector,
     DispensableDetector,
     FunctionInfo,
     ImportInfo,
     NamingDetector,
     Thresholds,
-    analyze_codebase,
+    analyze_codebase_anti_patterns,
     get_complex_conditional_severity,
     get_data_clump_severity,
     get_feature_envy_severity,
@@ -96,7 +100,7 @@ __all__ = [
     # Data models
     "AntiPatternResult",
     "AnalysisReport",
-    "ClassInfo",
+    "AnalyzedClassInfo",
     "FunctionInfo",
     "ImportInfo",
     # Severity utilities
@@ -118,7 +122,7 @@ __all__ = [
     "NamingDetector",
     # Main analyzer
     "AntiPatternDetector",
-    "analyze_codebase",
+    "analyze_codebase_anti_patterns",
     # Backward compatibility
     "_SNAKE_CASE_RE",
     "_CAMEL_CASE_RE",

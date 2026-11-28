@@ -13,7 +13,7 @@
 
 import { ref } from 'vue'
 import { getTimeConfig } from '@/utils/slmSettingsApi'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger, createDateFormatter } from '@autobot/ui'
 
 const logger = createLogger('useTimezone')
 
@@ -51,23 +51,29 @@ export function ensureTimezone(): Promise<void> {
   return fetchPromise
 }
 
+/** `Intl` option naming the fleet timezone, or nothing while it is not loaded. */
+export function getTimezoneOption(): { timeZone?: string } {
+  const tz = cachedTimezone.value
+  return tz ? { timeZone: tz } : {}
+}
+
+const formatInFleetTimezone = createDateFormatter({ intl: getTimezoneOption })
+
+/** Time of day / calendar date in the fleet timezone; an absent value reads as `''`. */
+export const formatFleetTime = createDateFormatter({ kind: 'time', intl: getTimezoneOption })
+export const formatFleetDate = createDateFormatter({ kind: 'date', intl: getTimezoneOption })
+
 /**
  * Format an ISO date string using the fleet-configured timezone.
  * Falls back to browser locale if timezone is not yet loaded.
  *
  * Accepts `undefined` as well as `null`: the generated OpenAPI contract models
  * nullable backend timestamps as optional (`expires_at?: string | null`), so
- * call sites forward possibly-absent values here (#12420).
+ * call sites forward possibly-absent values here (#12420). `emptyText` is what an
+ * absent value reads as (default `'Never'`); an unparseable one is returned as-is.
  */
-export function formatDateTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never'
-  const date = new Date(dateStr)
-  if (isNaN(date.getTime())) return dateStr
-  const tz = cachedTimezone.value
-  if (tz) {
-    return date.toLocaleString(undefined, { timeZone: tz })
-  }
-  return date.toLocaleString()
+export function formatFleetDateTime(dateStr: string | null | undefined, emptyText = 'Never'): string {
+  return dateStr ? formatInFleetTimezone(dateStr) : emptyText
 }
 
 /**

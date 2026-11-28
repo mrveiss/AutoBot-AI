@@ -253,14 +253,14 @@ async def test_track_agent_usage_failure_records_failed():
 @pytest.mark.asyncio
 async def test_execute_with_tracking_calls_analytics():
     """Verify that execute_with_tracking invokes AgentAnalytics on success."""
-    from agents.base_agent import AgentRequest, AgentResponse, BaseAgent
+    from agents.base_agent import AgentRequest, BaseAgent, StandardizedAgentResponse
 
     class _DummyAgent(BaseAgent):
         def __init__(self):
             super().__init__("dummy")
 
-        async def process_request(self, request: AgentRequest) -> AgentResponse:
-            return AgentResponse(
+        async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="success",
@@ -297,13 +297,13 @@ async def test_execute_with_tracking_calls_analytics():
 @pytest.mark.asyncio
 async def test_execute_with_tracking_records_failure():
     """execute_with_tracking records FAILED outcome when process_request raises."""
-    from agents.base_agent import AgentRequest, AgentResponse, BaseAgent
+    from agents.base_agent import AgentRequest, BaseAgent, StandardizedAgentResponse
 
     class _BrokenAgent(BaseAgent):
         def __init__(self):
             super().__init__("broken")
 
-        async def process_request(self, request: AgentRequest) -> AgentResponse:
+        async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
             raise RuntimeError("intentional failure")
 
         def get_capabilities(self):

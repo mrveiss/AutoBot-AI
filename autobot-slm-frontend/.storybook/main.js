@@ -5,7 +5,7 @@
 
 /** @type { import('@storybook/vue3-vite').StorybookConfig } */
 const config = {
-  stories: ['../src/**/*.stories.ts'],
+  stories: ['../src/**/*.stories.ts', '../../libs/autobot-ui/src/**/*.stories.ts'],
   addons: [
     '@storybook/addon-docs',
   ],

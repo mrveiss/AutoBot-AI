@@ -42,6 +42,8 @@ _PG_FOREIGN_KEY_VIOLATION = "23503"
 _PG_NOT_NULL_VIOLATION = "23502"
 _PG_CHECK_VIOLATION = "23514"
 _PG_INVALID_TEXT_REPRESENTATION = "22P02"
+#: Postgres aborted this transaction to break a lock wait cycle (#19593); the caller may retry.
+PG_DEADLOCK_DETECTED = "40P01"
 
 #: SQLite has no SQLSTATE; its DBAPI message is the only signal, and these
 #: prefixes are stable across the versions this repository supports.

@@ -98,6 +98,10 @@ class SessionList(BaseModel):
 
     sessions: list[Session] = []
     count: int | None = None
+    # #21997: ``sessions`` are the active company's chats; the untagged ones are listed apart.
+    unassigned: list[Session] = []
+    unassigned_count: int | None = None
+    company_id: str | None = None
     scope: str | None = None
     org_id: str | None = None
     team_id: str | None = None
@@ -181,6 +185,19 @@ class SessionDeleteTranscriptCleanup(BaseModel):
     error: str | None = None
 
 
+class SessionDeleteKnowledgeContextCleanup(BaseModel):
+    """Inline ``knowledge_context_cleanup`` block; mirrors ``KnowledgeContextCleanupResult``.
+
+    No ``error`` or ``cleanup_error`` field, unlike its siblings here, because
+    the producer ``_cleanup_chat_knowledge_context`` (#16490) has no error
+    branch to report. Mirroring the siblings' shape instead would declare a
+    field the route can never send.
+    """
+
+    context_deleted: bool | None = None
+    file_associations_removed: int | None = None
+
+
 class SessionDelete(BaseModel):
     """``data`` payload of ``DELETE /chat/sessions/{id}``; mirrors ``SessionDeleteData``.
 
@@ -195,6 +212,11 @@ class SessionDelete(BaseModel):
     terminal_cleanup: SessionDeleteTerminalCleanup | None = None
     kb_cleanup: SessionDeleteKbCleanup | None = None
     transcript_cleanup: SessionDeleteTranscriptCleanup | None = None
+    # #16502: the route returns this and the SDK did not declare it, so
+    # `extra='ignore'` discarded it silently -- an SDK consumer could not see
+    # the field at all. Declared on BOTH sides; the backend half alone leaves
+    # `sdk_response_model_contract_test` red, which is how this was found.
+    knowledge_context_cleanup: SessionDeleteKnowledgeContextCleanup | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -85,7 +85,7 @@ class SmartWorkflowStep(WorkflowStep):
 
 
 @dataclass
-class WorkflowTemplate:
+class SmartWorkflowTemplate:
     """Intelligent workflow template"""
 
     template_id: str

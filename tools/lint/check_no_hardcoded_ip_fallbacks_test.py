@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from autobot_shared.paths import scrubbed_git_env
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -141,19 +145,34 @@ class TestAllowlistedFiles:
 class TestEntryPoint:
     """Smoke test the main() argv harness end-to-end."""
 
-    def test_returns_1_when_violations(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_returns_1_when_violations(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         path = _write(
             tmp_path,
             "bad.py",
             "import os\nh = os.getenv('X', '172.16.168.23')\n",
         )
-        rc = hook.main(["check_no_hardcoded_ip_fallbacks.py", str(path)])
+        with caplog.at_level(logging.ERROR):
+            rc = hook.main(["check_no_hardcoded_ip_fallbacks.py", str(path)])
         assert rc == 1
-        captured = capsys.readouterr()
-        assert "172.16.168.23" in captured.err
-        assert "1 hardcoded-IP fallback(s)" in captured.err
+        # The harness reports through logging (#14896), so caplog, not capsys: a
+        # stderr handler built once would hold the first test's captured stream.
+        assert "172.16.168.23" in caplog.text
+        assert "1 hardcoded-IP fallback(s)" in caplog.text
 
-    def test_returns_0_on_clean(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_the_finding_reaches_stderr_for_a_real_run(self, tmp_path: Path) -> None:
+        """caplog sees the record whether or not a handler wrote it; only a real process proves the developer does."""
+        path = _write(tmp_path, "bad.py", "import os\nh = os.getenv('X', '172.16.168.23')\n")
+        done = subprocess.run(  # nosec B603  # fixed argv, no shell
+            [sys.executable, str(Path(hook.__file__)), str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={**scrubbed_git_env(), "PYTHONPATH": str(Path(hook.__file__).parents[2])},
+        )
+        assert done.returncode == 1, done.stderr
+        assert "172.16.168.23" in done.stderr and "1 hardcoded-IP fallback(s)" in done.stderr
+
+    def test_returns_0_on_clean(self, tmp_path: Path) -> None:
         path = _write(
             tmp_path,
             "clean.py",

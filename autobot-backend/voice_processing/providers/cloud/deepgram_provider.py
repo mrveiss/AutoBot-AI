@@ -10,11 +10,10 @@ API:     Deepgram Listen REST API with diarize=true
 Privacy: Audio is sent off-box — opt-in only (key must be set explicitly).
 """
 
-import os
 from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import TranscriptSegment
+from voice_processing.providers import ProviderFailed, TranscriptSegment, failures_as_provider_failed
 from voice_processing.providers.cloud.base import _DEFAULT_TIMEOUT, CloudSpeechProvider
 
 logger = get_logger(__name__)
@@ -29,19 +28,11 @@ class DeepgramProvider(CloudSpeechProvider):
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio via Deepgram Listen API."""
-        if not self.is_configured:
-            logger.error("DeepgramProvider: DEEPGRAM_API_KEY not set")
-            return []
-        if not os.path.exists(audio_path):
-            logger.error("DeepgramProvider: audio file not found: %s", audio_path)
-            return []
-        try:
+        self._require_ready(audio_path)
+        with failures_as_provider_failed(self.provider_name):
             with open(audio_path, "rb") as fh:
                 audio_bytes = fh.read()
             return await self._call_api(audio_bytes, language)
-        except Exception as exc:
-            logger.error("DeepgramProvider: transcription failed: %s", exc)
-            return []
 
     async def _call_api(self, audio_bytes: bytes, language: Optional[str]) -> List[TranscriptSegment]:
         """POST audio to Deepgram and parse the response."""
@@ -60,30 +51,27 @@ class DeepgramProvider(CloudSpeechProvider):
             if resp.status != 200:
                 err = await resp.text()
                 logger.error("DeepgramProvider: API error %d: %s", resp.status, err[:200])
-                return []
+                raise ProviderFailed(f"Deepgram API error {resp.status}")
             data = await resp.json()
         return self._parse(data, language)
 
     def _parse(self, data: dict, language: Optional[str]) -> List[TranscriptSegment]:
         """Map Deepgram Listen JSON to TranscriptSegments."""
         segments: List[TranscriptSegment] = []
-        try:
-            channels = data.get("results", {}).get("channels", [])
-            words = channels[0].get("alternatives", [{}])[0].get("words", []) if channels else []
-            for w in words:
-                speaker = f"SPEAKER_{int(w.get('speaker', 0)):02d}"
-                segments.append(
-                    TranscriptSegment(
-                        text=w.get("word", ""),
-                        start_time=float(w.get("start", 0.0)),
-                        end_time=float(w.get("end", 0.0)),
-                        confidence=float(w.get("confidence", 0.0)),
-                        language=language,
-                        speaker=speaker,
-                    )
+        channels = data.get("results", {}).get("channels", [])
+        words = channels[0].get("alternatives", [{}])[0].get("words", []) if channels else []
+        for w in words:
+            speaker = f"SPEAKER_{int(w.get('speaker', 0)):02d}"
+            segments.append(
+                TranscriptSegment(
+                    text=w.get("word", ""),
+                    start_time=float(w.get("start", 0.0)),
+                    end_time=float(w.get("end", 0.0)),
+                    confidence=float(w.get("confidence", 0.0)),
+                    language=language,
+                    speaker=speaker,
                 )
-        except Exception as exc:
-            logger.error("DeepgramProvider: parse error: %s", exc)
+            )
         return segments
 
     @property

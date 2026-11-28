@@ -348,3 +348,17 @@ hardcoded user-facing strings — `"Sign in with {{ providerLabel }}"` (`:14,67`
 `"Device auth is not configured for this provider"` (`:161`). The file contains no `$t(` and no
 `useI18n` import, violating the no-hardcoded-UI-strings rule (11 locales). Not in this research's
 scope — filed separately as #15031.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15021 — Umbrella: provider quota headroom + multi-account failover — finish the declared-but-unbuilt quota monitor
+- #15022 — llm: degradation store cannot distinguish a dead credential from a transient failure — dead tokens retry every TTL forever (closed)
+- #15026 — llm: harvest provider rate-limit response headers into a cross-worker quota headroom store (the missing quota monitor)
+- #15027 — llc/api: /costs/quota-windows returns structure with no values — populate it and add typed metric presentation
+- #15028 — llm: route on observed headroom before dispatch instead of on a 429 after it; reconcile guessed RPM buckets with observed limits (closed)
+- #15029 — llm-auth: one credential per provider per tenant — add a multi-account credential pool with headroom-based selection
+- #15030 — frontend: surface per-account quota headroom and provider lifecycle state in the provider view
+- #15031 — frontend(i18n): ProviderOAuthConnect.vue has hardcoded user-facing strings — no $t(), no useI18n (closed)
+- #15220 — docs(research): two completed research documents exist only on unmerged branches, while the issues they produced are being worked

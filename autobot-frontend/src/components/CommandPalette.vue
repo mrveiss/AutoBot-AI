@@ -26,7 +26,7 @@
                 ref="searchInput"
                 v-model="searchQuery"
                 type="text"
-                :placeholder="$t('commands.search', 'Search commands...')"
+                :placeholder="$t('commands.search')"
                 class="w-full px-4 py-3 bg-autobot-bg-secondary text-autobot-text-primary rounded-lg border border-autobot-border focus:outline-none focus:ring-2 focus:ring-autobot-primary placeholder-autobot-text-muted"
                 @keydown.arrow-down="moveDown"
                 @keydown.arrow-up="moveUp"
@@ -37,7 +37,7 @@
             <!-- Commands List -->
             <div class="max-h-96 overflow-y-auto">
               <div v-if="filteredCommands.length === 0" class="p-8 text-center">
-                <p class="text-autobot-text-muted">{{ $t('commands.noResults', 'No commands found') }}</p>
+                <p class="text-autobot-text-muted">{{ $t('commands.noResults') }}</p>
               </div>
 
               <div v-else class="py-2">
@@ -69,7 +69,7 @@
                           class="px-2 py-0.5 text-xs font-medium rounded-full"
                           :style="{ backgroundColor: getAgentColor(command.type) + '30', color: getAgentColor(command.type) }"
                         >
-                          {{ command.type }}
+                          {{ typeLabel(command.type) }}
                         </span>
                       </div>
                       <p class="text-sm text-autobot-text-secondary line-clamp-1">{{ command.description }}</p>
@@ -89,9 +89,9 @@
             <!-- Footer with hints -->
             <div class="p-3 border-t border-autobot-border bg-autobot-bg-secondary text-xs text-autobot-text-muted flex items-center justify-between">
               <div class="flex gap-4">
-                <span><kbd class="px-1 border border-autobot-border rounded">↑↓</kbd> navigate</span>
-                <span><kbd class="px-1 border border-autobot-border rounded">↵</kbd> select</span>
-                <span><kbd class="px-1 border border-autobot-border rounded">esc</kbd> close</span>
+                <span><kbd class="px-1 border border-autobot-border rounded">↑↓</kbd> {{ $t('commands.hints.navigate') }}</span>
+                <span><kbd class="px-1 border border-autobot-border rounded">↵</kbd> {{ $t('commands.hints.select') }}</span>
+                <span><kbd class="px-1 border border-autobot-border rounded">esc</kbd> {{ $t('commands.hints.close') }}</span>
               </div>
               <span>{{ selectedIndex + 1 }} / {{ filteredCommands.length }}</span>
             </div>
@@ -105,7 +105,10 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/useChatStore'
+import { useUserStore } from '@/stores/useUserStore'
+import { paletteNavItems } from '@/config/navItems'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CommandPalette')
@@ -115,10 +118,14 @@ interface Command {
   id: string
   label: string
   description: string
-  type: 'task' | 'research' | 'code' | 'analysis'
+  type: CommandType
   action: () => void
   shortcut?: string
+  /** Extra translated search words (nav entries, #17561). */
+  keywords?: string
 }
+
+type CommandType = 'task' | 'research' | 'code' | 'analysis' | 'navigate'
 
 const isOpen = ref(false)
 const searchQuery = ref('')
@@ -126,41 +133,69 @@ const selectedIndex = ref(0)
 const searchInput = ref<HTMLInputElement | null>(null)
 
 const chatStore = useChatStore()
+const userStore = useUserStore()
+const router = useRouter()
 
-const commands = computed<Command[]>(() => [
+// Navigation comes from the nav registry — no hand-written entries (#17561)
+const navCommands = computed<Command[]>(() =>
+  paletteNavItems(userStore.isAdmin).map((item) => {
+    const label = t(item.labelKey)
+    return {
+      id: `nav:${item.to}`,
+      label,
+      description: t('commands.openPage', { page: label }),
+      type: 'navigate',
+      action: () => { router.push(item.to) },
+      keywords: (item.keywords ?? []).map((key) => t(key)).join(' ')
+    }
+  })
+)
+
+const agentCommands = computed<Command[]>(() => [
   {
     id: 'new-task',
-    label: t('commands.newTask', 'New Task'),
-    description: t('commands.newTaskDesc', 'Create a new task agent'),
+    label: t('commands.newTask'),
+    description: t('commands.newTaskDesc'),
     type: 'task',
     action: () => startAgent('task'),
     shortcut: 'Cmd+T'
   },
   {
     id: 'new-research',
-    label: t('commands.newResearch', 'New Research'),
-    description: t('commands.newResearchDesc', 'Start a research session'),
+    label: t('commands.newResearch'),
+    description: t('commands.newResearchDesc'),
     type: 'research',
     action: () => startAgent('research'),
     shortcut: 'Cmd+R'
   },
   {
     id: 'new-code',
-    label: t('commands.newCode', 'New Code Agent'),
-    description: t('commands.newCodeDesc', 'Start a code analysis session'),
+    label: t('commands.newCode'),
+    description: t('commands.newCodeDesc'),
     type: 'code',
     action: () => startAgent('code'),
     shortcut: 'Cmd+C'
   },
   {
     id: 'new-analysis',
-    label: t('commands.newAnalysis', 'New Analysis'),
-    description: t('commands.newAnalysisDesc', 'Start an analysis session'),
+    label: t('commands.newAnalysis'),
+    description: t('commands.newAnalysisDesc'),
     type: 'analysis',
     action: () => startAgent('analysis'),
     shortcut: 'Cmd+A'
   }
 ])
+
+const commands = computed<Command[]>(() => [...agentCommands.value, ...navCommands.value])
+
+const TYPE_LABEL_KEYS: Record<CommandType, string> = {
+  task: 'commands.types.task',
+  research: 'commands.types.research',
+  code: 'commands.types.code',
+  analysis: 'commands.types.analysis',
+  navigate: 'commands.types.navigate'
+}
+const typeLabel = (type: CommandType): string => t(TYPE_LABEL_KEYS[type])
 
 const filteredCommands = computed<Command[]>(() => {
   if (!searchQuery.value.trim()) {
@@ -171,7 +206,8 @@ const filteredCommands = computed<Command[]>(() => {
   return commands.value.filter(cmd =>
     cmd.label.toLowerCase().includes(query) ||
     cmd.description.toLowerCase().includes(query) ||
-    cmd.type.toLowerCase().includes(query)
+    typeLabel(cmd.type).toLowerCase().includes(query) ||
+    (cmd.keywords ?? '').toLowerCase().includes(query)
   )
 })
 
@@ -190,13 +226,15 @@ const getAgentEmoji = (type: string): string => {
     task: '✓',
     research: '🔍',
     code: '</',
-    analysis: '📊'
+    analysis: '📊',
+    navigate: '→'
   }
   return emojis[type] || '◆'
 }
 
 const getShortcutText = (command: Command): string => {
-  if (!command.shortcut) return 'Enter'
+  // The locale-neutral key glyph the footer uses, not English "Enter"
+  if (!command.shortcut) return '↵'
   // Show OS-specific shortcut
   const isMac = /Mac/.test(navigator.platform)
   return command.shortcut.replace('Cmd', isMac ? '⌘' : 'Ctrl')

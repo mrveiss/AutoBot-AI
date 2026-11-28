@@ -474,3 +474,18 @@ trivial (a guard that only logs). One is the blocker underneath the rest (#13251
 The source's genuine contribution to us is not code and not architecture. It is the observation
 that a memory layer nobody can measure is a memory layer nobody can tune — which is the same
 conclusion #13251 already reached from the other direction.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13685 — umbrella: the tiered L0–L4 context stack was built and never ran — 2 of 5 layers cannot render
+- #13686 — fix(memory): L2 OnDemand can never render — memory graph read off an object that does not have it (closed)
+- #13687 — fix(memory): L4 GoalAncestry can never render — ancestry chain never passed at the only call site (closed)
+- #13688 — fix(memory): memory data plane has no tenant scoping — store/retrieve/search take no owner (closed)
+- #13689 — test(memory): run the #5066 A/B with all five layers live and record the result (closed)
+- #13690 — chore(memory): resolve memory/compat.py — no production callers, sole user of the untenanted plane (closed)
+- #13691 — fix(memory): L0+L1 budget guard warns instead of trimming — adopt the #13640 allocator (closed)
+- #13692 — feat(agent): no context offload of tool output — spill and anchor oversized results (closed)
+- #13694 — fix(llm): context-fit decisions run on a words×1.3 estimate that breaks on code, JSON and CJK (closed)
+- #13695 — feat(memory): distillation is clock-bound — add an idle-flush trigger alongside the cron (closed)

@@ -12,13 +12,18 @@ import asyncio
 import logging
 import sys
 
-from autobot_shared.paths import project_root
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-sys.path.append(str(project_root()))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
 
 from llm_self_awareness import get_llm_self_awareness
 from middleware.llm_awareness_middleware import get_awareness_injector

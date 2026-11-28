@@ -1,0 +1,178 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Re-pin reach floors main has outgrown (#22110).
+#
+# A reach floor decays through ordinary growth. ci.yml now fails main's own run when a floor enters
+# its bottom band (push to main, merge group), so the merge that caused it is the one that goes red.
+# This workflow is the other half: after every merge to main, and once a day for growth that
+# arrived without a run, it runs scripts/repin_reach_floors.py and, if that changed anything,
+# opens ONE pull request -- or updates the one already open -- that re-pins every stale floor.
+#
+# It never pushes to main and never merges. The write token lives only in this workflow, where no
+# scanned code runs beyond the repo's own re-pin script. Pattern: duplication-guard.yml `lower-pins`.
+
+name: Re-pin reach floors
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # Daily, off the top of the hour. GitHub dispatches `schedule` from the default branch only.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The bot PR carries #22110's milestone and phase label, read from here and nowhere else.
+  PR_MILESTONE: "M5 - Engineering platform: CI/CD security, debugging and dependency tooling"
+  PR_PHASE_LABEL: phase:M5.7
+  # The one bot branch every run force-pushes and the one PR lookup reads; declared once.
+  BRANCH: automation/reach-floors
+
+concurrency:
+  # One bot branch, one PR: two runs must not race on it.
+  group: repin-reach-floors
+  cancel-in-progress: false
+
+jobs:
+  repin:
+    name: Re-pin stale reach floors
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # No credentials are left in .git/config: the push below passes its token explicitly.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2  # the guards the script imports read the base commit (HEAD^1)
+
+      - uses: ./.github/actions/setup-python-suite
+
+      - name: Re-pin every stale floor
+        id: repin
+        run: |
+          set -uo pipefail
+          # Exit 2 means a guard failed to import, so its floor was NOT measured: never read as clean.
+          # The runner default shell is errexit: suspend it so a non-zero exit reaches the capture.
+          set +e
+          python scripts/repin_reach_floors.py | tee repin.log
+          code="${PIPESTATUS[0]}"
+          set -e
+          if [ "$code" = "2" ]; then
+            echo "::error::a guard failed to import, so some floors were not measured"
+            exit 2
+          fi
+          # Exit 1 means a floor stays stale after the re-pin (a SKIP: an expression floor, or an equality
+          # pin with growth=0). The PR for the rest still opens; the last step fails the job, so main
+          # stays red with the reason surfaced rather than silent.
+          if [ "$code" = "1" ]; then echo "stale_left=true" >> "$GITHUB_OUTPUT"; fi
+          if git diff --quiet -- repo_tests; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect the re-pinned path:line cells
+        id: pins
+        if: steps.repin.outputs.changed == 'true'
+        run: |
+          set -uo pipefail
+          # The script prints "... in <path>:<line>" for every floor it rewrote; no lookup here. An empty
+          # list still yields a true, non-empty cell, and nothing in this step can fail the job.
+          lines="$(grep '^PIN' repin.log | sed -n 's/^.* in \([^ |]*:[0-9][0-9]*\)$/\1/p' | paste -sd ';' - | sed 's/;/; /g')" || true
+          echo "lines=${lines:-see repin.log (no PIN line)}" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the re-pin PR
+        if: steps.repin.outputs.changed == 'true'
+        env:
+          # A PAT, deliberately not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN triggers no
+          # workflow run, so its required checks would never report and it could never merge.
+          GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+          PIN_LINES: ${{ steps.pins.outputs.lines }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::AUTOBOT_PUSH_TOKEN not set -- the re-pin PR would never trigger CI. Floors are stale on main (repin.log above) until an owner adds the secret or re-pins by hand."
+            exit 1
+          fi
+          SHORT_SHA="$(git rev-parse --short=10 HEAD)"
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add repo_tests
+          git commit -m "ci(guards): re-pin the reach floors main has outgrown (#22110)"
+          # The bot branch is regenerated from main every time and overwritten BY DESIGN: nobody commits
+          # to it by hand, so a human push here is replaced on the next run.
+          REMOTE_HEAD="$(git ls-remote "${REMOTE}" "refs/heads/${BRANCH}" | cut -f1)"
+          git push --force-with-lease="${BRANCH}:${REMOTE_HEAD}" "${REMOTE}" "$BRANCH"
+
+          # --state open: a MERGED earlier PR for this branch name must not stop a new one.
+          OPEN="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${OPEN}" ]; then
+            echo "::notice::updated the open re-pin PR #${OPEN}"
+            exit 0
+          fi
+          BODY_FILE="$(mktemp)"
+          {
+            echo "## Thinking Path"
+            echo
+            echo "Generated by \`repin-reach-floors.yml\`. A reach floor the tree outgrew, or one in the bottom band of its window, fails main's own run and then an unrelated PR. This re-pins each to the middle of its window, measured on main ${SHORT_SHA}."
+            echo
+            echo "## What Changed"
+            echo
+            echo '```'
+            grep '^PIN' repin.log || true
+            echo '```'
+            echo
+            echo "## Verification"
+            echo
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "## Requirement proofs"
+            echo
+            echo "| AC | Precondition | Postcondition | Establishing lines | Argument | Reviewer |"
+            echo "|---|---|---|---|---|---|"
+            echo "| Re-pin the reach floors main outgrew | the floors listed under What Changed are stale or in their band on main | each is pinned mid-window | ${PIN_LINES} | the script writes \`population - skips - growth//2\`, inside the window and outside the bottom band | pending |"
+            echo
+            echo "## Model Used"
+            echo
+            echo "None -- generated by CI."
+            echo
+            echo "## Issue Link"
+            echo
+            echo "Refs #22110"
+          } > "$BODY_FILE"
+          gh pr create --base main --head "$BRANCH" \
+            --milestone "$PR_MILESTONE" --label "$PR_PHASE_LABEL" \
+            --title "ci(guards): re-pin the reach floors main has outgrown (#22110)" \
+            --body-file "$BODY_FILE"
+          rm -f "$BODY_FILE"
+
+      - name: Say a still-open re-pin PR is no longer needed
+        # Never closed here: no PR is closed without a merge. A comment, once, so a person decides.
+        if: steps.repin.outputs.changed == 'false' && steps.repin.outputs.stale_left != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+          MARKER: "<!-- repin-reach-floors: no longer needed -->"
+        run: |
+          set -euo pipefail
+          [ -n "${GH_TOKEN}" ] || exit 0
+          OPEN="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          [ -n "${OPEN}" ] || exit 0
+          if grep -qF "${MARKER}" < <(gh pr view "${OPEN}" --json comments --jq '.comments[].body'); then exit 0; fi
+          gh pr comment "${OPEN}" --body "${MARKER}
+          Main no longer has a stale reach floor, so this re-pin is not needed. It is left open for a person to close or merge."
+
+      - name: Fail while a floor stays stale
+        if: always() && steps.repin.outputs.stale_left == 'true'
+        run: |
+          grep '^SKIP' repin.log | while IFS= read -r line; do echo "::error::reach floor needs a hand re-pin: ${line#SKIP  }"; done
+          echo "::error::stale reach floors remain after the re-pin; an equality pin (growth=0) is re-pinned by hand"
+          exit 1

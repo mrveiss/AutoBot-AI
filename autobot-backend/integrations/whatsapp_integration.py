@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.secret_redaction import LOG_MASK
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -41,15 +42,14 @@ def _mask_phone(phone: object) -> str:
 
     WhatsApp recipient numbers are PII; logging them in clear text trips CodeQL's
     clear-text-logging-of-sensitive-data query (GH#9725). Routing every logged
-    number through this helper keeps logs debuggable (last 4) without exposing the
-    full number.
+    number through this helper keeps logs debuggable (last 4) without the full number.
     """
     if not phone:
         return "<none>"
     digits = "".join(ch for ch in str(phone) if ch.isdigit())
     if len(digits) <= 4:
-        return "***"
-    return f"***{digits[-4:]}"
+        return LOG_MASK
+    return f"{LOG_MASK}{digits[-4:]}"
 
 
 _OPT_STATUS_KEY_PREFIX = "whatsapp:opt_status:"
@@ -268,17 +268,12 @@ class WhatsAppIntegration(BaseIntegration):
         from whatever the approver touched (#14539).
         """
         masked_to = _mask_phone(to)
-        verdict = await egress_governor.evaluate(
-            platform="whatsapp",
-            channel_id=masked_to,
-            message_id="",
+        verdict = await egress_governor.gate(
+            platform="whatsapp", channel_id=masked_to, subject=f"WhatsApp send to {masked_to}"
         )
         if verdict.allowed:
             return None
-        logger.warning(
-            "WhatsApp send to %s blocked by egress governance (%s): %s", masked_to, verdict.rule, verdict.reason
-        )
-        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
+        return egress_governor.denial_payload(verdict)
 
     async def send_text_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send text message to WhatsApp number.
@@ -491,45 +486,10 @@ class WhatsAppIntegration(BaseIntegration):
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
             }
-
-            template_payload: Dict[str, Any] = {
-                "name": template_name,
-                "language": {"code": language_code},
-            }
-            if params.get("components"):
-                template_payload["components"] = params["components"]
-
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to,
-                "type": "template",
-                "template": template_payload,
-            }
+            payload = self._build_template_payload(to, template_name, language_code, params)
 
             result = await self._make_request("POST", url, headers=headers, json_data=payload)
-
-            if result.get("status_code") == 200:
-                logger.info(
-                    "Sent WhatsApp template message '%s' to %s",
-                    template_name,
-                    _mask_phone(to),
-                )
-                return {
-                    "ok": True,
-                    "message_id": result["body"]["messages"][0]["id"],
-                    "to": _mask_phone(to),
-                    "template_name": template_name,
-                }
-
-            error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
-            logger.error(
-                "Failed to send WhatsApp template message '%s' to %s: %s",
-                template_name,
-                _mask_phone(to),
-                error_msg,
-            )
-            return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
+            return self._template_response(result, to, template_name)
 
         except Exception as exc:
             logger.error(
@@ -542,6 +502,37 @@ class WhatsAppIntegration(BaseIntegration):
                 "error": str(exc),
                 "to": _mask_phone(params.get("to")),
             }
+
+    @staticmethod
+    def _build_template_payload(to: str, name: str, language_code: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the template message payload (helper for send_template_message)."""
+        template: Dict[str, Any] = {"name": name, "language": {"code": language_code}}
+        if params.get("components"):
+            template["components"] = params["components"]
+        return {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "template",
+            "template": template,
+        }
+
+    @staticmethod
+    def _template_response(result: Dict[str, Any], to: str, template_name: str) -> Dict[str, Any]:
+        """Map the API result to the response dict (helper for send_template_message)."""
+        if result.get("status_code") == 200:
+            logger.info("Sent WhatsApp template message '%s' to %s", template_name, _mask_phone(to))
+            return {
+                "ok": True,
+                "message_id": result["body"]["messages"][0]["id"],
+                "to": _mask_phone(to),
+                "template_name": template_name,
+            }
+        error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
+        logger.error(
+            "Failed to send WhatsApp template message '%s' to %s: %s", template_name, _mask_phone(to), error_msg
+        )
+        return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
 
     async def check_opt_in_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Check if phone number has opted in for messaging.

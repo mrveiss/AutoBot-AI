@@ -1,5 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
 import { defineAsyncComponent, defineComponent, h } from 'vue'
 import type { AsyncComponentLoader, Component } from 'vue'
 import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'
@@ -159,7 +160,7 @@ export function defineRobustAsyncComponent(
         onRetry?.(retryCount)
 
         // Exponential backoff delay
-        const delay = Math.min(retryDelay * Math.pow(2, retryCount - 1), 5000)
+        const delay = backoffDelay(retryCount - 1, { base: retryDelay, max: RETRY_BACKOFF.max })
         await new Promise(resolve => setTimeout(resolve, delay))
 
         // Recursive retry

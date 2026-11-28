@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
@@ -36,7 +37,7 @@ from ..source_models import (
 )
 from ..source_paths import CODE_SOURCES_BASE, make_clone_path
 from ..source_storage import get_source, list_sources, save_source
-from .shared import _caller_owner_id
+from .shared import caller_owner_id
 
 logger = get_logger(__name__)
 
@@ -228,7 +229,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/sources")
+@router.get("/sources", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -254,14 +255,14 @@ async def create_code_source(request: CodeSourceCreateRequest, http_request: Req
     Issue #12377: captures owner_id from the caller so HTTP-created sources
     are privately scoped like the LLC-created ones (source_service's
     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
-    Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+    Uses the same caller-identity derivation (caller_owner_id) that #12375's
     require_source_access dependency authorizes reads against, so create and
     read agree on what "owned by the caller" means.
     """
     from auth_middleware import get_current_user  # noqa: PLC0415
 
     user = await get_current_user(http_request)
-    owner_id = _caller_owner_id(user)
+    owner_id = caller_owner_id(user)
 
     if request.source_type == "github" and request.repo:
         source = await source_service.create_github_source(
@@ -311,7 +312,7 @@ async def _auto_index_local_source(source: CodeSource) -> None:
     await _trigger_indexing(source)
 
 
-@router.get("/sources/summary")
+@router.get("/sources/summary", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -465,23 +466,17 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
 
 
 async def _get_last_indexed(source_id: str) -> str | None:
-    """Read last_indexed timestamp from ChromaDB stats metadata (#1458) -- per-source doc first, then global (#1716)."""
+    """Read a source's last_indexed from its own stats doc (#1458, #1716); none means None (#20513)."""
     try:
         from ..storage import get_code_collection_async
 
         collection = await get_code_collection_async()
         if collection:
-            # Try per-source stats first (#1716), fall back to global
             stats_id = f"codebase_stats_{source_id}"
             results = await collection.get(
                 ids=[stats_id],
                 include=["metadatas"],
             )
-            if not results or not results.get("metadatas"):
-                results = await collection.get(
-                    ids=["codebase_stats"],
-                    include=["metadatas"],
-                )
             if results and results.get("metadatas"):
                 return results["metadatas"][0].get("last_indexed")
     except Exception as exc:

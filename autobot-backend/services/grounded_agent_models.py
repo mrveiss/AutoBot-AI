@@ -10,78 +10,18 @@ The claim, verification, conflict and response types that GroundedAgent
 Split out of the agent module so the orchestration and the data it passes
 around can each be read, and sized, on their own (#14981).
 
-Not the same types as the claim classifier's Claim/KBStatus in
-services/knowledge_grounding_models.py, or the conflict resolver's
-Claim/Conflict/ConflictResolution in api/knowledge_grounding_models.py: the same
-domain, but different shapes, each with its own callers.
+Claim and VerifiedClaim (services/knowledge_grounding_models.py) and Conflict
+(api/knowledge_grounding_models.py) are the one model each (#18086), shared with
+the claim classifier, claim verifier and conflict resolver.
 """
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List
 from uuid import uuid4
 
-
-class ClaimStatus(str, Enum):
-    """Status of a claim in the grounding process."""
-
-    IN_KB = "in_kb"  # Claim verified in knowledge base
-    UNKNOWN = "unknown"  # Claim not found in KB, needs research
-    CONTRADICTS = "contradicts"  # Claim contradicts KB knowledge
-    VERIFIED = "verified"  # Claim verified through external source
-    UNVERIFIABLE = "unverifiable"  # Claim cannot be verified
-    CONFLICTED = "conflicted"  # Claim conflicts with other verified claims
-
-
-class ConflictResolution(str, Enum):
-    """Resolution status of a conflict."""
-
-    RESOLVED = "resolved"  # Conflict resolved with clear winner
-    PENDING_REVIEW = "pending_review"  # Needs human review
-    INCONCLUSIVE = "inconclusive"  # Multiple valid interpretations
-
-
-@dataclass
-class Claim:
-    """Extracted claim from response text."""
-
-    claim_id: str = field(default_factory=lambda: str(uuid4()))
-    claim_text: str = ""
-    subject: str = ""  # Subject entity
-    predicate: str = ""  # Relationship/property
-    object: str = ""  # Object/value
-    confidence: float = 0.0  # LLM confidence in the claim (0.0-1.0)
-    context: Dict[str, Any] = field(default_factory=dict)  # Context from response
-    timestamp: float = field(default_factory=time.time)
-
-
-@dataclass
-class VerifiedClaim:
-    """Claim that has been verified."""
-
-    claim: Claim
-    kb_status: ClaimStatus  # Classification result
-    kb_source: str | None = None  # KB fact ID if IN_KB
-    confidence: float = 0.0  # Verification confidence (0.0-1.0)
-    evidence: List[str] = field(default_factory=list)  # Supporting evidence
-    verification_method: str = ""  # a VerificationMethod value; see #15005
-    resolved_at: float = field(default_factory=time.time)
-
-
-@dataclass
-class Conflict:
-    """Conflict between claims or against KB."""
-
-    conflict_id: str = field(default_factory=lambda: str(uuid4()))
-    claim_1_id: str = ""  # First claim ID
-    claim_2_id: str | None = None  # Second claim ID (or KB fact)
-    description: str = ""  # Description of conflict
-    severity: str = "medium"  # "low", "medium", "high"
-    resolution: ConflictResolution = ConflictResolution.PENDING_REVIEW
-    chosen_fact: str | None = None  # Fact ID chosen for resolution
-    reasoning: str = ""  # Human/system reasoning for resolution
-    timestamp: float = field(default_factory=time.time)
+from api.knowledge_grounding_models import Conflict
+from services.knowledge_grounding_models import Claim, VerifiedClaim
 
 
 @dataclass

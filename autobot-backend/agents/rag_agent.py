@@ -24,7 +24,7 @@ from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .payloads import AgentStatus, RAGPayload
+from .payloads import AgentOutcome, RAGPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -146,7 +146,7 @@ class RAGAgent(StandardizedAgent):
         public API contract (Dict[str, Any]) is unchanged.
         """
         return RAGPayload(
-            status=AgentStatus.SUCCESS,
+            status=AgentOutcome.SUCCESS,
             agent_type="rag",
             model_used=self.model_name,
             synthesized_response=synthesis_result.get("response", ""),

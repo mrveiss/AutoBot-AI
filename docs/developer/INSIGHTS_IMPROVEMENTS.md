@@ -44,14 +44,14 @@ All recommendations from the insights report have been implemented to improve wo
 
 ---
 
-## 2. Custom Skill: `/issue`
+## 2. Custom Skill: `/autobot-dev-skills:lifecycle implement`
 
 ### Location
-`~/.claude/skills/issue/SKILL.md`
+`autobot-dev-skills` plugin, `skills/lifecycle/references/implement.md` (supersedes the former `issue` skill)
 
 ### Usage
 ```bash
-/issue <number>
+/autobot-dev-skills:lifecycle implement <number>
 ```
 
 ### What It Does
@@ -77,7 +77,7 @@ Executes the complete GitHub issue implementation workflow:
 ### Example
 ```bash
 # Instead of: "Work on issue #789"
-# Use: /issue 789
+# Use: /autobot-dev-skills:lifecycle implement 789
 ```
 
 ### Impact
@@ -131,7 +131,7 @@ Before every `git commit`, automatically runs:
 
 **Before:**
 ```python
-Task(subagent_type="senior-backend-engineer",
+Task(subagent_type="autobot-dev-skills:senior-developer",
      description="Implement feature X",
      prompt="...")
 ```
@@ -343,7 +343,7 @@ A service is degraded: [DESCRIBE SYMPTOM]. Debug systematically. Do NOT attempt 
 
 ### Starting a New Issue
 ```bash
-/issue <number>
+/autobot-dev-skills:lifecycle implement <number>
 # OR if not using skill:
 # 1. Verify: gh issue view <number> --json state
 # 2. Check PRs: gh pr list | grep <issue>
@@ -376,7 +376,7 @@ Only use Task agents for unfamiliar code exploration."
 
 ## 9. Next Steps
 
-1. **Test the /issue skill** on your next GitHub issue
+1. **Test the `/autobot-dev-skills:lifecycle implement` skill** on your next GitHub issue
 2. **Observe pre-commit hooks** catching lint issues automatically
 3. **Try structured continuation prompts** in multi-session workflows
 4. **Experiment with headless mode** for next batch refactoring campaign
@@ -387,6 +387,6 @@ Only use Task agents for unfamiliar code exploration."
 ## Support
 
 - **CLAUDE.md:** `CLAUDE.md`
-- **Issue skill:** `~/.claude/skills/issue/SKILL.md`
+- **Implement skill:** `autobot-dev-skills` plugin, `skills/lifecycle/references/implement.md`
 - **Hooks config:** `~/.claude/settings.json`
 - **This doc:** `docs/developer/INSIGHTS_IMPROVEMENTS.md`

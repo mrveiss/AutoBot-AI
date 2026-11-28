@@ -48,7 +48,7 @@ const tooltipText = computed(() => {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.025em;
@@ -56,22 +56,22 @@ const tooltipText = computed(() => {
 }
 
 .trust-tier-official {
-  background-color: #10b981;
-  color: #fff;
+  background-color: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .trust-tier-verified {
-  background-color: #3b82f6;
-  color: #fff;
+  background-color: var(--color-info);
+  color: var(--text-on-info);
 }
 
 .trust-tier-community {
-  background-color: #f59e0b;
-  color: #fff;
+  background-color: var(--color-warning);
+  color: var(--text-on-warning);
 }
 
 .trust-tier-unverified {
-  background-color: #ef4444;
-  color: #fff;
+  background-color: var(--color-error);
+  color: var(--text-on-error);
 }
 </style>

@@ -49,7 +49,7 @@ from .safety_limits import (
     WorkflowLimits,
 )
 from .step_evaluator import WorkflowStepEvaluator
-from .templates import WorkflowTemplateManager
+from .templates import AutomationStepTemplateManager
 
 __all__ = [
     # Main Manager
@@ -70,7 +70,7 @@ __all__ = [
     "WorkflowExecutor",
     "WorkflowController",
     "WorkflowStepEvaluator",
-    "WorkflowTemplateManager",
+    "AutomationStepTemplateManager",
     # Issue #2159: Safety limits
     "WorkflowLimits",
     "CostTracker",

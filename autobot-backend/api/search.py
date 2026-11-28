@@ -12,7 +12,7 @@ import asyncio
 import time
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
@@ -27,6 +27,8 @@ from api.schemas_knowledge import (
     SearchPerformanceAnalyticsResponse,
 )
 from api.system_health import register_singleton_probe
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.embedding_model import EmbeddingUnavailableError, raise_if_embedding_refused
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_llm_logger
 
@@ -36,7 +38,7 @@ from type_defs.common import Metadata
 
 logger = get_llm_logger("search_api")
 
-router = APIRouter(tags=["Search"])
+router = APIRouter(tags=["Search"], dependencies=[Depends(get_current_user)])
 
 
 def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
@@ -85,7 +87,7 @@ def _convert_metrics_to_api_format(metrics) -> dict:
     """
     Convert metrics object to API response format (Issue #665: extracted helper).
     """
-    return {
+    data = {
         "total_documents_searched": metrics.total_documents_searched,
         "embedding_generation_time_ms": metrics.embedding_generation_time_ms,
         "similarity_computation_time_ms": metrics.similarity_computation_time_ms,
@@ -93,6 +95,9 @@ def _convert_metrics_to_api_format(metrics) -> dict:
         "device_used": metrics.device_used,
         "hardware_utilization": metrics.hardware_utilization,
     }
+    if getattr(metrics, "error", None):  # a failed search carries its reason (#18185)
+        data["error"] = metrics.error
+    return data
 
 
 @router.post("/semantic", response_model=NPUSearchResponse)
@@ -126,6 +131,9 @@ async def semantic_search(request: NPUSearchRequest):
             enable_npu_acceleration=request.enable_npu_acceleration,
             force_device=force_device,
         )
+
+        if getattr(metrics, "error", None):  # embedding refused: a failed search, never "no results" (#18185)
+            raise HTTPException(status_code=503, detail=metrics.error)
 
         results_data = _convert_search_results_to_api_format(search_results)
         metrics_data = _convert_metrics_to_api_format(metrics)
@@ -221,7 +229,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
-async def optimize_search_engine(request: NPUOptimizationRequest):
+async def optimize_search_engine(request: NPUOptimizationRequest, _: bool = Depends(check_admin_permission)):
     """
     Optimize search engine for specific workload types.
 
@@ -314,6 +322,7 @@ async def test_npu_connectivity():
             query="test connectivity", similarity_top_k=3, enable_npu_acceleration=True
         )
 
+        raise_if_embedding_refused(test_metrics)  # reported as a failed connectivity test (#18185)
         return {
             "connectivity": "success",
             "npu_worker_url": search_engine.npu_worker_url,
@@ -325,12 +334,23 @@ async def test_npu_connectivity():
 
     except Exception as e:
         logger.warning("NPU connectivity test failed: %s", e)
-        return {
-            "connectivity": "failed",
-            "error": "Internal server error",
-            "fallback_available": True,
-            "timestamp": time.time(),
-        }
+        return _connectivity_failure(e)
+
+
+#: What a client is told when the index's embedding space is refused; the reason itself is logged.
+REFUSED_SEARCH_ERROR = "Search refused: the index's embedding model is unavailable"
+
+
+def _connectivity_failure(exc: Exception) -> dict:
+    """A failed connectivity test. A refused query space has no fallback by design (#18185); for any
+    other failure whether one exists is not determined, so ``fallback_available`` is None."""
+    refused = isinstance(exc, EmbeddingUnavailableError)
+    return {
+        "connectivity": "failed",
+        "error": REFUSED_SEARCH_ERROR if refused else "Internal server error",
+        "fallback_available": False if refused else None,
+        "timestamp": time.time(),
+    }
 
 
 def _evaluate_device_timing(

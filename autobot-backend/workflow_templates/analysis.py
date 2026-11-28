@@ -13,7 +13,7 @@ from typing import Dict, List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _build_data_preparation_steps() -> List[WorkflowStep]:
@@ -118,8 +118,8 @@ def create_data_analysis_template() -> WorkflowTemplate:
         id="data_analysis",
         name="Data Analysis",
         description="Comprehensive data analysis and insights generation",
-        category=TemplateCategory.ANALYSIS,
-        complexity=TaskComplexity.RESEARCH,
+        category=WorkflowTemplateCategory.ANALYSIS,
+        complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=35,
         agents_involved=[
             "research",
@@ -224,7 +224,7 @@ def create_log_analysis_template() -> WorkflowTemplate:
         id="log_analysis",
         name="Log Analysis",
         description="Automated log analysis for security and performance insights",
-        category=TemplateCategory.ANALYSIS,
+        category=WorkflowTemplateCategory.ANALYSIS,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=30,
         agents_involved=[

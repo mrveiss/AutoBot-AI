@@ -16,26 +16,28 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
 
+from api.analytics_shared import git_root_of
+from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
-from code_intelligence.cross_language_patterns import (
-    CrossLanguageAnalysis,
-    CrossLanguagePatternDetector,
-)
+from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, CrossLanguagePatternDetector
 
 # Issue #208: Code Pattern Detection & Optimization
-from code_intelligence.pattern_analysis import (
-    CodePatternAnalyzer,
-    PatternAnalysisReport,
-)
-from constants.path_constants import PATH
+from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
-from utils.cancel_tokens import new_cancel_token, run_cancellable
+from utils.cancel_tokens import (
+    CancelTokenSet,
+    new_cancel_token,
+    register_cancel_token,
+    run_cancellable,
+    signal_cancel_token,
+)
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -52,25 +54,26 @@ from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import (  # noqa: F401
+    HIGH_SIMILARITY_THRESHOLD,
     LOW_SIMILARITY_THRESHOLD,
+    MEDIUM_SIMILARITY_THRESHOLD,
     DuplicateAnalysis,
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..problem_dedup import dedupe_same_location_problems
+from ..run_status import report_response, run_response_fields
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
+from .scan_responses import ScanUnavailable
 from .shared import (
     filter_problems_by_file_existence,
-    resolve_project_root,
-    resolve_source_root,
+    resolve_scan_root,
 )
 
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Severity order for sorting (most critical first)
-SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3, "hint": 4}
 
 # All file categories for tracking
 ALL_CATEGORIES = [
@@ -226,7 +229,7 @@ def _generate_category_section(
 
     grouped = _group_problems(problems)
 
-    for severity in ["high", "medium", "low", "info", "hint"]:
+    for severity in PROBLEM_SEVERITY_ORDER:
         if severity in grouped:
             lines.extend(_format_severity_subsection(severity, grouped[severity]))
 
@@ -299,7 +302,7 @@ def _build_summary_section(severity_counts: Dict[str, int], type_counts: Dict[st
         "|----------|-------|",
     ]
 
-    for sev in ["high", "medium", "low", "info", "hint"]:
+    for sev in PROBLEM_SEVERITY_ORDER:
         count = severity_counts.get(sev, 0)
         if count > 0:
             emoji = _get_severity_emoji(sev)
@@ -359,7 +362,7 @@ def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
         "| Risk Level | Files |",
         "|------------|-------|",
     ]
-    for level in ["critical", "high", "medium", "low", "minimal"]:
+    for level in (s.value for s in Severity.risk_ladder()):
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
         lines.append(f"| {emoji} {level.capitalize()} | {count} |")
@@ -658,19 +661,27 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
         "| Metric | Value |",
         "|--------|-------|",
         f"| Files Analyzed | {analysis.files_analyzed} |",
-        f"| Total Duplicate Pairs | {analysis.total_duplicates} |",
+        f"| Total Duplicate Clusters | {analysis.total_duplicates} ({analysis.total_locations} locations) |",
+        f"| Exact / Structural Clusters | {analysis.exact_cluster_count} / {analysis.structural_cluster_count} |",
         f"| High Similarity (90%+) | {analysis.high_similarity_count} |",
         f"| Medium Similarity (70-89%) | {analysis.medium_similarity_count} |",
         f"| Low Similarity (50-69%) | {analysis.low_similarity_count} |",
         f"| Total Duplicate Lines | {analysis.total_duplicate_lines} |",
         "",
     ]
+    if analysis.truncated:  # the analysis's own return cap, separate from each table's display limit
+        lines += [f"> Only {len(analysis.duplicates)} of {analysis.total_duplicates} clusters were returned.", ""]
     return lines
+
+
+def _cluster_locations(cluster) -> str:
+    """Every location of a duplicate cluster, ``file:start-end`` (#22157)."""
+    return "<br>".join(f"`{_shorten_path(loc.file)}`:{loc.start_line}-{loc.end_line}" for loc in cluster.locations)
 
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate high similarity duplicates section."""
-    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= 0.90]
+    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD]
     if not high_similarity_dups:
         return []
 
@@ -679,21 +690,15 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
         "",
         "> These are exact or near-exact duplicates. Consider extracting to shared utility.",
         "",
-        "| File 1 | Lines | File 2 | Lines | Similarity |",
-        "|--------|-------|--------|-------|------------|",
+        "| Locations | Kind | Lines | Similarity |",
+        "|-----------|------|-------|------------|",
     ]
 
     for dup in high_similarity_dups[:15]:  # Limit to top 15
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(
-            f"| `{file1_short}` | {dup.start_line1}-{dup.end_line1} | "
-            f"`{file2_short}` | {dup.start_line2}-{dup.end_line2} | "
-            f"{dup.similarity * 100:.0f}% |"
-        )
+        lines.append(f"| {_cluster_locations(dup)} | {dup.kind} | {dup.line_count} | {dup.similarity * 100:.0f}% |")
 
     if len(high_similarity_dups) > 15:
-        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | | |")
+        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | |")
 
     lines.append("")
     return lines
@@ -701,7 +706,9 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
-    medium_similarity_dups = [d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90]
+    medium_similarity_dups = [
+        d for d in analysis.duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+    ]
     if not medium_similarity_dups:
         return []
 
@@ -710,14 +717,12 @@ def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[
         "",
         "> Similar patterns that may benefit from consolidation.",
         "",
-        "| File 1 | File 2 | Similarity | Lines |",
-        "|--------|--------|------------|-------|",
+        "| Locations | Similarity | Lines |",
+        "|-----------|------------|-------|",
     ]
 
     for dup in medium_similarity_dups[:10]:  # Limit to top 10
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(f"| `{file1_short}` | `{file2_short}` | " f"{dup.similarity * 100:.0f}% | {dup.line_count} |")
+        lines.append(f"| {_cluster_locations(dup)} | {dup.similarity * 100:.0f}% | {dup.line_count} |")
 
     if len(medium_similarity_dups) > 10:
         lines.append(f"| ... | *{len(medium_similarity_dups) - 10} more* | | |")
@@ -770,7 +775,7 @@ def _generate_duplicate_code_section(
                 "### Recommendations",
                 "",
                 "- **Extract common code** to shared utilities or base classes",
-                "- **Review high-similarity pairs** for potential consolidation",
+                "- **Review high-similarity clusters** for potential consolidation",
                 "- **Consider design patterns** like Template Method or Strategy for similar logic",
                 "",
             ]
@@ -1011,11 +1016,10 @@ def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
         "low": "🟢",
         "info": "🔵",
     }
-    for severity in ["critical", "high", "medium", "low", "info"]:
+    for severity in (s.value for s in reversed(Severity.finding_ladder())):
         count = report.severity_distribution.get(severity, 0)
         if count > 0:
-            emoji = severity_emojis.get(severity, "⚪")
-            lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+            lines.append(f"| {severity_emojis.get(severity, '⚪')} {severity.capitalize()} | {count} |")
     lines.append("")
     return lines
 
@@ -1228,8 +1232,8 @@ def _generate_cross_language_section(
 
 
 def _fetch_problems_from_chromadb(
-    source_id: str | None = None,
-    source_root: Path | None = None,
+    source_id: str,
+    source_root: Path,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
@@ -1240,7 +1244,7 @@ def _fetch_problems_from_chromadb(
     prevent hallucinated results from reaching the issue tracker.
 
     Args:
-        source_id: Optional source registry ID to scope results.
+        source_id: Source registry ID the results are scoped to (#20513: required).
         source_root: Filesystem root to resolve relative file paths against.
                      Defaults to the project root when None.
 
@@ -1249,6 +1253,8 @@ def _fetch_problems_from_chromadb(
         Each entry includes ``file_verified: True`` when the path was confirmed
         on disk, or ``file_verified: False`` when the path field was absent.
     """
+    # Before the `try` below, which logs and swallows: a missing source is a caller bug.
+    where_filter = {"$and": [{"type": "problem"}, {"source_id": require_source_id(source_id, "report problems query")}]}
     code_collection = get_code_collection()
     problems = []
 
@@ -1256,15 +1262,6 @@ def _fetch_problems_from_chromadb(
         return problems
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
         results = get_all_paginated(
             code_collection,
             where=where_filter,
@@ -1289,13 +1286,8 @@ def _fetch_problems_from_chromadb(
 
         # Issue #2724: Validate file paths — drop findings that reference
         # files not present in the indexed repository.
-        # Issue #12399: Fall back to resolve_project_root() (deployed-layout-aware,
-        # #10730) rather than get_project_root() (hardcoded parents[4], which
-        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
-        # standalone rsync layout).
-        root = source_root or Path(resolve_project_root())
-        problems = filter_problems_by_file_existence(problems, root)
-
+        # #20513: the source's own root, never AutoBot's tree as a stand-in.
+        problems = dedupe_same_location_problems(filter_problems_by_file_existence(problems, source_root))  # #20493
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
         logger.error("Failed to fetch problems from ChromaDB: %s", e)
@@ -1310,8 +1302,8 @@ def _build_analysis_task_list(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> List[Tuple[str, Any, float]]:
     """
     Build list of analysis tasks to run, each with its own deadline.
@@ -1339,7 +1331,7 @@ def _build_analysis_task_list(
             (
                 "bug_prediction",
                 _get_bug_prediction(
-                    project_root=str(scan_root) if scan_root else None,
+                    project_root=str(scan_root),
                     use_semantic=use_semantic,
                     source_id=source_id,
                 ),
@@ -1403,8 +1395,8 @@ async def _run_parallel_analyses(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> Dict[str, object | None]:
     """
     Run multiple code analyses in parallel.
@@ -1536,8 +1528,8 @@ def _generate_empty_report_with_analyses(
 
 
 async def _get_cross_language_analysis(
-    source_id: str | None = None,
-    project_root: Path | None = None,
+    source_id: str,
+    project_root: Path,
 ) -> CrossLanguageAnalysis | None:
     """
     Get cross-language pattern analysis for the project (Issue #244).
@@ -1549,15 +1541,14 @@ async def _get_cross_language_analysis(
 
     Args:
         source_id: Code source this analysis is scoped to (Issue #12372).
-        project_root: Resolved filesystem root to scan for this source.
-            Falls back to AutoBot's own root when None.
+        project_root: Resolved filesystem root to scan for this source (required, #20513).
 
     Returns:
         CrossLanguageAnalysis or None if analysis fails
     """
     try:
         detector = CrossLanguagePatternDetector(
-            project_root=str(project_root) if project_root else None,
+            project_root=str(project_root),
             use_llm=True,
             use_cache=True,
             source_id=source_id,
@@ -1584,59 +1575,38 @@ async def _get_cross_language_analysis(
 
 
 async def _get_pattern_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> PatternAnalysisReport | None:
-    """
-    Get code pattern analysis for the project (Issue #208).
+    """Code pattern analysis of the requested source's root, and nothing else (Issue #208).
 
-    Issue #2655: Scope analysis to autobot-backend/ (PATH.BACKEND_DIR) instead of
-    the full repo root to avoid the 180s timeout on large codebases -- this
-    optimization only applies to AutoBot's own tree (no distinct source
-    resolved), since other registered sources don't share AutoBot's layout.
+    #12372/#20513: ``project_root`` is required and scanned as given; the analysis never substitutes AutoBot's own
+    backend directory, which answered every source with AutoBot's own findings (the #2655 shortcut is gone).
 
-    Issue #12372: When a distinct source is resolved, scan that source's root
-    instead of always defaulting to AutoBot's own backend directory --
-    otherwise a report requested for source A returned AutoBot's own
-    pattern-analysis findings for every source.
-
-    Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own backend dir when None or when it
-            resolves to AutoBot's own project root (default source).
+    Bounds (#22094): the ``wait_for`` ends the wait after about 180 s and then sets the cancel token, which stops
+    the analyzer before its next file or phase and the clone thread before its next file. Stopped at its token
+    (``AnalysisCancelled``, a ``CancelTokenSet``) the analysis answers None; an outer cancel still propagates.
 
     Returns:
-        PatternAnalysisReport or None if analysis fails
+        PatternAnalysisReport, or None when the analysis fails, times out or stops at its cancel token.
     """
+    cancel_token = new_cancel_token()
+    register_cancel_token("pattern_analysis", cancel_token)  # /report's bounded() signals it (scope provider, #14256)
     try:
-        # #12399: compare against resolve_project_root() (deployed-layout-aware),
-        # matching the scan_root fallback — otherwise in the deployed layout an
-        # AutoBot self-report (project_root == code_source) fails this identity
-        # check and scans the full repo instead of PATH.BACKEND_DIR, dropping the
-        # #2655 timeout optimization.
-        if project_root and Path(project_root).resolve() != Path(resolve_project_root()).resolve():
-            scan_target = str(project_root)
-        else:
-            scan_target = str(PATH.BACKEND_DIR)
+        scan_target = str(project_root)
 
         analyzer = CodePatternAnalyzer(
+            cancel_token=cancel_token,
             enable_clone_detection=True,
             enable_anti_pattern_detection=True,
             enable_regex_detection=True,
             enable_complexity_analysis=True,
             similarity_threshold=0.8,
-            # #12372: the report consumes the returned PatternAnalysisReport
-            # directly and never reads the ChromaDB cache, so disable embedding
-            # storage. Otherwise Phase 4 would persist THIS source's code into the
-            # global, source-unscoped `code_patterns` collection — re-introducing
-            # a cross-source write on the very path this PR scopes. The read-side
-            # source_id filter for that store is tracked separately in #12384.
+            # #12372: no embedding storage: Phase 4 would persist THIS source's code into the global,
+            # source-unscoped `code_patterns` collection (a cross-source write; read side: #12384).
             enable_embedding_storage=False,
         )
 
-        report = await asyncio.wait_for(
-            analyzer.analyze_directory(scan_target),
-            timeout=180.0,  # 3 minute timeout for comprehensive analysis
-        )
+        report = await asyncio.wait_for(analyzer.analyze_directory(scan_target), timeout=180.0)  # 3 minutes
 
         logger.info(
             "Pattern analysis: %d patterns, %d duplicates, %d complexity hotspots",
@@ -1646,7 +1616,14 @@ async def _get_pattern_analysis(
         )
         return report
     except asyncio.TimeoutError:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis deadline")
         logger.warning("Pattern analysis timed out")
+        return None
+    except asyncio.CancelledError as cancelled:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis cancelled")
+        if not isinstance(cancelled, CancelTokenSet) or asyncio.current_task().cancelling():
+            raise
+        logger.warning("Pattern analysis stopped at its cancel token: %s", cancelled)
         return None
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e, exc_info=True)
@@ -1654,7 +1631,7 @@ async def _get_pattern_analysis(
 
 
 async def _get_duplicate_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> DuplicateAnalysis | None:
     """
     Get duplicate code analysis for the project (Issue #528).
@@ -1665,14 +1642,13 @@ async def _get_duplicate_analysis(
     findings for every source.
 
     Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own project root when None.
+        project_root: Resolved filesystem root for the requested source (required, #20513).
 
     Returns:
         DuplicateAnalysis or None if analysis fails
     """
     try:
-        scan_target = str(project_root) if project_root else str(Path(__file__).resolve().parents[4])
+        scan_target = str(project_root)
 
         # #13602: delegate to the guarded scan in `duplicates`. This submitted
         # straight to the executor with neither the single-flight lock nor the
@@ -1682,15 +1658,6 @@ async def _get_duplicate_analysis(
         # LOW_SIMILARITY_THRESHOLD is the detector's own default, which is what
         # this call site relied on implicitly — behaviour unchanged.
         analysis = await _run_standard_analysis(scan_target, LOW_SIMILARITY_THRESHOLD)
-        if analysis is None:
-            # #13602: say so. The GUI polls /duplicates while loading /report and
-            # they now share one lock, so this is the common case — and a report
-            # that omits the section without comment reads as "no duplicates".
-            logger.warning(
-                "Duplicate section omitted from the report: the scan was "
-                "unavailable (already in flight, or it exceeded its deadline)"
-            )
-            return None
 
         logger.info(
             "Duplicate analysis: %d duplicates (%d high, %d medium, %d low)",
@@ -1700,6 +1667,13 @@ async def _get_duplicate_analysis(
             analysis.low_similarity_count,
         )
         return analysis
+    except ScanUnavailable as exc:
+        # #13602/#18013: say so, and say which. The GUI polls /duplicates while
+        # loading /report and they share one lock, so busy is the common case --
+        # and a report that omits the section without comment reads as "no
+        # duplicates".
+        logger.warning("Duplicate section omitted from the report: %s", exc)
+        return None
     except asyncio.TimeoutError:
         logger.warning("Duplicate analysis timed out")
         return None
@@ -1709,7 +1683,7 @@ async def _get_duplicate_analysis(
 
 
 async def _get_api_endpoint_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> APIEndpointAnalysis | None:
     """
     Get API endpoint analysis for the project (Issue #527).
@@ -1720,9 +1694,7 @@ async def _get_api_endpoint_analysis(
     coverage findings for every source.
 
     Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own project root (APIEndpointChecker
-            default) when None.
+        project_root: Resolved filesystem root for the requested source (required, #20513).
 
     Returns:
         APIEndpointAnalysis or None if analysis fails
@@ -1761,10 +1733,10 @@ async def _get_api_endpoint_analysis(
 
 
 async def _get_bug_prediction(
-    project_root: str | None = None,
+    project_root: str,
+    source_id: str,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ) -> PredictionResult | None:
     """
     Get bug prediction data for the project (Issue #505).
@@ -1775,17 +1747,15 @@ async def _get_bug_prediction(
     collection when use_semantic=True; with use_semantic=False (the
     pipeline default) it degrades to the same synchronous per-file
     analysis as the old sync path, so this is a safe default baseline.
-
     Issue #554: Enhanced with optional semantic analysis:
     - use_semantic=True enables LLM-based bug pattern matching
     - Uses ChromaDB for vector similarity and Redis for caching
-
     Issue #12384: Threads source_id into the detector so a report requested
     for one source never reads another source's (or AutoBot's own) learned
     bug patterns from the shared ``bug_pattern_vectors`` collection.
 
     Args:
-        project_root: Root directory to analyze (defaults to current directory)
+        project_root: The source's checkout to analyze (required, #20513)
         limit: Maximum number of files to analyze
         use_semantic: Enable semantic analysis via LLM embeddings (Issue #554)
         source_id: Code source this analysis is scoped to (Issue #12384).
@@ -1793,15 +1763,13 @@ async def _get_bug_prediction(
     Returns:
         PredictionResult or None if analysis fails or times out
     """
+    root = await asyncio.to_thread(git_root_of, Path(project_root))  # own repository only (#20513)
+    if root is None:  # `git log` would read another repository's history: this section fails closed
+        logger.warning("Bug prediction skipped: the source checkout is not a git repository of its own")
+        return None
     try:
-        # Issue #2655: Use PATH.PROJECT_ROOT as fallback — Path.cwd() is unreliable
-        # in deployed environments where the backend process CWD may differ from
-        # the project root, causing FileNotFoundError in git subprocess calls.
-        root = project_root or str(PATH.PROJECT_ROOT)
-
-        # Issue #554: Pass semantic analysis flag
-        # Issue #12384: Pass source_id for ChromaDB metadata/query scoping
-        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic, source_id=source_id)
+        # Issue #554/#12384: semantic flag; source_id scopes the ChromaDB metadata/query
+        predictor = BugPredictor(project_root=str(root), use_semantic_analysis=use_semantic, source_id=source_id)
 
         # Issue #12406: analyze_directory_async is the path that writes/reads
         # the source_id-scoped bug_pattern_vectors collection; the previous
@@ -2137,8 +2105,8 @@ async def _resolve_analyses(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> dict:
     """Helper for generate_analysis_report. Resolve analysis results or quick-mode blanks. Ref: #1088.
 
@@ -2196,6 +2164,7 @@ def _render_report(problems: list, analyses: dict) -> str:
     error_code_prefix="CODEBASE",
 )
 async def generate_analysis_report(
+    source_id: SourceIdQuery,
     format: str = "markdown",
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
@@ -2204,7 +2173,6 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -2221,29 +2189,15 @@ async def generate_analysis_report(
         quick: If True, skip expensive analyses for faster export
         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
         source_id: Scope the report and every sub-analysis to this code source
-            (Issue #12372). Falls back to the most recently indexed source, or
-            AutoBot's own root only when no source is resolvable.
+            (Issue #12372). Required (#20513): there is no default source.
 
     Returns:
         Markdown formatted report as plain text
     """
-    # Default to most recent source to prevent cross-project data mixing (#2653)
-    if not source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
-
-        source_id = await get_default_source_id()
-
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
-    source_root = await resolve_source_root(source_id)
-    # Issue #12372: Sub-analysis scanners need a concrete root even when the
-    # source is unresolvable -- fall back to AutoBot's own project root
-    # (matches resolve_scan_root's fallback behavior) rather than letting each
-    # sub-analysis silently default to its own hard-coded AutoBot path.
-    # Issue #12399: Use resolve_project_root() (deployed-layout-aware, #10730)
-    # to match resolve_scan_root's fallback -- get_project_root() (parents[4])
-    # resolves to /opt/autobot, not the analyzable repo, in the deployed layout.
-    scan_root = source_root or Path(resolve_project_root())
+    # #20513: a source with no checkout is a 404, never AutoBot's own tree.
+    source_root = await resolve_scan_root(source_id)
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
@@ -2255,13 +2209,7 @@ async def generate_analysis_report(
         include_pattern_analysis=include_pattern_analysis,
         use_semantic=use_semantic,
         source_id=source_id,
-        scan_root=scan_root,
+        scan_root=source_root,
     )
-    report = _render_report(problems, analyses)
-    return PlainTextResponse(
-        content=report,
-        media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
-        },
-    )
+    # #21003: a report built from an interrupted run says so, in its body and its headers.
+    return report_response(_render_report(problems, analyses), await run_response_fields(source_id), source_id)

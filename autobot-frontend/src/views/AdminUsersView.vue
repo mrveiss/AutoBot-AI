@@ -9,14 +9,14 @@
         <p class="page-subtitle">{{ t('adminUsers.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-action-primary" @click="showCreateModal = true">
+        <BaseButton size="sm" @click="showCreateModal = true">
           <Icon name="user-plus" />
           {{ t('adminUsers.addUser') }}
-        </button>
-        <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="loading" @click="loadUsers">
           <Icon name="sync-alt" :spin="loading" />
           {{ t('common.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -51,6 +51,7 @@
             <th>{{ t('adminUsers.colEmail') }}</th>
             <th>{{ t('adminUsers.colDisplayName') }}</th>
             <th>{{ t('adminUsers.colRole') }}</th>
+            <th v-if="canSetAdmin">{{ t('adminUsers.colAdmin') }}</th>
             <th>{{ t('adminUsers.colVoiceBundle') }}</th>
             <th>{{ t('adminUsers.colStatus') }}</th>
             <th>{{ t('adminUsers.colActions') }}</th>
@@ -60,23 +61,14 @@
           <tr v-for="user in users" :key="user.id">
             <td class="username-cell">
               <span class="username">{{ user.username }}</span>
-              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.roleAdmin') }}</span>
+              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.adminBadge') }}</span>
             </td>
             <td>{{ user.email }}</td>
             <td>{{ user.display_name || t('adminUsers.displayNameNotSet') }}</td>
-            <td>
-              <select
-                class="role-select"
-                :value="primaryRole(user)"
-                @change="onRoleChange(user, ($event.target as HTMLSelectElement).value)"
-              >
-                <!-- #14937: a role the UI does not assign still shows as itself
-                     instead of leaving the select blank. -->
-                <option v-if="!isAssignableRole(primaryRole(user))" :value="primaryRole(user)" disabled>
-                  {{ roleLabel(primaryRole(user)) }}
-                </option>
-                <option v-for="role in ASSIGNABLE_ROLES" :key="role" :value="role">{{ roleLabel(role) }}</option>
-              </select>
+            <!-- #20670: the role changes permissions only; admin status has its own control -->
+            <td><UserRoleSelect :user="user" @changed="onAccessChanged" /></td>
+            <td v-if="canSetAdmin">
+              <AdminStatusControl :user="user" :is-self="user.username === userStore.currentUser?.username" @changed="onAccessChanged" />
             </td>
             <td class="bundle-cell">
               <span v-if="userBundles[user.id] !== undefined" class="badge badge-bundle">
@@ -123,7 +115,7 @@
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="7" class="empty-row">{{ t('adminUsers.empty') }}</td>
+            <td :colspan="canSetAdmin ? 8 : 7" class="empty-row">{{ t('adminUsers.empty') }}</td>
           </tr>
         </tbody>
       </table>
@@ -179,11 +171,11 @@
         <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
       </form>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
+        <BaseButton variant="secondary" size="sm" type="button" @click="showCreateModal = false">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton size="sm" type="button" :disabled="creating" @click="createUser">
           <Icon v-if="creating" name="sync-alt" :spin="true" />
           {{ t('adminUsers.createUser') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -211,16 +203,15 @@
         <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
       </template>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="closeBundleModal">{{ t('common.cancel') }}</button>
-        <button
+        <BaseButton variant="secondary" size="sm" type="button" @click="closeBundleModal">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton size="sm"
           type="button"
-          class="btn-action-primary"
           :disabled="bundleSaving || bundleModalLoading"
           @click="doAssignBundle"
         >
           <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
           {{ t('common.save') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -235,8 +226,8 @@
     >
       <p v-if="deleteTarget">{{ t('adminUsers.deleteConfirm') }} <strong>{{ deleteTarget.username }}</strong>? {{ t('adminUsers.deleteUndone') }}</p>
       <template #actions>
-        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
-        <button class="btn-action-danger" @click="deleteUser">{{ t('common.delete') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="deleteTarget = null">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton variant="error" size="sm" @click="deleteUser">{{ t('common.delete') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -244,12 +235,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ASSIGNABLE_ROLES, isAssignableRole } from '@/constants/roles'
-import type { Role } from '@/types/_generated/workflow'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import AdminStatusControl from '@/components/admin/AdminStatusControl.vue'
+import UserRoleSelect from '@/components/admin/UserRoleSelect.vue'
+import { useUserStore } from '@/stores/useUserStore'
+import { BaseModal, HttpError, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   useAdminVoiceBundle,
@@ -260,6 +252,9 @@ import type { VoiceBundleName } from '@/composables/useVoiceBundle'
 
 const { t } = useI18n()
 const logger = createLogger('AdminUsersView')
+const userStore = useUserStore()
+// The admin-status control is offered to platform admins only, the same JWT test the route applies (#20670).
+const canSetAdmin = computed(() => userStore.isAdmin)
 
 interface UserRecord {
   id: string
@@ -308,28 +303,6 @@ const bundleModalLoading = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
-function primaryRole(user: UserRecord): string {
-  if (user.is_platform_admin) return 'admin'
-  const sysRole = user.roles.find(r => r.is_system)
-  return sysRole?.name ?? 'user'
-}
-
-// #14937: every canonical role has a label, so a role the UI does not assign
-// still renders as itself; `Record<Role, ...>` fails to compile when one is added.
-const roleLabels = computed<Record<Role, string>>(() => ({
-  admin: t('adminUsers.roleAdmin'),
-  superadmin: t('adminUsers.roleSuperadmin'),
-  operator: t('adminUsers.roleOperator'),
-  analyst: t('adminUsers.roleAnalyst'),
-  editor: t('adminUsers.roleEditor'),
-  user: t('adminUsers.roleUser'),
-  readonly: t('adminUsers.roleReadonly'),
-}))
-
-function roleLabel(role: string): string {
-  return (roleLabels.value as Record<string, string>)[role] ?? role
-}
-
 async function loadUsers(): Promise<void> {
   loading.value = true
   error.value = null
@@ -344,7 +317,7 @@ async function loadUsers(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     const data = await res.json() as { users: UserRecord[]; total: number }
     users.value = data.users
@@ -434,21 +407,10 @@ function changePage(delta: number): void {
   loadUsers()
 }
 
-async function onRoleChange(user: UserRecord, role: string): Promise<void> {
-  try {
-    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/role`, {
-      method: 'PUT',
-      body: { role },
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
-    }
-    await loadUsers()
-  } catch (err) {
-    logger.error('Failed to update role:', err)
-    error.value = err instanceof Error ? err.message : 'Failed to update role'
-  }
+/** After a role or admin-status attempt: re-read the list, then show the failure, if any. */
+async function onAccessChanged(failure: string | null): Promise<void> {
+  await loadUsers()
+  if (failure) error.value = failure
 }
 
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
@@ -459,7 +421,7 @@ async function toggleActive(user: UserRecord, activate: boolean): Promise<void> 
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     await loadUsers()
   } catch (err) {
@@ -480,7 +442,7 @@ async function deleteUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     deleteTarget.value = null
     await loadUsers()
@@ -506,7 +468,7 @@ async function createUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     showCreateModal.value = false
     newUser.value = { email: '', username: '', password: '', display_name: '' }
@@ -690,14 +652,6 @@ onMounted(loadUsers)
   font-size: var(--text-sm);
 }
 
-.role-select {
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: 0.8125rem;
-  background: transparent;
-}
-
 .actions-cell {
   display: flex;
   gap: var(--spacing-1);
@@ -766,42 +720,6 @@ onMounted(loadUsers)
 .page-info {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-}
-
-.btn-action-primary,
-.btn-action-secondary,
-.btn-action-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.btn-action-primary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-action-secondary {
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-action-danger {
-  background: var(--color-error);
-  color: var(--text-on-error);
-}
-
-.btn-action-primary:disabled,
-.btn-action-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .form-group {

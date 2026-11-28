@@ -26,8 +26,10 @@ from typing import Any, Dict, Iterator
 import yaml
 
 from a2a.pii_pipeline import get_pii_pipeline
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
+from autobot_shared.regex_whitespace import NOT_WS, WS
 from autobot_shared.scoping import ScopeLevel
 from knowledge.ownership import AccessLevel
 
@@ -58,7 +60,6 @@ def get_claude_memory_dir() -> Path:
     return Path.home() / ".claude" / "projects" / slug / "memory"
 
 
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?\n)---\n(.*)\Z", re.DOTALL)
 _INDEX_FILENAME = "MEMORY.md"
 
 
@@ -100,11 +101,10 @@ def parse_memory_file(path: Path) -> ParsedMemory:
     block, or the frontmatter is missing ``name``.
     """
     text = path.read_text(encoding="utf-8")
-    match = _FRONTMATTER_RE.match(text)
-    if not match:
+    front_raw, body = split_frontmatter(text)
+    if front_raw is None:
         raise MemoryParseError(f"{path.name}: no frontmatter block")
 
-    front_raw, body = match.groups()
     front = yaml.safe_load(front_raw) or {}
     slug = front.get("name")
     if not slug:
@@ -175,7 +175,7 @@ def _fact_content(memory: ParsedMemory) -> str:
 # suffix (e.g. "the box is called prod-db-3") passes through untouched.
 # Widening a2a.pii_pipeline's own hostname detector to catch that would need
 # its own review against its existing consumers/tests — out of scope here.
-_SSH_TARGET_RE = re.compile(r"\bssh\s+(?:-\S+\s+)*[\w.-]+@[\w.-]+\b")
+_SSH_TARGET_RE = re.compile(rf"\bssh{WS}+(?:-{NOT_WS}+{WS}+)*[\w.-]+@[\w.-]+\b")
 
 
 def _redact(content: str) -> tuple[str, bool, list[str]]:

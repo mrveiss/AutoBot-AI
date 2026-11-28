@@ -34,8 +34,14 @@ def test_install_sh_does_not_read_the_retired_redis_db_var():
     assert not matches, f"install.sh still reads the retired AUTOBOT_REDIS_DB: {matches}"
 
 
-def test_install_sh_reads_the_named_main_redis_db_key():
+def test_install_sh_resolves_main_through_the_canonical_client():
+    """#19232 superseded the #15577 env read: no host, port or DB number of its own.
+
+    The self-test connects with ``require_redis_client(database='main')``, so the number
+    comes from redis-databases.yaml plus ``AUTOBOT_REDIS_DB_MAIN`` -- the same resolution
+    the suite's own ``get_async_redis_client()`` calls get -- and nothing writes a URL.
+    """
     text = _INSTALL_SH.read_text(encoding="utf-8")
-    assert text.count(_REPLACEMENT_VAR) >= 2, (
-        f"install.sh should resolve both its .env template and its self-test " f"from {_REPLACEMENT_VAR}"
-    )
+    assert "require_redis_client(database='main')" in text
+    assert "redis.Redis(" not in text and "REDIS_URL=" not in text
+    assert _REPLACEMENT_VAR in text, "the comment must still name the override operators set"

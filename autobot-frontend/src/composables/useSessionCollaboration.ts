@@ -45,7 +45,9 @@ import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurren
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
-import { getApiBase } from '@/config/ssot-config'
+import { onCompanySwitch } from '@/utils/companyScopedSocket'
+import { presenceWsUrl } from '@/composables/sessionPresenceUrl'
+import { syncOnlineUsers } from '@/composables/sessionPresenceSync'
 import { apiService, type PendingInvitationResponse } from '@/services/api'
 
 const logger = createLogger('SessionCollaboration')
@@ -160,13 +162,6 @@ let presenceSocket: WebSocket | null = null
 // closes only when the last instance disposes.
 let activeInstanceCount = 0
 
-// #16457: the token travels via the Sec-WebSocket-Protocol subprotocol, not
-// the URL -- it no longer lands in server access logs or browser history.
-function _presenceWsUrl(sessionId: string): string {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${wsProtocol}//${window.location.host}${getApiBase()}/ws/sessions/${sessionId}/presence`
-}
-
 /**
  * Session Collaboration composable
  *
@@ -201,6 +196,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     })
   }
 
+  const _syncPresence = () => syncOnlineUsers(() => currentSessionId.value, presenceMap.value, _upsertPresence)
   const _handleBroadcastPayload = (senderId: string, payload: Record<string, unknown>): void => {
     const currentUser = getCurrentUser()
     const isOwnMessage = !!currentUser && senderId === currentUser.id
@@ -266,10 +262,12 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       }
       case 'user_joined':
         _upsertPresence(data.user_id as string, {})
+        void _syncPresence()
         logger.debug(`User ${data.user_id} joined session`)
         break
       case 'user_left':
         presenceMap.value.delete(data.user_id as string)
+        void _syncPresence()
         logger.debug(`User ${data.user_id} left session`)
         break
       case 'user_message':
@@ -350,7 +348,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       leaveSession()
     }
 
-    const wsUrl = _presenceWsUrl(sessionId)
+    const wsUrl = presenceWsUrl(sessionId)
     const subprotocols = buildAuthenticatedWsSubprotocols()
     if (subprotocols === null) {
       logger.debug('No auth token available yet; deferring presence connect')
@@ -369,6 +367,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     presenceSocket = new WebSocket(wsUrl, subprotocols)
     presenceSocket.onopen = () => {
       wsConnected.value = true
+      void _syncPresence()
       logger.debug(`Joined session ${sessionId} for collaboration`)
     }
     presenceSocket.onmessage = _handlePresenceSocketMessage
@@ -538,6 +537,12 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       }
     }
   )
+
+  // A company switch reopens the presence socket; one already on the new URL stays (many instances watch).
+  onCompanySwitch(() => {
+    const id = currentSessionId.value
+    if (id && presenceSocket?.url !== presenceWsUrl(id)) { leaveSession(); joinSession(id) }
+  })
 
   if (getCurrentInstance()) {
     onMounted(() => {

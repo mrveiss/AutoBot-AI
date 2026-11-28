@@ -205,9 +205,9 @@ def get_template_path(template_path: str) -> Path:
     return TEMPLATES_DIR / template_path
 
 
-def get_data_path(data_path: str) -> Path:
+def get_bundled_data_path(data_path: str) -> Path:
     """
-    Get the full filesystem path for a data file.
+    Get the full path of a data file bundled under the project data/ directory (not the runtime PathsManager data dir).
 
     Args:
         data_path: Relative path from data/ directory

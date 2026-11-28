@@ -17,14 +17,23 @@ import hashlib
 import hmac
 import logging
 import os
-import socket
 import time
 from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
 
+from utils.config_bootstrap import DEFAULT_WORKER_PORT
+from utils.local_ip import get_local_ip
+
 logger = logging.getLogger(__name__)
+
+#: Seconds between this worker's telemetry heartbeats to the main backend. Named apart from the
+#: SLM agent's ``DEFAULT_HEARTBEAT_INTERVAL`` (autobot_shared/fleet_constants.py) on purpose
+#: (#18094): a different channel and receiver -- the backend judges NPU workers by its own
+#: ``heartbeat_max_silence_seconds`` -- so the equal value is a coincidence, not a shared
+#: contract, and this bundle cannot import autobot_shared anyway (#5438).
+DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL = 30
 
 
 class BackendTelemetryClient:
@@ -46,7 +55,7 @@ class BackendTelemetryClient:
         worker_id: str,
         worker_url: str,
         platform: str = "windows",
-        heartbeat_interval: int = 30,
+        heartbeat_interval: int = DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL,
         service_id: str | None = None,
         service_key: str | None = None,
     ):
@@ -337,14 +346,6 @@ class BackendTelemetryClient:
             return False
 
 
-# =============================================================================
-# Constants (Issue #68 - Code smells fix: Extract magic numbers)
-# Note: No hardcoded IPs - backend host comes from config/environment
-# =============================================================================
-DEFAULT_WORKER_PORT = 8082
-DEFAULT_HEARTBEAT_INTERVAL = 30
-LOCAL_IP_FALLBACK = "127.0.0.1"
-
 # Issue #255: Service authentication defaults
 DEFAULT_SERVICE_ID = "npu-worker"
 SERVICE_KEY_FILE_PATHS = [
@@ -357,7 +358,6 @@ SERVICE_KEY_FILE_PATHS = [
 # =============================================================================
 _telemetry_lock = asyncio.Lock()
 _telemetry_client: BackendTelemetryClient | None = None
-_local_ip_cache: str | None = None  # Cache to avoid repeated socket calls
 
 
 def _load_service_credentials(config: dict) -> tuple[str | None, str | None]:
@@ -443,43 +443,6 @@ def _read_key_from_file(key_file: str) -> str | None:
     return None
 
 
-def _get_local_ip(backend_host: str) -> str:
-    """
-    Get the local IP address that can reach the backend.
-
-    Uses caching to avoid repeated socket operations.
-
-    Args:
-        backend_host: Backend server hostname/IP
-
-    Returns:
-        Local IP address string
-    """
-    global _local_ip_cache
-
-    # Return cached value if available
-    if _local_ip_cache is not None:
-        return _local_ip_cache
-
-    sock = None
-    try:
-        # Get local IP by connecting to backend (doesn't actually send data)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.connect((backend_host, 80))
-        local_ip = sock.getsockname()[0]
-        _local_ip_cache = local_ip
-        return local_ip
-    except Exception:
-        return LOCAL_IP_FALLBACK
-    finally:
-        # Proper socket cleanup (Issue #68 - unclosed socket fix)
-        if sock is not None:
-            try:
-                sock.close()
-            except Exception:
-                logger.debug("Suppressed exception in try block", exc_info=True)
-
-
 async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
     """
     Get or create the global telemetry client.
@@ -526,7 +489,7 @@ async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
         worker_id = f"{worker_id_prefix}_{uuid.uuid4().hex[:8]}"
 
         # Determine this worker's accessible URL using cached local IP
-        local_ip = _get_local_ip(backend_host)
+        local_ip = get_local_ip(backend_host)
         worker_url = f"http://{local_ip}:{port}"
 
         # Issue #255: Load service authentication credentials
@@ -538,7 +501,7 @@ async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
             worker_id=worker_id,
             worker_url=worker_url,
             platform="windows",
-            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_HEARTBEAT_INTERVAL),
+            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL),
             service_id=service_id,
             service_key=service_key,
         )

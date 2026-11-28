@@ -25,12 +25,12 @@ class NPUWorkerError(Exception):
     """Raised when an NPU worker returns an error or is unreachable."""
 
 
-class NPUClient:
+class NPUPipelineWorkerClient:
     """Async HTTP client for a single NPU worker node.
 
     Usage::
 
-        async with NPUClient("http://worker-0:8080") as client:
+        async with NPUPipelineWorkerClient("http://worker-0:8080") as client:
             result = await client.partial_forward(
                 model_id="llama-7b",
                 layer_range=(0, 15),
@@ -49,7 +49,7 @@ class NPUClient:
         self._session = session
         self._owns_session = session is None
 
-    async def __aenter__(self) -> "NPUClient":
+    async def __aenter__(self) -> "NPUPipelineWorkerClient":
         # RAW carve-out (#12979, long-lived + returned-session): the
         # constructor also accepts an externally-owned `session=`, and
         # batch_partial_forward() below fires multiple partial_forward()
@@ -108,7 +108,7 @@ class NPUClient:
 
         url = f"{self._base_url}/partial_forward"
         logger.debug(
-            "NPUClient: POST %s model=%s layers=[%d-%d]",
+            "NPUPipelineWorkerClient: POST %s model=%s layers=[%d-%d]",
             url,
             model_id,
             layer_start,
@@ -117,6 +117,7 @@ class NPUClient:
 
         session = self._get_session()
         try:
+            # pending #18356: pipeline dispatcher never attached
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     body = await resp.text()
@@ -137,10 +138,11 @@ class NPUClient:
             NPUWorkerError: On HTTP error or unreachable worker.
         """
         url = f"{self._base_url}/capabilities"
-        logger.debug("NPUClient: GET %s", url)
+        logger.debug("NPUPipelineWorkerClient: GET %s", url)
 
         session = self._get_session()
         try:
+            # pending #18356: pipeline dispatcher never attached
             async with session.get(url) as resp:
                 if resp.status != 200:
                     body = await resp.text()
@@ -156,7 +158,8 @@ class NPUClient:
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None:
             raise RuntimeError(
-                "NPUClient used outside of an async context manager. " "Use `async with NPUClient(...) as client:`."
+                "NPUPipelineWorkerClient used outside of an async context manager. "
+                "Use `async with NPUPipelineWorkerClient(...) as client:`."
             )
         return self._session
 
@@ -175,7 +178,7 @@ async def batch_partial_forward(
     """
     import asyncio
 
-    async with NPUClient(worker_url, timeout=timeout) as client:
+    async with NPUPipelineWorkerClient(worker_url, timeout=timeout) as client:
         tasks = [
             client.partial_forward(
                 r["model_id"],

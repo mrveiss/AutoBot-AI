@@ -27,8 +27,8 @@ from api.schemas_system import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.singleton_factory import lazy_singleton
 from services.execution.docker_backend import DockerBackend
+from services.execution.docker_backend_accessor import get_docker_backend_singleton
 from services.execution.snapshot_index import SnapshotRecord
 
 logger = get_logger(__name__)
@@ -42,7 +42,7 @@ def get_docker_backend() -> DockerBackend:
     Returns:
         DockerBackend instance configured from environment.
     """
-    return lazy_singleton(DockerBackend)
+    return get_docker_backend_singleton()
 
 
 def _snapshot_record_to_metadata(record: SnapshotRecord) -> SnapshotMetadata:

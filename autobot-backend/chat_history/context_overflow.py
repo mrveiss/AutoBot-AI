@@ -15,30 +15,40 @@ Builds on #8990 (token usage tracking) and #3770 (compression service).
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.leader_lease import LeaderLease, worker_identity
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 from autobot_shared.tool_catalogue import FILE_WRITE_TOOLS, SHELL_EXEC_TOOLS, match_tool_name
 from chat_history.message_schema import message_text
+from chat_history.session_token_tracker import SessionTokenTracker
+from chat_history.summarization_prompt import (
+    SUMMARIZATION_PROMPT,
+    SUMMARIZER_DEFAULT_MAX_TOKENS,
+    SUMMARIZER_INPUT_MAX_CHARS,
+    SUMMARIZER_TIMEOUT_SECONDS,
+    SummarizationFailed,
+    SummaryResult,
+    count_turns,
+    fold_calls,
+    plan_chunks,
+)
 
 logger = get_logger(__name__)
 
 # Redis key prefixes
-_TOKEN_TRACKER_KEY_PREFIX = "chat:tokens:"  # nosec B105  # Redis key prefix, not a password
-_SUMMARY_MARKER_KEY_PREFIX = "chat:summary_marker:"
+_COMPACTION_LEASE_KEY_PREFIX = "chat:compaction_lease:"
+
+# How long one compaction may hold its session's lease before it expires on its own (#17805): two summariser
+# calls' worth (the bound of a gateway call is the summariser's own timeout), so a crashed holder frees it soon.
+_COMPACTION_LEASE_TTL_MS = int(SUMMARIZER_TIMEOUT_SECONDS * 2000)
 
 # Default thresholds (can be overridden)
 _DEFAULT_WARNING_THRESHOLD = 0.80  # 80%
 _DEFAULT_COMPRESS_THRESHOLD = 0.90  # 90%
-
-# How long to skip compaction after it fails, so a rate-limited provider costs
-# one attempt per window instead of one per turn (#14065 review).
-_SUMMARY_FAILURE_BACKOFF_SECONDS = env_int("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", 300)
 
 # How many of the most recent user messages cross a compaction verbatim (#14066).
 # Bounded so repeated compaction cannot grow the preserved set without limit —
@@ -55,169 +65,6 @@ _BOUNDARY_SEARCH_WINDOW = env_int("AUTOBOT_COMPACTION_BOUNDARY_WINDOW", 10)
 
 # Most recent shell commands named in the extracted state block.
 _STATE_COMMAND_CAP = env_int("AUTOBOT_COMPACTION_STATE_COMMAND_CAP", 10)
-
-
-class SessionTokenTracker:
-    """Tracks cumulative token usage for chat sessions.
-
-    Accumulates token counts from LLMResponse usage fields and persists
-    to Redis so long-running conversations can track their context fill.
-
-    Usage::
-
-        tracker = SessionTokenTracker()
-        await tracker.add_message_tokens(session_id, prompt_tokens=100, completion_tokens=50)
-        usage = await tracker.get_session_usage(session_id)
-        # {'total_tokens': 150, 'message_count': 1}
-    """
-
-    def __init__(self, ttl_seconds: int = 86400):
-        """Initialize token tracker.
-
-        Args:
-            ttl_seconds: TTL for Redis keys (default 24h).
-        """
-        self.ttl_seconds = ttl_seconds
-        self.redis = None
-
-    async def _ensure_redis(self):
-        """Lazy init Redis client."""
-        if self.redis is None:
-            self.redis = await get_async_redis_client()
-        if self.redis is None:
-            logger.warning("SessionTokenTracker: Redis unavailable, token tracking disabled")
-        return self.redis
-
-    async def add_message_tokens(
-        self,
-        session_id: str,
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
-    ) -> None:
-        """Add token usage from a new message to session cumulative total.
-
-        Args:
-            session_id: Chat session identifier.
-            prompt_tokens: Input token count.
-            completion_tokens: Generated token count.
-        """
-        redis = await self._ensure_redis()
-        if not redis:
-            return
-
-        key = f"{_TOKEN_TRACKER_KEY_PREFIX}{session_id}"
-        total_tokens = prompt_tokens + completion_tokens
-
-        try:
-            # Atomic increment and expiry
-            pipe = redis.pipeline()
-            pipe.hincrby(key, "total_tokens", total_tokens)
-            pipe.hincrby(key, "prompt_tokens", prompt_tokens)
-            pipe.hincrby(key, "completion_tokens", completion_tokens)
-            pipe.hincrby(key, "message_count", 1)
-            pipe.expire(key, self.ttl_seconds)
-            await pipe.execute()
-        except Exception as e:
-            logger.error("Failed to track tokens for session %s: %s", session_id, e)
-
-    async def get_session_usage(self, session_id: str) -> Dict[str, int]:
-        """Get cumulative token usage for a session.
-
-        Args:
-            session_id: Chat session identifier.
-
-        Returns:
-            Dict with total_tokens, prompt_tokens, completion_tokens, message_count.
-            Returns zeros if no data exists.
-        """
-        redis = await self._ensure_redis()
-        if not redis:
-            return {
-                "total_tokens": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "message_count": 0,
-            }
-
-        key = f"{_TOKEN_TRACKER_KEY_PREFIX}{session_id}"
-        try:
-            data = await redis.hgetall(key)
-            if not data:
-                return {
-                    "total_tokens": 0,
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "message_count": 0,
-                }
-
-            # add_message_tokens hincrby's str field names and the shared client is
-            # decode_responses=True, so hgetall yields str keys. Probing with bytes
-            # literals always missed and every counter read back 0 (#13274).
-            return {
-                "total_tokens": int(decode_redis_value(data.get("total_tokens")) or 0),
-                "prompt_tokens": int(decode_redis_value(data.get("prompt_tokens")) or 0),
-                "completion_tokens": int(decode_redis_value(data.get("completion_tokens")) or 0),
-                "message_count": int(decode_redis_value(data.get("message_count")) or 0),
-            }
-        except Exception as e:
-            logger.error("Failed to get session usage for %s: %s", session_id, e)
-            return {
-                "total_tokens": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "message_count": 0,
-            }
-
-    async def reset_session(self, session_id: str) -> None:
-        """Reset token tracking for a session (after summarization).
-
-        Args:
-            session_id: Chat session identifier.
-        """
-        redis = await self._ensure_redis()
-        if not redis:
-            return
-
-        key = f"{_TOKEN_TRACKER_KEY_PREFIX}{session_id}"
-        try:
-            await redis.delete(key)
-        except Exception as e:
-            logger.error("Failed to reset session %s: %s", session_id, e)
-
-    async def mark_summarization_failed(self, session_id: str) -> None:
-        """Back off compaction for this session after a failure (#14065 review).
-
-        Without this, a failing provider wedges the session permanently.
-        Compaction is awaited *inline* on the chat request path, under the
-        ``chat_timeout`` budget (``api/chat.py``), and the token tracker is
-        correctly left un-reset on failure — so fill never drops and every
-        subsequent turn spends the same time failing the same way, timing out a
-        turn whose answer was already generated and stored.
-
-        The marker bounds that to one attempt per backoff window. It is
-        deliberately best-effort: with Redis down the marker cannot be written,
-        and retrying every turn is the safer of the two failures.
-        """
-        redis = await self._ensure_redis()
-        if not redis:
-            return
-
-        try:
-            await redis.setex(f"{_SUMMARY_MARKER_KEY_PREFIX}{session_id}", _SUMMARY_FAILURE_BACKOFF_SECONDS, "failed")
-        except Exception as e:
-            logger.error("Failed to mark summarization failure for session %s: %s", session_id, e)
-
-    async def summarization_recently_failed(self, session_id: str) -> bool:
-        """True while the backoff window from a previous failure is still open."""
-        redis = await self._ensure_redis()
-        if not redis:
-            return False
-
-        try:
-            return bool(await redis.exists(f"{_SUMMARY_MARKER_KEY_PREFIX}{session_id}"))
-        except Exception as e:
-            logger.error("Failed to read summarization marker for session %s: %s", session_id, e)
-            return False
 
 
 def _message_text(msg: object) -> str:
@@ -464,23 +311,6 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     return cleaned
 
 
-class SummarizationFailed(RuntimeError):
-    """Summarization did not produce a usable summary (#14065).
-
-    Raised instead of returning a placeholder string. The placeholder read like
-    a successful compaction — "[Summary: N earlier message(s) were summarized to
-    preserve context.]" — so the caller reset the token tracker, reported
-    ``summary_created: True`` and logged "messages compressed" while the oldest
-    half of the conversation had in fact been replaced by a sentence containing
-    none of the goals, decisions, file paths or state the summarization prompt
-    exists to preserve.
-
-    Failure has to be *shaped* differently from success, not merely logged
-    differently. A ``logger.error`` in one line and a truthy return value in the
-    next is a failure the caller cannot see.
-    """
-
-
 class ConversationSummarizer:
     """Uses LLM to create intelligent conversation summaries.
 
@@ -493,90 +323,67 @@ class ConversationSummarizer:
         summary = await summarizer.summarize_messages(messages, model="gpt-4")
     """
 
-    _SUMMARIZATION_PROMPT = (
-        "You are summarizing a conversation to preserve context after compaction. "
-        "Produce a structured summary that lets the conversation continue seamlessly.\n\n"
-        "Use this format:\n\n"
-        "## Conversation Summary\n"
-        "**Turns summarized:** {{count}}\n\n"
-        "### User Goal\n"
-        "One sentence describing what the user is trying to accomplish.\n\n"
-        "### What Was Done\n"
-        "- Bullet points of completed actions, decisions made, and key outputs\n"
-        "- Include specific file paths, function names, variable names, URLs, and config values\n"
-        "- Note any errors encountered and how they were resolved\n\n"
-        "### Current State\n"
-        "What is the system/task state right now? What was the last thing discussed?\n\n"
-        "### Pending / Next Steps\n"
-        "- What remains to be done\n"
-        "- Any open questions or blockers\n\n"
-        "### Key Context\n"
-        "- Important constraints, preferences, or decisions that must not be forgotten\n"
-        "- Specific values: model names, ports, paths, credentials references, versions\n\n"
-        "Keep the summary under 1000 tokens. Be dense — every token should carry information.\n\n"
-        "Conversation to summarize:\n"
-        "{{conversation}}\n\n"
-        "Provide ONLY the structured summary above — no preamble or meta-commentary."
-    )
+    _SUMMARIZATION_PROMPT = SUMMARIZATION_PROMPT
+
+    def __init__(self, gateway: Any = None) -> None:
+        self._gateway = gateway
 
     async def _get_gateway(self):
         """Return the canonical LLM service (#14840); ``llm_shared.gateway`` never existed."""
+        if self._gateway is not None:
+            return self._gateway
         from services.llm_service import get_llm_service
 
         return get_llm_service()
 
-    async def summarize_messages(
+    async def summarize_messages(self, messages: List[Dict[str, Any]], model_name: Optional[str], **kwargs: Any) -> str:
+        """Summary text of *messages*; see :meth:`summarize_with_usage` for the arguments."""
+        return (await self.summarize_with_usage(messages, model_name, **kwargs)).text
+
+    async def summarize_with_usage(
         self,
         messages: List[Dict[str, Any]],
-        model_name: str,
-    ) -> str:
-        """Generate summary of conversation messages using LLM.
+        model_name: Optional[str],
+        prior_summary: str = "",
+        max_tokens: Optional[int] = SUMMARIZER_DEFAULT_MAX_TOKENS,
+        turns_summarized: Optional[int] = None,
+        template: str = SUMMARIZATION_PROMPT,
+        on_call: Optional[Callable[[], Awaitable[None]]] = None,
+        max_calls: Optional[int] = None,
+    ) -> SummaryResult:
+        """Summarise *messages* with the LLM (#20852: the one summariser).
+
+        The overflow protection, compact hook, ``/chat/summarize``, rolling chat-history summary and
+        chat-to-knowledge all call it. Input over ``SUMMARIZER_INPUT_MAX_CHARS`` is folded in chunks (an
+        over-long message is split, never cut), each call bounded by ``SUMMARIZER_TIMEOUT_SECONDS``;
+        the conversation is framed as data.
 
         Args:
-            messages: List of message dicts with 'sender' and 'text' fields.
-            model_name: LLM model to use for summarization.
-
-        Returns:
-            Summary text.
+            messages: Dicts in the API (role/content) or display (sender/text) schema.
+            model_name: LLM model to use.
+            prior_summary: Earlier summary to fold the new messages into (rolling).
+            max_tokens: Cap on the generated summary (also the length the prompt asks for).
+            turns_summarized: Turns the summary will cover; defaults to the user turns in *messages*.
+            template: Prompt template with ``{{count}}``/``{{target}}``/``{{conversation}}``.
+            on_call: Awaited before EACH gateway call (a caller renews its lock there); what it raises propagates.
+            max_calls: Most gateway calls allowed; more raises ``InputTooLong`` before any call.
 
         Raises:
-            SummarizationFailed: The gateway errored, or returned nothing usable.
+            SummarizationFailed: The gateway errored, timed out, or returned nothing usable.
                 Never a placeholder — see that exception's docstring (#14065).
         """
-        # Deliberately outside the try: these are pure, local transformations of
-        # the caller's own data. A bug in _sanitize_tool_messages or
-        # _format_messages is a programming error and must surface as itself,
-        # not be relabelled "summarization failed" and retried forever (#14065).
+        # Outside the try on purpose: a bug in these pure local transformations must surface
+        # as itself, not be relabelled "summarization failed" and retried forever (#14065).
         safe_messages = _sanitize_tool_messages(messages)
-        conversation_text = self._format_messages(safe_messages)
-        prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
-            "{{count}}", str(len(messages))
+        lines = [line for line in (self._format_messages([m]) for m in safe_messages) if line]
+        turns = count_turns(messages) if turns_summarized is None else turns_summarized
+        args = (turns, max_tokens or SUMMARIZER_DEFAULT_MAX_TOKENS, template, len(messages))
+        chunks = plan_chunks(lines, SUMMARIZER_INPUT_MAX_CHARS, max_calls)
+        summary, tokens = await fold_calls(
+            self._get_gateway, chunks, prior_summary, model_name, max_tokens, args, on_call
         )
-
-        try:
-            gateway = await self._get_gateway()
-            response = await gateway.chat(
-                messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
-                model_name=model_name,
-                temperature=0.3,  # Low temp for consistent summaries
-                max_tokens=500,  # Cap summary length
-            )
-            summary = (getattr(response, "content", None) or "").strip()
-        except Exception as exc:
-            logger.error("Summarization failed for %d messages: %s", len(messages), exc, exc_info=True)
-            raise SummarizationFailed(f"summarization call failed: {exc}") from exc
-
-        if not summary:  # LLMService reports a provider failure in .error, not by raising
-            logger.error("Empty summary for %d messages: %s", len(messages), getattr(response, "error", None))
-            raise SummarizationFailed(f"LLM returned empty summary: {getattr(response, 'error', None)}")
-
-        logger.info(
-            "Generated summary for %d messages (%d → %d tokens est.)",
-            len(messages),
-            sum(len(_message_text(m)) for m in messages) // 4,
-            len(summary) // 4,
-        )
-        return summary
+        logger.info("Generated summary for %d messages (%d tokens est.)", len(messages), len(summary) // 4)
+        return SummaryResult(summary, tokens)
 
     def _format_messages(self, messages: List[Dict[str, Any]]) -> str:
         """Format messages into readable conversation text.
@@ -603,6 +410,18 @@ class ConversationSummarizer:
             if role and content:
                 lines.append(f"{role}: {content}")
         return "\n".join(lines)
+
+
+async def _lease_held_elsewhere(lease: LeaderLease) -> bool:
+    """Take *lease*; True only when another turn definitely holds it (#17805).
+
+    With Redis unreachable nothing can be serialised, so compaction proceeds unguarded, as the failure marker does.
+    """
+    try:
+        return await lease.hold_or_refresh() is False
+    except Exception as exc:  # noqa: BLE001 -- no lease is no reason to skip a needed compaction
+        logger.warning("Compaction lease unavailable for %s: %s", lease.label, exc)
+        return False
 
 
 class ContextOverflowProtection:
@@ -684,7 +503,8 @@ class ContextOverflowProtection:
 
         # Get current usage
         session_usage = await self.tracker.get_session_usage(session_id)
-        total_tokens = session_usage["total_tokens"]
+        # #17802: fill is the context held now, never the cumulative spend (each turn's prompt re-sends the history).
+        total_tokens = session_usage["active_tokens"]
 
         # Calculate fill percentage
         fill_percentage = total_tokens / context_limit if context_limit > 0 else 0
@@ -699,6 +519,7 @@ class ContextOverflowProtection:
             "summary_error": "",
             "current_fill_percentage": fill_percentage,
             "total_tokens": total_tokens,
+            "cumulative_tokens": session_usage["total_tokens"],
             "context_limit": context_limit,
         }
 
@@ -744,6 +565,18 @@ class ContextOverflowProtection:
             logger.warning("Skipping auto-summarization for session %s: recent failure, backing off", session_id)
             return
 
+        lease = LeaderLease(
+            f"{_COMPACTION_LEASE_KEY_PREFIX}{session_id}",
+            ttl_ms=_COMPACTION_LEASE_TTL_MS,
+            worker_id=worker_identity(unique=True),
+            label=f"compaction:{session_id}",
+        )
+        if await _lease_held_elsewhere(lease):
+            # #17805: another turn is compacting this session; skip, keep the exact uncompacted tail.
+            logger.info(
+                "Skipping auto-summarization for session %s: another turn holds the compaction lease", session_id
+            )
+            return
         try:
             summary = await self._create_summary(session_id, messages, model_name)
         except SummarizationFailed as exc:
@@ -759,6 +592,8 @@ class ContextOverflowProtection:
                 exc,
             )
             return
+        finally:
+            await lease.release()
 
         if summary:
             result["summary_created"] = True
@@ -831,8 +666,7 @@ class ContextOverflowProtection:
 
         # Reset token tracker (conversation now starts from summary)
         await self.tracker.reset_session(session_id)
-        for tokens in retained_tokens:
-            await self.tracker.add_message_tokens(session_id, prompt_tokens=tokens)
+        await self.tracker.seed_session(session_id, retained_tokens)
 
         return summary_text
 

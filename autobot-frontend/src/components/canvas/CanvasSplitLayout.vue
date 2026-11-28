@@ -13,7 +13,7 @@
         @keydown="handleTabKeydown"
       >
         {{ tab.label }}
-        <span v-if="tab.id === 'canvas' && agentContentBadge > 0" class="ml-1 text-xs bg-autobot-primary text-white rounded-full px-1.5">{{ agentContentBadge }}</span>
+        <span v-if="tab.id === 'canvas' && agentContentBadge > 0" class="ml-1 text-xs bg-autobot-primary text-autobot-text-on-primary rounded-full px-1.5">{{ agentContentBadge }}</span>
       </button>
     </div>
     <div class="flex-1 overflow-hidden">

@@ -10,6 +10,8 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from constants.threshold_constants import QueryDefaults
+
 
 class AdvancedSearchResponse(BaseModel):
     """Shape returned by POST /advanced_search.
@@ -128,7 +130,12 @@ class AdvancedSearchRequest(BaseModel):
     """Request body for POST /rag/advanced_search."""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(default=5, ge=1, le=50, description="Maximum results")
+    max_results: int = Field(
+        default=QueryDefaults.RAG_DEFAULT_RESULTS,
+        ge=1,
+        le=50,
+        description="Maximum results",
+    )
     enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
     return_context: bool = Field(default=False, description="Return optimized context for RAG")
     timeout: float | None = Field(default=None, description="Optional timeout in seconds")

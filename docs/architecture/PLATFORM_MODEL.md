@@ -37,7 +37,7 @@ AutoBot is best understood as three layers, bottom to top:
 ```mermaid
 graph TB
     subgraph Modules["Modules — installable capabilities"]
-        LLC["AutoBot LLC<br/>(autonomous agent-company)"]
+        CompanyOS["Company OS<br/>(autonomous agent-company)"]
         Analytics["Codebase Analytics"]
         Transcriber["Transcriber"]
         More["…your modules"]
@@ -120,7 +120,7 @@ Modules that ship with or for AutoBot include:
 
 | Module | What it adds |
 |--------|--------------|
-| **[AutoBot LLC](../llc/_index.md)** | An autonomous *agent-company* — agents, goals, backlog, heartbeat scheduling, and board governance |
+| **[Company OS](../llc/_index.md)** | An autonomous *agent-company* — agents, goals, backlog, heartbeat scheduling, and board governance |
 | **Codebase Analytics** | Code structure analysis, risk detection, and dependency insights — all on your own hardware |
 | **Transcriber** | A general-purpose audio transcription module: projects, recordings, local transcription, and export |
 
@@ -129,24 +129,24 @@ module and the core provide.
 
 ---
 
-## The Flagship Module: AutoBot LLC
+## The Flagship Module: Company OS
 
-**AutoBot LLC** is the reference module — an autonomous *agent-company* you install on
+**Company OS** is the reference module — an autonomous *agent-company* you install on
 AutoBot. It lets you define a company of AI agents (and human co-workers), give them
 goals and a backlog, schedule them to work autonomously, and govern their spend.
 
-LLC is a clean illustration of the module model because it is almost entirely composed
+Company OS is a clean illustration of the module model because it is almost entirely composed
 of inherited platform primitives:
 
-| LLC needs… | …inherited from the platform core |
+| Company OS needs… | …inherited from the platform core |
 |------------|-----------------------------------|
 | Agents that remember across runs | Knowledge base + knowledge graph (institutional memory) |
 | Affordable 24/7 autonomous execution | Local inference at zero marginal cost |
 | Wiring agents into scheduled work | Hooks |
 | Budget caps and approval gates | Governance (RBAC, review gates, budgets) |
 
-See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
-[LLC module PRD](../planning/PRD_AutoBot_LLC_Module.md) for the full specification.
+See **[Company OS](../llc/_index.md)** for the module overview and the
+[Company OS PRD](../planning/PRD_AutoBot_LLC_Module.md) for the full specification.
 
 ---
 
@@ -174,7 +174,7 @@ See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
   rebuilding them, so a new capability stays small.
 - **What.** A self-hosted AI platform you install on your own hardware: chat, a private
   RAG knowledge base, a fleet-management dashboard, and installable modules — AutoBot
-  LLC, Codebase Analytics, Transcriber. Apache-2.0, no subscription.
+  Company OS, Codebase Analytics, Transcriber. Apache-2.0, no subscription.
 
 ---
 
@@ -204,6 +204,6 @@ what's still a gap.
 - [Architecture Overview](README.md) — component-level system architecture
 - [Distributed Architecture](DISTRIBUTED_ARCHITECTURE.md) — multi-node deployment
 - [SSOT Configuration](SSOT_CONFIGURATION_ARCHITECTURE.md) — single source of truth
-- [AutoBot LLC](../llc/_index.md) — the flagship module
+- [Company OS](../llc/_index.md) — the flagship module
 - [EU AI Act, NIS2 & Governance Fit](EU_AI_GOVERNANCE.md) — governance architecture vs. EU AI Act, NIS2 and ISO obligations
-- [Glossary](../GLOSSARY.md) — terminology, including SLM and LLC
+- [Glossary](../GLOSSARY.md) — terminology, including SLM and Company OS

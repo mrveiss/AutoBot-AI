@@ -70,7 +70,10 @@ class TestGatewaySmtpMcpCodebaseProviderDefaultsRestored13264:
             cfg = MiscConfig(_env_file=None)
             assert cfg.anthropic_api_base_url == "https://api.anthropic.com/v1"
             assert cfg.vllm_host == "http://127.0.0.1:8000"
-            assert cfg.openrouter_default_model == "gpt-3.5-turbo"
+            # #15501: OpenRouter's default moved to ssot_hosted_models (no longer a MiscConfig field)
+            from autobot_shared.ssot_hosted_models import hosted_default_model
+
+            assert hosted_default_model("openrouter") == "openai/gpt-4o-mini"
             assert cfg.vllm_dtype == "auto"
             assert cfg.vllm_gpu_memory_utilization == "0.9"
             assert cfg.vllm_tensor_parallel_size == 1

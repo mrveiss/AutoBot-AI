@@ -23,7 +23,7 @@ from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 from .subagent_task import (
     SubagentTask,
-    TaskResult,
+    SubagentTaskResult,
     TaskStatus,
 )
 
@@ -36,7 +36,7 @@ class SubagentManager:
     def __init__(self, redis_client=None) -> None:
         """Initialize manager with optional Redis client."""
         self.redis = redis_client
-        self.local_results: Dict[str, TaskResult] = {}
+        self.local_results: Dict[str, SubagentTaskResult] = {}
 
     async def register_subagent(self, task: SubagentTask) -> str:
         """Register a new subagent and return its ID."""
@@ -74,7 +74,7 @@ class SubagentManager:
             ex=TTL_1_HOUR,
         )
 
-    async def record_task_result(self, result: TaskResult) -> None:
+    async def record_task_result(self, result: SubagentTaskResult) -> None:
         """Record the result of a completed task."""
         logger.info("Recording result for task %s: %s", result.task_id, result.status.value)
 
@@ -96,7 +96,7 @@ class SubagentManager:
         # Store in local cache
         self.local_results[result.task_id] = result
 
-    async def get_task_result(self, task_id: str) -> TaskResult | None:
+    async def get_task_result(self, task_id: str) -> SubagentTaskResult | None:
         """Get result of a completed task."""
         # Check local cache first
         if task_id in self.local_results:
@@ -106,13 +106,13 @@ class SubagentManager:
         if self.redis:
             result_data = await self.redis.get(f"subagent:result:{task_id}")
             if result_data:
-                result = TaskResult.from_dict(result_data)
+                result = SubagentTaskResult.from_dict(result_data)
                 self.local_results[task_id] = result
                 return result
 
         return None
 
-    async def get_batch_results(self, task_ids: List[str]) -> Dict[str, TaskResult | None]:
+    async def get_batch_results(self, task_ids: List[str]) -> Dict[str, SubagentTaskResult | None]:
         """Get results for multiple tasks."""
         results = {}
         for task_id in task_ids:
@@ -204,7 +204,7 @@ class SubagentManager:
         self,
         task: SubagentTask,
         executor_func,
-    ) -> TaskResult:
+    ) -> SubagentTaskResult:
         """
         Distribute a task to an executor (agent) for processing.
 
@@ -213,7 +213,7 @@ class SubagentManager:
             executor_func: Async function(task) -> output that executes the task
 
         Returns:
-            TaskResult with execution outcome
+            SubagentTaskResult with execution outcome
         """
         task_id = task.task_id
         logger.info("Distributing task %s to executor", task_id)
@@ -232,7 +232,7 @@ class SubagentManager:
                 duration = asyncio.get_running_loop().time() - start_time
 
                 # Record success
-                result = TaskResult(
+                result = SubagentTaskResult(
                     task_id=task_id,
                     status=TaskStatus.COMPLETED,
                     output=output,
@@ -244,7 +244,7 @@ class SubagentManager:
             except asyncio.TimeoutError:
                 duration = asyncio.get_running_loop().time() - start_time
                 logger.warning("Task %s timed out after %.1f seconds", task_id, duration)
-                result = TaskResult(
+                result = SubagentTaskResult(
                     task_id=task_id,
                     status=TaskStatus.TIMEOUT,
                     error=f"Task timed out after {task.timeout_seconds} seconds",
@@ -256,7 +256,7 @@ class SubagentManager:
         except Exception as e:
             duration = asyncio.get_running_loop().time() - start_time
             logger.error("Task %s failed with error: %s", task_id, str(e))
-            result = TaskResult(
+            result = SubagentTaskResult(
                 task_id=task_id,
                 status=TaskStatus.FAILED,
                 error=str(e),
@@ -270,11 +270,11 @@ class SubagentManager:
         task_ids: List[str],
         timeout_seconds: int,
         check_interval: float = 0.5,
-    ) -> Dict[str, TaskResult | None]:
+    ) -> Dict[str, SubagentTaskResult | None]:
         """
         Wait for results from multiple tasks.
 
-        Returns dict mapping task_id to TaskResult or None if not completed.
+        Returns dict mapping task_id to SubagentTaskResult or None if not completed.
         """
         start_time = asyncio.get_running_loop().time()
 

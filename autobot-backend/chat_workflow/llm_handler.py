@@ -11,54 +11,45 @@ and streaming response processing.
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import (
+    interpretation_llm_options,
+    note_chat_turn_endpoint,
+    note_chat_turn_model,
+    session_thinking,
+)
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
-from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
-from dependencies import get_config
+from chat_history.rolling_summary import prompt_summary
+from dependencies import provide_config_manager
+from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
+from .interpretation_guard import INTERPRETATION_TIMEOUT_SECONDS, interpretation_never_fails_the_tool
+from .lifecycle_hooks import (  # noqa: F401 -- re-exported: manager, graph and tool_handler import these from here
+    _emit_after_continuation,
+    _emit_after_response_send,
+    _emit_before_continuation,
+    _emit_before_response_send,
+    _emit_critical_error,
+    _emit_loop_complete,
+    _emit_repairable_error,
+)
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .prompt_drift import record_session_prefix
+from .reasoning_kwargs import ollama_think_kwargs
+from .system_prompt_hook import _emit_system_prompt_ready
+from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
-
-
-async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
-    """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
-
-    Issue #3405: Fires after _get_system_prompt() so extensions can inspect or
-    rewrite the system prompt before it enters prompt assembly.  If no extension
-    is registered for this hook the function is a no-op and the original prompt
-    is returned unchanged.
-
-    Args:
-        system_prompt: The assembled system prompt string.
-        session: WorkflowSession instance (passed as data["session"]).
-
-    Returns:
-        Possibly modified system prompt string.
-    """
-    ctx = HookContext(
-        session_id=getattr(session, "session_id", ""),
-        data={"system_prompt": system_prompt, "session": session},
-    )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
-    if isinstance(result, str) and result != system_prompt:
-        logger.debug(
-            "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
-            len(system_prompt),
-            len(result),
-        )
-        return result
-    return system_prompt
 
 
 async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
@@ -249,29 +240,10 @@ async def _emit_before_tool_execute(
     tool_permission: str | None = None,
     user_role: str | None = None,
 ) -> bool:
-    """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
+    """Emit BEFORE_TOOL_EXECUTE (#4181); False means a hook cancelled the call.
 
-    Issue #4181: Fires before executing a tool so extensions can reject
-    or validate the execution.
-
-    Issue #14420: ``tool_permission``/``user_role`` feed
-    ``PermissionEnforcementExtension``. Callers that know the tool's
-    declared permission requirement (e.g. from the MCP registry) and the
-    caller's RBAC role should pass both. #14523: a caller that omits
-    ``tool_permission`` is no longer treated as a legacy tool waved through —
-    the extension refuses a missing declaration outright, so every call site
-    reaching this function must resolve a real permission.
-
-    Args:
-        tool_name: Name of tool to execute
-        tool_params: Tool parameters
-        session_id: Session identifier
-        tool_permission: The dot-style Permission value the tool requires,
-            or None if undeclared/unknown at this call site.
-        user_role: The caller's RBAC role, or None if unauthenticated.
-
-    Returns:
-        False to cancel tool execution, True otherwise
+    ``tool_permission``/``user_role`` feed ``PermissionEnforcementExtension`` (#14420); a caller that omits
+    the permission is refused outright (#14523), so every call site must resolve a real one.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -283,23 +255,24 @@ async def _emit_before_tool_execute(
         },
     )
     results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
-    return not any(result is False for result in results)
+    allowed = not any(result is False for result in results)
+    if allowed:
+        mark_tool_started(session_id, tool_name)  # #21879: the clock starts when the tool does
+    return allowed
 
 
-async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]) -> Any:
-    """Emit AFTER_TOOL_EXECUTE hook to registered extensions.
+async def _emit_after_tool_execute(
+    tool_name: str,
+    tool_result: Any,
+    session_id: str,
+    context: Dict[str, Any],
+    *,
+    success: bool | None = None,
+) -> Any:
+    """Emit AFTER_TOOL_EXECUTE (#4181); returns the possibly modified result.
 
-    Issue #4181: Fires after tool execution so extensions can inspect
-    or modify the result.
-
-    Args:
-        tool_name: Name of executed tool
-        tool_result: Result returned by tool
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        Possibly modified tool result
+    #21879: the hook data carries the measured ``execution_time`` and the call's ``success`` when known,
+    and omits a key it does not know (no default stands in for it). *success* is the site's outcome.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -307,6 +280,7 @@ async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id:
             "tool_name": tool_name,
             "tool_result": tool_result,
             "context": context,
+            **tool_outcome_fields(take_tool_elapsed(session_id, tool_name), success),
         },
     )
     result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result")
@@ -325,6 +299,7 @@ async def _emit_tool_error(tool_name: str, error: Exception, session_id: str, co
         session_id: Session identifier
         context: Request-level context dict
     """
+    take_tool_elapsed(session_id, tool_name)  # the call ended in error: close its clock
     ctx = HookContext(
         session_id=session_id,
         data={
@@ -337,163 +312,45 @@ async def _emit_tool_error(tool_name: str, error: Exception, session_id: str, co
     await get_extension_manager().invoke_hook(HookPoint.TOOL_ERROR, ctx)
 
 
-async def _emit_before_continuation(iteration: int, session_id: str, context: Dict[str, Any]) -> bool:
-    """Emit BEFORE_CONTINUATION hook to registered extensions.
+async def _retrieve_trajectory_block(session: WorkflowSession, message: str, lightweight_mode: bool) -> str:
+    """#11261: search-before -- similar high-reward past turns as an untrusted reference block.
 
-    Issue #4181: Fires before starting next iteration of continuation loop
-    so extensions can inspect state or cancel continuation.
-
-    Args:
-        iteration: Current iteration number
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        False to cancel continuation, True otherwise
+    User/tenant-scoped by the store; skipped in lightweight mode and fully non-fatal.
     """
-    ctx = HookContext(
-        session_id=session_id,
-        data={"iteration": iteration, "context": context},
+    if lightweight_mode:
+        return ""
+    from chat_workflow.trajectory_context import retrieve_trajectory_context
+
+    return await retrieve_trajectory_context(
+        message,
+        user_id=str(session.metadata.get("user_id") or ""),
+        tenant_id=str(session.metadata.get("tenant_id") or ""),
     )
-    results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_CONTINUATION, ctx)
-    return not any(result is False for result in results)
 
 
-async def _emit_after_continuation(iteration: int, response: str, session_id: str, context: Dict[str, Any]) -> str:
-    """Emit AFTER_CONTINUATION hook to registered extensions.
-
-    Issue #4181: Fires after continuation iteration completes so extensions
-    can inspect or modify the response.
-
-    Args:
-        iteration: Completed iteration number
-        response: Response from this iteration
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        Possibly modified response
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={"iteration": iteration, "response": response, "context": context},
+async def _emit_prompt_hooks(
+    full_prompt: str, session: WorkflowSession, message: str, use_knowledge: bool, endpoint: str, model: str
+) -> str:
+    """Issue #4265: AFTER_PROMPT_BUILD, then the full-prompt-ready hook."""
+    full_prompt = await _emit_after_prompt_build(
+        full_prompt, session.session_id, {"message": message, "use_knowledge": use_knowledge}
     )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_CONTINUATION, ctx, "response")
-    return result if isinstance(result, str) else response
-
-
-async def _emit_loop_complete(total_iterations: int, final_response: str, session_id: str) -> str:
-    """Emit LOOP_COMPLETE hook to registered extensions.
-
-    Issue #4181: Fires when continuation loop completes so extensions
-    can finalize or modify the final response.
-
-    Args:
-        total_iterations: Total iterations completed
-        final_response: Final response from loop
-        session_id: Session identifier
-
-    Returns:
-        Possibly modified final response
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={"total_iterations": total_iterations, "final_response": final_response},
+    return await _emit_full_prompt_ready(
+        full_prompt,
+        {"endpoint": endpoint, "model": model},
+        {"session_id": session.session_id, "message": message},
     )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.LOOP_COMPLETE, ctx, "final_response")
-    return result if isinstance(result, str) else final_response
-
-
-async def _emit_repairable_error(error: Exception, session_id: str, context: Dict[str, Any]) -> bool:
-    """Emit REPAIRABLE_ERROR hook to registered extensions.
-
-    Issue #4181: Fires when a repairable error occurs so extensions
-    can attempt recovery or take corrective action.
-
-    Args:
-        error: The repairable exception
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        True if error was handled, False otherwise
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={
-            "error": str(error),
-            "error_type": type(error).__name__,
-            "context": context,
-        },
-    )
-    result = await get_extension_manager().invoke_until_handled(HookPoint.REPAIRABLE_ERROR, ctx)
-    return result is not None
-
-
-async def _emit_critical_error(error: Exception, session_id: str, context: Dict[str, Any]) -> None:
-    """Emit CRITICAL_ERROR hook to registered extensions.
-
-    Issue #4181: Fires when a critical unrecoverable error occurs so
-    extensions can log, alert, or perform cleanup.
-
-    Args:
-        error: The critical exception
-        session_id: Session identifier
-        context: Request-level context dict
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={
-            "error": str(error),
-            "error_type": type(error).__name__,
-            "context": context,
-        },
-    )
-    await get_extension_manager().invoke_hook(HookPoint.CRITICAL_ERROR, ctx)
-
-
-async def _emit_before_response_send(response: str, session_id: str, context: Dict[str, Any]) -> str:
-    """Emit BEFORE_RESPONSE_SEND hook to registered extensions.
-
-    Issue #4181: Fires before sending response to user so extensions
-    can inspect, filter, or modify the response.
-
-    Args:
-        response: Response to be sent
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        Possibly modified response
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={"response": response, "context": context},
-    )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.BEFORE_RESPONSE_SEND, ctx, "response")
-    return result if isinstance(result, str) else response
-
-
-async def _emit_after_response_send(response: str, session_id: str, context: Dict[str, Any]) -> None:
-    """Emit AFTER_RESPONSE_SEND hook to registered extensions.
-
-    Issue #4181: Fires after response is sent to user so extensions
-    can perform post-processing or logging.
-
-    Args:
-        response: Response that was sent
-        session_id: Session identifier
-        context: Request-level context dict
-    """
-    ctx = HookContext(
-        session_id=session_id,
-        data={"response": response, "context": context},
-    )
-    await get_extension_manager().invoke_hook(HookPoint.AFTER_RESPONSE_SEND, ctx)
 
 
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
+
+    # Provided by the composed ChatWorkflowManager (its __init__ and the session mixin); declared so the mixin's own
+    # reads type-check. Annotation only: no attribute is created here.
+    knowledge_service: Any
+    redis_client: Any
+    get_or_create_session: Any
+    _persist_conversation: Any
 
     def _convert_conversation_history_format(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
@@ -524,7 +381,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
+        return _normalize_outbound_url(ollama_generate_url(_ssot_config.ollama_url))
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -533,12 +390,9 @@ class LLMHandlerMixin:
         Config may store just the base URL, so we ensure the path is appended.
         """
         try:
-            endpoint = get_config().get_nested("backend.llm.ollama.endpoint", None)
+            endpoint = provide_config_manager().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
-                # Ensure /api/generate path is included
-                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(endpoint)
+                return _normalize_outbound_url(ollama_generate_url(endpoint))
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
@@ -552,11 +406,9 @@ class LLMHandlerMixin:
         Returns URL with /api/generate suffix.
         """
         try:
-            base_url = get_config().get_ollama_endpoint_for_model(model_name)
+            base_url = provide_config_manager().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith(PATH_OLLAMA_GENERATE):
-                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(base_url)
+                return _normalize_outbound_url(ollama_generate_url(base_url))
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
@@ -662,29 +514,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
         )
 
-    def _build_conversation_context(self, session: WorkflowSession) -> str:
-        """Build conversation context from recent history.
+    def _build_conversation_context(self, session: WorkflowSession, rolling_summary: str = "") -> str:
+        """Rolling summary of older turns (#20852) + the recent turns verbatim."""
+        from chat_history.rolling_summary import render_context
 
-        Issue #715: Now handles incomplete entries (empty assistant response)
-        that are registered before LLM call to fix race conditions.
-        """
-        if not session.conversation_history:
-            return ""
-
-        # Filter out incomplete entries (where assistant response is empty placeholder)
-        # These are messages currently being processed
-        complete_messages = [
-            msg
-            for msg in session.conversation_history
-            if msg.get("assistant")  # Only include if assistant response exists
-        ]
-
-        if not complete_messages:
-            return ""
-
-        context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
-        return "".join(context_parts)
+        return render_context(session.conversation_history, rolling_summary)
 
     async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
@@ -698,8 +532,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 query=message,
                 conversation_history=session.conversation_history or [],
                 top_k=5,
-                score_threshold=0.3,  # Issue #1526: lowered from 0.7
-                force_retrieval=False,
+                principal=session.kb_principal(),  # #16664: retrieve as the turn's user
             )
             if knowledge_context:
                 logger.info(
@@ -732,6 +565,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         conversation_context: str,
         message: str,
         model_name: str | None,
+        system_prompt: str | None = None,
     ) -> tuple[str, str, str]:
         """Fit the prompt's competing sections into the model's window (#13640).
 
@@ -761,7 +595,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
             ]
             message_tokens = cwm.estimate_tokens(message)
-            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            from chat_workflow.prompt_window import measured_prompt_budget
+
+            budget = max(0, measured_prompt_budget(cwm, model_name, system_prompt) - message_tokens)
+            if budget == 0:  # surfaced to the user as ``over_window`` by attachment_context._window_notice
+                logger.warning(
+                    "[#22016] No prompt budget left for context sections: the system prompt and message fill it"
+                )
             result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
             logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
@@ -788,6 +628,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         message: str,
         trajectory_context: str = "",
         model_name: str | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -802,7 +643,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         content first, and what was shed is logged instead of vanishing.
         """
         knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
-            knowledge_context, trajectory_context, conversation_context, message, model_name
+            knowledge_context, trajectory_context, conversation_context, message, model_name, system_prompt
         )
         prefix = ""
         if knowledge_context:
@@ -817,8 +658,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             logger.info("Using per-request LLM model override: %s", requested_model)
             return requested_model
         try:
-            default_model = get_config().get_default_llm_model()
-            selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
+            default_model = provide_config_manager().get_default_llm_model()
+            selected = provide_config_manager().get_nested("backend.llm.ollama.selected_model", default_model)
             if selected and isinstance(selected, str):
                 logger.info("Using LLM model from config: %s", selected)
                 return selected
@@ -834,7 +675,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         session: WorkflowSession,
         message: str,
         use_knowledge: bool = True,
-        language: str = None,
+        language: Optional[str] = None,
         lightweight_mode: bool = False,
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt.
@@ -847,137 +688,24 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         session binding, not from any parameter threaded through here — the
         request context and session metadata are both client-influenced.
         """
-        selected_model = self._get_selected_model(
-            session.metadata.get("model_override") if session and session.metadata else None
-        )
-        # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
-        # then fall back to local config-based resolution (#1070 model routing).
-        slm_base = await self._discover_ollama_from_slm()
-        if slm_base:
-            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
-                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
-            ollama_endpoint = slm_base
-        else:
-            ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
-
+        selected_model = self._select_turn_model(session)
+        ollama_endpoint = await self._resolve_ollama_endpoint(selected_model)
+        await note_chat_turn_endpoint(ollama_endpoint)  # local or remote decides num_gpu (#22257)
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge, "language": language},
+            session.session_id, {"message": message, "use_knowledge": use_knowledge, "language": language}
         )
-
-        system_prompt = self._get_system_prompt(
-            language=language,
-            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
+        system_prompt = await self._build_system_prompt(session, message, language, selected_model, lightweight_mode)
+        conversation_context = self._build_conversation_context(session, await prompt_summary(session))
+        knowledge_context, citations = await self._retrieve_prompt_knowledge(
+            session, message, selected_model, use_knowledge, lightweight_mode
         )
-        # Issue #5066: Tiered L0-L4 context wake-up.
-        # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
-        # 2026-08-10. The A/B's "all five layers render" was measured against
-        # test doubles: at this call site L2 cannot render (it reads
-        # description/content; entity documents carry observations — #13686),
-        # L3 cannot render (knowledge_service=None since #13742, below), and L0
-        # renders a compile-time constant carrying a hardcoded owner (#13867).
-        # Re-enabling is gated on #13686 + #13867 and an A/B re-run against a
-        # live backend. Full record: docs/research/tiered-context-ab-13689.md
-        # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
-        # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
-        # When false the pre-existing unconditional EssentialStory path is used.
-        # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
-        if not lightweight_mode:
-            try:
-                from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
-
-                if TIERED_CONTEXT_ENABLED:
-                    # #13686: the memory graph was read off an object that never
-                    # had it, so L2 returned "" on every turn. #13687/#13704: the
-                    # goal ancestry comes from the *server-side* session binding,
-                    # never the request body, and both hops are company-scoped.
-                    # Both resolvers degrade to None rather than failing the turn.
-                    from chat_workflow.tiered_context_sources import (
-                        resolve_goal_ancestry,
-                        resolve_memory_graph,
-                    )
-
-                    tiered_ctx = await TieredContextBuilder().build(
-                        user_message=message,
-                        model_name=selected_model,
-                        session_id=session.session_id,
-                        memory_graph=await resolve_memory_graph(),
-                        # #13742: deliberately NOT self.knowledge_service. The RAG
-                        # path below (:914) retrieves for every use_knowledge turn
-                        # via the same conversation_aware_retrieve L3 would call,
-                        # then applies budget_grounded_context for trimming and
-                        # citation rebinding (#3770/#10837). Handing L3 the service
-                        # here bought a second identical vector search and the same
-                        # chunks twice in the prompt — with the copy inside the
-                        # tiered block escaping that budgeting entirely.
-                        #
-                        # L3 keeps its retrieval path for callers that have no
-                        # separate RAG stage; at this call site the main path owns
-                        # retrieval, so L3 correctly stays silent.
-                        knowledge_service=None,
-                        goal_ancestry=await resolve_goal_ancestry(session.session_id),
-                    )
-                    if tiered_ctx:
-                        system_prompt = tiered_ctx + "\n\n" + system_prompt
-                else:
-                    # Issue #3787: legacy always-loaded compact memory summary.
-                    from memory.essential_story import EssentialStoryGenerator
-
-                    story = await EssentialStoryGenerator().generate(model_name=selected_model)
-                    if story:
-                        system_prompt = story + "\n\n" + system_prompt
-            except Exception as _ctx_exc:
-                logger.warning("Context injection failed: %s", _ctx_exc)
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session)
-
-        # Knowledge retrieval for RAG
-        # Issue MVA-1992: Skip RAG when lightweight_mode=True
-        knowledge_context, citations = "", []
-        if self.knowledge_service and use_knowledge and not lightweight_mode:
-            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
-            # Issue #3770/#10837: compress KB results when context exceeds model budget.
-            # budget_grounded_context returns (context_str, effective_citations); rebind
-            # citations to the trimmed subset so params["citations"] only lists sources
-            # the model actually saw in the prompt (#10837 regression fix).
-            if knowledge_context and citations:
-                from services.knowledge.service import budget_grounded_context
-
-                knowledge_context, citations = await budget_grounded_context(
-                    citations, model_name=selected_model, context_label=message[:80]
-                )
-        else:
-            session.metadata["used_knowledge"] = False
-
-        # #11261: search-before — inject similar high-reward past turns as an
-        # untrusted reference block. User/tenant-scoped by the store; skipped in
-        # lightweight mode and fully non-fatal.
-        trajectory_context = ""
-        if not lightweight_mode:
-            from chat_workflow.trajectory_context import retrieve_trajectory_context
-
-            trajectory_context = await retrieve_trajectory_context(
-                message,
-                user_id=str(session.metadata.get("user_id") or ""),
-                tenant_id=str(session.metadata.get("tenant_id") or ""),
-            )
-
+        trajectory_context = await _retrieve_trajectory_block(session, message, lightweight_mode)
         full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+            knowledge_context, conversation_context, message, trajectory_context, selected_model, system_prompt
         )
-
-        # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
-        full_prompt = await _emit_after_prompt_build(
-            full_prompt,
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge},
-        )
-
-        full_prompt = await _emit_full_prompt_ready(
-            full_prompt,
-            {"endpoint": ollama_endpoint, "model": selected_model},
-            {"session_id": session.session_id, "message": message},
+        full_prompt = await _emit_prompt_hooks(
+            full_prompt, session, message, use_knowledge, ollama_endpoint, selected_model
         )
 
         logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
@@ -991,6 +719,66 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "citations": citations,
             "used_knowledge": bool(knowledge_context),
         }
+
+    def _select_turn_model(self, session: WorkflowSession) -> str:
+        """The turn's model, noted before any budgeting so side calls match this model's context (#22016)."""
+        override = session.metadata.get("model_override") if session and session.metadata else None
+        selected_model = self._get_selected_model(override)
+        note_chat_turn_model(selected_model)
+        return selected_model
+
+    async def _resolve_ollama_endpoint(self, selected_model: str) -> str:
+        """Issue #1214: SLM service discovery first (fleet-managed), then local config-based routing (#1070)."""
+        slm_base = await self._discover_ollama_from_slm()
+        if slm_base:
+            return ollama_generate_url(slm_base)
+        return self._get_ollama_endpoint_for_model(selected_model)
+
+    async def _build_system_prompt(
+        self,
+        session: WorkflowSession,
+        message: str,
+        language: Optional[str],
+        selected_model: str,
+        lightweight_mode: bool,
+    ) -> str:
+        """System prompt: the stable hashed text first, then the volatile memory context (#17278)."""
+        company_id = session.metadata.get("company_id") if session and session.metadata else None
+        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
+        # Issue #5066: Tiered L0-L4 context wake-up; #13689 turned it ON, #13866 reverted it to OFF (2026-08-10).
+        # Re-enabling is gated on #13686 + #13867 and an A/B re-run against a live backend. Full record:
+        # docs/research/tiered-context-ab-13689.md. When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns
+        # all context prepending; when false the pre-existing unconditional EssentialStory path is used.
+        # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
+        if not lightweight_mode:
+            from chat_workflow import tiered_context_sources as tcs
+
+            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        system_prompt = apply_topic_guidance(system_prompt, message, session)  # volatile: after the stable prefix
+        return system_prompt
+
+    async def _retrieve_prompt_knowledge(
+        self, session: WorkflowSession, message: str, selected_model: str, use_knowledge: bool, lightweight_mode: bool
+    ) -> tuple[str, list]:
+        """RAG context and the citations the model actually saw (Issue MVA-1992: skipped in lightweight mode)."""
+        if not (self.knowledge_service and use_knowledge and not lightweight_mode):
+            session.metadata["used_knowledge"] = False
+            return "", []
+        knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
+        # Issue #3770/#10837: compress KB results when context exceeds model budget.
+        # budget_grounded_context returns (context_str, effective_citations); rebind
+        # citations to the trimmed subset so params["citations"] only lists sources
+        # the model actually saw in the prompt (#10837 regression fix).
+        if knowledge_context and citations:
+            from services.knowledge.service import budget_grounded_context
+
+            knowledge_context, citations = await budget_grounded_context(
+                citations, model_name=selected_model, context_label=message[:80]
+            )
+        return knowledge_context, citations
 
     def _build_interpretation_prompt(self, command: str, stdout: str, stderr: str, return_code: int) -> str:
         """Build the interpretation prompt for LLM (Issue #332 - extracted helper)."""
@@ -1007,13 +795,13 @@ Return code: {return_code}
 Briefly explain what this output shows. Keep it concise (2-3 sentences max).
 Do NOT conclude the task or provide a final summary - just explain this specific result."""
 
-    def _get_interpretation_llm_options(self) -> Dict[str, Any]:
-        """Get LLM options for command interpretation."""
-        return {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
-        }
+    def _get_interpretation_llm_options(self, model: str | None = None) -> Dict[str, Any]:
+        """Get LLM options for command interpretation (#21878: the chat model keeps the chat's context)."""
+        return interpretation_llm_options(model)
+
+    async def _interpretation_think(self, model: str, endpoint: str, session_id: str) -> Dict[str, bool]:
+        """The session's thinking toggle as Ollama's ``think`` field, same rule as the chat turn (#22258)."""
+        return await ollama_think_kwargs(model, endpoint, session_thinking(session_id))
 
     async def _interpret_non_streaming(
         self,
@@ -1024,6 +812,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_id: str = "",
     ):
         """Handle non-streaming interpretation request (Issue #332)."""
+        import aiohttp
+
         # Issue #4259: Wire BEFORE_LLM_CALL hook
         llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
         should_proceed = await _emit_before_llm_call(interpretation_prompt, llm_params, session_id)
@@ -1032,14 +822,19 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return
 
         http_client = get_http_client()
+        think = await self._interpretation_think(selected_model, ollama_endpoint, session_id)
         response_data = await http_client.post_json(
-            f"{ollama_endpoint}/api/generate",
+            ollama_generate_url(ollama_endpoint),
             json_data={
                 "model": selected_model,
                 "prompt": interpretation_prompt,
                 "stream": False,
                 "options": llm_options,
+                **think,
             },
+            # #21750: the session default reads a socket for 10 s and a model answers in minutes, so every
+            # interpretation timed out into "length: 0"; the guard's own deadline is the only one.
+            timeout=aiohttp.ClientTimeout(total=INTERPRETATION_TIMEOUT_SECONDS),
         )
         interpretation = response_data.get("response", "")
 
@@ -1073,17 +868,19 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return
 
         http_client = get_http_client()
+        think = await self._interpretation_think(selected_model, ollama_endpoint, session_id)
         full_response = ""
         try:
             async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
+                ollama_generate_url(ollama_endpoint),
                 json={
                     "model": selected_model,
                     "prompt": interpretation_prompt,
                     "stream": True,
                     "options": llm_options,
+                    **think,
                 },
-                timeout=aiohttp.ClientTimeout(total=60.0),
+                timeout=aiohttp.ClientTimeout(total=INTERPRETATION_TIMEOUT_SECONDS),
             ) as interp_response:
                 async for line in interp_response.content:
                     line_str = line.decode("utf-8").strip()
@@ -1116,6 +913,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if full_response:
                 full_response = await _emit_after_llm_response(full_response, llm_params, session_id)
 
+    @interpretation_never_fails_the_tool
     async def _interpret_command_results(
         self,
         command: str,
@@ -1144,25 +942,17 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             WorkflowMessage chunks
         """
         interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
-        llm_options = self._get_interpretation_llm_options()
+        llm_options = self._get_interpretation_llm_options(selected_model)
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint,
-                selected_model,
-                interpretation_prompt,
-                llm_options,
-                session_id,
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint,
-            selected_model,
-            interpretation_prompt,
-            llm_options,
-            session_id,
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
         ):
             yield msg
 
@@ -1230,7 +1020,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
+    async def _persist_to_conversation_history(
+        self, session_id: str, interpretation: str, model: str = "", user_message: str | None = None
+    ) -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1240,6 +1032,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Args:
             session_id: Chat session ID
             interpretation: Interpretation text to persist
+            model: The model that produced it; the rolling-summary refresh folds with it (#20852)
+            user_message: The message the command answered, captured when it ran; else the latest one (#21938)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1249,7 +1043,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             session = await self.get_or_create_session(session_id)
 
             # Get the last user message from chat:session (most recent context)
-            last_user_message = await self._get_last_user_message(session_id)
+            last_user_message = user_message or await self._get_last_user_message(session_id)
 
             if not last_user_message:
                 logger.warning(
@@ -1264,6 +1058,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 session=session,
                 message=last_user_message,
                 llm_response=interpretation,
+                model=model or None,
             )
             logger.info(
                 f"✅ [interpret_terminal_command] Persisted user message + "
@@ -1286,13 +1081,13 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_id: str = "",
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
-        selected_model = get_config().get_selected_model()
+        selected_model = provide_config_manager().get_selected_model()
         # Issue #1214: Try SLM discovery first, then config-based routing
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
             ollama_endpoint = slm_base
         else:
-            ollama_endpoint = get_config().get_ollama_url_for_model(selected_model)
+            ollama_endpoint = provide_config_manager().get_ollama_url_for_model(selected_model)
 
         logger.info(f"[interpret_terminal_command] Starting interpretation " f"for command: {command[:50]}...")
 
@@ -1314,7 +1109,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         return interpretation
 
     async def interpret_terminal_command(
-        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str
+        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str, user_message: str | None = None
     ) -> str:
         """
         Public method to interpret terminal command results.
@@ -1331,7 +1126,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 return interpretation
 
             await self._save_to_chat_history(session_id, interpretation)
-            await self._persist_to_conversation_history(session_id, interpretation)
+            model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
+            await self._persist_to_conversation_history(session_id, interpretation, model, user_message)
 
             return interpretation
 

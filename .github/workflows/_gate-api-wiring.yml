@@ -1,0 +1,130 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# API Wiring Audit (GH#9851)
+# Cross-references every /api/ path the frontend calls against the backend's
+# actual route table and flags router modules that exist but are never mounted.
+#
+# Authoritative mode builds the app and dumps app.openapi(); if the build fails
+# in CI it falls back to static (regex) mode so the job still reports.
+#
+# BLOCKING gate since #9864: the audit's false-positive classes were fixed
+# (segment-wise template matching, base-URL strings, websocket routes via
+# x-websocket-paths, include_router aggregation chains, comment-line doc
+# examples) and the two real drift bugs they masked were fixed with them.
+# If this gate goes red, the diff genuinely broke the frontend/backend
+# contract — fix the wiring, do not re-add continue-on-error.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: API Wiring Audit (reusable body)
+
+on:
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the audit passed"
+        value: ${{ jobs.audit.outputs.ok }}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: API Wiring Audit
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: ./.github/actions/setup-python-ci
+        with:
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements*.txt
+
+      - name: Install CI requirements
+        continue-on-error: true
+        uses: ./.github/actions/install-ci-requirements
+
+      - name: Install SLM backend dependencies (best-effort)
+        # #12381: --dump-slm-openapi imports autobot-slm-backend/main.py, which
+        # needs its OWN requirements (croniter, authlib, ldap3, pysaml2, pyotp,
+        # ...) — requirements-ci.txt only covers autobot-backend. Without this,
+        # the SLM dump always fails ("No module named 'croniter'") and the SLM
+        # route union never happens, leaving every getSLMUrl()/slmFetch() call
+        # false-flagged as unwired. Best-effort/non-fatal like the step above —
+        # dump_slm_openapi() already degrades gracefully if something's still
+        # missing (audits against autobot-backend routes only).
+        continue-on-error: true
+        run: |
+          python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary || true
+
+      - name: Run API wiring audit
+        run: |
+          set -o pipefail
+          mkdir -p data logs static config
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          if python scripts/audit_api_wiring.py --dump-openapi openapi.json; then
+            echo "::notice::Authoritative OpenAPI dump succeeded — auditing against real route table."
+
+            # #12381: also dump the SLM control-plane backend's route table
+            # (separate FastAPI app, :8000) and union it in — otherwise every
+            # getSLMUrl()/slmFetch() call is false-flagged as unwired.
+            SLM_ARGS=()
+            export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
+            if python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.json; then
+              echo "::notice::SLM OpenAPI dump succeeded — unioning SLM route table."
+              SLM_ARGS=(--slm-openapi slm_openapi.json)
+            else
+              echo "::warning::SLM app build failed — auditing against autobot-backend routes only."
+            fi
+            export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+
+            # #16816: --dead-surface lists backend capability no part of the
+            # frontend reaches. The flag has existed for the life of the script
+            # and CI had never passed it, so the number was never known. It does
+            # not contribute to the exit code -- report-only until the first
+            # real count has been read and triaged.
+            #
+            # The split, the Company OS subtotal and the GUI-unreachable list go
+            # to this job's SUMMARY. scripts/dead_surface.py writes it there
+            # itself, rather than this step piping the auditor's stdout
+            # somewhere -- a pipeline between the audit and its own exit code is
+            # how a failing audit comes to read as a passing job.
+            #
+            # It is NOT in the job log yet. That module is not a CLI entry point
+            # and must not print (#16008), and the entry point that would print
+            # it cannot currently be edited: audit_api_wiring.py carries
+            # pre-existing hardcoded-value findings in a directory the repo-wide
+            # scan does not walk, so they cannot be baselined (#17329), plus a
+            # `main` over the function-length threshold, at exactly its size
+            # ceiling. report_dead_surface() returns the lines, so once #17330
+            # lands this is one line at the call site.
+            #
+            # The GUI-gap count is pinned in scripts/dead_surface_baseline.txt,
+            # UNMEASURED until this job prints a real figure once -- measuring it
+            # needs the backend imported to dump its OpenAPI schema, so the first
+            # number has to come from here. The comparison prints; it does not
+            # gate (AC3).
+            python scripts/audit_api_wiring.py --openapi openapi.json "${SLM_ARGS[@]}" \
+              --baseline scripts/api_wiring_baseline.txt --dead-surface --fail-on-unwired
+          else
+            echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
+            python scripts/audit_api_wiring.py
+          fi
+
+      # Positive evidence for the `api-wiring` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

@@ -25,10 +25,7 @@ export async function clearAllSystemNotifications() {
 
     // Reset backend status to healthy to prevent recreation
     if (appStore && typeof appStore.setBackendStatus === 'function') {
-      appStore.setBackendStatus({
-        text: 'Connected',
-        class: 'success'
-      })
+      appStore.setBackendStatus({ class: 'success' })
     }
 
     return true

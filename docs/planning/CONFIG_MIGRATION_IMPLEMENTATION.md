@@ -31,7 +31,7 @@ curl http://<frontend-ip>:5173  # Frontend accessible?
 
 ### Step 1: Add Missing Methods to unified_config_manager.py
 
-Add these methods to the UnifiedConfigManager class:
+Add these methods to the ConfigManager class:
 
 ```python
 # Add after line 766 (after existing get_timeout method)

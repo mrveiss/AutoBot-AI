@@ -31,9 +31,9 @@ from llm_shared.optimization.layer_inference import (
     _greedy_sample,
     _is_eos,
     _layer_prefix_for_arch,
-    _move_to_meta,
     _reset_peak_memory,
 )
+from llm_shared.optimization.meta_eviction import evict_layer_to_meta
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -621,9 +621,9 @@ class TestModuleHelpers:
         assert _is_eos(tok, 0) is False
 
     def test_move_to_meta_moves_params(self):
-        """_move_to_meta should place all parameters on the meta device."""
+        """evict_layer_to_meta should place all parameters on the meta device."""
         mod = torch.nn.Linear(4, 4)
-        _move_to_meta(torch, mod)
+        evict_layer_to_meta(mod)
         for param in mod.parameters():
             assert param.device.type == "meta"
 

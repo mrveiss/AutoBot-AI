@@ -30,6 +30,8 @@ export interface KnowledgeDocument {
     fileSize?: number
     language?: string
     author?: string
+    /** The backend fact's raw `metadata.type` (e.g. `man_page`); `type` above is the UI document class (#21037). */
+    factType?: string
   }
 }
 
@@ -191,7 +193,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const connectors = ref<ConnectorConfig[]>([])
   const connectorStatuses = ref<Record<string, ConnectorStatus>>({})
   const connectorsLoading = ref(false)
-
 
   // Verification state (Issue #1253)
   const pendingVerifications = ref<PendingSource[]>([])
@@ -612,7 +613,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   function setConnectorsLoading(loading: boolean) {
     connectorsLoading.value = loading
   }
-
 
   // Source panel actions (Issue #747)
   function openSourcePanel(document: SystemDoc) {

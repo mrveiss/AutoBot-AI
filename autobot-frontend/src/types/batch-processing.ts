@@ -8,171 +8,54 @@
  * Issue #584 - Batch Processing Manager
  */
 
+import type { components } from '@/types/generated/api'
 import type { BaseModuleHealthResponse } from './health'
 
-/**
- * Batch job status enum
- */
-export type BatchJobStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+// #21649: every record and request shape below is the backend's own contract
+// (autobot-backend/api/batch_jobs.py, schemas in api/schemas_workflows.py), read
+// from the generated OpenAPI types. The hand-written copies they replace had
+// drifted: the list carried four per-status counts the backend never sends, and
+// logs, templates and schedules were wrapped in objects the backend never builds.
+type Schemas = components['schemas']
 
-/**
- * Batch job type enum
- */
-export type BatchJobType =
-  | 'data_processing'
-  | 'file_conversion'
-  | 'report_generation'
-  | 'backup'
-  | 'custom'
+export type BatchJobStatus = Schemas['BatchJobStatus']
+export type BatchJobType = Schemas['BatchJobType']
+export type BatchJob = Schemas['BatchJob']
+export type BatchTemplate = Schemas['BatchTemplate']
+export type BatchSchedule = Schemas['BatchSchedule']
+export type BatchLogEntry = Schemas['BatchLogEntry']
 
-/**
- * Single batch job data structure
- */
-export interface BatchJob {
+/** GET /api/batch-jobs: `status_counts` counts every job by status, before the filter. */
+export type BatchJobsListResponse = Schemas['BatchJobList']
+
+/** POST /api/batch-jobs body. */
+export type CreateBatchJobRequest = Schemas['BatchJobCreate']
+
+/** POST /api/batch-jobs/templates/: `name` and `job_type` travel as query, `parameters` as the body. */
+export interface CreateBatchTemplateRequest {
+  name: string
+  job_type: BatchJobType
+  parameters?: Record<string, unknown>
+}
+
+/** POST /api/batch-jobs/schedules/: every field travels as query. */
+export interface CreateBatchScheduleRequest {
   job_id: string
-  name: string
-  job_type: BatchJobType
-  status: BatchJobStatus
-  progress: number
-  parameters: Record<string, unknown>
-  created_at: string
-  started_at?: string
-  completed_at?: string
-  error_message?: string
-  result?: Record<string, unknown>
-}
-
-/**
- * Batch template for reusable job configurations
- */
-export interface BatchTemplate {
-  template_id: string
-  name: string
-  description: string
-  job_type: BatchJobType
-  default_parameters: Record<string, unknown>
-  created_at: string
-  updated_at?: string
-}
-
-/**
- * Batch schedule for recurring jobs
- */
-export interface BatchSchedule {
-  schedule_id: string
-  name: string
-  template_id: string
   cron_expression: string
-  enabled: boolean
-  last_run?: string
-  next_run?: string
-  created_at: string
-  updated_at?: string
+  enabled?: boolean
 }
 
-/**
- * Filter options for batch jobs list
- */
+/** The list filter; each field is a query parameter of GET /api/batch-jobs. */
 export interface BatchJobsFilter {
   status?: BatchJobStatus
   job_type?: BatchJobType
   limit?: number
 }
 
-/**
- * Batch jobs list response from backend
- */
-export interface BatchJobsListResponse {
-  jobs: BatchJob[]
-  total_count: number
-  pending_count: number
-  running_count: number
-  completed_count: number
-  failed_count: number
-}
-
-/**
- * Batch templates list response
- */
-export interface BatchTemplatesListResponse {
-  templates: BatchTemplate[]
-  total_count: number
-}
-
-/**
- * Batch schedules list response
- */
-export interface BatchSchedulesListResponse {
-  schedules: BatchSchedule[]
-  total_count: number
-}
-
-/**
- * Batch service health check response
- */
+/** Batch service health, read from the canonical /api/system/health aggregator (#6902). */
 export interface BatchHealthResponse extends BaseModuleHealthResponse {
   active_jobs: number
   total_jobs: number
-}
-
-/**
- * Create batch job request
- */
-export interface CreateBatchJobRequest {
-  name: string
-  job_type: BatchJobType
-  parameters?: Record<string, unknown>
-  template_id?: string
-}
-
-/**
- * Create batch job response
- */
-export interface CreateBatchJobResponse {
-  job_id: string
-  status: string
-}
-
-/**
- * Create batch template request
- */
-export interface CreateBatchTemplateRequest {
-  name: string
-  description?: string
-  job_type: BatchJobType
-  default_parameters?: Record<string, unknown>
-}
-
-/**
- * Create batch schedule request
- */
-export interface CreateBatchScheduleRequest {
-  name: string
-  template_id: string
-  cron_expression: string
-  enabled?: boolean
-}
-
-/**
- * Batch job logs response
- */
-export interface BatchJobLogsResponse {
-  job_id: string
-  logs: BatchLogEntry[]
-}
-
-/**
- * Single log entry for a batch job
- */
-export interface BatchLogEntry {
-  timestamp: string
-  level: 'debug' | 'info' | 'warning' | 'error'
-  message: string
 }
 
 /**
@@ -262,4 +145,3 @@ export function isTerminalStatus(status: BatchJobStatus): boolean {
 export function canCancelJob(job: BatchJob): boolean {
   return ['pending', 'running'].includes(job.status)
 }
-

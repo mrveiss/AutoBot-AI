@@ -31,6 +31,7 @@ from autobot_memory_graph.core import (
 )
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
+from constants.rag_graph_constants import RAG_GRAPH_TRAVERSAL_DEPTH, RAG_RELATION_DEPTH
 
 logger = get_logger(__name__)
 
@@ -261,7 +262,7 @@ class RelationsMixin:
     async def traverse_relations(
         self,
         start_fact_id: str,
-        max_depth: int = 2,
+        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
         relation_types: List[str] | None = None,
         include_fact_details: bool = False,
     ) -> Dict[str, Any]:
@@ -325,7 +326,7 @@ class RelationsMixin:
         query: str,
         top_k: int = 10,
         expand_relations: bool = True,
-        relation_depth: int = 1,
+        relation_depth: int = RAG_RELATION_DEPTH,
         relation_types: List[str] | None = None,
     ) -> Dict[str, Any]:
         """Combine vector search with graph-relation expansion."""

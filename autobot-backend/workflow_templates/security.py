@@ -13,7 +13,7 @@ from typing import List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _get_network_scan_discovery_steps() -> List[WorkflowStep]:
@@ -118,8 +118,8 @@ def create_network_security_scan_template() -> WorkflowTemplate:
         id="network_security_scan",
         name="Network Security Scan",
         description="Comprehensive network security assessment with tool discovery and scanning",
-        category=TemplateCategory.SECURITY,
-        complexity=TaskComplexity.SECURITY_SCAN,
+        category=WorkflowTemplateCategory.SECURITY,
+        complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=15,
         agents_involved=[
             "librarian",
@@ -216,8 +216,8 @@ def create_vulnerability_assessment_template() -> WorkflowTemplate:
         id="vulnerability_assessment",
         name="Vulnerability Assessment",
         description="Targeted vulnerability assessment with remediation recommendations",
-        category=TemplateCategory.SECURITY,
-        complexity=TaskComplexity.SECURITY_SCAN,
+        category=WorkflowTemplateCategory.SECURITY,
+        complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=20,
         agents_involved=["research", "security_scanner", "knowledge_manager"],
         tags=["security", "vulnerability", "assessment", "remediation"],
@@ -357,7 +357,7 @@ def create_security_audit_template() -> WorkflowTemplate:
         id="security_audit",
         name="Security Audit",
         description="Comprehensive security audit with compliance checking",
-        category=TemplateCategory.SECURITY,
+        category=WorkflowTemplateCategory.SECURITY,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=45,
         agents_involved=metadata["agents_involved"],

@@ -28,7 +28,7 @@ router = APIRouter(prefix="/browser/mcp", tags=["browser"])
 BROWSER_WORKER_URL = os.getenv("BROWSER_WORKER_URL", "")  # noqa: ssot-fallback
 
 
-class NavigateRequest(BaseModel):
+class NavigateBrowserRequest(BaseModel):
     url: str
 
 
@@ -51,7 +51,7 @@ async def browser_status(
 
 @router.post("/navigate")
 async def browser_navigate(
-    body: NavigateRequest,
+    body: NavigateBrowserRequest,
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> dict:
     """Navigate the persistent browser page to a URL.

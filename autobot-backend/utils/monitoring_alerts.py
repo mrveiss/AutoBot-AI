@@ -63,7 +63,7 @@ class AlertStatus(Enum):
 
 
 @dataclass
-class AlertRule:
+class MetricAlertRule:
     """Configuration for an alert rule"""
 
     id: str
@@ -290,7 +290,7 @@ class MonitoringAlertsManager:
     """Advanced monitoring alerts and notifications manager"""
 
     def __init__(self):
-        self.alert_rules: Dict[str, AlertRule] = {}
+        self.alert_rules: Dict[str, MetricAlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.notification_channels: Dict[str, AlertNotificationChannel] = {}
         self.metric_history: Dict[str, List[Tuple[float, float]]] = {}  # metric_path -> [(timestamp, value)]
@@ -333,15 +333,15 @@ class MonitoringAlertsManager:
         # WebSocket channel (will be enabled when WebSocket manager is available)
         self.notification_channels["websocket"] = WebSocketNotificationChannel("websocket", {"enabled": False})
 
-    def _create_cpu_alert_rules(self) -> List[AlertRule]:
+    def _create_cpu_alert_rules(self) -> List[MetricAlertRule]:
         """
         Create CPU usage alert rules for VM0.
 
-        Returns list of AlertRule objects for high and critical CPU thresholds.
+        Returns list of MetricAlertRule objects for high and critical CPU thresholds.
         Issue #620.
         """
         return [
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_high_cpu",
                 name="VM0 High CPU Usage",
                 metric_path="vm0.stats.cpu_usage",
@@ -352,7 +352,7 @@ class MonitoringAlertsManager:
                 description="VM0 CPU usage exceeds 80%",
                 tags=["cpu", "performance", "vm0"],
             ),
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_critical_cpu",
                 name="VM0 Critical CPU Usage",
                 metric_path="vm0.stats.cpu_usage",
@@ -365,15 +365,15 @@ class MonitoringAlertsManager:
             ),
         ]
 
-    def _create_memory_alert_rules(self) -> List[AlertRule]:
+    def _create_memory_alert_rules(self) -> List[MetricAlertRule]:
         """
         Create memory usage alert rules for VM0.
 
-        Returns list of AlertRule objects for high and critical memory thresholds.
+        Returns list of MetricAlertRule objects for high and critical memory thresholds.
         Issue #620.
         """
         return [
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_high_memory",
                 name="VM0 High Memory Usage",
                 metric_path="vm0.stats.memory_percent",
@@ -384,7 +384,7 @@ class MonitoringAlertsManager:
                 description="VM0 memory usage exceeds 85%",
                 tags=["memory", "performance", "vm0"],
             ),
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_critical_memory",
                 name="VM0 Critical Memory Usage",
                 metric_path="vm0.stats.memory_percent",
@@ -397,15 +397,15 @@ class MonitoringAlertsManager:
             ),
         ]
 
-    def _create_disk_alert_rules(self) -> List[AlertRule]:
+    def _create_disk_alert_rules(self) -> List[MetricAlertRule]:
         """
         Create disk usage alert rules for VM0.
 
-        Returns list of AlertRule objects for high and critical disk thresholds.
+        Returns list of MetricAlertRule objects for high and critical disk thresholds.
         Issue #620.
         """
         return [
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_high_disk",
                 name="VM0 High Disk Usage",
                 metric_path="vm0.stats.disk_percent",
@@ -416,7 +416,7 @@ class MonitoringAlertsManager:
                 description="VM0 disk usage exceeds 85%",
                 tags=["disk", "storage", "vm0"],
             ),
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_critical_disk",
                 name="VM0 Critical Disk Usage",
                 metric_path="vm0.stats.disk_percent",
@@ -429,15 +429,15 @@ class MonitoringAlertsManager:
             ),
         ]
 
-    def _create_load_alert_rules(self) -> List[AlertRule]:
+    def _create_load_alert_rules(self) -> List[MetricAlertRule]:
         """
         Create load average alert rules for VM0.
 
-        Returns list of AlertRule objects for high load thresholds.
+        Returns list of MetricAlertRule objects for high load thresholds.
         Issue #620.
         """
         return [
-            AlertRule(
+            MetricAlertRule(
                 id="vm0_high_load",
                 name="VM0 High Load Average",
                 metric_path="vm0.stats.cpu_load_1m",
@@ -450,15 +450,15 @@ class MonitoringAlertsManager:
             ),
         ]
 
-    def _create_service_alert_rules(self) -> List[AlertRule]:
+    def _create_service_alert_rules(self) -> List[MetricAlertRule]:
         """
         Create service health alert rules.
 
-        Returns list of AlertRule objects for critical service availability monitoring.
+        Returns list of MetricAlertRule objects for critical service availability monitoring.
         Issue #620.
         """
         return [
-            AlertRule(
+            MetricAlertRule(
                 id="backend_api_down",
                 name="Backend API Unavailable",
                 metric_path="vm0.services.core.backend_api.status",
@@ -469,7 +469,7 @@ class MonitoringAlertsManager:
                 description="Backend API is not responding",
                 tags=["service", "api", "critical"],
             ),
-            AlertRule(
+            MetricAlertRule(
                 id="redis_down",
                 name="Redis Database Unavailable",
                 metric_path="vm0.services.database.redis.status",
@@ -480,7 +480,7 @@ class MonitoringAlertsManager:
                 description="Redis database is not accessible",
                 tags=["service", "database", "critical"],
             ),
-            AlertRule(
+            MetricAlertRule(
                 id="ollama_down",
                 name="Ollama LLM Service Down",
                 metric_path="vm0.services.application.ollama.status",
@@ -500,7 +500,7 @@ class MonitoringAlertsManager:
         Aggregates rules from helper methods for CPU, memory, disk, load,
         and service health monitoring. Issue #620.
         """
-        default_rules: List[AlertRule] = []
+        default_rules: List[MetricAlertRule] = []
 
         # Collect rules from categorized helper methods
         default_rules.extend(self._create_cpu_alert_rules())
@@ -515,7 +515,7 @@ class MonitoringAlertsManager:
 
         logger.info(f"Loaded {len(default_rules)} default alert rules")
 
-    def add_alert_rule(self, rule: AlertRule):
+    def add_alert_rule(self, rule: MetricAlertRule):
         """Add or update an alert rule"""
         self.alert_rules[rule.id] = rule
         logger.info(f"Added alert rule: {rule.name} ({rule.id})")
@@ -591,7 +591,7 @@ class MonitoringAlertsManager:
             logger.debug(f"Could not get value for path {path}: {e}")
             return None
 
-    def _should_trigger_alert(self, rule: AlertRule, current_value: float) -> bool:
+    def _should_trigger_alert(self, rule: MetricAlertRule, current_value: float) -> bool:
         """Check if alert should be triggered based on duration"""
         current_time = time.time()
 
@@ -620,7 +620,7 @@ class MonitoringAlertsManager:
 
         return False
 
-    def _should_suppress_alert(self, rule: AlertRule) -> bool:
+    def _should_suppress_alert(self, rule: MetricAlertRule) -> bool:
         """Check if alert should be suppressed due to cooldown"""
         if rule.id in self.active_alerts:
             alert = self.active_alerts[rule.id]
@@ -629,7 +629,7 @@ class MonitoringAlertsManager:
                 return (time.time() - last_alert_time) < rule.cooldown
         return False
 
-    async def _create_alert(self, rule: AlertRule, current_value: float) -> Alert:
+    async def _create_alert(self, rule: MetricAlertRule, current_value: float) -> Alert:
         """Create a new alert"""
         alert = Alert(
             rule_id=rule.id,
@@ -816,7 +816,7 @@ class MonitoringAlertsManager:
         """Get all active alerts"""
         return list(self.active_alerts.values())
 
-    def get_alert_rules(self) -> List[AlertRule]:
+    def get_alert_rules(self) -> List[MetricAlertRule]:
         """Get all alert rules"""
         return list(self.alert_rules.values())
 

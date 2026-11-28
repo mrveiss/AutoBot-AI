@@ -23,7 +23,7 @@
           {{ formatSize(current) }} / {{ formatSize(total) }}
         </span>
         <span v-if="eta" class="progress-eta">
-          {{ t('ui.progressBar.timeRemaining', { time: formatTime(eta) }) }}
+          {{ t('ui.progressBar.timeRemaining', { time: formatEta(eta) }) }}
         </span>
       </slot>
     </div>
@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatFileSize } from '@/utils/formatHelpers'
+import { formatDuration, formatFileSize } from '@/utils/formatHelpers'
 
 interface Props {
   progress: number // 0-100
@@ -95,11 +95,8 @@ const progressStyle = computed(() => {
 // Use shared file size formatting utility
 const formatSize = formatFileSize
 
-const formatTime = (seconds: number): string => {
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ${Math.round(seconds % 60)}s`
-  return `${Math.round(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`
-}
+/** Time remaining, `45s` / `1m 30s` / `2h 5m`: the kit's compound duration (#19905). */
+const formatEta = (seconds: number): string => formatDuration(seconds * 1000, { style: 'msCompound' })
 </script>
 
 <style scoped>

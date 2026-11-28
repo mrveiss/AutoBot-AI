@@ -21,14 +21,14 @@ correct, tested implementation of the pattern.
 """
 
 import asyncio
-import logging
 from typing import Any
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 
 from .base import PollLoopScheduler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Env-var-backed rather than literals (#13085): these two numbers are the whole
 # cost of an abandoned clustering loop — a 300 s initial delay followed by a 6 h

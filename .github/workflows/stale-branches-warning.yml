@@ -9,9 +9,9 @@
 # repository has ever had -- #11703, #13603 and #4324 each closed with no
 # action because there was none to take. A detector with a ~100% false-positive
 # rate trains its readers to ignore the next report, including the one that is
-# right. Ancestry is no better here: this repository squash-merges, so
-# `git branch --merged` and `--is-ancestor` are false for every branch it has
-# ever merged.
+# right. Ancestry is no better here: trains land with merge commits now, but older
+# history holds squashes, so `git branch --merged` and `--is-ancestor` are false for
+# a branch merged that way.
 #
 # So each stale branch is put through `branch_landing_evidence` from
 # scripts/lib/branch-guards.sh, and only `unproven` branches are reported --
@@ -82,10 +82,9 @@ jobs:
           # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
           # git question about it failed, and the branch was classified from
           # those failures rather than skipped.
-          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
             | sed 's|^origin/||' \
-            | grep -vx "HEAD\|release\|master\|main\|Dev_new_gui" || true)
+            | grep -vx "HEAD\|release\|master\|main" || true)
 
           if [ -z "$all_branches" ]; then
             echo "No candidate branches found."

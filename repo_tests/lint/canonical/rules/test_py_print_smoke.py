@@ -2,12 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the py-print-smoke rule (Wave 0 smoke-test rule)."""
 
-import ast
 from pathlib import Path
 
-import pytest
-
-from tools.lint.canonical import rules
+from tools.lint import _parse_cache as parse_cache
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.rules import py_print_smoke
 
@@ -17,7 +14,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "py_print_smoke"
 def _check(name: str) -> list:
     path = FIXTURES / name
     ctx = Context(repo_root=path.parent)
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     return py_print_smoke.check(path, tree, ctx)
 
 

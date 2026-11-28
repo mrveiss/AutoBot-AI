@@ -49,13 +49,13 @@
     - role: postgresql
       tags: ['postgresql']
       vars:
-        # #1038: Backend on .20 connects to PostgreSQL here for user management.
-        # Must listen on all interfaces and allow subnet access.
-        postgresql_listen_addresses: "*"
+        # #1038: fleet backends connect to PostgreSQL here for user management. listen_addresses
+        # comes from the postgresql role's single definition (#19239): loopback plus this host's
+        # fleet address. pg_hba below limits clients to network_subnet.
         pg_hba_remote_access:
           - database: autobot_users
             user: slm_app
-            address: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+            address: "{{ network_subnet }}"
     - role: slm_manager
     - role: monitoring
       tags: ['monitoring']

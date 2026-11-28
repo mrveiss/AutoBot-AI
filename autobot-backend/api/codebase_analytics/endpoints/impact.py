@@ -21,25 +21,34 @@ was derived.
 This is the REST/GUI path. #13475 covers the MCP tool surface over the same
 engine; neither substitutes for the other, and neither should reshape
 ``ImpactResult`` for its own convenience.
+
+Query logic lives in ``code_graph_queries`` (#21327): the MCP ``code.*`` tools call the same
+functions, so the route and the tool cannot diverge.
 """
 
-import asyncio
+from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
+from autobot_shared.code_graph.commit_freshness import COMMIT_PATTERN
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
-from autobot_shared.logging_manager import get_logger
-from services.knowledge.impact_analysis import find_impact
 
-from ..storage import get_code_graph_collection
-
-logger = get_logger(__name__)
+from ..code_graph_queries import query_affected
 
 router = APIRouter()
 
+ExpectedCommitQuery = Annotated[
+    str | None,
+    Query(
+        pattern=COMMIT_PATTERN,
+        description="Commit the caller expects the graph to describe; a mismatch is flagged stale in the answer.",
+    ),
+]
 
-@router.get("/impact")
+
+@router.get("/impact", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -47,83 +56,45 @@ router = APIRouter()
     error_code_prefix="CODEBASE_ANALYTICS",
 )
 async def analyze_impact(
-    node_id: str = Query(..., min_length=1, description="Graph node id to walk back from"),
+    node_id: Annotated[str | None, Query(min_length=1, description="Exact graph node id to walk back from")] = None,
+    symbol: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=500,
+            description="Symbol name (bare, Class.method or node id) instead of node_id; "
+            "an ambiguous name returns its candidates, never a guess",
+        ),
+    ] = None,
     max_depth: int | None = Query(
         None,
         ge=1,
         le=20,
         description="Override the configured hop limit. Omit to use impact_analysis_max_depth.",
     ),
+    expected_commit: ExpectedCommitQuery = None,
 ):
     """Return what transitively calls *node_id*.
+
+    CROSS-SOURCE (#20513): the code-graph collection is not tagged with a code
+    source. ``CodeIndexer`` writes ``source``/``source_path``/``node_name`` and, on
+    edges, a ``source_id`` that is the *caller node's* id, not a registry source;
+    ``POST /api/knowledge_base/index/code`` takes a directory, not a source. So
+    this walk cannot be filtered to one source, and node ids are path-based, so the
+    same id in two sources is one node here. Every response says so
+    (``source_scope``) instead of implying a scoped answer.
 
     A 200 with ``indexed: false`` rather than a 404 when the graph is missing:
     "the code graph has not been built" is a different answer from "that node
     does not exist", and collapsing them would send an operator hunting for a
     typo in their node id.
+
+    *symbol* resolves a name to its node id first (#21327); several matches come back
+    as ``status: ambiguous`` with every candidate and no walk.
+
+    Every answer carries ``indexed_at_commit`` and, when *expected_commit* is
+    given, ``stale`` (#21327).
     """
-    # #17254: the code GRAPH collection, not the inventory one. This endpoint
-    # used to read autobot_code, whose only writer never writes record_type,
-    # so every query returned an empty reach set with indexed: true.
-    collection = await asyncio.to_thread(get_code_graph_collection)
-    if collection is None:
-        return JSONResponse(
-            status_code=200,
-            content={
-                "indexed": False,
-                "node_id": node_id,
-                "message": "The code graph collection is not available — run an index first.",
-            },
-        )
-
-    # #17254: an EMPTY graph is not an empty impact. Reporting indexed: true over
-    # a collection holding no nodes is the exact failure this issue was filed for
-    # -- "nothing calls this" and "nothing has been indexed" are opposite answers
-    # and were indistinguishable. The collection is dedicated to the graph, so a
-    # zero count means the graph has not been built, never that it is empty of
-    # relationships.
-    graph_size = await asyncio.to_thread(collection.count)
-    if not graph_size:
-        return JSONResponse(
-            status_code=200,
-            content={
-                "indexed": False,
-                "node_id": node_id,
-                "message": (
-                    "The code graph collection exists but is empty — run POST "
-                    "/api/knowledge_base/index/code and retry."
-                ),
-            },
-        )
-
-    result = await find_impact(collection, node_id, max_depth=max_depth)
-
-    logger.info(
-        "Impact walk for %s: %d reached, depth %d/%d%s",
-        node_id,
-        len(result.reached),
-        result.depth_reached,
-        result.max_depth,
-        " (capped)" if result.depth_capped else "",
-    )
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            "indexed": True,
-            "root_id": result.root_id,
-            "seed_ids": result.seed_ids,
-            "reached": result.reached,
-            "edges": result.edges,
-            # Coverage, in full. A caller that sees `depth_capped` knows the
-            # answer is a lower bound; `depth_capped_frontier` says where it
-            # stopped so the walk can be resumed or widened deliberately.
-            "depth_capped": result.depth_capped,
-            "depth_capped_frontier": result.depth_capped_frontier,
-            "skipped_edges": result.skipped_edges,
-            "resolved_edge_count": result.resolved_edge_count,
-            "unresolved_edge_count": result.unresolved_edge_count,
-            "max_depth": result.max_depth,
-            "depth_reached": result.depth_reached,
-        },
-    )
+    if (node_id is None) == (symbol is None):
+        raise HTTPException(status_code=422, detail="Give exactly one of node_id or symbol")
+    return JSONResponse(status_code=200, content=await query_affected(node_id, symbol, max_depth, expected_commit))

@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
+from code_intelligence.python_files import discover_files, matches_exclusion
 
 logger = get_logger(__name__)
 
@@ -57,7 +58,34 @@ class Language(Enum):
     YAML = "yaml"
     JSON = "json"
     GO = "go"
+    # Detected for classification only; no analyzer targets these (#18094).
+    JAVA = "java"
+    C = "c"
+    CPP = "cpp"
+    CSHARP = "csharp"
+    RUBY = "ruby"
+    RUST = "rust"
+    PHP = "php"
+    SWIFT = "swift"
+    KOTLIN = "kotlin"
+    SCALA = "scala"
+    POWERSHELL = "powershell"
+    XML = "xml"
+    HTML = "html"
+    CSS = "css"
+    SQL = "sql"
+    MARKDOWN = "markdown"
     UNKNOWN = "unknown"
+
+    @classmethod
+    def _missing_(cls, value):
+        """Accept the shell dialect names ("bash", "sh", "zsh") as SHELL."""
+        if isinstance(value, str) and value.lower() in _SHELL_ALIASES:
+            return cls.SHELL
+        return None
+
+
+_SHELL_ALIASES = frozenset({"bash", "sh", "zsh"})
 
 
 class IssueCategory(Enum):
@@ -139,7 +167,7 @@ class AnalysisIssue:
 
 
 @dataclass
-class AnalysisResult:
+class MultiLangResult:
     """Result of analyzing a file or codebase."""
 
     files_analyzed: int = 0
@@ -213,7 +241,47 @@ EXTENSION_TO_LANGUAGE: Dict[str, Language] = {
     ".yml": Language.YAML,
     ".json": Language.JSON,
     ".go": Language.GO,
+    ".java": Language.JAVA,
+    ".c": Language.C,
+    ".h": Language.C,
+    ".cpp": Language.CPP,
+    ".cs": Language.CSHARP,
+    ".rb": Language.RUBY,
+    ".rs": Language.RUST,
+    ".php": Language.PHP,
+    ".swift": Language.SWIFT,
+    ".kt": Language.KOTLIN,
+    ".scala": Language.SCALA,
+    ".ps1": Language.POWERSHELL,
+    ".xml": Language.XML,
+    ".html": Language.HTML,
+    ".css": Language.CSS,
+    ".sql": Language.SQL,
+    ".md": Language.MARKDOWN,
 }
+
+#: Languages recognised for classification that no analyzer targets; an unanalysed
+#: file in one of them is not an error (it never was, before they were recognised).
+CLASSIFICATION_ONLY_LANGUAGES = frozenset(
+    {
+        Language.JAVA,
+        Language.C,
+        Language.CPP,
+        Language.CSHARP,
+        Language.RUBY,
+        Language.RUST,
+        Language.PHP,
+        Language.SWIFT,
+        Language.KOTLIN,
+        Language.SCALA,
+        Language.POWERSHELL,
+        Language.XML,
+        Language.HTML,
+        Language.CSS,
+        Language.SQL,
+        Language.MARKDOWN,
+    }
+)
 
 
 def detect_language(file_path: Path) -> Language:
@@ -331,9 +399,9 @@ class MultiLanguageAnalyzer:
         language = detect_language(file_path)
         return self._analyzer_by_language.get(language, [])
 
-    def analyze_file(self, file_path: Path) -> AnalysisResult:
+    def analyze_file(self, file_path: Path) -> MultiLangResult:
         """Analyze a single file with all applicable analyzers."""
-        result = AnalysisResult()
+        result = MultiLangResult()
 
         if not file_path.exists():
             result.errors.append(f"File not found: {file_path}")
@@ -342,7 +410,7 @@ class MultiLanguageAnalyzer:
         analyzers = self.get_analyzers_for_file(file_path)
         if not analyzers:
             language = detect_language(file_path)
-            if language != Language.UNKNOWN:
+            if language != Language.UNKNOWN and language not in CLASSIFICATION_ONLY_LANGUAGES:
                 result.errors.append(f"No analyzer registered for language: {language.value}")
             return result
 
@@ -366,29 +434,19 @@ class MultiLanguageAnalyzer:
     ) -> List[Path]:
         """Collect files to analyze after applying exclusion patterns (Issue #665: extracted helper)."""
         # Default exclusions
-        default_excludes = [
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/.venv/**",
-            "**/venv/**",
-            "**/.git/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/*.min.js",
-            "**/*.min.css",
-        ]
+        default_excludes = ["**/*.min.js", "**/*.min.css"]
         all_excludes = set((exclude_patterns or []) + default_excludes)
 
-        pattern = "**/*" if recursive else "*"
+        # Directory exclusion is the shared root-relative rule (#21004).
+        candidates = discover_files(directory, ("*",)) if recursive else sorted(directory.glob("*"))
         files_to_analyze = []
 
-        for file_path in directory.glob(pattern):
+        for file_path in candidates:
             if not file_path.is_file():
                 continue
 
             # Check exclusions
-            excluded = any(file_path.match(exclude) for exclude in all_excludes)
-            if excluded:
+            if matches_exclusion(file_path, all_excludes, directory):
                 continue
 
             # Check if we have an analyzer for this file
@@ -397,7 +455,7 @@ class MultiLanguageAnalyzer:
 
         return files_to_analyze
 
-    def _aggregate_file_results(self, result: "AnalysisResult", file_result: "AnalysisResult") -> None:
+    def _aggregate_file_results(self, result: "MultiLangResult", file_result: "MultiLangResult") -> None:
         """Aggregate file analysis results into overall result (Issue #665: extracted helper)."""
         result.files_analyzed += file_result.files_analyzed
         result.errors.extend(file_result.errors)
@@ -409,7 +467,7 @@ class MultiLanguageAnalyzer:
         directory: Path,
         recursive: bool = True,
         exclude_patterns: List[str] | None = None,
-    ) -> AnalysisResult:
+    ) -> MultiLangResult:
         """Analyze all files in a directory.
 
         Args:
@@ -418,13 +476,13 @@ class MultiLanguageAnalyzer:
             exclude_patterns: Glob patterns to exclude (e.g., ["**/node_modules/**"])
 
         Returns:
-            AnalysisResult with all issues found
+            MultiLangResult with all issues found
         """
         import time
 
         start_time = time.time()
 
-        result = AnalysisResult()
+        result = MultiLangResult()
         files_to_analyze = self._collect_files_to_analyze(directory, recursive, exclude_patterns)
 
         logger.info("Analyzing %d files in %s", len(files_to_analyze), directory)

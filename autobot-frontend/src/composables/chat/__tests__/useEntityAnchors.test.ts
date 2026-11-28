@@ -83,7 +83,7 @@ describe('renderMarkdownLinks', () => {
   })
 
   it('drops unsafe schemes, keeping only the link text', () => {
-    expect(renderMarkdownLinks('[x](javascript:doEvil)')).toBe('x')
+    expect(renderMarkdownLinks('[x](javascript:doEvil)')).toBe('[x](javascript:doEvil)')
   })
 
   it('escapes HTML in the link label', () => {

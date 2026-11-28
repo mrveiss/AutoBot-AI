@@ -14,7 +14,8 @@ import re
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.shared.analysis_base import (
+from autobot_shared.status_enums import Severity
+from code_intelligence.shared.analysis_base import (  # noqa: F401 -- HAS_* re-exported by the package __init__
     HAS_ANALYTICS_INFRASTRUCTURE,
     SIMILARITY_MEDIUM,
     BaseCodeAnalyzer,
@@ -265,8 +266,7 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
 
     def _get_top_issues(self) -> List[Dict[str, Any]]:
         """Get top issues by severity."""
-        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-        sorted_issues = sorted(self.results, key=lambda x: severity_order.get(x.severity.value, 5))
+        sorted_issues = sorted(self.results, key=lambda x: -Severity.rank_of(x.severity.value))
         return [issue.to_dict() for issue in sorted_issues[:5]]
 
     def generate_report(self, format: str = "json") -> str:
@@ -290,8 +290,7 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
         recommendations = []
         seen_types: set = set()
 
-        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(self.results, key=lambda x: severity_order.get(x.severity.value, 4))
+        sorted_findings = sorted(self.results, key=lambda x: -Severity.rank_of(x.severity.value))
 
         for finding in sorted_findings[:10]:
             if finding.issue_type not in seen_types:
@@ -361,7 +360,7 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

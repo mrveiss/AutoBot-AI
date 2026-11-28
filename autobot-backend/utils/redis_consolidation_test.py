@@ -19,10 +19,10 @@ from autobot_shared.redis_client import (
     ConnectionState,
     ManagerStats,
     PoolStatistics,
-    RedisConfig,
     RedisConfigLoader,
     RedisConnectionManager,
     RedisDatabase,
+    RedisDbConfig,
     RedisStats,
     get_redis_client,
 )
@@ -40,8 +40,8 @@ class TestPhase1Configuration:
         assert RedisDatabase.METRICS.value == 4
 
     def test_redis_config_dataclass(self):
-        """Test RedisConfig dataclass creation"""
-        config = RedisConfig(
+        """Test RedisDbConfig dataclass creation"""
+        config = RedisDbConfig(
             name="test",
             db=0,
             host="10.0.0.4",
@@ -278,7 +278,7 @@ def test_module_imports():
     assert hasattr(redis_client, "get_redis_client")
     assert hasattr(redis_client, "RedisConnectionManager")
     assert hasattr(redis_client, "RedisDatabase")
-    assert hasattr(redis_client, "RedisConfig")
+    assert hasattr(redis_client, "RedisDbConfig")
     assert hasattr(redis_client, "RedisStats")
     assert hasattr(redis_client, "PoolStatistics")
     assert hasattr(redis_client, "ManagerStats")

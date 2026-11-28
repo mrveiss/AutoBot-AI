@@ -106,3 +106,18 @@ async def test_get_current_git_commit_argv_is_wellformed():
     ):
         await _orchestrator()._get_current_git_commit("10.0.0.5", "autobot", "/home/autobot/code")  # noqa: ssot-path
     _assert_ssh_argv_wellformed(list(mock_exec.call_args[0]))
+
+
+@pytest.mark.asyncio
+async def test_a_role_with_an_empty_target_path_is_refused_before_any_rsync():
+    """#16025: an empty target_path would rsync into the filesystem root; no sync context is built for it."""
+    node, role = MagicMock(), MagicMock()
+    role.source_paths, role.target_path = ["autobot-backend/"], ""
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: n) for n in (node, role)])
+    session = MagicMock()
+    session.return_value.__aenter__ = AsyncMock(return_value=db)
+    session.return_value.__aexit__ = AsyncMock(return_value=False)
+    with patch.object(_so_mod.db_service, "session", session):
+        ok, message, ctx = await _orchestrator()._get_node_and_role_info("n1", "backend")
+    assert (ok, ctx) == (False, None) and "sync target" in message

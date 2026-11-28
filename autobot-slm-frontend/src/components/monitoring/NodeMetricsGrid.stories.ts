@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 import type { Meta } from '@storybook/vue3'
-import type { NodeMetricsDetailed } from '@/composables/usePrometheusMetrics'
+import type { NodeMetricsDetailed } from '@/composables/useFleetMetrics'
 import NodeMetricsGrid from './NodeMetricsGrid.vue'
 
 const sampleNodes: NodeMetricsDetailed[] = [

@@ -13,6 +13,7 @@ import-isolation contract that motivated the extraction.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 from unittest.mock import patch
 
@@ -191,6 +192,29 @@ async def test_resolve_safe_ip_no_usable_ip() -> None:
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         with pytest.raises(ValueError, match="non-public"):
             await resolve_safe_ip_async("all-private.example")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_enforces_its_timeout() -> None:
+    """A lookup that never answers is a ValueError after ``timeout``, not a hang (#18731)."""
+
+    async def hung(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    with patch.object(asyncio.get_running_loop(), "getaddrinfo", hung):
+        with pytest.raises(ValueError, match="DNS resolution timeout"):
+            await resolve_safe_ip_async("slow.example", timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_answers_within_its_timeout() -> None:
+    """A lookup that answers inside ``timeout`` is not cut short."""
+
+    async def prompt(*_args, **_kwargs):
+        return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+    with patch.object(asyncio.get_running_loop(), "getaddrinfo", prompt):
+        assert await resolve_safe_ip_async("example.com", timeout=0.05) == "93.184.216.34"
 
 
 # ---------------------------------------------------------------------------
@@ -451,3 +475,47 @@ async def test_resolve_safe_ip_raises_when_every_sockaddr_is_non_string() -> Non
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         with pytest.raises(ValueError, match="no usable public IP"):
             await resolve_safe_ip_async("nothing-usable.example")
+
+
+@pytest.mark.parametrize(
+    "address,expected",
+    [
+        ("127.0.0.1", "loopback"),
+        ("::1", "loopback"),
+        ("::ffff:127.0.0.1", "loopback"),
+        ("10.1.2.3", "private"),
+        ("192.168.0.5", "private"),
+        ("100.64.0.9", "private"),
+        ("fe80::1", "private"),
+        ("fd00::1", "private"),
+        ("8.8.8.8", "public"),
+        ("0.0.0.0", "public"),
+        ("224.0.0.1", "public"),
+    ],
+)
+def test_ip_locality_classes(address: str, expected: str) -> None:
+    assert url_safety.ip_locality(ipaddress.ip_address(address)) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url,infos,expected",
+    [
+        ("http://[fe80::1%25eth0]:11434", None, "private"),
+        ("http://10.0.0.5:1", None, "private"),
+        ("http://name.example:1", [(2, 1, 6, "", ("10.0.0.5", 0))], "private"),
+        ("http://name.example:1", [(2, 1, 6, "", ("127.0.0.1", 0))], "loopback"),
+        ("http://name.example:1", [(2, 1, 6, "", ("10.0.0.5", 0)), (2, 1, 6, "", ("8.8.8.8", 0))], "public"),
+        ("http://name.example:1", [], "public"),
+        ("", None, "public"),
+    ],
+)
+async def test_url_locality_resolves_every_address_and_fails_closed(url: str, infos, expected: str) -> None:
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=infos or []):
+        assert await url_safety.url_locality_async(url) == expected
+
+
+@pytest.mark.asyncio
+async def test_url_locality_of_an_unresolvable_name_is_public() -> None:
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=OSError("no such host")):
+        assert await url_safety.url_locality_async("http://nowhere.example:1") == "public"

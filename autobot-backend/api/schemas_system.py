@@ -15,11 +15,13 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
+from api.schemas_desktop_host import DesktopHostRequest
 from api.schemas_secrets import StorableSecretType
 from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
+from services.secret_names import reserved_or_validated
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -35,7 +37,7 @@ class SystemFrontendConfigResponse(BaseModel):
     timestamp: str
 
 
-class SystemHealthResponse(BaseModel):
+class ProbeHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
@@ -125,7 +127,7 @@ class SystemMetricsResponse(BaseModel):
 
 
 class SystemCacheCoordinatorStatsResponse(BaseModel):
-    """Response for GET /api/cache/stats.
+    """Response for GET /api/system/cache/coordinator/stats.
 
     Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
     """
@@ -134,7 +136,7 @@ class SystemCacheCoordinatorStatsResponse(BaseModel):
 
 
 class SystemCacheEvictResponse(BaseModel):
-    """Response for POST /api/cache/evict."""
+    """Response for POST /api/system/cache/evict."""
 
     status: str
     evicted: int
@@ -142,7 +144,7 @@ class SystemCacheEvictResponse(BaseModel):
 
 
 class SystemCacheClearResponse(BaseModel):
-    """Response for POST /api/cache/clear/{cache_name}."""
+    """Response for POST /api/system/cache/clear/{cache_name}."""
 
     status: str
     cache: str
@@ -343,32 +345,6 @@ class SecretsStatusResponse(BaseModel):
     encryption_enabled: bool | None = None
     error: str | None = None
     timestamp: str
-
-
-# ---------------------------------------------------------------------------
-# log_forwarding.py schemas  (Issue #5912)
-# ---------------------------------------------------------------------------
-
-
-class LogForwardingDestinationItem(BaseModel):
-    """Single destination entry in list/detail responses.
-
-    Shape from dest.config.to_dict_sanitized() + extra health fields.
-    Extra fields allowed to handle dynamic config dict.
-    """
-
-    model_config = {"extra": "allow"}
-
-    healthy: bool
-    last_error: str | None = None
-    sent_count: int
-    failed_count: int
-
-
-class LogForwardingDestinationsListResponse(BaseModel):
-    """Response for GET /log-forwarding/destinations — returns a list directly."""
-
-    model_config = {"extra": "allow"}
 
 
 # ---------------------------------------------------------------------------
@@ -1218,39 +1194,33 @@ class SessionScreenshotSaveResponse(BaseModel):
     screenshot_path: str | None = None
 
 
-class MouseClickRequest(BaseModel):
-    x: int = Field(..., ge=0, description="X coordinate")
-    y: int = Field(..., ge=0, description="Y coordinate")
+class MouseClickRequest(DesktopHostRequest):
+    x: int = Field(..., ge=0, le=65535, description="X coordinate")
+    y: int = Field(..., ge=0, le=65535, description="Y coordinate")
     button: str = Field(default="left", description="Mouse button: left, middle, right")
-    # Issue #12002 (#11506 T1): gates agent actuation against the desktop control-lock.
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class KeyboardTypeRequest(BaseModel):
+class KeyboardTypeRequest(DesktopHostRequest):
     text: str = Field(..., description="Text to type")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class SpecialKeyRequest(BaseModel):
+class SpecialKeyRequest(DesktopHostRequest):
     key: str = Field(..., description="Special key name (e.g., Return, Escape, ctrl+c)")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class MouseScrollRequest(BaseModel):
+class MouseScrollRequest(DesktopHostRequest):
     direction: str = Field(..., description="Scroll direction: up or down")
     amount: int = Field(default=3, ge=1, le=10, description="Scroll amount (1-10)")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class MouseDragRequest(BaseModel):
-    x1: int = Field(..., ge=0, description="Start X coordinate")
-    y1: int = Field(..., ge=0, description="Start Y coordinate")
-    x2: int = Field(..., ge=0, description="End X coordinate")
-    y2: int = Field(..., ge=0, description="End Y coordinate")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+class MouseDragRequest(DesktopHostRequest):
+    x1: int = Field(..., ge=0, le=65535, description="Start X coordinate")
+    y1: int = Field(..., ge=0, le=65535, description="Start Y coordinate")
+    x2: int = Field(..., ge=0, le=65535, description="End X coordinate")
+    y2: int = Field(..., ge=0, le=65535, description="End Y coordinate")
 
 
-class ClipboardSyncRequest(BaseModel):
+class ClipboardSyncRequest(DesktopHostRequest):
     content: str = Field(..., description="Text content to copy to clipboard")
 
 
@@ -1766,7 +1736,7 @@ class InvalidateCacheResponse(BaseModel):
     deleted_count: int
 
 
-class ClearAllResponse(BaseModel):
+class CacheClearAllResponse(BaseModel):
     success: bool
     message: str
     total_deleted: int
@@ -2206,149 +2176,6 @@ class HardwarePriorityResponse(BaseModel):
     changed: dict
 
 
-# ---------------------------------------------------------------------------
-# log_forwarding.py remaining schemas (#6042)
-# ---------------------------------------------------------------------------
-
-
-class LogFwdDestinationCreate(BaseModel):
-    name: str = Field(..., description="Unique name for the destination")
-    type: str = Field(
-        ...,
-        description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
-    )
-    enabled: bool = Field(True, description="Whether the destination is enabled")
-    url: str | None = Field(None, description="URL/host for the destination")
-    api_key: str | None = Field(None, description="API key for authentication")
-    username: str | None = Field(None, description="Username for authentication")
-    password: str | None = Field(None, description="Password for authentication")
-    index: str | None = Field("autobot-logs", description="Index name (Elasticsearch)")
-    file_path: str | None = Field(None, description="File path (file destination)")
-    min_level: str = Field("Information", description="Minimum log level to forward")
-    batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
-    retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(1.0, ge=0.1, le=30.0, description="Delay between retries")
-    scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
-    syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
-    ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
-    ssl_ca_cert: str | None = Field(None, description="Path to CA certificate")
-    ssl_client_cert: str | None = Field(None, description="Path to client certificate")
-    ssl_client_key: str | None = Field(None, description="Path to client key")
-
-
-class LogFwdDestinationUpdate(BaseModel):
-    enabled: bool | None = None
-    url: str | None = None
-    api_key: str | None = None
-    username: str | None = None
-    password: str | None = None
-    index: str | None = None
-    file_path: str | None = None
-    min_level: str | None = None
-    batch_size: int | None = None
-    batch_timeout: float | None = None
-    retry_count: int | None = None
-    retry_delay: float | None = None
-    scope: str | None = None
-    target_hosts: List[str] | None = None
-    syslog_protocol: str | None = None
-    ssl_verify: bool | None = None
-    ssl_ca_cert: str | None = None
-    ssl_client_cert: str | None = None
-    ssl_client_key: str | None = None
-
-
-class LogFwdDestinationResponse(BaseModel):
-    name: str
-    type: str
-    enabled: bool
-    url: str | None
-    index: str | None
-    file_path: str | None
-    min_level: str
-    batch_size: int
-    batch_timeout: float
-    scope: str
-    target_hosts: List[str]
-    syslog_protocol: str
-    ssl_verify: bool
-    healthy: bool
-    last_error: str | None
-    sent_count: int
-    failed_count: int
-
-
-class LogFwdMessageResponse(BaseModel):
-    message: str
-
-
-class LogFwdCreateUpdateResponse(BaseModel):
-    message: str
-    destination: Dict[str, Any]
-
-
-class LogFwdTestResponse(BaseModel):
-    name: str
-    healthy: bool
-    last_error: str | None = None
-    message: str
-
-
-class LogFwdTestAllResponse(BaseModel):
-    results: Dict[str, Any]
-    total: int
-    healthy: int
-    unhealthy: int
-
-
-class LogFwdDestinationStatusItem(BaseModel):
-    name: str
-    type: str
-    enabled: bool
-    healthy: bool
-    last_error: str | None = None
-    sent_count: int
-    failed_count: int
-    scope: str
-
-
-class LogFwdStatusResponse(BaseModel):
-    running: bool
-    hostname: str
-    queue_size: int
-    destinations: List[LogFwdDestinationStatusItem]
-    total_destinations: int
-    enabled_destinations: int
-    healthy_destinations: int
-    total_sent: int
-    total_failed: int
-
-
-class LogFwdDestinationTypesResponse(BaseModel):
-    types: List[Any]
-    scopes: List[Any]
-    log_levels: List[str]
-    syslog_protocols: List[Any]
-
-
-class LogFwdKnownHostItem(BaseModel):
-    hostname: str
-    ip: str | None = None
-    description: str
-
-
-class LogFwdKnownHostsResponse(BaseModel):
-    hosts: List[LogFwdKnownHostItem]
-    current_hostname: str
-
-
-class LogFwdAutoStartResponse(BaseModel):
-    auto_start: bool
-    message: str
-
-
 # security_assessment.py schemas (#6042)
 
 
@@ -2547,64 +2374,6 @@ class TerminalHostSelectionResponse(BaseModel):
     selected_host_id: str | None = Field(None, description="Selected host ID")
     selected_host_name: str | None = Field(None, description="Selected host name")
     connection_info: Dict | None = Field(None, description="Connection details (host, port, username)")
-
-
-class HeartbeatConfigRequest(BaseModel):
-    """Request body to configure heartbeat for an agent."""
-
-    heartbeat_enabled: bool = False
-    heartbeat_interval_seconds: int = Field(default=300, ge=10)
-    max_run_duration_seconds: int = Field(default=600, ge=10)
-
-
-class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state (GH#6476)."""
-
-    agent_id: str
-    heartbeat_enabled: bool
-    status: str
-    paused_reason: str | None = None
-    paused_at: str | None = None
-    paused_by: str | None = None
-    error_detail: str | None = None
-    error_at: str | None = None
-    error_code: str | None = None
-    heartbeat_interval_seconds: int
-    max_run_duration_seconds: int
-    current_task_id: str | None
-    last_heartbeat_at: str | None
-    session_params: Dict[str, Any] | None
-    extra: Dict[str, Any] | None
-    created_at: str | None
-    updated_at: str | None
-
-
-class AgentPauseRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/pause (GH#6476)."""
-
-    reason: str | None = None
-    paused_by: str | None = None
-
-
-class AgentResumeRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/resume (GH#6476)."""
-
-
-class AgentTerminateRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/terminate (GH#6476)."""
-
-    reason: str | None = None
-
-
-class AgentErrorRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/error (MVA-1411)."""
-
-    error_detail: str | None = None
-    error_code: str | None = None
-
-
-class AgentRecoverRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/recover (MVA-1411)."""
 
 
 class WakeupRequestCreate(BaseModel):
@@ -3075,16 +2844,6 @@ class AuditQueryRequest(BaseModel):
     offset: int = Field(0, ge=0, description="Pagination offset")
 
 
-class AuditQueryResponse(BaseModel):
-    """Audit log query response."""
-
-    success: bool
-    total_returned: int
-    has_more: bool
-    entries: List[dict]
-    query: dict
-
-
 class AuditStatisticsResponse(BaseModel):
     """Audit statistics response."""
 
@@ -3519,6 +3278,18 @@ class SecretModel(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
     expires_at: datetime | None = None
     metadata: Metadata = Field(default_factory=dict)
+    # #13051: SecretCreateRequest has accepted these four since #685 and the
+    # response could not express any of them, so a caller set ownership and got
+    # a body back that looked as if they had not. They are *descriptive* --
+    # self-asserted by the request body, never resolved from the authenticated
+    # principal -- so nothing may authorize on them while that is true; the
+    # legacy store gates on `scope`/`chat_id` alone (api/secrets.py
+    # get_secret/list_secrets) and `secrets_ownership_fields_13051_test.py`
+    # fails if that changes. Real enforcement is #16450 / umbrella #10088.
+    owner_id: str | None = None
+    org_id: str | None = None
+    team_ids: List[str] = Field(default_factory=list)
+    shared_with: List[str] = Field(default_factory=list)
 
 
 class SecretCreateRequest(BaseModel):
@@ -3537,12 +3308,8 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
-    # #17099: the UI has offered "System" here since #685, but this field never
-    # existed -- Pydantic silently dropped it (no extra="forbid"), so every
-    # choice, System included, went through the legacy per-user file store
-    # unrouted. Only "system" gets special handling in create_secret(); every
-    # other value's current (unrouted) behaviour is unchanged by this field's
-    # mere existence.
+    # #17099: Pydantic used to drop this field silently, so "System" landed in the
+    # legacy file store. Only "system" is routed (to the vault) by create_secret().
     visibility: Literal["private", "shared", "group", "organization", "system"] | None = Field(
         None, description="A typo here must 422, not silently fall through to the legacy store (#16428 review)"
     )
@@ -3564,7 +3331,7 @@ class SecretCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        return _validate_secret_name(v)
+        return reserved_or_validated(v, _validate_secret_name)
 
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
@@ -3591,6 +3358,10 @@ class SecretCreateRequest(BaseModel):
             tags=self.tags,
             expires_at=self.expires_at,
             metadata=self.metadata,
+            owner_id=self.owner_id,
+            org_id=self.org_id,
+            team_ids=self.team_ids,
+            shared_with=self.shared_with,
         )
 
     def is_chat_scoped(self) -> bool:
@@ -3611,6 +3382,9 @@ class SecretUpdateRequest(BaseModel):
     tags: List[str] | None = None
     expires_at: datetime | None = None
     metadata: Metadata | None = None
+    # #17731: the new value for a SYSTEM-vault secret (rotated through the
+    # envelope coordinator); #20557: for a legacy secret it re-encrypts the stored value.
+    value: str | None = Field(None, min_length=1, max_length=65536)
     # #16428: rotates a connector-bridged secret's credential in
     # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy
     # secrets have never supported value rotation via this endpoint.
@@ -3619,9 +3393,7 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        if v is not None:
-            return _validate_secret_name(v)
-        return v
+        return v if v is None else reserved_or_validated(v, _validate_secret_name)
 
 
 class SecretTransferRequest(BaseModel):
@@ -3637,7 +3409,7 @@ class SecretTransferRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class VNCOCRRequest(BaseModel):
+class VNCOCRRequest(DesktopHostRequest):
     """OCR text recognition request (VNC desktop)."""
 
     region: Dict[str, int] = Field(
@@ -3646,14 +3418,14 @@ class VNCOCRRequest(BaseModel):
     )
 
 
-class FindImageRequest(BaseModel):
+class FindImageRequest(DesktopHostRequest):
     """Find image on screen request."""
 
     template_data: str = Field(..., description="Base64-encoded template image (PNG)")
     threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Match confidence threshold (0-1)")
 
 
-class WaitForTextRequest(BaseModel):
+class WaitForTextRequest(DesktopHostRequest):
     """Wait for text to appear request."""
 
     text: str = Field(..., description="Text to wait for")
@@ -3661,7 +3433,7 @@ class WaitForTextRequest(BaseModel):
     region: Dict[str, int] = Field(default_factory=dict, description="Optional region to search")
 
 
-class WaitForImageRequest(BaseModel):
+class WaitForImageRequest(DesktopHostRequest):
     """Wait for image to appear request."""
 
     template_data: str = Field(..., description="Base64-encoded template image")
@@ -3772,10 +3544,8 @@ class GPUConfigUpdateRequest(BaseModel):
 # startup.py schemas
 # ---------------------------------------------------------------------------
 
-from enum import Enum as _StartupEnum
 
-
-class StartupPhase(str, _StartupEnum):
+class StartupPhase(str, Enum):
     """Lifecycle phase the backend reports during boot."""
 
     INITIALIZING = "initializing"
@@ -3815,13 +3585,13 @@ class VncProxyStatusResponse(BaseModel):
 class DesktopControlAcquireRequest(BaseModel):
     """Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002)."""
 
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+    session_id: str = Field(..., min_length=1, description="Selected /secrets host id (the control-lock key)")
 
 
 class DesktopControlReleaseRequest(BaseModel):
     """Request for POST /vnc-proxy/{vnc_type}/control/release (#12002)."""
 
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+    session_id: str = Field(..., min_length=1, description="Selected /secrets host id (the control-lock key)")
 
 
 class DesktopControlLockResponse(BaseModel):
@@ -4228,21 +3998,6 @@ class TelegramWebhookUpdate(BaseModel):
     channel_post: Optional[Dict[str, Any]] = None
     edited_channel_post: Optional[Dict[str, Any]] = None
     callback_query: Optional[Dict[str, Any]] = None
-
-
-class TelegramBotConfigRequest(BaseModel):
-    """Request to configure Telegram bot."""
-
-    bot_token: str = Field(..., description="Telegram Bot API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
-
-
-class TelegramBotConfigResponse(BaseModel):
-    """Response for Telegram bot configuration."""
-
-    status: str
-    message: str
-    webhook_url: Optional[str] = None
 
 
 class WhatsAppConfigRequest(BaseModel):

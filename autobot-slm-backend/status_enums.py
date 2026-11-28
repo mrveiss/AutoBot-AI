@@ -46,6 +46,13 @@ class NodeStatus(str, enum.Enum):
     DECOMMISSIONED = "decommissioned"
 
 
+#: Statuses that CAN mean "not fully enrolled" (#21036, owner ruling 2026-11-10): pending (incl. enrolling) always
+#: does; ``degraded`` only when no enrollment completed (``node_events.unenrolled_state`` is the one predicate).
+#: Failed enrollment is event evidence, not a NodeStatus, so only pending/enrolling/degraded are listed here.
+#: Other sets (``_NON_OPERATIONAL_STATUSES``, ``_NODE_NOT_COUNTED_STATUSES``) answer different questions.
+NOT_FULLY_ENROLLED_STATUSES = frozenset({NodeStatus.PENDING, NodeStatus.ENROLLING, NodeStatus.DEGRADED})
+
+
 class DeploymentStatus(str, enum.Enum):
     """Deployment status enumeration."""
 
@@ -108,6 +115,8 @@ class BackupServiceType(str, enum.Enum):
 
     REDIS = "redis"
     POSTGRES = "postgres"
+    #: Ciphertext-only snapshot of the backend's secrets store (#18281).
+    SECRETS = "secrets"  # pragma: allowlist secret
 
     @classmethod
     def _missing_(cls, value: object) -> "BackupServiceType | None":
@@ -131,6 +140,21 @@ class BackupServiceType(str, enum.Enum):
             if member.value == normalized:
                 return member
         return None
+
+    @classmethod
+    def is_restorable(cls, value: str) -> bool:
+        """Whether the SLM's restore action can restore a stored ``service_type`` (#19455).
+
+        The restore path stops Redis and replaces its ``dump.rdb``, so only a Redis
+        backup may enter it. Restoring a PostgreSQL dump or a secrets snapshot that
+        way destroyed the Redis data and restored nothing. Those are operator
+        restores (docs/operations/disaster-recovery.md). An unknown stored value is
+        not restorable.
+        """
+        try:
+            return cls(value) is cls.REDIS
+        except ValueError:
+            return False
 
 
 # Wire spellings that are not member values. Kept next to the enum so the set of

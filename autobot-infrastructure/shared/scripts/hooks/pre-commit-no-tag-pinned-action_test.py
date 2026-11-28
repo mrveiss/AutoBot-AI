@@ -17,7 +17,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
 
@@ -25,13 +25,13 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
 def _test_git_env() -> dict[str, str]:
     """#15246: env for every git subprocess this suite spawns.
 
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    Isolated (#18940) rather than os.environ: the pre-push hook runs this suite with
     GIT_DIR pointing at the worktree it is pushing (every checkout here is
     one), and an unscrubbed `git init`/`git add`/`git commit` in a
     fixture then operates on THAT repository instead of tmp_path's. See
     autobot_shared/paths_test.py and #15246 for the reproduced incident.
     """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    return isolated_git_env()
 
 
 def _run(tmp_path: Path, content: str, rel: str = ".github/workflows/test.yml") -> subprocess.CompletedProcess:
@@ -161,7 +161,7 @@ def test_no_staged_files_in_a_real_repo_exits_cleanly(tmp_path):
     that is not "no files staged", it is git itself failing to answer the
     question — now covered by TestFailsClosedWhenGitCannotAnswer below
     (GH#14151)."""
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=_test_git_env())
+    make_repo(tmp_path)
     result = subprocess.run([str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -191,13 +191,11 @@ def test_actions_path_rejects_third_party_tag(tmp_path):
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
+    return git(repo, *args)
 
 
 def _init_repo(tmp_path):
-    _git(tmp_path, "init", "--quiet")
-    _git(tmp_path, "config", "user.email", "t@t")
-    _git(tmp_path, "config", "user.name", "t")
+    make_repo(tmp_path)
     return tmp_path
 
 

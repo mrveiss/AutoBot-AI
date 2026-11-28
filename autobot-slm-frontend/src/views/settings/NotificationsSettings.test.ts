@@ -25,6 +25,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import { BaseAlert } from '@autobot/ui'
 import NotificationsSettings from './NotificationsSettings.vue'
 import { useAuthStore } from '@/stores/auth'
 import en from '@/locales/en.json'
@@ -93,8 +94,9 @@ describe('NotificationsSettings', () => {
     await flushPromises()
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/settings')
-    const boxes = wrapper.findAll('input[type="checkbox"]')
-    expect((boxes[0].element as HTMLInputElement).checked).toBe(false)
+    // The kit BaseSwitch: state in aria-checked (#14780).
+    const switches = wrapper.findAll('[role="switch"]')
+    expect(switches[0].attributes('aria-checked')).toBe('false')
     const email = wrapper.find('input[type="email"]').element as HTMLInputElement
     expect(email.value).toBe('ops@example.test')
     // Rendering that field also compiles its placeholder message. `en.json`
@@ -134,8 +136,8 @@ describe('NotificationsSettings', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    expect(wrapper.find('.bg-red-50').exists()).toBe(true)
-    expect(wrapper.find('.bg-red-50').text()).toContain('401')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toContain('401')
     // …and the dead session is cleared rather than left in place.
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(USER_KEY)).toBeNull()
@@ -149,7 +151,7 @@ describe('NotificationsSettings', () => {
     await flushPromises()
     fetchMock.mockClear()
 
-    await wrapper.find('button').trigger('click')
+    await wrapper.find('button:not([role="switch"])').trigger('click') // Save; the switches are buttons too
     await flushPromises()
 
     const writes = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit).method === 'PUT')
@@ -159,7 +161,9 @@ describe('NotificationsSettings', () => {
     expect(urls).toContain('/api/settings/email_address')
     const body = JSON.parse((writes[0][1] as RequestInit).body as string)
     expect(body).toEqual({ value: 'true' })
-    expect(wrapper.find('.bg-green-50').exists()).toBe(true)
+    const success = wrapper.findAllComponents(BaseAlert).filter((a) => a.props('variant') === 'success')
+    expect(success).toHaveLength(1)
+    expect(success[0].text()).toContain(en.settings.notificationsSettings.settingsSaved)
   })
 
   it('reports a rejected write instead of claiming the save succeeded', async () => {
@@ -170,10 +174,10 @@ describe('NotificationsSettings', () => {
     await flushPromises()
 
     fetchMock.mockImplementation(async () => jsonResponse({ detail: 'read only' }, 403))
-    await wrapper.find('button').trigger('click')
+    await wrapper.find('button:not([role="switch"])').trigger('click') // Save; the switches are buttons too
     await flushPromises()
 
-    expect(wrapper.find('.bg-green-50').exists()).toBe(false)
-    expect(wrapper.find('.bg-red-50').text()).toContain('Failed to save setting(s)')
+    expect(wrapper.findAllComponents(BaseAlert).some((a) => a.props('variant') === 'success')).toBe(false)
+    expect(wrapper.find('[role="alert"]').text()).toContain('Failed to save setting(s)')
   })
 })

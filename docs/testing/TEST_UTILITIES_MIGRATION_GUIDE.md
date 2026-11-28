@@ -130,7 +130,7 @@ message = TestDataFactory.websocket_message(
 class TestChatAgent:
     def setup_method(self):
         # Mock config - DUPLICATE
-        with patch("src.agents.chat_agent.global_config_manager") as mock:
+        with patch("src.agents.chat_agent.config_manager") as mock:
             mock.get.return_value = {"model": "test-model"}
             self.agent = ChatAgent()
 

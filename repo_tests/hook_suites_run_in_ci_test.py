@@ -41,6 +41,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 _HOOKS_REL = "autobot-infrastructure/shared/scripts/hooks"
 _HOOKS_DIR = _REPO_ROOT / _HOOKS_REL
@@ -51,9 +53,7 @@ _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 # 27 bare `pytest`, 19 `python -m pytest`, 1 `python3 -m pytest`. Matching only
 # the middle spelling is how the first version of this guard missed
 # marker-tests.yml — a guard narrower than its own subject reads as coverage.
-_PYTEST_CALL = re.compile(
-    r"(?:python[0-9.]*\s+-m\s+pytest|(?<![-\w/])pytest)((?:[^\n]*\\\n)*[^\n]*)"
-)
+_PYTEST_CALL = re.compile(r"(?:python[0-9.]*\s+-m\s+pytest|(?<![-\w/])pytest)((?:[^\n]*\\\n)*[^\n]*)")
 
 # Tests that must survive to the end of the collection, named individually.
 # #14884's two suites, so a sweep that reaches the directory but drops these
@@ -78,11 +78,7 @@ def _yaml_sources() -> list[Path]:
     """
     roots = (_WORKFLOWS, _REPO_ROOT / ".github" / "actions")
     return sorted(
-        path
-        for root in roots
-        if root.is_dir()
-        for pattern in ("*.yml", "*.yaml")
-        for path in root.rglob(pattern)
+        path for root in roots if root.is_dir() for pattern in ("*.yml", "*.yaml") for path in root.rglob(pattern)
     )
 
 
@@ -180,17 +176,11 @@ def test_pytest_testpaths_lists_the_hook_suites() -> None:
     """
     parser = configparser.ConfigParser(inline_comment_prefixes=("#",))
     parser.read(_REPO_ROOT / "pytest.ini", encoding="utf-8")
-    assert parser.has_option("pytest", "testpaths"), (
-        "pytest.ini no longer declares testpaths"
-    )
+    assert parser.has_option("pytest", "testpaths"), "pytest.ini no longer declares testpaths"
     # Parsed, not split on the first occurrence of the word: `testpaths` also
     # appears inside the #13084 comment above the option, and a naive split
     # picks that up and reads prose as configuration.
-    entries = [
-        line.strip()
-        for line in parser.get("pytest", "testpaths").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
+    entries = [cl.text.strip() for cl in code_lines(parser.get("pytest", "testpaths")) if cl.text.strip()]
     assert len(entries) >= 9, f"only {len(entries)} testpaths entries — the list shrank"
     assert _HOOKS_REL in entries, (
         f"{_HOOKS_REL} is not in pytest.ini's testpaths, so the 18 hook suites "
@@ -234,8 +224,7 @@ def test_every_ci_pytest_invocation_that_runs_repo_tests_also_runs_the_hooks() -
         "exemption — resolve it or name the expression literally"
     )
     selecting = [
-        (wf, argv) for wf, argv, text in carriers
-        if _selects_unmarked_tests(_marker_expression(argv, text) or "")
+        (wf, argv) for wf, argv, text in carriers if _selects_unmarked_tests(_marker_expression(argv, text) or "")
     ]
     marker_only = [wf for wf, argv, text in carriers if (wf, argv) not in selecting]
     assert len(selecting) >= 3, (
@@ -243,8 +232,7 @@ def test_every_ci_pytest_invocation_that_runs_repo_tests_also_runs_the_hooks() -
         "ci.yml, coverage.yml and test-durations.yml"
     )
     assert marker_only, (
-        "no carrier is marker-only, so the branch that exempts one is untested — "
-        "marker-tests.yml should be here"
+        "no carrier is marker-only, so the branch that exempts one is untested — " "marker-tests.yml should be here"
     )
 
     # The exemption is EARNED, not asserted: it holds only while no hook test
@@ -256,11 +244,7 @@ def test_every_ci_pytest_invocation_that_runs_repo_tests_also_runs_the_hooks() -
         f"suites after all: {marked}"
     )
 
-    offenders = sorted(
-        f"{wf}: {' '.join(argv[:8])}…"
-        for wf, argv in selecting
-        if _HOOKS_REL not in argv
-    )
+    offenders = sorted(f"{wf}: {' '.join(argv[:8])}…" for wf, argv in selecting if _HOOKS_REL not in argv)
     assert not offenders, (
         "these CI invocations run repo_tests but not the hook suites, so the "
         f"18 suites under {_HOOKS_REL} are collected by nothing in CI and a "
@@ -294,8 +278,7 @@ def test_pytest_really_collects_them_under_this_repos_config() -> None:
     )
     for name in _REQUIRED_MODULES:
         assert name in result.stdout, (
-            f"{name} was not collected, so the property #14884 exists to restore "
-            "is still verified by nothing"
+            f"{name} was not collected, so the property #14884 exists to restore " "is still verified by nothing"
         )
 
 
@@ -333,11 +316,7 @@ def test_every_ci_invocation_carrying_repo_tests_names_the_same_roots() -> None:
     the point: a fifth invocation added later is checked on arrival, and no
     entry here goes stale when a tree is renamed.
     """
-    carriers = [
-        (workflow, _root_paths(argv))
-        for workflow, argv, _ in _pytest_invocations()
-        if "repo_tests" in argv
-    ]
+    carriers = [(workflow, _root_paths(argv)) for workflow, argv, _ in _pytest_invocations() if "repo_tests" in argv]
     assert len(carriers) >= 4, (
         f"only {len(carriers)} invocations name repo_tests as a path — expected at "
         "least 4 (ci, coverage, test-durations, marker-tests); either one was "

@@ -1,85 +1,119 @@
 <template>
-  <div class="chat-header bg-autobot-bg-card border-b border-autobot-border px-3 sm:px-6 py-3 sm:py-4">
-    <div class="flex items-center justify-between gap-2">
-      <!-- Left: Mobile sidebar toggle + session info -->
-      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-        <!-- Mobile hamburger to open chat sidebar (#1804) -->
-        <button
-          class="header-btn lg:hidden shrink-0"
-          :title="$t('chat.sidebar.expandSidebar')"
-          :aria-label="$t('chat.sidebar.expandSidebar')"
+  <PageHeader class="shrink-0" size="xl">
+    <!-- Left: Mobile sidebar toggle + session avatar -->
+    <template #leading>
+      <!-- Mobile hamburger to open chat sidebar (#1804) -->
+      <!-- The responsive class sits on an unstyled wrapper: BaseTooltip's scoped display:inline-flex would override lg:hidden on its root. -->
+      <div class="lg:hidden shrink-0" data-testid="mobile-sidebar-toggle">
+        <ChatHeaderIconButton
+          :label="$t('chat.sidebar.expandSidebar')"
+          icon="bars"
           @click="$emit('toggle-mobile-sidebar')"
-        >
-          <Icon name="bars" />
-        </button>
-
-        <div class="w-7 h-7 sm:w-8 sm:h-8 bg-electric-600 rounded-full flex items-center justify-center shrink-0">
-          <Icon name="robot" class="text-white text-xs sm:text-sm" />
-        </div>
-        <div class="min-w-0">
-          <h1 class="text-sm sm:text-lg font-semibold text-autobot-text-primary truncate">
-            {{ currentSessionTitle }}
-          </h1>
-          <p class="text-xs sm:text-sm text-autobot-text-muted truncate hidden sm:block">
-            {{ sessionInfo }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Right: Actions + connection status -->
-      <div class="flex items-center gap-1 sm:gap-2 shrink-0">
-        <!-- GH#8990: context window usage indicator (hidden on mobile to save space) -->
-        <ContextWindowIndicator
-          v-if="contextWindowProps?.hasData"
-          class="hidden sm:flex"
-          v-bind="contextWindowProps"
         />
-
-        <!-- Custom Actions Slot -->
-        <slot name="actions"></slot>
-
-        <!-- Session Actions -->
-        <button
-          v-if="currentSessionId"
-          @click="$emit('open-settings')"
-          class="header-btn"
-          :title="$t('chat.openSettings')"
-        >
-          <Icon name="cog" />
-        </button>
-
-        <button
-          v-if="currentSessionId"
-          @click="$emit('export-session')"
-          class="header-btn"
-          :title="$t('chat.exportChat')"
-        >
-          <Icon name="download" />
-        </button>
-
-        <button
-          v-if="currentSessionId"
-          @click="$emit('clear-session')"
-          class="header-btn"
-          :title="$t('chat.clearChat')"
-        >
-          <Icon name="trash" />
-        </button>
-
-        <!-- Connection Status — icon only on mobile, full label on sm+ -->
-        <div class="connection-status" :class="connectionStatusClass">
-          <Icon :name="connectionStatusIcon" />
-          <span class="text-sm hidden sm:inline">{{ connectionStatus }}</span>
-        </div>
       </div>
-    </div>
-  </div>
+
+      <div class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-[var(--tile-b)] bg-[var(--tile)] text-[var(--stroke)]" aria-hidden="true">
+        <Icon name="robot" size="lg" />
+      </div>
+    </template>
+    <template #title>{{ currentSessionTitle }}</template>
+    <!-- Above the title, as in the mockup: Overseer on/off and Knowledge on/off (useChatKnowledge, shared with the composer chip). -->
+    <template #eyebrow>
+      <BaseTooltip :text="$t('chat.header.overseerTip')" placement="bottom">
+        <template #default="{ describedby }">
+          <span tabindex="0" :aria-describedby="describedby">{{ overseerEnabled ? $t('chat.header.overseerOn') : $t('chat.header.overseerOff') }}</span>
+        </template>
+      </BaseTooltip>
+      ·
+      <BaseTooltip :text="$t('chat.header.knowledgeTip')" placement="bottom">
+        <template #default="{ describedby }">
+          <span tabindex="0" :aria-describedby="describedby" data-testid="header-knowledge">{{ knowledgeEnabled ? $t('chat.header.knowledgeOn') : $t('chat.header.knowledgeOff') }}</span>
+        </template>
+      </BaseTooltip>
+      <template v-if="currentSessionId && startedAt"> · <span class="font-mono" data-testid="header-session-id">{{ $t('chat.header.sessionId', { id: currentSessionId }) }}</span></template>
+      <template v-if="startedAt"> · <i18n-t keypath="chat.header.startedAt" tag="span"><template #time><span class="font-mono">{{ startedTime }}</span></template></i18n-t></template>
+      <template v-else> · {{ sessionInfo }}</template>
+    </template>
+
+    <!-- Right: Actions + connection status -->
+    <template #actions>
+      <!-- Minimal mode: say what is hidden and how to get it back (#18243) -->
+      <div class="only-min items-center gap-2 text-sm text-[var(--aui-color-text-muted)]">
+        <span>{{ $t('chat.header.essentialsNote') }}</span>
+        <BaseButton variant="link" size="sm" @click="showAllFeatures">
+          {{ $t('chat.header.showAllFeatures') }}
+        </BaseButton>
+      </div>
+
+      <!-- GH#8990: context window usage indicator (hidden on mobile to save space) -->
+      <ContextWindowIndicator
+        v-if="contextWindowProps?.hasData"
+        class="adv hidden sm:flex"
+        v-bind="contextWindowProps"
+      />
+      <span
+        v-else-if="contextWindowProps?.loadError"
+        class="adv hidden sm:inline text-xs text-[var(--aui-color-warning)]"
+        role="status"
+        :title="contextWindowProps.loadError"
+      >
+        {{ $t('chat.contextWindow.unavailable') }}
+      </span>
+
+      <!-- Custom Actions Slot -->
+      <slot name="actions"></slot>
+
+      <!-- Session Actions -->
+      <template v-if="currentSessionId">
+        <ChatHeaderIconButton
+          adv
+          :label="$t('chat.exportChat')"
+          icon="download"
+          @click="$emit('export-session')"
+        />
+        <ChatHeaderIconButton
+          adv
+          :label="$t('chat.openSettings')"
+          icon="cog"
+          @click="$emit('open-settings')"
+        />
+        <ChatHeaderIconButton
+          :label="$t('chat.clearChat')"
+          icon="trash"
+          @click="$emit('clear-session')"
+        />
+      </template>
+
+      <!-- Connection status: a plain pill; the tooltip says what Connected means -->
+      <BaseTooltip :text="connectionTip" placement="left">
+        <template #default="{ describedby }">
+          <BaseBadge
+            :variant="connectionVariant"
+            size="sm"
+            rounded
+            :aria-describedby="describedby"
+            role="status"
+            tabindex="0"
+          >
+            {{ connectionStatus }}
+          </BaseBadge>
+        </template>
+      </BaseTooltip>
+    </template>
+  </PageHeader>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { BaseBadge, BaseButton, BaseTooltip, PageHeader } from '@autobot/ui'
+import type { SemanticVariant } from '@autobot/ui'
 import ContextWindowIndicator from './ContextWindowIndicator.vue'
+import ChatHeaderIconButton from './ChatHeaderIconButton.vue'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatLocalTime } from '@/utils/formatHelpers'
+import { useUiMode, useUiModeAnnouncer } from '@/composables/useUiMode'
+import { useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 interface ContextWindowProps {
   tokensUsed: number
@@ -88,6 +122,7 @@ interface ContextWindowProps {
   isWarning: boolean
   isCritical: boolean
   hasData: boolean
+  loadError?: string | null
 }
 
 interface Props {
@@ -97,6 +132,10 @@ interface Props {
   connectionStatus: string
   isConnected: boolean
   contextWindowProps?: ContextWindowProps
+  /** Whether Overseer mode is on for this chat (the ChatInterface ref ChatInput also reads). */
+  overseerEnabled?: boolean
+  /** When the chat started (the session's creation time, else its first message), if known. */
+  startedAt?: Date | string | null
 }
 
 interface Emits {
@@ -104,45 +143,33 @@ interface Emits {
   (e: 'clear-session'): void
   (e: 'toggle-mobile-sidebar'): void
   (e: 'open-settings'): void
+  /** The Full-mode switch hid the control that had focus: the parent moves focus to its always-visible fallback. */
+  (e: 'restore-focus'): void
 }
 
 const props = defineProps<Props>()
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
 
-const connectionStatusClass = computed(() => ({
-  'text-green-600': props.isConnected,
-  'text-red-600': !props.isConnected,
-  'text-yellow-600': props.connectionStatus === 'Connecting'
-}))
+const { t } = useI18n()
+const { setMode } = useUiMode()
+const { enabled: knowledgeEnabled } = useChatKnowledge()
+const announceMode = useUiModeAnnouncer()
 
-const connectionStatusIcon = computed(() => {
-  if (!props.isConnected) return 'exclamation-circle'
-  if (props.connectionStatus === 'Connecting') return 'spinner'
-  return 'check-circle'
+function showAllFeatures(): void {
+  setMode('full')
+  announceMode('full')
+  // The note holding this button is display:none in Full mode; focus would fall to <body>.
+  emit('restore-focus')
+}
+
+const connectionVariant = computed<SemanticVariant>(() => {
+  if (!props.isConnected) return 'error'
+  return props.connectionStatus === 'Connecting' ? 'warning' : 'success'
 })
+
+const startedTime = computed(() => (props.startedAt ? formatLocalTime(props.startedAt) : ''))
+
+const connectionTip = computed(() =>
+  props.isConnected && props.connectionStatus !== 'Connecting' ? t('chat.header.connectedTip') : props.connectionStatus,
+)
 </script>
-
-<style scoped>
-@reference "../../assets/tailwind.css";
-.chat-header {
-  @apply flex-shrink-0;
-}
-
-.header-btn {
-  /* min 44px touch target on mobile (#1804) */
-  @apply w-8 h-8 sm:w-8 sm:h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
-  min-width: 44px;
-  min-height: 44px;
-}
-
-@media (min-width: 640px) {
-  .header-btn {
-    min-width: 2rem;
-    min-height: 2rem;
-  }
-}
-
-.connection-status {
-  @apply flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-md bg-autobot-bg-tertiary;
-}
-</style>

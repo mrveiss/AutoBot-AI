@@ -27,8 +27,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from multimodal_processor.models import MultiModalInput, ProcessingResult
-from multimodal_processor.types import ModalityType, ProcessingIntent
+from multimodal_processor.models import MultiModalInput, MultimodalResult
+from multimodal_processor.types import ModalityType, MultimodalProcessingIntent
 
 # Modalities that reach each processor's *unsupported-modality* branch.
 # These differ, and the old source-grep test could never have noticed:
@@ -47,7 +47,7 @@ def _input(modality: ModalityType) -> MultiModalInput:
     return MultiModalInput(
         input_id="lsp-contract",
         modality_type=modality,
-        intent=ProcessingIntent.AUTOMATION_TASK,
+        intent=MultimodalProcessingIntent.AUTOMATION_TASK,
         data=b"",
         metadata={},
     )
@@ -89,7 +89,7 @@ class TestUnsupportedModalityDegradesInsteadOfRaising:
     async def test_vision_returns_failure_result(self, vision_processor, modality):
         result = await vision_processor.process(_input(modality))
 
-        assert isinstance(result, ProcessingResult)
+        assert isinstance(result, MultimodalResult)
         assert result.success is False
         assert "Unsupported modality" in result.error_message
 
@@ -98,7 +98,7 @@ class TestUnsupportedModalityDegradesInsteadOfRaising:
     async def test_voice_returns_failure_result(self, voice_processor, modality):
         result = await voice_processor.process(_input(modality))
 
-        assert isinstance(result, ProcessingResult)
+        assert isinstance(result, MultimodalResult)
         assert result.success is False
         assert "Unsupported modality" in result.error_message
 
@@ -152,7 +152,7 @@ class TestSupportedModalityStillReachesProcessing:
         """
         result = await vision_processor.process(_input(ModalityType.VIDEO))
 
-        assert isinstance(result, ProcessingResult)
+        assert isinstance(result, MultimodalResult)
         assert result.success is False
         assert "Unsupported modality" not in result.error_message
 

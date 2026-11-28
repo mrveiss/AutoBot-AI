@@ -21,8 +21,9 @@ Design constraints:
 
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Any, Dict, Iterator
 
 from autobot_shared.logging_manager import get_logger
 
@@ -260,3 +261,50 @@ def get_session_adaptive_reranker(
                 default_keyword=default_keyword,
             )
         return _reranker_cache[key]
+
+
+@contextmanager
+def session_adapted_weights(
+    optimizer: Any,
+    reranker: SessionAdaptiveReranker,
+    session_id: str | None,
+    *,
+    enabled: bool,
+) -> Iterator[None]:
+    """Apply this session's adapted hybrid weights for the duration of a search (#4690).
+
+    The optimizer is shared, so a caller that does not adapt must see the
+    original weights afterwards. Restoring in ``finally`` means a search that
+    raises no longer leaks this session's weights into the next caller — the
+    inline version it replaced restored only on the success path.
+
+    SCOPE: this restores correctly for *non-overlapping* uses only. Save and
+    restore straddle an ``await``, so two concurrent sessions can interleave
+    such that the second saves the first's adapted weights as its "previous"
+    and reinstates them on exit, stranding them on the shared optimizer. Making
+    that safe needs per-session weights or a lock rather than save/restore, and
+    is tracked in #18084 — do not read this as a concurrency guarantee.
+
+    A no-op when the feature is off, no session is given, or there is no
+    optimizer to adapt, so callers pass ``None`` rather than building one.
+    """
+    if not (enabled and session_id and optimizer):
+        yield
+        return
+
+    prev_semantic = optimizer.hybrid_weight_semantic
+    prev_keyword = optimizer.hybrid_weight_keyword
+    adapted_semantic, adapted_keyword = reranker.get_weights(session_id)
+    optimizer.hybrid_weight_semantic = adapted_semantic
+    optimizer.hybrid_weight_keyword = adapted_keyword
+    logger.debug(
+        "Session adaptive reranking [%s]: sem=%.3f kw=%.3f",
+        session_id,
+        adapted_semantic,
+        adapted_keyword,
+    )
+    try:
+        yield
+    finally:
+        optimizer.hybrid_weight_semantic = prev_semantic
+        optimizer.hybrid_weight_keyword = prev_keyword

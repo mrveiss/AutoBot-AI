@@ -3,7 +3,7 @@
     <h3>
       <Icon name="copy" /> {{ $t('analytics.duplicates.title') }}
       <span v-if="duplicates && duplicates.length > 0" class="total-count">
-        ({{ duplicates.length.toLocaleString() }} {{ $t('analytics.duplicates.pairs') }})
+        ({{ totalCount.toLocaleString() }} {{ $t('analytics.duplicates.clusters') }})
       </span>
       <div v-if="duplicates && duplicates.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
@@ -19,11 +19,12 @@
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
+      <StaleResultNotice kind="duplicates" />
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
-          <div class="summary-value">{{ duplicates.length.toLocaleString() }}</div>
-          <div class="summary-label">{{ $t('analytics.duplicates.totalPairs') }}</div>
+          <div class="summary-value">{{ totalCount.toLocaleString() }}</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.totalClusters') }}</div>
         </div>
         <div class="summary-card high">
           <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
@@ -42,6 +43,17 @@
           <div class="summary-label">{{ $t('analytics.duplicates.totalLines') }}</div>
         </div>
       </div>
+
+      <!-- #22157: the true size of the scan; the rows below are only what the server returned -->
+      <div v-if="summary" class="header-info">
+        <span class="header-count">{{ $t('analytics.duplicates.exactClusters', { count: summary.exactCount }) }}</span>
+        <span class="header-count">{{ $t('analytics.duplicates.structuralClusters', { count: summary.structuralCount }) }}</span>
+        <span v-if="summary.totalLocations !== null" class="header-count">{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
+        <span v-if="summary.excludedDirs.length" class="header-count">
+          {{ $t('analytics.duplicates.excluded', { dirs: summary.excludedDirs.join(', ') }) }}
+        </span>
+      </div>
+      <TruncationNotice v-if="summary" :shown="duplicates.length" :total="summary.totalCount" server-limited />
 
       <!-- Duplicates by Similarity Group -->
       <div class="accordion-groups">
@@ -69,34 +81,46 @@
           <transition name="accordion">
             <div v-if="isGroupExpanded(similarity)" class="accordion-items">
               <div
-                v-for="(duplicate, index) in group.slice(0, 20)"
+                v-for="(duplicate, index) in visible(similarity, group)"
                 :key="index"
                 class="list-item"
                 :class="`item-${similarity}`"
               >
                 <div class="item-header">
                   <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% {{ $t('analytics.duplicates.similar') }}</span>
+                  <span v-if="duplicate.kind" class="item-lines">{{ $t(`analytics.duplicates.kind.${duplicate.kind}`) }}</span>
                   <span class="item-lines">{{ duplicate.lines }} {{ $t('analytics.duplicates.lines') }}</span>
                 </div>
                 <div class="item-files">
-                  <div class="item-file">{{ duplicate.file1 }}</div>
-                  <div class="item-file">{{ duplicate.file2 }}</div>
+                  <div v-for="place in rowPlaces(duplicate)" :key="place" class="item-file">{{ place }}</div>
                 </div>
               </div>
-              <div v-if="group.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.duplicates.showingOf', { shown: 20, total: group.length.toLocaleString() }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(similarity, group.length)" :total="group.length" :step="20" @show-more="showMore(similarity)" />
             </div>
           </transition>
         </div>
       </div>
     </div>
+    <!-- #17983: a failed or never-run scan is not "no duplicates found" -->
     <EmptyState
-      v-else-if="!loading"
-      icon="check-circle"
-      :message="$t('analytics.duplicates.emptyMessage')"
-      variant="success"
+      v-else-if="scanState === 'failed'"
+      icon="exclamation-triangle"
+      :message="$t('analytics.duplicates.scanFailed')"
     />
+    <EmptyState
+      v-else-if="scanState === 'not_scanned'"
+      icon="search"
+      :message="$t('analytics.duplicates.notScanned')"
+    />
+    <!-- #17982: "none found" from a cached result older than the last sync says so too -->
+    <template v-else-if="!loading">
+      <StaleResultNotice kind="duplicates" />
+      <EmptyState
+        icon="check-circle"
+        :message="$t('analytics.duplicates.emptyMessage')"
+        variant="success"
+      />
+    </template>
   </div>
 </template>
 
@@ -114,11 +138,17 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
+import StaleResultNotice from './StaleResultNotice.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import type { DuplicateScanState } from '@/composables/analytics/duplicatePayload'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
+import { duplicateSummary as summary, rowPlaces } from '@/composables/analytics/duplicatePayload'
+import type { DuplicateLocation } from '@/composables/analytics/analyticsTypes'
 
 const { t } = useI18n()
 
@@ -127,15 +157,30 @@ interface Duplicate {
   lines: number
   file1: string
   file2: string
+  kind?: string
+  locations?: DuplicateLocation[]
+  start_line1?: number
+  end_line1?: number
+  start_line2?: number
+  end_line2?: number
 }
 
 interface Props {
   duplicates: Duplicate[]
   /** #5368: render a spinner during the scan instead of empty-state. */
   loading?: boolean
+  /** #17983: done | not_scanned | failed -- only "done" may show "none found". */
+  scanState?: DuplicateScanState
 }
 
 const props = defineProps<Props>()
+
+// #22157: the count is the scan's true total; `duplicates.length` is only the rows returned.
+const totalCount = computed(() => summary.value?.totalCount ?? props.duplicates.length)
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.duplicates)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -210,7 +255,7 @@ const formatSimilarityGroup = (similarity: string): string => {
   font-size: var(--text-sm);
 }
 
-.section-loading i {
+.section-loading .icon {
   color: var(--color-info);
 }
 
@@ -345,16 +390,6 @@ const formatSimilarityGroup = (similarity: string): string => {
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-disabled);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

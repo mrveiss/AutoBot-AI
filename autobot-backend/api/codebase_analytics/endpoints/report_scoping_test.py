@@ -27,6 +27,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from api.codebase_analytics.endpoints.shared import UnresolvedSourceError
+from autobot_shared.isolated_git import make_repo
+
 
 # ---------------------------------------------------------------------------
 # _build_analysis_task_list: every sub-analysis must receive the resolved
@@ -102,47 +105,6 @@ class TestBuildAnalysisTaskListScoping:
 
 
 # ---------------------------------------------------------------------------
-# _fetch_problems_from_chromadb: unresolved-source fallback used for path
-# validation must be the deployed-layout-aware root (Issue #12399).
-# ---------------------------------------------------------------------------
-class TestFetchProblemsFromChromaDBFallback:
-    """Issue #12399: sibling of #12393's resolve_scan_root fix."""
-
-    def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
-        """When source_root is None, path validation must resolve against
-        resolve_project_root() (git-walk-up / deployed code_source probe,
-        #10730), not the plain parents[4] get_project_root() -- which
-        resolves to /opt/autobot (not the analyzable repo) in the deployed
-        standalone rsync layout."""
-        from api.codebase_analytics.endpoints import report as report_mod
-
-        deployed_root = tmp_path / "opt_autobot" / "code_source"
-        wrong_root = tmp_path / "opt_autobot"
-        captured: dict = {}
-
-        def fake_filter(problems, root):
-            captured["root"] = root
-            return problems
-
-        fake_collection = MagicMock()
-
-        with (
-            patch.object(report_mod, "get_code_collection", return_value=fake_collection),
-            patch.object(
-                report_mod,
-                "get_all_paginated",
-                return_value={"metadatas": [{"file_path": "x.py"}]},
-            ),
-            patch.object(report_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
-            patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
-        ):
-            report_mod._fetch_problems_from_chromadb(source_id=None, source_root=None)
-
-        assert captured["root"] == deployed_root
-        assert captured["root"] != wrong_root
-
-
-# ---------------------------------------------------------------------------
 # End-to-end: GET /report for source B must never scan/return source A's
 # (or AutoBot's own) tree.
 # ---------------------------------------------------------------------------
@@ -152,8 +114,10 @@ class TestReportPipelineSourceIsolation:
     async def _run_report_for_source(self, source_id, source_roots, captured):
         from api.codebase_analytics.endpoints import report as report_mod
 
-        async def fake_resolve_source_root(sid):
-            return source_roots.get(sid)
+        async def fake_resolve_scan_root(sid):
+            if sid not in source_roots:
+                raise UnresolvedSourceError(sid)
+            return source_roots[sid]
 
         async def fake_get_cross_language_analysis(source_id=None, project_root=None):
             captured.setdefault(source_id, {})["cross_language_root"] = project_root
@@ -176,7 +140,7 @@ class TestReportPipelineSourceIsolation:
             return None
 
         with (
-            patch.object(report_mod, "resolve_source_root", side_effect=fake_resolve_source_root),
+            patch.object(report_mod, "resolve_scan_root", side_effect=fake_resolve_scan_root),
             patch.object(
                 report_mod,
                 "_fetch_problems_from_chromadb",
@@ -221,61 +185,25 @@ class TestReportPipelineSourceIsolation:
         assert captured["A"]["bug_root"] == str(root_a)
         assert captured["B"]["bug_root"] == str(root_b)
 
-    async def test_unresolvable_source_falls_back_to_project_root_not_none(self):
-        """No registered source resolves -> fall back to AutoBot's own root,
-        not None (which would crash str(None) downstream / silently point
-        every sub-analysis at an undefined scope)."""
-        from api.codebase_analytics.endpoints import report as report_mod
-        from api.codebase_analytics.endpoints.shared import get_project_root
-
-        captured: dict = {}
-
-        async def fake_get_pattern_analysis(project_root=None):
-            captured["pattern_root"] = project_root
-            return None
-
-        with (
-            patch.object(report_mod, "resolve_source_root", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_fetch_problems_from_chromadb", return_value=[]),
-            patch.object(report_mod, "_get_cross_language_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_duplicate_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_pattern_analysis", side_effect=fake_get_pattern_analysis),
-            patch.object(report_mod, "_get_api_endpoint_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_bug_prediction", new=AsyncMock(return_value=None)),
-        ):
-            await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
-
-        assert captured["pattern_root"] == get_project_root()
-
-    async def test_unresolvable_source_scan_root_uses_deployed_layout_aware_root(self, tmp_path):
-        """Issue #12399: generate_analysis_report's scan_root fallback (sibling
-        of #12393's resolve_scan_root fix) must use resolve_project_root(), not
-        the plain parents[4] get_project_root() -- which resolves to
-        /opt/autobot (not the analyzable repo) in the deployed layout."""
+    async def test_unresolvable_source_is_a_404_and_scans_nothing(self):
+        """#20513: no checkout -> UnresolvedSourceError before any sub-analysis runs; AutoBot's tree is no stand-in."""
         from api.codebase_analytics.endpoints import report as report_mod
 
-        deployed_root = tmp_path / "opt_autobot" / "code_source"
-        wrong_root = tmp_path / "opt_autobot"
-        captured: dict = {}
+        async def unresolved(sid):
+            raise UnresolvedSourceError(sid)
 
-        async def fake_get_pattern_analysis(project_root=None):
-            captured["pattern_root"] = project_root
-            return None
-
+        sub = AsyncMock(return_value=None)
         with (
-            patch.object(report_mod, "resolve_source_root", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_fetch_problems_from_chromadb", return_value=[]),
-            patch.object(report_mod, "_get_cross_language_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_duplicate_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_pattern_analysis", side_effect=fake_get_pattern_analysis),
-            patch.object(report_mod, "_get_api_endpoint_analysis", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "_get_bug_prediction", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(report_mod, "resolve_scan_root", side_effect=unresolved),
+            patch.object(report_mod, "_get_pattern_analysis", new=sub),
+            patch.object(report_mod, "_fetch_problems_from_chromadb") as fetch,
         ):
-            await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
+            with pytest.raises(UnresolvedSourceError) as caught:
+                await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
 
-        assert captured["pattern_root"] == deployed_root
-        assert captured["pattern_root"] != wrong_root
+        assert caught.value.status_code == 404
+        sub.assert_not_called()
+        fetch.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +247,8 @@ class TestPatternAnalysisNoGlobalWrite:
 class TestGetBugPredictionUsesAsyncPath:
     """Issue #12406: wire _get_bug_prediction to BugPredictor.analyze_directory_async."""
 
-    async def test_calls_analyze_directory_async_not_sync(self):
+    async def test_calls_analyze_directory_async_not_sync(self, tmp_path):
+        make_repo(tmp_path)
         from api.codebase_analytics.endpoints import report as report_mod
 
         fake_result = MagicMock(analyzed_files=3, high_risk_count=0)
@@ -329,7 +258,7 @@ class TestGetBugPredictionUsesAsyncPath:
 
         with patch.object(report_mod, "BugPredictor", return_value=fake_predictor):
             result = await report_mod._get_bug_prediction(
-                project_root="/srv/sources/b",
+                project_root=str(tmp_path),
                 use_semantic=False,
                 source_id="B",
             )
@@ -340,7 +269,8 @@ class TestGetBugPredictionUsesAsyncPath:
         fake_predictor.analyze_directory.assert_not_called()
         assert result is fake_result
 
-    async def test_constructs_predictor_with_semantic_flag_and_source_id(self):
+    async def test_constructs_predictor_with_semantic_flag_and_source_id(self, tmp_path):
+        make_repo(tmp_path)
         from api.codebase_analytics.endpoints import report as report_mod
 
         with patch.object(report_mod, "BugPredictor") as fake_cls:
@@ -348,12 +278,12 @@ class TestGetBugPredictionUsesAsyncPath:
             fake_predictor.analyze_directory_async = AsyncMock(return_value=None)
 
             await report_mod._get_bug_prediction(
-                project_root="/srv/sources/b",
+                project_root=str(tmp_path),
                 use_semantic=True,
                 source_id="B",
             )
 
-        fake_cls.assert_called_once_with(project_root="/srv/sources/b", use_semantic_analysis=True, source_id="B")
+        fake_cls.assert_called_once_with(project_root=str(tmp_path), use_semantic_analysis=True, source_id="B")
 
 
 class TestEveryAnalysisIsBounded:
@@ -416,6 +346,8 @@ class TestEveryAnalysisIsBounded:
                 include_cross_language_analysis=False,
                 include_pattern_analysis=False,
                 use_semantic=False,
+                source_id="A",
+                scan_root=Path("/tmp/does-not-need-to-exist"),
             ),
             timeout=10,
         )
@@ -445,6 +377,8 @@ class TestEveryAnalysisIsBounded:
                     include_cross_language_analysis=False,
                     include_pattern_analysis=False,
                     use_semantic=False,
+                    source_id="A",
+                    scan_root=Path("/tmp/does-not-need-to-exist"),
                 ),
                 timeout=10,
             )

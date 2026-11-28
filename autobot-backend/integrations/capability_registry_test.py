@@ -48,8 +48,8 @@ def test_both_messaging_tokens_resolve_through_the_vault_seam(asked_names: list[
     assert not missing, f"declared messaging credentials never resolved at runtime: {missing}"
 
 
-def test_env_var_wins_over_the_vault(monkeypatch) -> None:
-    """Dual-read, env-first: an Ansible-provisioned deployment is unaffected.
+def test_the_vault_wins_over_the_env_var(monkeypatch) -> None:
+    """Vault first; the env var is only a logged migration fallback (#18094, owner decision 2026-10-12).
 
     Asserted via the token actually handed to ``_register_messaging_if_token``
     rather than by inspecting the constructed integration's internals, which
@@ -73,7 +73,7 @@ def test_env_var_wins_over_the_vault(monkeypatch) -> None:
 
     _populate_default_providers(CapabilityRegistry())
 
-    assert ("slack", "env-value") in calls
+    assert ("slack", "vault-value") in calls
 
 
 def test_vault_only_token_still_reaches_registration(monkeypatch) -> None:

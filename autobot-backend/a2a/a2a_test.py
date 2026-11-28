@@ -19,7 +19,7 @@ import pytest
 from a2a.agent_card import build_agent_card
 from a2a.conftest import make_redis_mock
 from a2a.task_manager import TaskManager
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskArtifact, TaskState
+from a2a.types import A2ATaskArtifact, AgentCapabilities, AgentCard, AgentSkill, TaskState
 
 # ---------------------------------------------------------------------------
 # AgentCard / types tests
@@ -197,7 +197,7 @@ class TestTaskManager:
 
     def test_add_artifact(self):
         task = self.mgr.create_task("Analyze data")
-        artifact = TaskArtifact(artifact_type="text", content="Analysis result")
+        artifact = A2ATaskArtifact(artifact_type="text", content="Analysis result")
         ok = self.mgr.add_artifact(task.id, artifact)
         assert ok is True
         fetched = self.mgr.get_task(task.id)
@@ -205,7 +205,7 @@ class TestTaskManager:
         assert fetched.artifacts[0].content == "Analysis result"
 
     def test_add_artifact_missing_task_returns_false(self):
-        artifact = TaskArtifact(artifact_type="text", content="x")
+        artifact = A2ATaskArtifact(artifact_type="text", content="x")
         ok = self.mgr.add_artifact("bad-id", artifact)
         assert ok is False
 

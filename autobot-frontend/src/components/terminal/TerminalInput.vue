@@ -1,7 +1,7 @@
 <template>
   <div class="terminal-input-container">
     <div class="terminal-input-line">
-      <span class="prompt" v-html="currentPrompt"></span>
+      <span class="prompt" v-html="safePrompt"></span>
       <input
         ref="terminalInput"
         v-model="currentInput"
@@ -60,6 +60,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 // Extend Window interface to include custom properties
 declare global {
@@ -95,6 +96,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const terminalInput = ref<HTMLInputElement>()
+// #19118: the prompt carries backend-supplied text (cwd, host)
+const safePrompt = computed(() => sanitizeHtml(props.currentPrompt))
 const historyIndex = ref(-1)
 
 // Update v-model
@@ -325,7 +328,7 @@ defineExpose({
 }
 
 .footer-button.workflow-test {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   border-color: var(--color-info-hover);
   color: var(--text-on-primary);
   font-weight: var(--font-semibold);

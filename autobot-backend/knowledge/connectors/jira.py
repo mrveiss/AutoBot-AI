@@ -33,13 +33,14 @@ Config keys (under ``ConnectorConfig.config``):
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from autobot_shared.auth import BasicAuth
-from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import AbstractConnector, RetryableError, instance_host_egress
+from knowledge.connectors.atlassian_base import (
+    AtlassianConnector,
+    build_atlassian_source_id,
+    parse_atlassian_source_id,
+)
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -56,7 +57,7 @@ logger = get_logger(__name__)
 
 
 @ConnectorRegistry.register("jira")
-class JiraConnector(AbstractConnector):
+class JiraConnector(AtlassianConnector):
     """Knowledge connector that pulls issues (and comments) from Jira projects.
 
     Each issue becomes one KB fact keyed by
@@ -66,6 +67,7 @@ class JiraConnector(AbstractConnector):
     """
 
     connector_type = "jira"
+    vendor_name = "Jira"
     # Issue #4421: needs an Atlassian API token — tier 2 (credentialed).
     tier = 2
     max_concurrency = 4
@@ -95,9 +97,6 @@ class JiraConnector(AbstractConnector):
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._email: str = cfg.get("username", "")
-        self._api_token: str = cfg.get("password", "")
-        self._base_url: str = cfg.get("base_url", "").rstrip("/")
         self._project_keys: List[str] = cfg.get("project_keys", [])
         self._jql_override: str = cfg.get("jql", "")
         self._page_size: int = int(cfg.get("page_size", 50))
@@ -229,39 +228,8 @@ class JiraConnector(AbstractConnector):
                 break
         return issues
 
-    async def _get(self, path: str) -> Dict[str, Any]:
-        return await self._request("GET", path)
-
     async def _post(self, path: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
         return await self._request("POST", path, json_data=json_data)
-
-    async def _request(self, method: str, path: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Make an authenticated request to the Jira REST API."""
-        url = "%s%s" % (self._base_url, path)
-        auth = aiohttp.BasicAuth(login=self._email, password=self._api_token)
-        try:
-            timeout = aiohttp.ClientTimeout(total=30.0)
-            # Operator-configured instance host — private opt-in applies (#13625).
-            async with get_http_client().tracked_request(
-                method,
-                url,
-                auth=auth,
-                json=json_data,
-                timeout=timeout,
-                suppress_error_log=True,
-                guard_egress=instance_host_egress(),
-            ) as resp:
-                if resp.status == 429:
-                    raise RetryableError("Jira rate-limited", status_code=429)
-                if resp.status >= 500:
-                    raise RetryableError("Jira server error %d" % resp.status, status_code=resp.status)
-                body = await resp.json(content_type=None)
-                return {"status_code": resp.status, "body": body}
-        except RetryableError:
-            raise
-        except aiohttp.ClientError as exc:
-            self.logger.warning("Jira request to %s failed: %s", url, exc)
-            return {"status_code": 0, "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -270,15 +238,12 @@ class JiraConnector(AbstractConnector):
 
 
 def _build_source_id(connector_id: str, issue_key: str) -> str:
-    return "jira:%s:issue:%s" % (connector_id, issue_key)
+    return build_atlassian_source_id("jira", connector_id, "issue", issue_key)
 
 
 def _parse_issue_key(source_id: str) -> Optional[str]:
-    parts = source_id.split(":")
     # Format: jira:{connector_id}:issue:{issue_key}
-    if len(parts) != 4 or parts[2] != "issue":
-        return None
-    return parts[3]
+    return parse_atlassian_source_id("issue", source_id)
 
 
 def _issue_to_source_info(connector_id: str, issue: Dict[str, Any]) -> SourceInfo:

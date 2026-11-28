@@ -1,0 +1,50 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+//
+// The kit adapter maps every --aui-table-* token to a --tbl-* token (#14778). The SLM
+// must define each of those in every theme, contrast and mono included, or the mapped
+// value is invalid and the table loses its sizes, borders and type.
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, it, expect } from 'vitest'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const read = (rel: string) => readFileSync(resolve(here, rel), 'utf-8')
+const ADAPTER = read('../../../../libs/autobot-ui/src/tokens/adapter.css')
+const SCHEME = read('./slm-scheme.css')
+
+const ALL_THEMES = ":root[data-app='slm']"
+
+const consumed = [...new Set([...ADAPTER.matchAll(/var\((--tbl-[a-z-]+)\)/g)].map((m) => m[1]))]
+
+/** --tbl-* names declared in the top-level blocks whose selector is exactly *selector*. */
+function declaredUnder(selector: string): Set<string> {
+  const names = new Set<string>()
+  for (const [, sel, body] of SCHEME.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (sel.replace(/\/\*[\s\S]*?\*\//g, '').trim() !== selector) continue
+    for (const [, name] of body.matchAll(/(--tbl-[a-z-]+)\s*:/g)) names.add(name)
+  }
+  return names
+}
+
+const missingIn = (selectors: string[]) => {
+  const defined = new Set(selectors.flatMap((s) => [...declaredUnder(s)]))
+  return consumed.filter((name) => !defined.has(name))
+}
+
+describe('SLM table tokens', () => {
+  it('the adapter reads table tokens at all', () => {
+    // fails if the scan reads nothing, which would make the checks below pass vacuously
+    expect(consumed.length).toBeGreaterThan(10)
+  })
+
+  it('defines every adapter table token for every theme', () => {
+    // one selector now serves all four themes: the legacy high-contrast block is folded into contrast (#18239)
+    expect(missingIn([ALL_THEMES])).toEqual([])
+  })
+
+  it('keeps no separate legacy high-contrast block', () => {
+    expect(SCHEME).not.toContain("data-theme='high-contrast'")
+  })
+})

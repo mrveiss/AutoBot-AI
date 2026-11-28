@@ -1,7 +1,7 @@
 <template>
   <div class="charts-section">
     <!-- Documents by Category -->
-    <BasePanel variant="bordered" size="md">
+    <BaseCard scrollable variant="bordered" size="md">
       <h4>{{ $t('knowledge.stats.docsByCategory') }}</h4>
       <div class="bar-chart">
         <div
@@ -22,10 +22,10 @@
           </div>
         </div>
       </div>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Documents by Type -->
-    <BasePanel variant="bordered" size="md">
+    <BaseCard scrollable variant="bordered" size="md">
       <h4>{{ $t('knowledge.stats.docsByType') }}</h4>
       <div class="pie-chart">
         <div class="type-stats">
@@ -37,11 +37,12 @@
           </div>
         </div>
       </div>
-    </BasePanel>
+    </BaseCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -55,7 +56,6 @@
  * Issue #11562: Wire in orphaned stats subpanels
  */
 
-import BasePanel from '@/components/base/BasePanel.vue'
 
 interface Category {
   name: string

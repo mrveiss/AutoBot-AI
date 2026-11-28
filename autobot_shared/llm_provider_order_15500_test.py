@@ -147,6 +147,19 @@ class TestNamesThatMatchNothing:
         assert "anthropic" in logged
         assert ORDER_ENV_VAR in logged
 
+    def test_absent_credentials_and_an_unrecognised_name_log_separately(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """#17504: `nous` is a real provider (absent credentials); `nouss` is not."""
+        monkeypatch.setenv(ORDER_ENV_VAR, "nous,nouss,*")
+
+        with patch.object(llm_provider_order.logger, "info") as info:
+            apply_configured_order(["ollama"])
+
+        lines = [str(call) for call in info.call_args_list]
+        absent = [line for line in lines if "absent credentials" in line]
+        unknown = [line for line in lines if "not a known provider name" in line]
+        assert len(absent) == 1 and "'nous'" in absent[0] and "nouss" not in absent[0]
+        assert len(unknown) == 1 and "nouss" in unknown[0]
+
     def test_an_excluded_provider_is_named_in_a_log_line_too(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The other half of "no silent drop": a provider an exhaustive order
         leaves out says so, and says it is still reachable."""

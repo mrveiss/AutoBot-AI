@@ -36,11 +36,13 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _MODULE = repo_root() / "autobot-backend" / "llc" / "api" / "agent_api.py"
 
 
 def _function(name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    tree = ast.parse(_MODULE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_MODULE.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
             return node
@@ -91,6 +93,4 @@ def test_the_response_distinguishes_stored_from_absent():
     status back without performing the transition.
     """
     source = ast.unparse(_function("update_work_item_status"))
-    assert "comment_id" in source, (
-        "the response carries no marker for whether a comment was stored (#16017)"
-    )
+    assert "comment_id" in source, "the response carries no marker for whether a comment was stored (#16017)"

@@ -13,11 +13,8 @@ import re
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.shared.analysis_base import (
-    HAS_ANALYTICS_INFRASTRUCTURE,
-    SIMILARITY_MEDIUM,
-    BaseCodeAnalyzer,
-)
+from autobot_shared.status_enums import Severity
+from code_intelligence.shared.analysis_base import SIMILARITY_MEDIUM, BaseCodeAnalyzer
 
 from ..shared.line_index import LineIndex
 from .ast_visitor import SecurityASTVisitor
@@ -292,8 +289,7 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
     def _get_top_recommendations(self) -> List[str]:
         """Get top security recommendations based on findings."""
         recommendations = []
-        severity_priority = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(self.results, key=lambda f: severity_priority.get(f.severity.value, 4))
+        sorted_findings = sorted(self.results, key=lambda f: -Severity.rank_of(f.severity.value))
 
         seen_types = set()
         for finding in sorted_findings[:10]:
@@ -356,7 +352,7 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

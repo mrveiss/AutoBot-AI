@@ -115,7 +115,7 @@ _hb_mod, _sched_mod, _Base = _load_models_and_scheduler()
 # Undo the sys.modules stubs so later test modules import the real code
 # (GH#11604 — the stubs shadowed services.task_claim for the whole session).
 _stubs.restore()
-AgentStatus = _hb_mod.AgentStatus
+HeartbeatStatus = _hb_mod.HeartbeatStatus
 AgentRuntimeState = _hb_mod.AgentRuntimeState
 AgentWakeupRequest = _hb_mod.AgentWakeupRequest
 HeartbeatRun = _hb_mod.HeartbeatRun
@@ -151,7 +151,7 @@ async def _seed_paused_agent(factory: async_sessionmaker, agent_id: str) -> Agen
         state = AgentRuntimeState(
             id=uuid.uuid4(),
             agent_id=agent_id,
-            status=AgentStatus.PAUSED.value,
+            status=HeartbeatStatus.PAUSED.value,
             paused_reason="budget hard-stop",
             paused_by="system:budget",
         )
@@ -165,7 +165,7 @@ async def _seed_active_agent(factory: async_sessionmaker, agent_id: str) -> Agen
         state = AgentRuntimeState(
             id=uuid.uuid4(),
             agent_id=agent_id,
-            status=AgentStatus.ACTIVE.value,
+            status=HeartbeatStatus.ACTIVE.value,
         )
         session.add(state)
         await session.commit()

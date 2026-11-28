@@ -14,7 +14,7 @@ import time
 from typing import Any, Dict
 
 from ..base import BaseModalProcessor
-from ..models import MultiModalInput, ProcessingResult
+from ..models import MultiModalInput, MultimodalResult
 
 
 class ContextProcessor(BaseModalProcessor):
@@ -24,7 +24,7 @@ class ContextProcessor(BaseModalProcessor):
         """Initialize context processor with base modality type."""
         super().__init__("context")
 
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def process(self, input_data: MultiModalInput) -> MultimodalResult:
         """Process context and make decisions"""
         start_time = time.time()
 
@@ -33,7 +33,7 @@ class ContextProcessor(BaseModalProcessor):
             processing_time = time.time() - start_time
             confidence = self.calculate_confidence(result)
 
-            return ProcessingResult(
+            return MultimodalResult(
                 result_id=f"context_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,
@@ -48,7 +48,7 @@ class ContextProcessor(BaseModalProcessor):
             processing_time = time.time() - start_time
             self.logger.error("Context processing failed: %s", e)
 
-            return ProcessingResult(
+            return MultimodalResult(
                 result_id=f"context_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,

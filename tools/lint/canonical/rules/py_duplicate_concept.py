@@ -24,6 +24,7 @@ import ast
 import re
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.diagnostic import Diagnostic
 
@@ -51,8 +52,7 @@ _WAIVER = re.compile(r"#\s*canonical:\s*ignore\s+py-duplicate-concept\b")
 
 def _is_test_file(file_path: Path) -> bool:
     """Migration / back-compat tests legitimately reference the old era-marker names."""
-    name = file_path.name
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in file_path.parts
+    return is_test_filename(file_path.name, include_js=False, include_conftest=False) or "tests" in file_path.parts
 
 
 def _banned_token(name: str) -> str | None:

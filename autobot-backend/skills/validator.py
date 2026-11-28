@@ -10,12 +10,12 @@ Checks: SKILL.md frontmatter, Python syntax, MCP server starts.
 """
 
 import ast
-import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -25,7 +25,7 @@ _TEST_TIMEOUT: float = config.timeout.skill_test
 
 
 @dataclass
-class ValidationResult:
+class SkillPackageValidation:
     """Result of validating a skill package."""
 
     valid: bool
@@ -37,8 +37,8 @@ class ValidationResult:
 class SkillValidator:
     """Validates skill packages by checking syntax and optionally running the MCP server."""
 
-    async def validate(self, skill_md: str, skill_py: str | None = None) -> ValidationResult:
-        """Run all validation checks and return a ValidationResult.
+    async def validate(self, skill_md: str, skill_py: str | None = None) -> SkillPackageValidation:
+        """Run all validation checks and return a SkillPackageValidation.
 
         Checks manifest, Python syntax, and MCP server startup (if skill_py provided).
         """
@@ -52,7 +52,7 @@ class SkillValidator:
                 mcp_errors, tools_found = await self._check_mcp_server(skill_py)
                 errors.extend(mcp_errors)
 
-        return ValidationResult(
+        return SkillPackageValidation(
             valid=len(errors) == 0,
             errors=errors,
             tools_found=tools_found,
@@ -83,12 +83,12 @@ class SkillValidator:
 def _check_manifest(skill_md: str) -> List[str]:
     """Validate SKILL.md has required YAML frontmatter with name, description, tools."""
     errors: List[str] = []
-    match = re.match(r"^---\n(.*?)\n---", skill_md, re.DOTALL)
-    if not match:
+    raw, _ = split_frontmatter(skill_md)
+    if raw is None:
         errors.append("SKILL.md missing YAML frontmatter (--- block)")
         return errors
     try:
-        manifest = yaml.safe_load(match.group(1)) or {}
+        manifest = yaml.safe_load(raw) or {}
     except yaml.YAMLError as exc:
         errors.append(f"Invalid YAML frontmatter: {exc}")
         return errors

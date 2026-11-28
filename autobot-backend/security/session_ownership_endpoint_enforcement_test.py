@@ -54,7 +54,7 @@ def _validator(global_mode: EnforcementMode, endpoint_override: EnforcementMode 
     validator.metrics_service = None
     validator.get_session_owner = AsyncMock(return_value="alice")
     validator._is_org_admin_access = AsyncMock(return_value=False)
-    validator._get_authenticated_user = MagicMock(
+    validator._get_authenticated_user = AsyncMock(
         return_value={"username": "bob", "user_id": "bob-id", "auth_disabled": False}
     )
     return validator

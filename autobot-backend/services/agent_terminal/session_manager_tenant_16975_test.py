@@ -65,7 +65,7 @@ class TestTenantSurvivesRedisReload:
     async def test_a_reloaded_session_keeps_its_tenant_and_is_discoverable_only_there(self):
         from services.command_approval_manager import AgentRole
 
-        fake_redis = fakeredis.aioredis.FakeRedis(server=fakeredis.aioredis.FakeServer())
+        fake_redis = fakeredis.aioredis.FakeRedis(server=fakeredis.FakeServer())
         mgr = SessionManager(redis_client=fake_redis)
         session = await mgr.create_session(
             agent_id="chat_agent_3", agent_role=AgentRole.CHAT_AGENT, tenant_id="tenant-x"

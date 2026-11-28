@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 # ---------------------------------------------------------------------------
 # Sample JSON fixtures
@@ -83,7 +83,7 @@ async def test_reddit_search_maps_posts():
     result = await backend.fetch(request)
 
     assert result.success is True
-    assert result.source_type is SourceType.REDDIT
+    assert result.source_type is SourceKind.REDDIT
     posts = result.structured["posts"]
     assert len(posts) == 2
     assert posts[0]["title"] == "Post 1"
@@ -258,7 +258,7 @@ async def test_hn_maps_hits():
     result = await backend.fetch(request)
 
     assert result.success is True
-    assert result.source_type is SourceType.FORUM  # #11079: HN is a forum, not Reddit
+    assert result.source_type is SourceKind.FORUM  # #11079: HN is a forum, not Reddit
     hits = result.structured["hits"]
     assert len(hits) == 2
     # First hit: has url field

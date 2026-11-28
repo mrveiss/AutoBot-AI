@@ -16,6 +16,7 @@ import json
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
@@ -79,7 +80,7 @@ async def _compress_via_ollama(description: str) -> str | None:
         f"all parameter names and types:\n{description}"
     )
     model = config.llm.system_model
-    url = f"{config.ollama_url}/api/generate"
+    url = ollama_generate_url(config.ollama_url)
     payload = {"model": model, "prompt": prompt, "stream": False}
 
     try:

@@ -253,14 +253,14 @@ sync_to_vm() {
         local RSYNC_PATH="--rsync-path=sudo rsync"
         if [ -d "$local_path" ]; then
             log_info "Syncing directory (rsync with --delete): $local_path -> $vm_name:$remote_path"
-            rsync -avz --delete --progress \
+            rsync -avz --chmod=o-w --delete --progress \
                 "${RSYNC_EXCLUDES[@]}" \
                 "$RSYNC_PATH" \
                 -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
                 "$local_path/" "$REMOTE_USER@$vm_ip:$remote_path/"
         else
             log_info "Syncing file (rsync): $local_path -> $vm_name:$remote_path"
-            rsync -avz --progress \
+            rsync -avz --chmod=o-w --progress \
                 "$RSYNC_PATH" \
                 -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
                 "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"

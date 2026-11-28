@@ -12,7 +12,7 @@
 #      looking authoritative.
 #
 # THIS LIST ONLY SHRINKS. Seeded from the actual drift measured 2026-08-18,
-# then re-audited against a code-reviewer finding the same day: 9 entries in
+# then re-audited against a review finding the same day: 9 entries in
 # the first version of this file claimed "no CI-scoped test exercising the
 # real library" while a real skipif/importorskip gate existed and was
 # silently skipping. Per the same policy that mirrors pytesseract instead of
@@ -64,8 +64,8 @@ typing-extensions
 # --- OpenTelemetry tracing stack ------------------------------------------
 # Issue #57/#697: distributed tracing across AutoBot's role-based deployment. Several
 # production files DO import opentelemetry unconditionally at module scope
-# (middleware/tracing_middleware.py, llm_shared/observability/otel_observer.py,
-# pki/distributor.py, utils/traced_http_client.py, services/tracing_service.py)
+# (llm_shared/observability/otel_observer.py,
+# pki/distributor.py, utils/traced_http_client.py)
 # — but none of them is imported by anything else in the tree (verified by
 # grep), so no currently-collected test reaches that import. autobot_shared/
 # itself imports no opentelemetry module unconditionally (verified directly,
@@ -77,10 +77,10 @@ typing-extensions
 # imports them or not. Undeclared meant unconstrained, not absent, so CI took
 # 1.45.0 against production's ==1.44.0 and failed shard 1/12 on eight PRs.
 # They are now declared in requirements-ci/monitoring.txt at the production
-# pin. The three below stay: nothing in CI installs them at all.
+# pin. opentelemetry-instrumentation-fastapi joined them in requirements-ci/storage.txt (#21685), for the real-
+# instrumentor test. The ones below stay: nothing in CI installs them at all.
 opentelemetry-exporter-otlp
 opentelemetry-exporter-otlp-proto-http
-opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-aiohttp-client
 opentelemetry-propagator-b3
@@ -95,7 +95,6 @@ protobuf
 # (see the "Installing CI-safe requirements" step's ~3GB-vs-10-package-closure
 # comment in setup-python-suite/action.yml, and the completion_trainer_test.py
 # 17 tests that import torch directly and pass in CI).
-torch
 torchvision
 
 # tree-sitter-javascript has no CI-scoped test gating on it directly (only

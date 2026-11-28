@@ -21,10 +21,10 @@ from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
 from .subagent_task import (
-    ConflictResolution,
+    SubagentConflictResolution,
     SubagentTask,
+    SubagentTaskResult,
     TaskPriority,
-    TaskResult,
     TaskStatus,
 )
 
@@ -158,7 +158,7 @@ class SubagentSpawner:
         parent_task_id: str,
         tasks: List[SubagentTask],
         timeout_seconds: int,
-    ) -> List[TaskResult]:
+    ) -> List[SubagentTaskResult]:
         """Wait for all subagent tasks to complete with timeout."""
         task_coroutines: List[Coroutine] = []
         for task in tasks:
@@ -177,7 +177,7 @@ class SubagentSpawner:
                 await self.cancel_subagent(task.task_id)
             raise
 
-    async def _wait_for_task(self, task_id: str, timeout_seconds: int) -> TaskResult:
+    async def _wait_for_task(self, task_id: str, timeout_seconds: int) -> SubagentTaskResult:
         """Wait for a single task to complete."""
         start_time = asyncio.get_running_loop().time()
         poll_interval = 0.5  # Check every 500ms
@@ -186,7 +186,7 @@ class SubagentSpawner:
             elapsed = asyncio.get_running_loop().time() - start_time
             if elapsed > timeout_seconds:
                 logger.warning("Task %s timed out after %.1f seconds", task_id, elapsed)
-                return TaskResult(
+                return SubagentTaskResult(
                     task_id=task_id,
                     status=TaskStatus.TIMEOUT,
                     error=f"Timeout after {timeout_seconds} seconds",
@@ -197,7 +197,7 @@ class SubagentSpawner:
             if self.redis:
                 cancelled = await self.redis.get(f"subagent:cancelled:{task_id}")
                 if cancelled:
-                    return TaskResult(
+                    return SubagentTaskResult(
                         task_id=task_id,
                         status=TaskStatus.CANCELLED,
                         duration_seconds=elapsed,
@@ -206,7 +206,7 @@ class SubagentSpawner:
                 # Try to get result
                 result_data = await self.redis.get(f"subagent:result:{task_id}")
                 if result_data:
-                    result = TaskResult.from_dict(result_data)
+                    result = SubagentTaskResult.from_dict(result_data)
                     result.duration_seconds = elapsed
                     return result
 
@@ -229,7 +229,7 @@ class SubagentSpawner:
 
     async def aggregate_results(
         self,
-        results: List[TaskResult],
+        results: List[SubagentTaskResult],
         strategy: str = "consensus",
     ) -> Dict[str, Any]:
         """
@@ -302,13 +302,13 @@ class SubagentSpawner:
 
     async def resolve_conflicts(
         self,
-        results: List[TaskResult],
+        results: List[SubagentTaskResult],
         strategy: str = "consensus",
-    ) -> ConflictResolution | None:
+    ) -> SubagentConflictResolution | None:
         """
         Detect and resolve conflicts between subagent outputs.
 
-        Returns ConflictResolution if conflicts detected, None otherwise.
+        Returns SubagentConflictResolution if conflicts detected, None otherwise.
         """
         if len(results) < 2:
             return None
@@ -327,7 +327,7 @@ class SubagentSpawner:
 
         # Conflict detected
         logger.warning("Output conflict detected between %d subagents", len(results))
-        conflict = ConflictResolution(
+        conflict = SubagentConflictResolution(
             task_ids=[r.task_id for r in successful_results],
             resolution_strategy=strategy,
             metadata={"outputs": outputs},

@@ -74,3 +74,25 @@ export function applyOrgHeader(headers: Headers): void {
     headers.set('X-Organization-Id', companyId)
   }
 }
+
+/**
+ * Request options that scope a call to ONE named company, whichever company is selected.
+ * The ApiClient fills the header from the selection only when the caller has not set it, so a view
+ * that is showing company X sends this for X. It only picks which company the caller asks about:
+ * the backend still resolves the tenant context from the header and checks the caller's membership.
+ */
+export function orgScope(companyId: string): { headers: { 'X-Organization-Id': string } } {
+  return { headers: { 'X-Organization-Id': companyId } }
+}
+
+/**
+ * A WebSocket URL naming the selected company in the `company_id` query parameter. A browser WebSocket cannot
+ * set the `X-Organization-Id` header, so this is how a socket tells the backend its active company; the backend
+ * checks the caller's membership exactly as it does for the header. Unchanged when no company is selected or the
+ * URL already names one.
+ */
+export function withCompanyScope(url: string): string {
+  const companyId = getSelectedCompanyId()
+  if (!companyId || /[?&]company_id=/.test(url)) return url
+  return `${url}${url.includes('?') ? '&' : '?'}company_id=${encodeURIComponent(companyId)}`
+}

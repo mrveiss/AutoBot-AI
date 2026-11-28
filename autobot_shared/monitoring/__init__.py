@@ -17,6 +17,7 @@ from autobot_shared.monitoring.prometheus_query import (
     list_metric_names,
     query_instant,
     query_range,
+    query_range_series,
 )
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "get_metrics_manager",
     "query_instant",
     "query_range",
+    "query_range_series",
     "list_metric_names",
 ]

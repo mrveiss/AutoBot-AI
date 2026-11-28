@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# #20620: the SLM must always be running. systemd's start limit stays (#4090), so a broken unit
+# still shows as failed, and this clears it and tries again on every timer tick. A process that is
+# active but fails its health check is restarted only after several ticks, so a slow start isn't
+# interrupted. While a builtin update runs this does nothing, up to a limit so that a stuck update
+# can't keep the SLM down. To keep the SLM down on purpose, stop this timer too.
+set -u
+
+unit="{{ slm_backend_service }}"
+health_url="http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
+max_failures="{{ slm_watchdog_max_health_failures }}"
+counter="${SLM_WATCHDOG_STATE:-/run/autobot-slm-watchdog.failures}"
+update_ticks_file="${counter}.update"
+max_update_ticks="{{ slm_watchdog_max_update_ticks }}"
+
+log() { logger -p "daemon.$1" -t autobot-slm-watchdog "$2" 2>/dev/null || true; }
+
+# The self-update runs in a transient unit (playbook_executor.py SELF_UPDATE_DETACH_UNIT_PREFIX).
+if [ -n "$(systemctl list-units --no-legend --state=active,activating "{{ slm_self_update_unit_prefix }}*" 2>/dev/null)" ]; then
+    ticks=$(( $(cat "$update_ticks_file" 2>/dev/null || echo 0) + 1 ))
+    echo "$ticks" >"$update_ticks_file"
+    if [ "$ticks" -le "$max_update_ticks" ]; then
+        rm -f "$counter"
+        exit 0
+    fi
+    log err "an update has been running for $ticks checks; looking after $unit regardless"
+else
+    rm -f "$update_ticks_file"
+fi
+
+state="$(systemctl is-active "$unit" 2>/dev/null)"
+case "$state" in
+    active) ;;
+    activating|deactivating|reloading) exit 0 ;;  # systemd is already working on it
+    *)
+        log err "$unit is $state; clearing its failure state and starting it"
+        systemctl reset-failed "$unit" 2>/dev/null
+        systemctl start --no-block "$unit"
+        rm -f "$counter"
+        exit 0
+        ;;
+esac
+
+if curl -fsS -m {{ slm_watchdog_health_timeout }} -o /dev/null "$health_url"; then
+    rm -f "$counter"
+    exit 0
+fi
+
+# The count belongs to one process: a replacement gets its full allowance to start.
+pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null)"
+read -r counted_pid failures <"$counter" 2>/dev/null || true
+[ "${counted_pid:-}" = "$pid" ] || failures=0
+failures=$(( ${failures:-0} + 1 ))
+echo "$pid $failures" >"$counter"
+if [ "$failures" -lt "$max_failures" ]; then
+    log warning "$unit failed its health check ($failures of $max_failures)"
+    exit 0
+fi
+log err "$unit is active but failed $failures health checks in a row; restarting it"
+rm -f "$counter"
+systemctl restart --no-block "$unit"

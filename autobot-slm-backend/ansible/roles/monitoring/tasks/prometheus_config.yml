@@ -45,6 +45,42 @@
     _backend_metrics_on_loopback: >-
       {{ _backend_unit.stat.exists and not _backend_vhost.stat.exists }}
 
+# #16375: /api/metrics/prometheus refuses a scrape without the backend's scrape
+# token. The token comes from the SLM secret store as `prometheus_scrape_token`
+# and goes into a file only root and the prometheus group can read; the scrape
+# config names the FILE (bearer_token_file), so the value never appears in
+# prometheus.yml, in the play output, or in Prometheus' /config page.
+#
+# A run that carries no token (the SLM's secret fetch degraded) leaves an
+# existing file alone, and the config keeps pointing at it -- an empty render
+# must not take a working scrape down.
+- name: "Prometheus | Write the backend scrape token file (#16375)"
+  ansible.builtin.copy:
+    content: "{{ prometheus_scrape_token | trim }}"
+    dest: "{{ prometheus_scrape_token_file }}"
+    owner: root
+    group: "{{ prometheus_group }}"
+    mode: "0640"
+  when: (prometheus_scrape_token | default('') | trim) | length > 0
+  no_log: true
+
+- name: "Prometheus | Stat the backend scrape token file (#16375)"
+  ansible.builtin.stat:
+    path: "{{ prometheus_scrape_token_file }}"
+  register: _scrape_token_file
+
+- name: "Prometheus | Resolve whether the backend job can present a token (#16375)"
+  ansible.builtin.set_fact:
+    _backend_scrape_token_present: "{{ _scrape_token_file.stat.exists | default(false) }}"
+
+- name: "Prometheus | Warn that the backend job has no scrape token (#16375)"
+  ansible.builtin.debug:
+    msg: >-
+      No Prometheus scrape token is available (prometheus_scrape_token unset and
+      no {{ prometheus_scrape_token_file }} on this host). The autobot-backend job
+      will be refused with 401 until the SLM delivers one on the next deploy.
+  when: not (_backend_scrape_token_present | bool)
+
 - name: Create Prometheus config
   ansible.builtin.template:
     src: prometheus.yml.j2

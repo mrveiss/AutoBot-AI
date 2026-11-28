@@ -66,6 +66,8 @@ class PoolStatistics:
     max_connections: int
     idle_connections: int
     last_cleanup: datetime | None = None
+    #: Effective decode mode of the pool; None when unknown. One database may have a pool per mode.
+    decode_responses: bool | None = None
 
 
 @dataclass

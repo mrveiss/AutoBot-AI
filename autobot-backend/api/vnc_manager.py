@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 # Issue #12002 (#11506 T1): agent<->human input arbitration
 from api.desktop_control_lock import is_actuation_muted
@@ -51,21 +51,9 @@ from api.schemas_system import (
     WaitForTextRequest,
     WaitForTextResponse,
 )
-from api.vnc_blocking_probes import (
-    is_vnc_running,
-    probe_connection_quality,
-    run_clipboard_write,
-)
-
-# Issue #74 - Area 5: Human-like behavior helpers
-from api.vnc_humanization import (
-    humanize_action_delay,
-    humanize_click_position,
-    humanize_pause_duration,
-    humanize_typing_speed,
-    should_add_human_pause,
-    simulate_mouse_curve,
-)
+from api.vnc_blocking_probes import is_vnc_running, probe_connection_quality
+from api.vnc_host_actions import run_on_host
+from api.vnc_host_target import resolve_host_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -91,14 +79,14 @@ def _launch_websockify() -> None:
     otherwise serves a stale pre-VeNCrypt client (#13060).
     """
     websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
-    vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
+    vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:{config.port.vnc_server}"
     subprocess.Popen(  # nosec B603 B607  # fixed argv, no user input
         [
             "/usr/bin/websockify",
             "--web",
             config.path.novnc_path,
-            "--cert=/etc/autobot/certs/server-cert.pem",
-            "--key=/etc/autobot/certs/server-key.pem",
+            f"--cert={config.tls.remote_cert_dir}/server-cert.pem",
+            f"--key={config.tls.remote_cert_dir}/server-key.pem",
             "--ssl-only",
             websockify_bind,
             vnc_target,
@@ -137,7 +125,7 @@ def start_vnc_server() -> Dict[str, str]:
                 "-SecurityTypes",
                 "VncAuth,TLSVnc",
                 "-rfbport",
-                "5901",
+                str(config.port.vnc_server),
                 "-geometry",
                 "1920x1080",
                 "-depth",
@@ -354,6 +342,12 @@ def _caller_username(current_user: object) -> str | None:
     return None
 
 
+async def _muted_for_host(host_id: str, current_user: object) -> bool:
+    """True when another human holds this host's control lock; refuses a non-/secrets host first (#22145)."""
+    resolve_host_id(host_id)
+    return await is_actuation_muted(host_id, _caller_username(current_user))
+
+
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
@@ -362,8 +356,8 @@ async def vnc_mouse_click(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Perform mouse click at specified coordinates with human-like behavior.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Click at the given coordinates on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
@@ -373,20 +367,10 @@ async def vnc_mouse_click(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
-    # Add human-like randomness to click position (Issue #74 - Area 5)
-    humanized_x, humanized_y = humanize_click_position(request.x, request.y)
-
-    button_map = {"left": "1", "middle": "2", "right": "3"}
-    button_num = button_map.get(request.button, "1")
-
-    # Add realistic delay before action
-    delay = humanize_action_delay()
-    await asyncio.sleep(delay)
-
-    return _run_xdotool_cmd(["mousemove", str(humanized_x), str(humanized_y), "click", button_num])
+    return await run_on_host(request.host_id, "click", x=request.x, y=request.y, button=request.button)
 
 
 @router.post("/type", response_model=VncStatusMessageResponse)
@@ -397,8 +381,8 @@ async def vnc_keyboard_type(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Type text via keyboard with human-like speed and pauses.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Type text on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
@@ -408,38 +392,10 @@ async def vnc_keyboard_type(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
-    # Get humanized typing delay in milliseconds for xdotool
-    delay_seconds = humanize_typing_speed()
-    delay_ms = int(delay_seconds * 1000)
-
-    # Add realistic delay before starting to type
-    pre_delay = humanize_action_delay()
-    await asyncio.sleep(pre_delay)
-
-    # Add random pause during typing if needed
-    if should_add_human_pause():
-        # Split text roughly in half for mid-typing pause
-        mid_point = len(request.text) // 2
-        first_half = request.text[:mid_point]
-        second_half = request.text[mid_point:]
-
-        # Type first half
-        result = _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", first_half])
-        if result["status"] == "error":
-            return result
-
-        # Human pause
-        pause = humanize_pause_duration()
-        await asyncio.sleep(pause)
-
-        # Type second half
-        return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", second_half])
-    else:
-        # Type all at once with humanized delay
-        return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", request.text])
+    return await run_on_host(request.host_id, "type", text=request.text)
 
 
 @router.post("/key", response_model=VncStatusMessageResponse)
@@ -461,10 +417,10 @@ async def vnc_special_key(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
-    return _run_xdotool_cmd(["key", request.key])
+    return await run_on_host(request.host_id, "key", key=request.key)
 
 
 @router.post("/scroll", response_model=VncStatusMessageResponse)
@@ -486,18 +442,10 @@ async def vnc_mouse_scroll(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
-    # Mouse buttons: 4 = scroll up, 5 = scroll down
-    button = "4" if request.direction == "up" else "5"
-
-    # Perform multiple scroll clicks for smooth scrolling
-    args = []
-    for _ in range(request.amount):
-        args.extend(["click", button])
-
-    return _run_xdotool_cmd(args)
+    return await run_on_host(request.host_id, "scroll", direction=request.direction, amount=request.amount)
 
 
 @router.post("/drag", response_model=VncStatusMessageResponse)
@@ -508,8 +456,8 @@ async def vnc_mouse_drag(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Perform mouse drag operation with curved, human-like movement.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Drag along a curved path on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
@@ -519,97 +467,25 @@ async def vnc_mouse_drag(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
-    # Add realistic delay before starting drag
-    pre_delay = humanize_action_delay()
-    await asyncio.sleep(pre_delay)
-
-    # Generate curved path for realistic mouse movement
-    path_points = simulate_mouse_curve(request.x1, request.y1, request.x2, request.y2)
-
-    # Move to start position and press mouse button
-    result = _run_xdotool_cmd(["mousemove", str(request.x1), str(request.y1), "mousedown", "1"])
-    if result["status"] == "error":
-        return result
-
-    # Move through the curved path with small delays
-    for x, y in path_points[1:]:  # Skip first point (already there)
-        _run_xdotool_cmd(["mousemove", str(x), str(y)])
-        # Small delay between movements for smooth curve
-        await asyncio.sleep(TimingConstants.POLL_INTERVAL)
-
-    # Release mouse button at end position
-    return _run_xdotool_cmd(["mouseup", "1"])
-
-
-async def _run_screenshot_capture(argv: list):
-    """Run one screenshot capture command off the event loop. Issue #13208.
-
-    Each command carries a 10s timeout and there are two of them, so running
-    these inline blocked the loop for up to 20s per failed capture.
-    """
-    return await asyncio.to_thread(  # nosec B603 B607  # fixed argv, no user input
-        subprocess.run,
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-    )
-
-
-async def _capture_screenshot_to(tmp_path: str) -> bool:
-    """Capture the desktop into *tmp_path*, falling back from scrot to import."""
-    for argv in (["scrot", "-o", tmp_path], ["import", "-window", "root", tmp_path]):
-        result = await _run_screenshot_capture(argv)
-        if result.returncode == 0:
-            return True
-    return False
+    return await run_on_host(request.host_id, "drag", x1=request.x1, y1=request.y1, x2=request.x2, y2=request.y2)
 
 
 @router.get("/screenshot", response_model=VncScreenshotResponse)
 @with_error_handling(error_code_prefix="VNC_SCREENSHOT")
 async def vnc_screenshot(
+    host_id: str = Query(..., min_length=1, description="Selected /secrets infrastructure host id"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
+    """Capture the selected /secrets host's desktop over its VNC endpoint (#22145).
+
+    Returns {"status": "success|error", "image_data": "base64 PNG", "message": "..."}.
+    A host that is not a /secrets infrastructure host is refused with 404.
     """
-    Capture desktop screenshot.
-    Issue #74: Desktop interaction controls.
-
-    Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
-    on the success path, on capture failure and on any exception. Previously
-    only the success path unlinked it and each failed capture leaked a PNG.
-
-    Returns:
-        {
-            "status": "success|error",
-            "image_data": "base64-encoded PNG",
-            "message": "..."
-        }
-    """
-    try:
-        with temporary_file_path(suffix=".png") as tmp_path:
-            if not await _capture_screenshot_to(tmp_path):
-                return {
-                    "status": "error",
-                    "message": "Screenshot capture failed",
-                    "image_data": "",
-                }
-
-            with open(tmp_path, "rb") as f:
-                image_data = base64.b64encode(f.read()).decode("utf-8")
-
-        return {
-            "status": "success",
-            "message": "Screenshot captured",
-            "image_data": image_data,
-        }
-
-    except Exception as e:
-        logger.error("Error capturing screenshot: %s", e)
-        return {"status": "error", "message": "Operation failed", "image_data": ""}
+    result = await run_on_host(host_id, "screenshot")
+    return {"image_data": "", **result}
 
 
 @router.post("/clipboard", response_model=VncStatusMessageResponse)
@@ -617,37 +493,12 @@ async def vnc_screenshot(
 async def vnc_clipboard_sync(
     request: ClipboardSyncRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
-    """
-    Sync clipboard content to remote desktop.
-    Issue #74: Desktop interaction controls.
-
-    Args:
-        request: ClipboardSyncRequest with text content
-
-    Returns:
-        {"status": "success|error", "message": "..."}
-    """
-    try:
-        # Use xclip to set clipboard content
-        # `Popen` is cheap; `communicate(timeout=5)` is not, and it was on the event
-        # loop. `subprocess.run` with `input=` is the same two calls in one, so it
-        # moves off the loop in a single `to_thread` hop. `TimeoutExpired` still
-        # propagates to the handler below.
-        completed = await asyncio.to_thread(run_clipboard_write, request.content.encode("utf-8"))
-
-        if completed.returncode != 0:
-            return {"status": "error", "message": completed.stderr.decode("utf-8")}
-
-        return {"status": "success", "message": "Clipboard synced"}
-
-    except FileNotFoundError:
-        return {"status": "error", "message": "xclip not installed"}
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "message": "Clipboard sync timeout"}
-    except Exception as e:
-        logger.error("Error syncing clipboard: %s", e)
-        return {"status": "error", "message": "Operation failed"}
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
+    """Send clipboard text to the selected /secrets host's desktop (#22145); muted like the other controls."""
+    if await _muted_for_host(request.host_id, current_user):
+        return _muted_result()
+    return await run_on_host(request.host_id, "clipboard", content=request.content)
 
 
 # Connection Settings Management (Issue #74 - Area 4)
@@ -1002,7 +853,11 @@ async def list_macros(
 
 @router.post("/macro/playback", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_PLAY")
-async def playback_macro(name: str, admin_check: bool = Depends(check_admin_permission)) -> Dict[str, str]:
+async def playback_macro(
+    name: str,
+    host_id: str = Query(..., min_length=1, description="Selected /secrets infrastructure host id"),
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
     """
     Play back a recorded macro.
     Issue #74 - Area 5: Automation Features.
@@ -1033,15 +888,15 @@ async def playback_macro(name: str, admin_check: bool = Depends(check_admin_perm
         # Execute action based on type
         try:
             if action.action_type == "click":
-                await vnc_mouse_click(MouseClickRequest(**action.params))
+                await vnc_mouse_click(MouseClickRequest(**{**action.params, "host_id": host_id}))
             elif action.action_type == "type":
-                await vnc_keyboard_type(KeyboardTypeRequest(**action.params))
+                await vnc_keyboard_type(KeyboardTypeRequest(**{**action.params, "host_id": host_id}))
             elif action.action_type == "key":
-                await vnc_special_key(SpecialKeyRequest(**action.params))
+                await vnc_special_key(SpecialKeyRequest(**{**action.params, "host_id": host_id}))
             elif action.action_type == "scroll":
-                await vnc_mouse_scroll(MouseScrollRequest(**action.params))
+                await vnc_mouse_scroll(MouseScrollRequest(**{**action.params, "host_id": host_id}))
             elif action.action_type == "drag":
-                await vnc_mouse_drag(MouseDragRequest(**action.params))
+                await vnc_mouse_drag(MouseDragRequest(**{**action.params, "host_id": host_id}))
         except Exception as e:
             logger.error("Error executing macro action %d: %s", i, e)
             return {
@@ -1137,7 +992,7 @@ async def vnc_ocr_text(
 
     try:
         # Capture screenshot
-        screenshot_result = await vnc_screenshot()
+        screenshot_result = await vnc_screenshot(host_id=request.host_id, admin_check=True)
         if screenshot_result["status"] != "success":
             return {"status": "error", "text": "", "message": "Screenshot failed"}
 
@@ -1253,7 +1108,7 @@ async def vnc_find_image(
         }
 
     try:
-        screenshot_result = await vnc_screenshot()
+        screenshot_result = await vnc_screenshot(host_id=request.host_id, admin_check=True)
         if screenshot_result["status"] != "success":
             return {"status": "error", "found": False, "message": "Screenshot failed"}
 
@@ -1296,7 +1151,7 @@ async def vnc_wait_for_text(
 
     while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Perform OCR
-        ocr_result = await vnc_ocr_text(VNCOCRRequest(region=request.region))
+        ocr_result = await vnc_ocr_text(VNCOCRRequest(host_id=request.host_id, region=request.region))
 
         if ocr_result["status"] == "success":
             recognized_text = ocr_result["text"]
@@ -1345,7 +1200,7 @@ async def vnc_wait_for_image(
     while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Find image
         find_result = await vnc_find_image(
-            FindImageRequest(template_data=request.template_data, threshold=request.threshold)
+            FindImageRequest(host_id=request.host_id, template_data=request.template_data, threshold=request.threshold)
         )
 
         if find_result["status"] == "success" and find_result["found"]:
@@ -1529,6 +1384,7 @@ async def get_session_action_log(
 @with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOT")
 async def save_session_screenshot(
     session_id: str,
+    host_id: str = Query(..., min_length=1, description="Selected /secrets infrastructure host id"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
     """
@@ -1548,7 +1404,7 @@ async def save_session_screenshot(
     if "/" in session_id or ".." in session_id:
         raise HTTPException(status_code=400, detail="Invalid session ID")
     # Capture screenshot
-    screenshot_result = await vnc_screenshot()
+    screenshot_result = await vnc_screenshot(host_id=host_id, admin_check=True)
     if screenshot_result["status"] != "success":
         return {"status": "error", "message": "Screenshot capture failed"}
 

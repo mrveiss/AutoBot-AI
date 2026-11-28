@@ -1,0 +1,82 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""Response models of the audit-log query API (``api/audit.py``)."""
+
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+from type_defs.common import Metadata
+
+
+class AuditEntryResponse(BaseModel):
+    """One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
+
+    ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+    ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+    an open string: operation rows say success/denied/failed/error/attempted, identity
+    rows add verified/backup-code and more. It is never narrowed to a Literal, which
+    would turn one off-vocabulary row into a 500 for the whole query.
+    """
+
+    id: str
+    timestamp: float
+    date: str
+    operation: str
+    result: str
+    user_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    session_id: Optional[str] = None
+    user_role: Optional[str] = None
+    resource: Optional[str] = None
+    vm_source: Optional[str] = None
+    vm_name: Optional[str] = None
+    details: Metadata
+    performance_ms: Optional[float] = None
+
+
+class AuditQueryResponse(BaseModel):
+    """Audit log query response."""
+
+    success: bool
+    total_returned: int
+    has_more: bool
+    entries: List[AuditEntryResponse]
+    query: dict
+
+
+class AuditIntegrityFinding(BaseModel):
+    """One finding of an audit-chain verification, positioned at the ``chain_seq`` where it was found (#17219)."""
+
+    kind: str
+    seq: int
+    detail: str = ""
+
+
+class AuditIntegrityReport(BaseModel):
+    """The result of one audit-chain verification (``services/audit/integrity.py``)."""
+
+    ok: bool
+    checked_at: str
+    rows_checked: int
+    chain_started: bool
+    head_seq: int
+    head_hash: Optional[str] = None
+    pre_chain_count: int
+    unchained_count: int
+    from_seq: int
+    findings: List[AuditIntegrityFinding]
+
+
+class AuditIntegrityStatus(BaseModel):
+    """The last verification run in this process (None before the first) and the chain's current head."""
+
+    last_result: Optional[AuditIntegrityReport] = None
+    head_seq: int
+    head_hash: Optional[str] = None
+
+
+class AuditIntegrityRequest(BaseModel):
+    """Body of the verify route: where to start (default: the genesis)."""
+
+    from_seq: Optional[int] = Field(default=None, ge=1, le=2**62)

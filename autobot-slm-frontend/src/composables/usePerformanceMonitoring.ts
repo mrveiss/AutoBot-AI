@@ -11,8 +11,9 @@
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { ref, onMounted } from 'vue'
+import { HttpError, createLogger } from '@autobot/ui'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { slmApiClient } from '@/utils/ApiClient'
 
 const logger = createLogger('usePerformanceMonitoring')
@@ -114,8 +115,6 @@ export function usePerformanceMonitoring(options: {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
-
   /**
    * Perform one authenticated SLM request and return parsed JSON.
    *
@@ -143,7 +142,7 @@ export function usePerformanceMonitoring(options: {
     const response = await slmApiClient.rawRequest(endpoint, options)
     if (!response.ok) {
       const body = await response.text().catch(() => '')
-      throw new Error(`HTTP ${response.status}: ${body || response.statusText}`)
+      throw new HttpError(response.status, body || response.statusText)
     }
     if (response.status === 204) {
       return undefined as unknown as T
@@ -313,16 +312,20 @@ export function usePerformanceMonitoring(options: {
 
   // ===== Polling =====
 
+  // #19482: the shared dashboard policy (stops with the owning scope and after repeated
+  // failures; the view shows PollingPausedAlert and Retry calls `poller.start('')`).
+  const poller = useDashboardPoller(throwIfFailed(fetchOverview, error), pollInterval)
+
+  /** Start polling; its first tick is the overview fetch. */
   function startPolling(): void {
-    if (pollingInterval) return
+    if (poller.isPolling.value) return
     logger.debug(`Starting performance polling: ${pollInterval}ms`)
-    pollingInterval = setInterval(fetchOverview, pollInterval)
+    poller.start('')
   }
 
   function stopPolling(): void {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
+    if (poller.isPolling.value) {
+      poller.stop()
       logger.debug('Performance polling stopped')
     }
   }
@@ -330,16 +333,11 @@ export function usePerformanceMonitoring(options: {
   // ===== Lifecycle =====
 
   onMounted(() => {
-    if (autoFetch) {
-      fetchOverview()
-    }
     if (autoFetch && pollInterval > 0) {
       startPolling()
+    } else if (autoFetch) {
+      fetchOverview()
     }
-  })
-
-  onUnmounted(() => {
-    stopPolling()
   })
 
   return {
@@ -365,6 +363,7 @@ export function usePerformanceMonitoring(options: {
     deleteAlertRule,
     startPolling,
     stopPolling,
+    poller,
   }
 }
 

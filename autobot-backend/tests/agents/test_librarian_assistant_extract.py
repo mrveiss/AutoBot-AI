@@ -126,7 +126,7 @@ if _llm_mod is not None:
 
 _kb_mod = sys.modules.get("knowledge_base")
 if _kb_mod is not None:
-    _kb_mod.KnowledgeBase = MagicMock  # type: ignore[attr-defined]
+    _kb_mod.get_knowledge_base = AsyncMock()  # type: ignore[attr-defined]  # #18122: canonical accessor
 
 # ---------------------------------------------------------------------------
 # Load the module under test.
@@ -202,7 +202,7 @@ def _make_content_result(
     url: str = "",
     structured: dict | None = None,
 ) -> MagicMock:
-    """Build a mock ContentResult."""
+    """Build a mock ContentReachResult."""
     r = MagicMock()
     r.success = success
     r.text = text

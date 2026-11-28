@@ -52,6 +52,17 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+def submitter_metadata(task_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """The submitter identity of a task: ``user_id`` / ``org_id`` from the envelope, beside ``user_role``.
+
+    Read from the task's top level, the same trust level as ``user_role`` that
+    ``WorkerNode.execute_task`` already authorises on; never from the handler's own ``metadata``
+    payload, which is the LLM's. A task submitted without a user (a schedule or system origin) gets
+    no ``user_id``, and a KB write handler refuses it (#19517).
+    """
+    return {key: str(task_payload[key]) for key in ("user_id", "org_id") if task_payload.get(key)}
+
+
 class TaskExecutor:
     """
     Routes task execution to appropriate handlers using Strategy Pattern.
@@ -169,6 +180,7 @@ class TaskExecutor:
             task_payload=task_payload,
             user_role=user_role,
             task_id=task_id,
+            metadata=submitter_metadata(task_payload),
         )
 
         # Delegate to the handler with context

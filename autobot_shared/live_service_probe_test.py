@@ -139,15 +139,29 @@ class TestSplitEndpoint:
 
 
 class TestRequireLiveEndpoint:
-    def test_does_not_skip_when_the_service_is_up(self, listening_port):
+    @pytest.fixture
+    def opted_in(self, monkeypatch):
+        monkeypatch.setenv(live_service_probe.LIVE_TESTS_ENV, "1")
+
+    def test_does_not_skip_when_the_service_is_up(self, opted_in, listening_port):
         # Reaching the next statement is the assertion: pytest.skip raises.
         require_live_endpoint(f"http://127.0.0.1:{listening_port}", what="a test double")
 
-    def test_skips_with_a_reason_naming_the_service_and_endpoint(self, closed_port):
-        with pytest.raises(Exception) as excinfo:
+    @pytest.mark.parametrize("value", [None, "0", "false", ""])
+    def test_a_listening_service_is_not_consent(self, monkeypatch, listening_port, value):
+        """#19479: on a machine that runs an install, the listener is the user's live system."""
+        if value is None:
+            monkeypatch.delenv(live_service_probe.LIVE_TESTS_ENV, raising=False)
+        else:
+            monkeypatch.setenv(live_service_probe.LIVE_TESTS_ENV, value)
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            require_live_endpoint(f"http://127.0.0.1:{listening_port}", what="the AutoBot backend API")
+        assert f"{live_service_probe.LIVE_TESTS_ENV}=1" in str(excinfo.value)
+
+    def test_skips_with_a_reason_naming_the_service_and_endpoint(self, opted_in, closed_port):
+        with pytest.raises(pytest.skip.Exception) as excinfo:
             require_live_endpoint(f"http://127.0.0.1:{closed_port}", what="the AutoBot backend API")
 
-        assert excinfo.typename == "Skipped", f"expected a skip, got {excinfo.typename}"
         message = str(excinfo.value)
         assert "the AutoBot backend API" in message
         assert f"127.0.0.1:{closed_port}" in message
@@ -183,10 +197,9 @@ class TestRedisClientIsStubbed:
         standin = types.ModuleType(live_service_probe.REDIS_CLIENT_MODULE)
         monkeypatch.setitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, standin)
 
-        with pytest.raises(Exception) as excinfo:
+        with pytest.raises(pytest.skip.Exception) as excinfo:
             live_service_probe.require_real_redis_client("the knowledge base")
 
-        assert excinfo.typename == "Skipped"
         assert "#14932" in str(excinfo.value), "the skip reason must name the tracking issue"
 
         import autobot_shared.redis_client as real

@@ -16,7 +16,7 @@
         :class="[
           'sidebar-loading-view h-full shrink-0',
           'hidden lg:block',
-          store.sidebarCollapsed ? 'w-12' : 'w-80',
+          store.sidebarCollapsed ? 'w-12' : 'w-[16.25rem]',
         ]"
       >
         <ChatSidebar />
@@ -33,7 +33,7 @@
       >
         <div
           v-if="showMobileSidebar"
-          class="lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] z-40 shadow-2xl overflow-hidden"
+          class="lg:hidden fixed top-0 left-0 h-full w-[16.25rem] max-w-[85vw] z-40 shadow-2xl overflow-hidden"
         >
           <ChatSidebar @close-mobile="showMobileSidebar = false" />
         </div>
@@ -50,67 +50,31 @@
           :connection-status="connectionStatus"
           :is-connected="isConnected"
           :context-window-props="contextWindowProps"
+          :overseer-enabled="overseerEnabled" :started-at="store.currentSession?.createdAt ?? store.currentSession?.messages[0]?.timestamp"
           @export-session="exportSession"
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
           @open-settings="showChatSettings = true"
+          @restore-focus="fallbackBtnRef?.focus()"
           class="shrink-0"
         >
-          <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
-            <!-- Voice controls group (GH#8755): proximity grouping for audio actions -->
-            <div role="group" aria-label="Voice controls" class="header-btn-group">
-              <!-- Voice Output Toggle (#928) -->
-              <button
-                @click="toggleVoiceOutput"
-                class="header-btn"
-                :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-                :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
-              >
-                <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
-              </button>
-              <!-- Voice Conversation (#1029) -->
-              <button
-                @click="openVoiceConversation"
-                class="header-btn"
-                :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
-                :title="$t('chat.interface.voiceChat')"
-              >
-                <Icon name="headset" />
-              </button>
-            </div>
-            <!-- Divider between voice group and utility actions -->
-            <div class="header-btn-divider" aria-hidden="true"></div>
-            <button
-              v-if="store.currentSessionId"
-              @click="toggleFilePanel"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
-              :title="$t('chat.interface.toggleFilePanel')"
-            >
-              <Icon name="paperclip" />
-            </button>
-            <!-- Issue #4414: multi-model comparison toggle -->
-            <button
-              @click="showComparePanel = !showComparePanel"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showComparePanel }"
-              :title="$t('chat.compare.toggleTitle')"
-              :aria-pressed="showComparePanel"
-            >
-              <Icon name="columns" />
-            </button>
-            <!-- #16443: collaboration panel toggle, collaborative sessions only -->
-            <button
-              v-if="isCollaborativeSession"
-              @click="toggleCollaborationPanel"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showCollaborationPanel }"
-              :title="$t('collaboration.panel.title')"
-              :aria-pressed="showCollaborationPanel"
-            >
-              <Icon name="users" />
-            </button>
+            <ChatHeaderActions
+              :voice-output-enabled="voiceOutputEnabled"
+              :is-speaking="isSpeaking"
+              :voice-expanded="voiceExpanded"
+              :voice-controls-id="voiceControlsId"
+              :has-session="!!store.currentSessionId"
+              :is-collaborative="isCollaborativeSession"
+              :show-file-panel="showFilePanel"
+              :show-compare-panel="showComparePanel"
+              :show-collaboration-panel="showCollaborationPanel"
+              @toggle-voice-output="toggleVoiceOutput"
+              @toggle-voice-conversation="toggleVoiceConversation"
+              @toggle-panel="togglePanel"
+              @toggle-compare="showComparePanel = !showComparePanel"
+              @button-el="setPanelButton"
+            />
             <!-- #16470 follow-up: always-mountable, independent of session
                  mode -- an invitee usually has no collaborative session of
                  their own yet, so this can't be gated the same way. -->
@@ -153,15 +117,17 @@
       <Transition name="slide-left">
         <ChatFilePanel
           v-if="showFilePanel && store.currentSessionId"
+          id="chat-panel-files"
           :session-id="store.currentSessionId"
           @close="showFilePanel = false"
         />
         <VoiceConversationPanel
           v-else-if="showVoicePanel"
-          @close="closeVoicePanel"
+          id="chat-panel-voice"
+          @close="showVoicePanel = false"
         />
         <ChatCollaborationPanel
-          v-else-if="showCollaborationPanel && isCollaborativeSession"
+          id="chat-panel-collaboration" v-else-if="showCollaborationPanel && isCollaborativeSession"
           @close="showCollaborationPanel = false"
         />
       </Transition>
@@ -287,13 +253,14 @@
 </template>
 
 <script setup lang="ts">
+import { formatLocalTime, isoDateStamp } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, saveTextFile } from '@autobot/ui'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -318,11 +285,13 @@ const logger = createLogger('ChatInterface')
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
+import { useChatSidePanels, type ChatSidePanel } from '@/composables/useChatSidePanels'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
 import ChatCollaborationPanel from './ChatCollaborationPanel.vue'
 import PendingInvitationsBell from '@/components/collaboration/PendingInvitationsBell.vue'
+import ChatHeaderActions from './ChatHeaderActions.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
@@ -330,7 +299,8 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractCompleteSentences } from '@/utils/ttsSentences'
+import { approvalErrorMessage } from '@/utils/approvalResult'
+import { createSpeechShaper, createTtsStream } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -393,7 +363,7 @@ const contextWindowProps = computed(() => ({
   usagePercent: _ctxWindow.usagePercent.value,
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
-  hasData: _ctxWindow.hasData.value,
+  hasData: _ctxWindow.hasData.value, loadError: _ctxWindow.loadError.value,
   isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
 
@@ -505,13 +475,17 @@ const {
 // Voice conversation (#1029)
 const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
-const showVoicePanel = ref(false)
+// One right-hand panel at a time; focus handled in the composable (#18243)
+const { showFilePanel, showVoicePanel, showCollaborationPanel, fileBtnRef, voiceBtnRef,
+  collabBtnRef, fallbackBtnRef, voiceExpanded, voiceControlsId, toggle: togglePanel, closeAll: closeAllPanels } = useChatSidePanels(showVoiceOverlay)
+// ChatHeaderActions reports each toggle button's element, so a closing panel can return focus to it.
+const setPanelButton = (panel: ChatSidePanel | 'fallback', el: HTMLElement | null): void => {
+  ({ files: fileBtnRef, voice: voiceBtnRef, collaboration: collabBtnRef, fallback: fallbackBtnRef })[panel].value = el
+}
 const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 
 function openVoiceConversation(): void {
   if (voiceDisplayMode.value === 'sidepanel') {
-    showFilePanel.value = false
-    showCollaborationPanel.value = false
     showVoicePanel.value = true
   } else {
     showVoiceOverlay.value = true
@@ -519,7 +493,11 @@ function openVoiceConversation(): void {
   voiceConversation.activate()
 }
 
-function closeVoicePanel(): void {
+// Side-panel mode: the header button toggles (aria-expanded); overlay mode
+// stays open-only, it has its own close control.
+function toggleVoiceConversation(): void {
+  if (!showVoicePanel.value) return openVoiceConversation()
+  voiceConversation.deactivate()
   showVoicePanel.value = false
 }
 
@@ -575,9 +553,8 @@ const showComparePanel = ref(false)
 const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
-const showFilePanel = ref(false)
+
 // #16443: collaboration panel (participants/activity/notifications)
-const showCollaborationPanel = ref(false)
 // Mobile sidebar overlay (#1804)
 const showMobileSidebar = ref(false)
 // Chat settings modal (MVA-2006)
@@ -729,7 +706,7 @@ const sessionInfo = computed(() => {
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
-  const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
+  const lastMessageTime = lastMessage ? formatLocalTime(lastMessage.timestamp) : null
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
@@ -739,22 +716,10 @@ const sessionInfo = computed(() => {
   return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
 
-
 // Methods
-const toggleFilePanel = () => {
-  showVoicePanel.value = false
-  showCollaborationPanel.value = false
-  showFilePanel.value = !showFilePanel.value
-}
 
 // #16443
 const isCollaborativeSession = computed(() => store.currentSession?.mode === 'collaborative')
-
-const toggleCollaborationPanel = () => {
-  showVoicePanel.value = false
-  showFilePanel.value = false
-  showCollaborationPanel.value = !showCollaborationPanel.value
-}
 
 const exportSession = async () => {
   if (!store.currentSessionId) return
@@ -772,13 +737,8 @@ const exportSession = async () => {
       exportedAt: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const name = `chat-${session.title || session.id.slice(-8)}-${isoDateStamp()}.json`
+    saveTextFile(JSON.stringify(data, null, 2), name, 'application/json')
 
   } catch (error) {
     logger.error('Failed to export session:', error)
@@ -971,17 +931,14 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`)
-      }
-
-      await response.json()
-
+      if (response.status === 409) { notify(t('chat.interface.alreadyDecided'), 'info'); showCommandDialog.value = false; return } // #19951
+      if (!response.ok) throw new Error(`Server returned ${response.status}`)
+      const refusal = approvalErrorMessage(await response.json(), t)
+      if (refusal) { notify(refusal, 'error'); return } // 200 can carry a refusal: still pending (#21174)
       logger.debug('Command denied with user feedback/alternative approach')
       notify(t('chat.interface.feedbackSent'), 'success')
     }
 
-    // Close the dialog
     showCommandDialog.value = false
 
     // The comment was already sent to chat via CommandPermissionDialog
@@ -1065,7 +1022,7 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
       case 'f':
         if (store.currentSessionId) {
           event.preventDefault()
-          toggleFilePanel()
+          togglePanel('files')
         }
         break
     }
@@ -1281,9 +1238,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     loadNovncUrl()
 
     // Close file panel when switching sessions
-    showFilePanel.value = false
-    showVoicePanel.value = false
-    showCollaborationPanel.value = false
+    closeAllPanels()
 
     // Prime TTS cursor to end of new session's last speakable message (#1488).
     // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
@@ -1313,6 +1268,10 @@ watch(
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+// Shapes each reply's spoken slices; fence state spans slices (#13102)
+const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
+let _speechShaper = _newSpeechShaper()
+let _ttsStream = createTtsStream()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1324,6 +1283,10 @@ function _primeTtsCursor(): void {
     if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
     _lastStreamingMsgId = m.id
     _lastSpokenIdx = m.content.length
+    // Read the skipped text unspoken so an open code fence is known (#13102)
+    _speechShaper = _newSpeechShaper()
+    _speechShaper.push(m.content)
+    _ttsStream = createTtsStream(true)
     break
   }
 }
@@ -1364,6 +1327,8 @@ watch(
       if (store.isTyping) stopSpeaking()
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
+      _speechShaper = _newSpeechShaper()
+      _ttsStream = createTtsStream(!store.isTyping)
     }
 
     if (store.isTyping && current.content) {
@@ -1372,18 +1337,16 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { sentences, consumed } = extractCompleteSentences(
-        newText,
-        _MIN_TTS_SENTENCE_CHARS,
-      )
-      for (const s of sentences) speakStreaming(s)
+      const { spans, consumed } = _ttsStream.next(newText)
+      for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
       // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
       // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
       // so they only ever reach TTS via this remainder flush (#12502).
-      const remainder = current.content.slice(_lastSpokenIdx).trim()
-      if (remainder) speakStreaming(remainder)
+      const remainder = current.content.slice(_lastSpokenIdx)
+      if (remainder.trim()) speakStreaming(_speechShaper.push(remainder))
+      speakStreaming(_speechShaper.flush())
       flushStreaming()
       // Mark all content as spoken — do NOT reset to 0/null here.
       // Resetting _lastStreamingMsgId to null would cause any subsequent reactive
@@ -1394,11 +1357,6 @@ watch(
     }
   }
 )
-
-// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
-// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
-// buffer them until they combine with the next sentence or flush as a remainder.
-const _MIN_TTS_SENTENCE_CHARS = 20
 
 </script>
 
@@ -1412,11 +1370,9 @@ const _MIN_TTS_SENTENCE_CHARS = 20
 /* CRITICAL FIX: Enhanced sidebar dimensions constraint */
 .sidebar-loading-view {
   /* Force sidebar width and height - prevent UnifiedLoadingView override */
-  width: 320px !important; /* Force w-80 equivalent (320px) */
+  /* Width comes from the w-12 / w-[16.25rem] classes on the element (mockup: ~260px); only the height is forced. */
   height: 100% !important; /* Force full height */
   flex-shrink: 0 !important;
-  max-width: 320px !important;
-  min-width: 320px !important;
 }
 
 .workflow-progress-widget {
@@ -1460,24 +1416,6 @@ const _MIN_TTS_SENTENCE_CHARS = 20
   animation: slideInFromRight 0.3s ease-out;
 }
 
-/* Header button styling for file panel toggle */
-.header-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
-}
-
-/* GH#8755: voice action group — subtle pill wraps related audio controls */
-.header-btn-group {
-  @apply flex items-center gap-0.5 rounded-md px-0.5;
-  background: var(--bg-tertiary);
-}
-
-/* GH#8755: vertical divider between voice group and utility buttons */
-.header-btn-divider {
-  @apply self-stretch my-1 mx-1;
-  width: 1px;
-  background: var(--border-light);
-}
-
 /* Agent-loop tool approval dialog (#4952) */
 .tool-approval-overlay {
   @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50;
@@ -1491,7 +1429,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
   background: var(--color-warning-bg);
   border-bottom: 1px solid var(--color-warning-border);
 }
-.tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header .icon { color: var(--color-warning); width: 1.25rem; height: 1.25rem; }
 .tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }
@@ -1507,7 +1445,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error-solid); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
 .tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */

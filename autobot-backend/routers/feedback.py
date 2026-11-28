@@ -11,14 +11,15 @@ Endpoints for completion feedback tracking and model improvement.
 import asyncio
 from typing import Dict, List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["feedback"])
+router = APIRouter(tags=["feedback"], dependencies=[Depends(get_current_user)])
 
 # Lazy service initialization — FeedbackTracker accesses config.database,
 # IncrementalTrainer chains to torchmetrics. Both deferred to avoid import crash.
@@ -251,7 +252,9 @@ async def get_recent_feedback(
 
 
 @router.post("/retrain", response_model=RetrainResponse)
-async def trigger_retraining(request: RetrainRequest, background_tasks: BackgroundTasks):
+async def trigger_retraining(
+    request: RetrainRequest, background_tasks: BackgroundTasks, _: bool = Depends(check_admin_permission)
+):
     """
     Trigger model retraining with feedback.
 

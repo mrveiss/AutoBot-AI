@@ -10,6 +10,7 @@
 // specifiers ending in `.css`, not this bare specifier, so declare it explicitly
 // for vue-tsc (bundler resolution maps it to src/tokens/contract.css at build).
 declare module '@autobot/ui/tokens'
+declare module '@autobot/ui/adapter'
 
 interface ImportMetaEnv {
   readonly VITE_API_URL: string

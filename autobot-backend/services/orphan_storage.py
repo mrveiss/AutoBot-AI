@@ -66,7 +66,7 @@ class DeleteResult:
 
 
 @dataclass(frozen=True)
-class ProviderStatus:
+class OrphanDetectorStatus:
     """Whether one detector's listing actually ran (#17039 review, #17050).
 
     An outage that makes a detector raise must never be read as "this
@@ -85,7 +85,7 @@ class OrphanListing:
     """Every candidate found, plus which detectors actually ran."""
 
     candidates: list[OrphanCandidate]
-    statuses: list[ProviderStatus]
+    statuses: list[OrphanDetectorStatus]
 
 
 @dataclass(frozen=True)
@@ -116,14 +116,14 @@ async def list_all_candidates() -> OrphanListing:
     as unavailable, with why.
     """
     candidates: list[OrphanCandidate] = []
-    statuses: list[ProviderStatus] = []
+    statuses: list[OrphanDetectorStatus] = []
     for provider, detector in _REGISTRY.items():
         try:
             candidates.extend(await detector.list_candidates())
-            statuses.append(ProviderStatus(provider=provider, available=True))
+            statuses.append(OrphanDetectorStatus(provider=provider, available=True))
         except Exception as exc:
             logger.error("Orphan detector %r failed to list candidates: %s", provider, exc)
-            statuses.append(ProviderStatus(provider=provider, available=False, error=safe_error_reason(exc)))
+            statuses.append(OrphanDetectorStatus(provider=provider, available=False, error=safe_error_reason(exc)))
     return OrphanListing(candidates=candidates, statuses=statuses)
 
 

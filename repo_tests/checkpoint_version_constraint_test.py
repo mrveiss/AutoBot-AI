@@ -35,6 +35,8 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SOURCE = repo_root() / "autobot-backend" / "training" / "completion_trainer.py"
 _MIN_ACCEPTED_SHAPES = 2
 
@@ -45,7 +47,7 @@ def _source_text() -> str:
 
 
 def _tree() -> ast.Module:
-    return ast.parse(_source_text())
+    return parse_cache.parse(_source_text())
 
 
 def _version_re_assignments(tree: ast.Module) -> list[ast.expr]:

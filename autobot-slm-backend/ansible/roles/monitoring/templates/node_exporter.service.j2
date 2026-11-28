@@ -28,7 +28,7 @@ Type=simple
 User=node_exporter
 Group=node_exporter
 ExecStart=/opt/node_exporter/node_exporter \
-  --web.listen-address=0.0.0.0:{{ node_exporter_port }} \
+  --web.listen-address={{ monitoring_listen_address }}:{{ node_exporter_port }} \
   --collector.systemd \
   --collector.processes
 

@@ -18,23 +18,16 @@ import asyncio
 import random
 import time
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, TypeVar
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.retry_mechanism import RetryStrategy
+from autobot_shared.ssot_constants import model_config
 
 logger = get_logger(__name__)
 
 T = TypeVar("T")
-
-
-class RetryStrategy(Enum):
-    """Retry backoff strategies."""
-
-    EXPONENTIAL = "exponential"  # 2^attempt seconds
-    LINEAR = "linear"  # attempt * base seconds
-    FIXED = "fixed"  # Fixed delay
 
 
 class RateLimitError(Exception):
@@ -63,11 +56,11 @@ class RateLimitError(Exception):
 class RateLimitConfig:
     """Configuration for rate limit handling."""
 
-    max_retries: int = 3
+    max_retries: int = model_config.MAX_RETRIES  # LLM retry budget (#19730)
     base_delay: float = 1.0  # Base delay in seconds
     max_delay: float = 60.0  # Maximum delay cap
     jitter_factor: float = 0.5  # Random jitter (0-1)
-    strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
+    strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF
 
     # Rate limit detection
     rate_limit_status_codes: tuple = (429, 503)
@@ -142,11 +135,12 @@ class RateLimitHandler:
         if retry_after is not None and retry_after > 0:
             base_delay = retry_after
         else:
-            if self.config.strategy == RetryStrategy.EXPONENTIAL:
+            if self.config.strategy in (RetryStrategy.EXPONENTIAL_BACKOFF, RetryStrategy.JITTERED_BACKOFF):
+                # Jitter is always applied below, so JITTERED_BACKOFF is exponential here.
                 base_delay = self.config.base_delay * (2**attempt)
-            elif self.config.strategy == RetryStrategy.LINEAR:
+            elif self.config.strategy == RetryStrategy.LINEAR_BACKOFF:
                 base_delay = self.config.base_delay * (attempt + 1)
-            else:  # FIXED
+            else:  # FIXED_DELAY
                 base_delay = self.config.base_delay
 
         # Apply cap
@@ -342,7 +336,7 @@ class RateLimitHandler:
 
 
 # Convenience decorator for rate-limited functions
-def with_retry(
+def with_rate_limit_retry(
     provider: str = "default",
     max_retries: int = 3,
     handler: RateLimitHandler = None,
@@ -376,9 +370,8 @@ __all__ = [
     "RateLimitHandler",
     "RateLimitConfig",
     "RateLimitError",
-    "RetryStrategy",
     "RetryMetrics",
-    "with_retry",
+    "with_rate_limit_retry",
     "llm_rate_limiter",
 ]
 
@@ -387,9 +380,14 @@ __all__ = [
 # Shared delegate (Issue #4460)
 # ---------------------------------------------------------------------------
 # A pre-configured instance of the shared RateLimiter scoped to LLM providers.
-# RateLimitHandler handles *retry* logic after a rate-limit error is returned;
-# the shared limiter below adds a *proactive* sliding-window guard that callers
-# can use to check limits before dispatching a request.
+# RateLimitHandler handles *retry* logic after a rate-limit error is returned.
+#
+# NOT ACQUIRED ANYWHERE, ON PURPOSE (owner decision on #16857). Proactive
+# provider pacing is ``llm_shared.cross_worker_rate_limiter.LLMCrossWorkerRateLimiter``
+# (``get_llm_rate_limiter()``), acquired in ``BaseProvider.chat_completion``.
+# Wiring this instance too would run two budgets over one limit, with no way to
+# tell which is authoritative. Known gap in that limiter, tracked on #16538:
+# ``stream_completion`` acquires neither it nor the concurrency cap.
 llm_rate_limiter = _SharedRateLimiter(
     scope_prefix="llm",
     default_tier="privileged",

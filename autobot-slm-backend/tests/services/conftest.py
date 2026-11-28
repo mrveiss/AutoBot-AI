@@ -26,12 +26,17 @@ broke every later ``autobot_shared.*`` import in the directory sweep.
 
 import os
 import sys
-import types
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from testkit.module_stubs import StubSet
+
 _SLM_ROOT = Path(__file__).parent.parent.parent
+
+# Hollow packages are installed through StubSet and removed in pytest_unconfigure
+# (#13596); the hand-rolled version put them in sys.modules and never took them out.
+_stubs = StubSet()
 
 # #16025: role_registry.DEFAULT_ROLES is now derived from the manifests under
 # autobot-infrastructure/ (services/manifest_loader.py). Point the loader at
@@ -51,9 +56,7 @@ def _ensure_real_pkg(name: str, directory: Path) -> None:
     if existing is not None and hasattr(existing, "__path__"):
         return  # already a package (real or hollow)
 
-    pkg = types.ModuleType(name)
-    pkg.__path__ = [str(directory)]  # type: ignore[assignment]
-    pkg.__package__ = name
+    pkg = _stubs.install_package(name, directory)
     pkg.__spec__ = None  # type: ignore[assignment]
 
     # Re-bind existing child stubs onto the new parent (#9780).
@@ -62,8 +65,6 @@ def _ensure_real_pkg(name: str, directory: Path) -> None:
     for key, child in list(sys.modules.items()):
         if key.startswith(prefix) and key.count(".") == depth:
             setattr(pkg, key.rsplit(".", 1)[1], child)
-
-    sys.modules[name] = pkg
 
 
 _ensure_real_pkg("services", _SLM_ROOT / "services")
@@ -83,3 +84,15 @@ import autobot_shared  # noqa: E402,F401
 
 with contextlib.suppress(ImportError):
     import aiohttp  # noqa: F401
+
+
+# Shared setup of the role_manifest_*_test.py files, loaded by path under a unique name through StubSet
+# (#13596), after the real `services` / `models` packages above are in place, since it imports
+# `services.manifest_loader`. A conftest in a test's own directory is imported before that directory's test
+# modules are collected, also under --import-mode=importlib, so `import _slm_role_manifest_fixtures` resolves.
+_stubs.real_load("_slm_role_manifest_fixtures", Path(__file__).parent / "_role_manifest_fixtures.py")
+
+
+def pytest_unconfigure(config) -> None:  # noqa: ARG001
+    """Remove the hollow ``services`` / ``models`` packages this file installed."""
+    _stubs.restore()

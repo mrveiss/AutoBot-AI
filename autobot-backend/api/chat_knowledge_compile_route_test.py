@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 from api import chat_knowledge
 from api.chat_knowledge_prompt import TranscriptRefused
+from chat_history.summarization_prompt import SummarizationFailed
 
 _REQUEST = SimpleNamespace(chat_id="chat-15700", title=None, include_system_messages=False)
 
@@ -43,6 +44,16 @@ async def test_a_refused_transcript_is_a_422_carrying_the_reason(monkeypatch) ->
 async def test_any_other_failure_is_still_a_500(monkeypatch) -> None:
     """Only the refusal is the user's to fix; a real fault keeps its status and its silence."""
     _manager_raising(monkeypatch, RuntimeError("redis went away"))
+
+    with pytest.raises(HTTPException) as raised:
+        await chat_knowledge.compile_chat_to_knowledge(_REQUEST, SimpleNamespace())
+
+    assert (raised.value.status_code, raised.value.detail) == (500, "Internal server error")
+
+
+async def test_a_failed_summarisation_is_the_same_opaque_500_the_old_path_gave(monkeypatch) -> None:
+    """#20852: SummarizationFailed (a gateway error, timeout or empty reply) maps explicitly, to the old 500."""
+    _manager_raising(monkeypatch, SummarizationFailed("summarization call failed: timeout"))
 
     with pytest.raises(HTTPException) as raised:
         await chat_knowledge.compile_chat_to_knowledge(_REQUEST, SimpleNamespace())

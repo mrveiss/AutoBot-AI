@@ -503,3 +503,14 @@ up, a terminal-reason enum in the loop that does not run and ten free-text strin
 does. Four genuinely new defects, eight findings already filed, one adoption that is simply better
 than what we do (report the tool you could not compile, with the reason), and one adoption
 correctly blocked on a measurement we have already told ourselves we have not made.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #14031 — fix(agent): pre-action verifier and belief state run nowhere — AgentLoop has no production caller
+- #17466 — feat(mcp): tool annotations are never ingested — no protocol-native risk signal at discovery
+- #17467 — bug(mcp): an unparseable tool is dropped to a log line, and every discovery failure is labelled "unreachable server" (closed)
+- #17468 — bug(chat): two independent iteration caps — graph.py hardcodes 5 beside MAX_CONTINUATION_ITERATIONS (closed)
+- #17469 — bug(agent-loop): three timeout budgets declared in AgentLoopConfig and read by nothing
+- #17470 — tech-debt(chat): ten free-text tool-status spellings, two of them synonym pairs — no type constrains the set

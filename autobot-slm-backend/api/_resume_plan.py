@@ -21,7 +21,7 @@ resumed process knows about the run before it started comes from this row.
 from __future__ import annotations
 
 import json as _json
-import logging
+import signal
 from typing import TYPE_CHECKING, List
 
 from sqlalchemy import select
@@ -31,17 +31,10 @@ from models.database import Setting
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from api.code_sync import UpdateAllJob
 
-# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
-# `code_sync.py:106` does the same and this module was extracted from it, so the
-# constraint came with the code even though the general rule says get_logger.
-#
-# `tests/api/test_collect_outdated_node_ids.py` imports code_sync at module scope
-# with the config stack replaced by MagicMock. get_logger() builds a
-# RotatingFileHandler, which compares maxBytes to an int -- against a MagicMock
-# that raises `TypeError: '>' not supported`. It fails at COLLECTION, so the whole
-# file errors out rather than one test failing. Same reason as
-# `autobot_shared/user_management/password_epoch.py`.
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from services.rollback_target import current_rollback_ref, resume_ref, resumed_scope  # noqa: F401 - re-exported
+
+logger = get_logger(__name__)
 
 #: Settings key the plan is stored under.
 _UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
@@ -81,6 +74,8 @@ async def _persist_resume_plan(
         "remaining_node_ids": remaining_node_ids,
         "target_commit": target_commit,  # C1
         "created_at": job.created_at,
+        "deploy_ref": current_rollback_ref(),  # #20214: set only for a rollback; the resume hook reads it once
+        "is_rollback": current_rollback_ref() is not None,
         # #15881: `_stage_log` writes to `stage.log_lines`, which lives in the
         # process the self-update is about to restart. Without this the operator
         # watching the GUI sees the log stop at "Firing Ansible self-update
@@ -101,6 +96,26 @@ async def _persist_resume_plan(
         len(remaining_node_ids),
         (target_commit[:_LOG_SHA_PREFIX] if target_commit else None),
     )
+
+
+def restart_cut_the_wait(result: dict, node_id: str) -> bool:
+    """Whether the self-update's waiter was SIGTERMed by this SLM's own restart (#19139).
+
+    The playbook runs detached, but its ``systemd-run --wait`` waiter stays in this
+    service's cgroup, so the restart the run itself triggers ends the waiter with
+    -SIGTERM. That is not a failure -- the run continues, and the plan persisted for
+    the restarted process must survive. A real failure arrives as the unit's own
+    exit code, and a timeout as -SIGKILL with ``timed_out``; both still fail. An ATTACHED run
+    (no detach possible, "UPDATE-ALL DEGRADED") dies itself on that SIGTERM -- a real failure.
+    """
+    cut = bool(result.get("detached")) and result.get("returncode") == -signal.SIGTERM and not result.get("timed_out")
+    if cut:
+        logger.info(
+            "self-update for %s: this SLM is restarting; the detached run continues and the "
+            "resume plan is kept for the restarted process (#19139)",
+            node_id,
+        )
+    return cut
 
 
 async def _clear_resume_plan() -> None:

@@ -9,16 +9,12 @@
  */
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import type { InstalledTheme } from '@autobot/ui'
 
 const log = createLogger('ThemeRegistry')
 
-export interface InstalledTheme {
-  id: string
-  name: string
-  author: string
-  version: string
-  supports: string[]
-}
+// The one declaration lives in the kit (#14908); re-exported so this module's importers keep working.
+export type { InstalledTheme }
 
 /** Fetch installed theme descriptors. Returns [] on any error (graceful degrade). */
 export async function fetchInstalledThemes(): Promise<InstalledTheme[]> {

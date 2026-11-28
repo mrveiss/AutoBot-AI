@@ -19,19 +19,19 @@
   serial: 3
 
   tasks:
-    - name: "Fix ownership on /opt/autobot"
+    - name: "Fix ownership on {{ autobot.base_dir }}"
       file:
-        path: /opt/autobot
+        path: "{{ autobot.base_dir }}"
         owner: autobot
         group: autobot
         recurse: true
       become: true
 
     - name: "Verify ownership"
-      command: stat -c '%U:%G' /opt/autobot
+      command: stat -c '%U:%G' {{ autobot.base_dir }}
       register: owner_check
       changed_when: false
 
     - name: "Report"
       debug:
-        msg: "{{ inventory_hostname }}: /opt/autobot owned by {{ owner_check.stdout }}"
+        msg: "{{ inventory_hostname }}: {{ autobot.base_dir }} owned by {{ owner_check.stdout }}"

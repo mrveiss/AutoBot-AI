@@ -13,12 +13,19 @@ Description=AutoBot AI Stack - LlamaIndex & RAG Services
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network.target
 Wants=network-online.target
+# #20620, #4090: a restarting unit must be able to reach `failed`. The window has to exceed
+# RestartSec * StartLimitBurst, or the limit is never hit and the unit loops forever while
+# showing `activating`. Same values as the role-rendered units.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-ai-stack
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-ai-stack/logs
 
 # Environment
 Environment="PYTHONUNBUFFERED=1"
@@ -51,7 +58,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/autobot/autobot-ai-stack/data
 ReadWritePaths=/opt/autobot/autobot-ai-stack/cache
-ReadWritePaths=/opt/autobot/autobot-ai-stack/logs
+ReadWritePaths=-/opt/autobot/autobot-ai-stack/logs
 
 # Logging
 StandardOutput=journal

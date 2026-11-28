@@ -28,9 +28,10 @@ from typing import Any, Dict, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.vue_sfc import vue_script_body
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from knowledge_base_factory import get_knowledge_base
+from knowledge_base_factory import get_knowledge_base_or_none
 
 logger = get_logger(__name__)
 
@@ -49,11 +50,7 @@ _VUE_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
-# #5695: \s* before > to match closing tags with trailing whitespace (bad-tag-filter)
-_VUE_SCRIPT_RE = re.compile(
-    r"<script[^>]*>([\s\S]*?)</script\s*>",
-    re.IGNORECASE,
-)
+# #21641: the <script> extractor lives in autobot_shared.vue_sfc (vue_script_body)
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
 _VUE_STYLE_RE = re.compile(
     r"<style[^>]*>([\s\S]*?)</style>",
@@ -107,7 +104,7 @@ class IndexingProgress:
 
 
 @dataclass
-class FileInfo:
+class IndexableFileInfo:
     """Information about a file to be indexed"""
 
     path: Path
@@ -321,7 +318,7 @@ class CodeChunker:
         """Chunk Vue files by template, script, and style sections."""
         chunks = []
         template_match = _VUE_TEMPLATE_RE.search(content)
-        script_match = _VUE_SCRIPT_RE.search(content)
+        script_body = vue_script_body(content)
         style_match = _VUE_STYLE_RE.search(content)
 
         if template_match:
@@ -335,8 +332,8 @@ class CodeChunker:
                     }
                 )
 
-        if script_match:
-            script_content = script_match.group(1).strip()
+        if script_body is not None:
+            script_content = script_body.strip()
             if script_content:
                 self._add_vue_script_chunks(chunks, script_content)
 
@@ -638,7 +635,7 @@ class CodebaseIndexingService:
 
         return language_map.get(extension, "text")
 
-    def _scan_files(self) -> List[FileInfo]:
+    def _scan_files(self) -> List[IndexableFileInfo]:
         """Scan the codebase and collect file information"""
         files = []
 
@@ -646,7 +643,7 @@ class CodebaseIndexingService:
             if file_path.is_file() and self._should_include_file(file_path):
                 try:
                     relative_path = str(file_path.relative_to(self.root_path))
-                    file_info = FileInfo(
+                    file_info = IndexableFileInfo(
                         path=file_path,
                         relative_path=relative_path,
                         file_type=file_path.suffix.lower() or "unknown",
@@ -686,7 +683,7 @@ class CodebaseIndexingService:
             logger.warning("Error reading file %s: %s", file_path, e)
             return None
 
-    def _chunk_file_content(self, content: str, file_info: FileInfo) -> List[Dict[str, Any]]:
+    def _chunk_file_content(self, content: str, file_info: IndexableFileInfo) -> List[Dict[str, Any]]:
         """Chunk file content based on file type"""
         if file_info.language == "python":
             return self.chunker.chunk_python_file(content, str(file_info.path))
@@ -700,7 +697,7 @@ class CodebaseIndexingService:
             return self.chunker.chunk_generic_file(content, str(file_info.path))
 
     def _build_chunk_metadata(
-        self, file_info: FileInfo, chunk: Dict[str, Any], index: int, total: int
+        self, file_info: IndexableFileInfo, chunk: Dict[str, Any], index: int, total: int
     ) -> Dict[str, Any]:
         """
         Build metadata dictionary for a chunk.
@@ -751,7 +748,7 @@ class CodebaseIndexingService:
         logger.warning("Failed to store chunk %s for %s: %s", index + 1, relative_path, result)
         return False
 
-    async def _store_chunks(self, chunks: List[Dict[str, Any]], file_info: FileInfo, knowledge_base) -> int:
+    async def _store_chunks(self, chunks: List[Dict[str, Any]], file_info: IndexableFileInfo, knowledge_base) -> int:
         """Store file chunks in the knowledge base."""
         stored_count = 0
         total = len(chunks)
@@ -772,7 +769,7 @@ class CodebaseIndexingService:
 
         return stored_count
 
-    def _record_indexing_result(self, file_info: FileInfo, stored_count: int) -> bool:
+    def _record_indexing_result(self, file_info: IndexableFileInfo, stored_count: int) -> bool:
         """
         Record the result of indexing a file.
 
@@ -788,7 +785,7 @@ class CodebaseIndexingService:
         self.progress.processed_files += 1
         return stored_count > 0
 
-    async def index_single_file(self, file_info: FileInfo, knowledge_base) -> bool:
+    async def index_single_file(self, file_info: IndexableFileInfo, knowledge_base) -> bool:
         """Index a single file."""
         try:
             self.progress.current_file = file_info.relative_path
@@ -872,7 +869,7 @@ class CodebaseIndexingService:
         self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
-            knowledge_base = await get_knowledge_base()
+            knowledge_base = await get_knowledge_base_or_none()
             if knowledge_base is None:
                 raise RuntimeError("Could not initialize knowledge base")
 
@@ -946,7 +943,7 @@ class CodebaseIndexingService:
         self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
-            knowledge_base = await get_knowledge_base()
+            knowledge_base = await get_knowledge_base_or_none()
             if knowledge_base is None:
                 raise RuntimeError("Could not initialize knowledge base")
 

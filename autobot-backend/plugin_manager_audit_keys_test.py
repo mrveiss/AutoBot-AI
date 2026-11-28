@@ -34,9 +34,9 @@ import pytest
 
 import plugin_manager
 from autobot_shared.plugin_sdk.capabilities import (
-    Capability,
     CapabilityChecker,
     CapabilityContext,
+    PluginCapability,
 )
 
 # The live wire shape: decode_responses=True means field names are str.
@@ -133,7 +133,7 @@ async def test_writer_mapping_round_trips(monkeypatch):
     writer_redis = _install(monkeypatch, [], module=capabilities_module)
     context = CapabilityContext(
         plugin_name="demo-plugin",
-        capability=Capability.KB_READ,
+        capability=PluginCapability.KB_READ,
         granted=True,
         timestamp=datetime(2026, 8, 2, 7, 0, 0, tzinfo=timezone.utc),
         operation="kb_query",

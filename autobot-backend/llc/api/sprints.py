@@ -43,12 +43,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP
 from llc.deps import load_owned_project as _load_owned_project
+from llc.deps import log_unexpected
 from user_management.services import TenantContext
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
@@ -59,13 +61,15 @@ from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
+from ._common import actor_id
+from ._named_agent import require_member_targets
+from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
-_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -235,18 +239,13 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: uuid.UUID
 
 
 # ------------------------------------------------------------------ Portfolio routes
 
 
-# ---------------------------------------------------------------------------
-# Card-enrichment aggregation helpers (#10232)
-#
-# Each returns a {parent_id: value} map computed with a single grouped query so
-# list endpoints stay O(1) queries — never N+1 per card.
-# ---------------------------------------------------------------------------
+# Card-enrichment aggregation helpers (#10232): each returns a {parent_id: value} map from ONE grouped query,
+# so list endpoints stay O(1) queries -- never N+1 per card.
 _OPEN_WORK_ITEM_STATUSES = [s.value for s in WorkItemStatus if s not in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED)]
 
 
@@ -308,10 +307,7 @@ async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) ->
     enriched: List[ProjectResponse] = []
     for p in projects:
         resp = _enrich(
-            ProjectResponse,
-            p,
-            open_work_item_count=open_counts.get(p.id, 0),
-            active_sprint_name=active.get(p.id),
+            ProjectResponse, p, open_work_item_count=open_counts.get(p.id, 0), active_sprint_name=active.get(p.id)
         )
         resp.code_source = await _project_source_summary(p.code_source_id)
         enriched.append(resp)
@@ -322,9 +318,9 @@ async def _project_source_summary(code_source_id: Optional[str]) -> Optional[Cod
     """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
     if not code_source_id:
         return None
-    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable  # noqa: PLC0415
 
-    src = await get_source(code_source_id)
+    src = await get_source_or_none_if_unreadable(code_source_id)
     if not src:
         return None
     return CodeSourceSummary(
@@ -346,7 +342,7 @@ class AttachRepoRequest(BaseModel):
 @router.get("/companies/{company_id}/portfolios", response_model=List[PortfolioResponse])
 async def list_portfolios(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[PortfolioResponse]:
@@ -363,7 +359,7 @@ async def list_portfolios(
 async def create_portfolio(
     company_id: uuid.UUID,
     body: PortfolioCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
@@ -380,7 +376,7 @@ async def create_portfolio(
 @router.get("/portfolios/{portfolio_id}", response_model=PortfolioResponse)
 async def get_portfolio(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
@@ -396,7 +392,7 @@ async def get_portfolio(
 async def update_portfolio(
     portfolio_id: uuid.UUID,
     body: PortfolioUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
@@ -415,7 +411,7 @@ async def update_portfolio(
 @router.delete("/portfolios/{portfolio_id}", status_code=204)
 async def delete_portfolio(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -434,7 +430,7 @@ async def delete_portfolio(
 @router.get("/portfolios/{portfolio_id}/programs", response_model=List[ProgramResponse])
 async def list_programs(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ProgramResponse]:
@@ -452,7 +448,7 @@ async def list_programs(
 async def create_program(
     portfolio_id: uuid.UUID,
     body: ProgramCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
@@ -476,7 +472,7 @@ async def create_program(
 @router.get("/programs/{program_id}", response_model=ProgramResponse)
 async def get_program(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
@@ -492,7 +488,7 @@ async def get_program(
 async def update_program(
     program_id: uuid.UUID,
     body: ProgramUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
@@ -511,7 +507,7 @@ async def update_program(
 @router.delete("/programs/{program_id}", status_code=204)
 async def delete_program(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -530,7 +526,7 @@ async def delete_program(
 @router.get("/programs/{program_id}/projects", response_model=List[ProjectResponse])
 async def list_projects(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ProjectResponse]:
@@ -545,7 +541,7 @@ async def list_projects(
 @router.get("/companies/{company_id}/projects", response_model=List[ProjectResponse])
 async def list_company_projects(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ProjectResponse]:
@@ -564,7 +560,7 @@ async def list_company_projects(
 async def create_project(
     program_id: uuid.UUID,
     body: ProjectCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
@@ -572,6 +568,7 @@ async def create_project(
     prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
     if prog is None or str(prog.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
+    await require_member_targets(session, prog.company_id, body.lead_user_id, body.lead_agent_id)
     project = LLCProject(
         # #10261: derive tenant from the validated parent, never trust body.company_id.
         company_id=prog.company_id,
@@ -588,13 +585,12 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
 @router.get("/projects/with-repos", response_model=List[ProjectResponse])
 async def list_projects_with_repos(
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ProjectResponse]:
@@ -622,7 +618,7 @@ async def list_projects_with_repos(
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
@@ -638,7 +634,7 @@ async def get_project(
 async def attach_project_repo(
     project_id: uuid.UUID,
     body: AttachRepoRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectResponse:
@@ -668,7 +664,7 @@ async def attach_project_repo(
 @router.delete("/projects/{project_id}/repo", response_model=ProjectResponse)
 async def detach_project_repo(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectResponse:
@@ -686,7 +682,7 @@ async def detach_project_repo(
 async def update_project(
     project_id: uuid.UUID,
     body: ProjectUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
@@ -695,6 +691,7 @@ async def update_project(
     # IDOR guard (#10148).
     if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
+    await require_member_targets(session, project.company_id, body.lead_user_id, body.lead_agent_id)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(project, field, value)
     await session.commit()
@@ -705,7 +702,7 @@ async def update_project(
 @router.post("/projects/{project_id}/archive", response_model=ProjectResponse)
 async def archive_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectResponse:
@@ -721,7 +718,7 @@ async def archive_project(
 @router.post("/projects/{project_id}/restore", response_model=ProjectResponse)
 async def restore_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectResponse:
@@ -741,7 +738,7 @@ async def restore_project(
 @router.post("/projects/{project_id}/dispose")
 async def dispose_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -784,7 +781,7 @@ async def _apply_disposal(project: LLCProject, session: AsyncSession, ctx: Tenan
 @router.delete("/projects/{project_id}", status_code=204)
 async def delete_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -802,7 +799,7 @@ async def delete_project(
 async def list_sprints(
     project_id: uuid.UUID,
     status: Optional[SprintStatus] = Query(None),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCSprint]:
@@ -821,7 +818,7 @@ async def list_sprints(
 async def create_sprint(
     project_id: uuid.UUID,
     body: SprintCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
@@ -843,14 +840,13 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
-    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
 @router.get("/sprints/{sprint_id}", response_model=SprintResponse)
 async def get_sprint(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
@@ -869,7 +865,7 @@ _LIFECYCLE_STATUSES = frozenset([SprintStatus.ACTIVE, SprintStatus.CLOSED])
 async def update_sprint(
     sprint_id: uuid.UUID,
     body: SprintUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
@@ -896,7 +892,7 @@ async def update_sprint(
 @router.delete("/sprints/{sprint_id}", status_code=204)
 async def delete_sprint(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -912,45 +908,39 @@ async def delete_sprint(
         from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
 
         await KbCollectionManager().drop_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
-    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
-        logger.warning("Could not drop KB collection for sprint %s", sprint_id, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - defensive; drop_collection does not raise
+        log_unexpected(logger, f"sprints.drop_kb_collection {sprint_id}", exc)
 
 
 @router.post("/sprints/{sprint_id}/close", response_model=SprintResponse)
 async def close_sprint(
     sprint_id: uuid.UUID,
     body: SprintCloseRequest,
-    session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
+    session: AsyncSession = SESSION_DEP,
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
-    """Manual sprint close trigger — board only, requires an APPROVED approval.
+    """Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
 
-    Flow:
-      1. Caller must first request a SPRINT_CLOSE approval via ApprovalService
-         (or let the scheduler do it automatically).
-      2. Board approves the approval record.
-      3. This endpoint is called with the approval_id to execute the close.
+    Deciding the approval closes the sprint itself (#8214), so after a decision this answers 400
+    (the sprint no longer has that approval pending). It remains for an approval granted before
+    deciding applied the close.
     """
-    # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
-    _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
-    if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Sprint not found")
+    await require_sprint_in_org(session, sprint_id, ctx.org_id)
+    caller = actor_id(current_user)
     try:
         sprint = await _autoclose_svc.execute_close(
-            session,
-            sprint_id=sprint_id,
-            approval_id=body.approval_id,
-            decided_by=body.decided_by,
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=caller, actor_user_id=str(caller)
         )
         await session.commit()
+        _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
-        raise HTTPException(status_code=422, detail="Internal server error") from exc
+        raise fixed_refusal(422) from exc
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=400, detail="Internal server error") from exc
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(400) from exc
 
 
 # ------------------------------------------------------------------ Sprint planning analytics (GH#8220)
@@ -961,7 +951,7 @@ _planning_svc = SprintPlanningService()
 @router.get("/sprints/{sprint_id}/capacity")
 async def get_sprint_capacity(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -973,15 +963,15 @@ async def get_sprint_capacity(
     try:
         return await _planning_svc.get_capacity(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error") from exc
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404) from exc
 
 
 @router.get("/projects/{project_id}/velocity")
 async def get_project_velocity(
     project_id: uuid.UUID,
     n_sprints: int = Query(default=5, ge=1, le=52, description="Number of closed sprints to include"),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -1023,7 +1013,7 @@ class ProjectTimelineResponse(BaseModel):
 @router.get("/projects/{project_id}/timeline", response_model=ProjectTimelineResponse)
 async def get_project_timeline(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectTimelineResponse:
@@ -1082,7 +1072,7 @@ async def get_project_timeline(
 @router.get("/sprints/{sprint_id}/burndown")
 async def get_sprint_burndown(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -1094,8 +1084,8 @@ async def get_sprint_burndown(
     try:
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error") from exc
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404) from exc
 
 
 @router.get("/projects/{project_id}/knowledge")
@@ -1103,7 +1093,7 @@ async def get_project_knowledge(
     project_id: uuid.UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -1116,22 +1106,16 @@ async def get_project_knowledge(
     proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
     if proj is None or str(proj.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    from autobot_shared.singleton_factory import lazy_singleton
+    from ..services.accessors import get_work_product_service
 
-    from ..services.work_product_service import WorkProductService
-
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     artifacts = await svc.list_indexed_by_project(
         session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
         project_id=str(project_id),
         limit=limit,
         offset=offset,
     )
-    return {
-        "project_id": str(project_id),
-        "artifacts": artifacts,
-        "total": len(artifacts),
-    }
+    return {"project_id": str(project_id), "artifacts": artifacts, "total": len(artifacts)}
 
 
 class SprintSummaryResponse(BaseModel):
@@ -1144,7 +1128,7 @@ class SprintSummaryResponse(BaseModel):
 @router.get("/sprints/{sprint_id}/summary", response_model=SprintSummaryResponse)
 async def get_sprint_summary(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> SprintSummaryResponse:
@@ -1200,7 +1184,7 @@ class SprintScorecardResponse(BaseModel):
 @router.get("/sprints/{sprint_id}/agent-scorecard", response_model=SprintScorecardResponse)
 async def get_sprint_agent_scorecard(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> SprintScorecardResponse:
@@ -1218,6 +1202,6 @@ async def get_sprint_agent_scorecard(
     try:
         scorecard = await _scorecard_svc.build(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error") from exc
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404) from exc
     return SprintScorecardResponse(**scorecard.to_dict())

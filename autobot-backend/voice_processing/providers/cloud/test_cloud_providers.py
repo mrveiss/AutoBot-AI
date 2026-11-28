@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from voice_processing.providers import ProviderFailed, ProviderUnavailable
 from voice_processing.providers.cloud.assemblyai_provider import AssemblyAIProvider
 from voice_processing.providers.cloud.deepgram_provider import DeepgramProvider
 from voice_processing.providers.cloud.google_provider import GoogleSpeechProvider
@@ -103,7 +104,7 @@ async def test_deepgram_transcribe_request_shape(audio_file):
 
 
 @pytest.mark.asyncio
-async def test_deepgram_returns_empty_on_api_error(audio_file):
+async def test_deepgram_raises_on_api_error(audio_file):
     from autobot_shared.http_client import get_http_client
 
     mock_resp = AsyncMock()
@@ -117,18 +118,18 @@ async def test_deepgram_returns_empty_on_api_error(audio_file):
 
     manager = get_http_client()
     with patch.object(manager, "tracked_request", return_value=mock_resp):
-        segments = await provider.transcribe(audio_file, "en")
-
-    assert segments == []
+        with pytest.raises(ProviderFailed):
+            await provider.transcribe(audio_file, "en")
 
 
 @pytest.mark.asyncio
-async def test_deepgram_no_key_returns_empty(audio_file):
+async def test_deepgram_no_key_is_unavailable(audio_file):
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("DEEPGRAM_API_KEY", None)
         provider = DeepgramProvider()
-    segments = await provider.transcribe(audio_file, "en")
-    assert segments == []
+    assert provider.is_available() is False
+    with pytest.raises(ProviderUnavailable):
+        await provider.transcribe(audio_file, "en")
 
 
 # ── AssemblyAI adapter ────────────────────────────────────────────────────────
@@ -161,6 +162,7 @@ async def test_assemblyai_transcribe_request_shape(audio_file):
     submit_resp.__aexit__ = AsyncMock(return_value=False)
 
     poll_resp = AsyncMock()
+    poll_resp.status = 200
     poll_resp.json = AsyncMock(return_value=ASSEMBLYAI_COMPLETED)
     poll_resp.__aenter__ = AsyncMock(return_value=poll_resp)
     poll_resp.__aexit__ = AsyncMock(return_value=False)
@@ -182,12 +184,12 @@ async def test_assemblyai_transcribe_request_shape(audio_file):
 
 
 @pytest.mark.asyncio
-async def test_assemblyai_no_key_returns_empty(audio_file):
+async def test_assemblyai_no_key_is_unavailable(audio_file):
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("ASSEMBLYAI_API_KEY", None)
         provider = AssemblyAIProvider()
-    segments = await provider.transcribe(audio_file, "en")
-    assert segments == []
+    with pytest.raises(ProviderUnavailable):
+        await provider.transcribe(audio_file, "en")
 
 
 # ── Google Cloud STT adapter ──────────────────────────────────────────────────
@@ -204,8 +206,8 @@ async def test_google_not_configured_when_lib_absent(audio_file):
         with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS": audio_file}):
             provider = GoogleSpeechProvider()
         assert not provider.is_configured
-        segments = await provider.transcribe(audio_file, "en")
-        assert segments == []
+        with pytest.raises(ProviderUnavailable):
+            await provider.transcribe(audio_file, "en")
     finally:
         gmod._google_available = original
 
@@ -222,7 +224,7 @@ async def test_google_not_configured_when_no_credentials():
 async def test_google_transcribe_uses_diarization_config(audio_file, tmp_path):
     """When lib + credentials present, verify diarization config is passed."""
     creds_file = tmp_path / "creds.json"
-    creds_file.write_text("{}", encoding="utf-8")
+    creds_file.write_text("{}", encoding="utf-8")  # noqa: async_blocking_io
 
     mock_word = MagicMock()
     mock_word.word = "Hello"

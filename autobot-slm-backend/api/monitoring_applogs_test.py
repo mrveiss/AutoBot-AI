@@ -47,7 +47,7 @@ for _name in (
     "NodeEvent",
     "NodeStatus",
     "Service",
-    "ServiceStatus",
+    "SystemdState",
 ):
     setattr(_models_stub, _name, MagicMock())
 sys.modules.setdefault("models.database", _models_stub)

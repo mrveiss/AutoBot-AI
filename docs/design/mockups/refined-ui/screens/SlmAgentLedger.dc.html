@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent ledger</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+/* SLM token set: deep teal / green family, applied on top of the AutoBot theme tokens */
+.th.slm{
+ --slm-bar:#0B2E2B;--slm-bar-fg:#E6F4F1;--slm-bar-muted:#A9CBC5;--slm-bar-hover:#14423D;--slm-bar-line:#1D4A45;--slm-stripe:#14A38B;--slm-badge-bg:#14A38B;--slm-badge-fg:#062220;--slm-bar-on:#2CC5A8;
+}
+.th.slm[data-theme="light"]{
+ --bg:#F2F8F7;--surface:#FFFFFF;--surface2:#F6FBFA;--border:#D7E6E3;--line:#E6F0EE;
+ --text:#10302D;--text2:#3C5A56;--muted:#52706C;--link:#0D5C55;--link-h:#0A4740;
+ --primary:#0D5C55;--primary-h:#0A4A44;--on-primary:#FFFFFF;--accent:#14A38B;--focus:#2563EB;
+ --tile:#EAF4F2;--tile-b:#D7E6E3;--stroke:#10302D;--i1:#9FD8CC;--i2:#E9CF7A;--i3:#5FB8A6;--i1t:#D6EEE9;--i2t:#F5EBC6;--i3t:#CBE8E1;
+ --bar:#0D5C55;--bar-track:#E6F0EE;--info-bg:#DFF1EE;--info-fg:#0D5C55;--idle-bg:#E8F1EF;--idle-fg:#3C5A56;
+ --brand-bg:#0D5C55;--brand-fg:#FFFFFF;
+ --slm-bar:#0B2E2B;--slm-bar-fg:#E6F4F1;--slm-bar-muted:#A9CBC5;--slm-bar-hover:#14423D;--slm-bar-line:#1D4A45;--slm-stripe:#14A38B;--slm-badge-bg:#14A38B;--slm-badge-fg:#062220;--slm-bar-on:#2CC5A8;
+}
+.th.slm[data-theme="dark"]{
+ --bg:#0B1C1B;--surface:#112624;--surface2:#15302D;--border:#24423E;--line:#1B3532;
+ --text:#DDEFEB;--text2:#B3D1CB;--muted:#8FB3AC;--link:#DDEFEB;--link-h:#2CC5A8;
+ --primary:#2CC5A8;--primary-h:#4FD3BA;--on-primary:#06201D;--accent:#2CC5A8;--focus:#7FD8FF;
+ --tile:#173330;--tile-b:#24423E;--stroke:#CBE7E1;--i1:#3E8F80;--i2:#B8973F;--i3:#2E7A6D;--i1t:#1D3F3A;--i2t:#3A3420;--i3t:#1A3A35;
+ --bar:#8FD3C4;--bar-track:#1B3532;--info-bg:#123A35;--info-fg:#9FE3D4;--idle-bg:#1B3532;--idle-fg:#B3D1CB;
+ --brand-bg:#2CC5A8;--brand-fg:#06201D;
+ --slm-bar:#050F0E;--slm-bar-fg:#DDEFEB;--slm-bar-muted:#8FB3AC;--slm-bar-hover:#10272A;--slm-bar-line:#1B3532;--slm-stripe:#2CC5A8;--slm-badge-bg:#2CC5A8;--slm-badge-fg:#06201D;--slm-bar-on:#2CC5A8;
+}
+.th.slm[data-theme="contrast"]{
+ --link:#003D36;--link-h:#001F1B;--primary:#003D36;--primary-h:#002420;--accent:#00695C;
+ --brand-bg:#003D36;--brand-fg:#FFFFFF;
+ --slm-bar:#002420;--slm-bar-fg:#FFFFFF;--slm-bar-muted:#FFFFFF;--slm-bar-hover:#003D36;--slm-bar-line:#FFFFFF;--slm-stripe:#00695C;--slm-badge-bg:#FFFFFF;--slm-badge-fg:#002420;--slm-bar-on:#FFFFFF;
+}
+.th.slm[data-theme="mono"]{
+ --bg:#EEEEF0;--surface2:#F7F7F8;
+ --slm-bar:#27272A;--slm-bar-fg:#FAFAFA;--slm-bar-muted:#D4D4D8;--slm-bar-hover:#3F3F46;--slm-bar-line:#3F3F46;--slm-stripe:#71717A;--slm-badge-bg:#FAFAFA;--slm-badge-fg:#18181B;--slm-bar-on:#FAFAFA;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.be{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:6px;font-size:12.5px;font-weight:500;border:var(--bw) solid var(--border);background:var(--surface);font-family:'IBM Plex Mono',ui-monospace,monospace}
+.be .st{font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:11.5px;font-weight:600}
+.be.down{border-color:var(--bar-alert)}
+.be.down .st{color:var(--alert-text)}
+.be.live .st{color:var(--ok-fg)}
+.fig{text-align:center}
+.fig b{display:block;font-size:24px;font-weight:600}
+.fig span{font-size:12.5px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+/* SLM chrome */
+.stripe{flex:1 1 100%;height:4px;background:var(--slm-stripe)}
+.slmbar{flex:1 1 100%;box-sizing:border-box;min-height:52px;padding:0 clamp(16px,2.5vw,28px);display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:var(--slm-bar);color:var(--slm-bar-fg);border-bottom:var(--bw) solid var(--slm-bar-line)}
+.th .slmbar a{color:var(--slm-bar-fg);text-decoration:none}
+.th .slmbar a:hover{color:var(--slm-bar-fg);background:var(--slm-bar-hover)}
+.slmbadge{font-size:12px;font-weight:700;letter-spacing:.08em;padding:4px 8px;border-radius:5px;background:var(--slm-badge-bg);color:var(--slm-badge-fg)}
+.slmbar .lab{font-size:13px;color:var(--slm-bar-muted)}
+.th .slmbar a.out{height:32px;padding:0 12px;display:inline-flex;align-items:center;border-radius:6px;border:var(--bw) solid var(--slm-bar-line);font-size:13px;font-weight:500}
+.slmav{width:32px;height:32px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--slm-badge-bg);color:var(--slm-badge-fg);border:0;font-family:inherit;cursor:pointer}
+.snav{flex:0 1 216px;box-sizing:border-box;padding:16px 10px;display:flex;flex-direction:column;gap:1px;background:var(--surface);border-right:var(--bw) solid var(--border)}
+.snav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;font-weight:500;text-decoration:none;border-left:3px solid transparent}
+.snav a:hover{background:var(--surface2);color:var(--text)}
+.th .snav a.on{background:var(--tile);color:var(--text);font-weight:600;border-left-color:var(--accent)}
+.fh{margin:0 0 10px;padding:10px 12px;border-radius:8px;background:var(--surface2);border:var(--bw) solid var(--border);display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12px}
+.fh span{display:flex;align-items:center;gap:6px;color:var(--text2)}
+.fh b{font-weight:600;text-align:right}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+/* Agent ledger */
+.tabs{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);flex-wrap:wrap}
+.tabs .seg{height:32px;font-size:13px}
+.tabs.fs .seg{height:28px;font-size:12.5px}
+.soon td{background:var(--warn-bg)}
+.fl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.qn{width:22px;height:22px;border-radius:99px;display:grid;place-items:center;font-size:11.5px;font-weight:600;background:var(--idle-bg);color:var(--idle-fg);flex:none;border:var(--pill-b)}
+.hist{display:flex;gap:12px;align-items:baseline;padding:9px 16px;border-bottom:var(--bw) solid var(--line);flex-wrap:wrap}
+.hist:last-child{border-bottom:0}
+.cc{border-left:4px solid var(--dot-warn)}
+</style>
+</helmet>
+
+<div class="th slm" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="stripe" aria-hidden="true"></div>
+
+  <header class="slmbar">
+    <a href="#" aria-label="SLM Admin, Fleet Overview" style="display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 0; border-radius: 6px">
+      <span class="slmbadge" data-tip="Service Lifecycle Manager — fleet administration console" data-tip-pos="bottom">SLM</span>
+      <span style="display: flex; flex-direction: column; line-height: 1.2"><strong style="font-size: 14.5px; font-weight: 600">SLM Admin</strong><span class="lab" style="font-size: 12px">Service Lifecycle Manager</span></span>
+    </a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="lab mono" style="font-size: 12px" data-tip="SLM host this console is connected to" data-tip-pos="bottom">slm.autobot.example</span>
+    <a href="Main.dc.html" class="out">Open AutoBot ↗</a>
+    <button type="button" class="slmav" aria-label="Admin account menu" data-tip="Admin account menu" data-tip-pos="left">A</button>
+  </header>
+
+  <nav class="snav" aria-label="Main navigation">
+    <div class="fh" aria-label="Fleet health">
+      <strong style="grid-column: 1 / -1; font-size: 12.5px; font-weight: 600">Fleet Health</strong>
+      <span>Total:</span><b>6</b>
+      <span data-tip="Nodes passing all health checks"><i class="dot d-ok" aria-hidden="true"></i>Healthy:</span><b>5</b>
+      <span data-tip="Nodes reachable but with at least one failing service or check"><i class="dot d-warn" aria-hidden="true"></i>Degraded:</span><b>1</b>
+      <span data-tip="Nodes unreachable or failing critical checks"><i class="dot d-bad" aria-hidden="true"></i>Unhealthy:</span><b>0</b>
+    </div>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1" class="it3"/></svg>Fleet Overview</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="3" class="i2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3" class="i1"/><path d="M12 9v3M12 12l-5 3.5M12 12l5 3.5"/></svg>Orchestration</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="it1"/><path d="M8 10h8M8 14h5"/></svg>Roles</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c4 2 6 6 6 11l-3 3H9l-3-3c0-5 2-9 6-11z" class="i3"/><circle cx="12" cy="10" r="2" class="iw"/><path d="M9 20l3 1 3-1"/></svg>Deployments</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" class="i1"/><path d="M5 6v12c0 1.7 3 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3 3 7 3s7-1.3 7-3"/></svg>Backups</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="10" rx="2" class="it1"/><rect x="11" y="10" width="10" height="10" rx="2" class="iw"/></svg>Replication</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V4"/><circle cx="9.5" cy="13" r="1.2" class="ik"/><circle cx="14.5" cy="13" r="1.2" class="ik"/></svg>Agents</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .6-4.5 4 1.3 6-5.4-3.2-5.4 3.2 1.3-6-4.5-4 6-.6z" class="i2"/></svg>Skills</a>
+    <a href="Plugins.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg>Plugins</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4a5 5 0 0 0-5 6l-6 6 3 3 6-6a5 5 0 0 0 6-5l-3 3-3-1-1-3z" class="it3"/></svg>Maintenance <span class="pill warn" style="margin-left: auto" data-tip="2 pending maintenance tasks" data-tip-pos="right">2</span></a>
+    <a href="AdminUsers.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
+    <a href="SystemHealth.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5" y="12" width="3" height="6" class="i1"/><rect x="10.5" y="7" width="3" height="11" class="i2"/><rect x="16" y="10" width="3" height="8" class="i3"/></svg>Monitoring</a>
+    <a href="AuditLogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M9 12l2 2 4-4"/></svg>Security</a>
+    <a href="AdminAdvancedControl.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l7-7M14 4l6 6-4 4-6-6z" class="i2"/></svg>Tools</a>
+    <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Shared Links <span class="pill idle" style="margin-left: auto" data-tip="Requires admin role" data-tip-pos="right">admin</span></a>
+    <p class="sub2" style="margin: auto 10px 0; padding-top: 16px">SLM Admin v1.0.0</p>
+  </nav>
+
+  <aside class="sub" aria-label="Monitoring sections" style="flex: 0 1 210px; box-sizing: border-box; padding: 16px 10px; display: flex; flex-direction: column; gap: 1px; background: var(--surface2); border-right: var(--bw) solid var(--border)">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600; padding: 0 10px 2px">Monitoring</h2>
+    <a href="SystemHealth.dc.html">System</a><a href="KnowledgeHealth.dc.html">Knowledge base</a><a href="SlmAgentLedger.dc.html" class="on" aria-current="page">Agent ledger</a><a href="Operations.dc.html">Operations</a><a href="#">Logs</a><a href="#">Dashboards</a><a href="#">Alerts</a><a href="ErrorMonitoring.dc.html">Errors</a><a href="FailureAnalysis.dc.html">Diagnostics</a><a href="#">Performance</a>
+  </aside>
+
+    <main id="main-content" style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h10a3 3 0 0 1 3 3v13H9a3 3 0 0 1-3-3z" class="it1"/><path d="M9 9h7M9 13h7M9 17h4"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 360px">
+          <span class="sub2">SLM › Monitoring › Agent ledger</span>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Agent ledger</h1>
+            <span class="pill idle" tabindex="0" data-tip="Only platform admins can see this">Admin only</span>
+          </div>
+          <span style="font-size: 13.5px; color: var(--text2)">Every agent on this install — Company OS agents in all companies, AI-stack agents and live sessions — and what each one has claimed.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end">
+            <span class="be {{storeCls}}" tabindex="0" data-tip="{{storeTip}}" data-tip-pos="left"><span class="dot {{storeDot}}"></span>Ledger store<span class="st">{{storeText}}</span></span>
+          </div>
+          <span class="sub2">{{storeRead}}</span>
+          <button type="button" class="linkbtn" aria-pressed="{{downPressed}}" onClick="{{toggleDown}}" data-tip="Design preview: shows what admins see when the ledger store cannot be read. An unreachable ledger is never shown as an empty list." data-tip-pos="left">{{downLabel}}</button>
+        </div>
+      </header>
+
+      <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+        <div role="status" class="card" style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--info-bg); color: var(--info-fg); border-color: var(--info-fg); font-size: 13.5px">
+          <span style="flex-grow: 1">{{toast}}</span>
+          <button type="button" class="linkbtn" onClick="{{closeToast}}">Dismiss</button>
+        </div>
+      </sc-if>
+
+      <section aria-label="Summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px">
+        <sc-for list="{{kpis}}" as="k" hint-placeholder-count="6">
+          <div class="card kpi" tabindex="0" data-tip="{{k.tip}}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="{{k.icon}}"/></svg></span>
+            <div><b>{{k.big}}</b><span style="display: block">{{k.label}}</span><span style="display: block; font-size: 12px">{{k.sub}}</span></div>
+          </div>
+        </sc-for>
+      </section>
+
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <div class="tabs" role="group" aria-label="Ledger views">
+          <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+            <button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button>
+          </sc-for>
+        </div>
+        <span class="sub2">Ledger state is temporary (kept in Redis). The durable record of work is the task, not the claim.</span>
+      </div>
+
+      <sc-if value="{{showDown}}" hint-placeholder-val="{{ false }}">
+        <section class="card" role="alert" aria-labelledby="dn" style="border-left: 4px solid var(--dot-bad); padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap">
+          <span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 4.3L2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z" class="iw"/></svg></span>
+          <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 6px">
+            <h2 id="dn" style="margin: 0; font-size: 15px; font-weight: 600">Couldn't read the ledger</h2>
+            <span style="font-size: 13.5px; color: var(--text2)">Redis is unreachable, so presence, claims and history are unknown. This is not an empty result: agents may still hold claims. Last good read was at 10:52:41.</span>
+            <span class="sub2">What to do: check Redis in <a href="SystemHealth.dc.html">System health</a>, then reload this page. Nothing is released or deleted while the ledger is unreachable.</span>
+          </div>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{showPresence}}" hint-placeholder-val="{{ true }}">
+        <section class="card" aria-labelledby="pr">
+          <div class="ch" style="flex-wrap: wrap">
+            <h2 id="pr">Presence</h2>
+            <div class="fl"><span id="pfl">Status</span>
+              <div class="tabs fs" role="group" aria-labelledby="pfl">
+                <sc-for list="{{pStatus}}" as="s" hint-placeholder-count="4"><button type="button" class="seg {{s.cls}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+              </div>
+            </div>
+            <span class="sub2">{{presenceCount}}</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead><tr><th scope="col">Agent</th><th scope="col">Company</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Current task</th><th scope="col"><span tabindex="0" data-tip="Claims this agent holds right now">Claims</span></th><th scope="col"><span tabindex="0" data-tip="Agents that asked to be told once when this agent is next idle. One-shot: the note is gone after it fires.">Idle subscribers</span></th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+              <tbody>
+                <sc-for list="{{presence}}" as="p" hint-placeholder-count="13">
+                  <tr>
+                    <td><span style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600" class="mono">{{p.name}}</strong><span class="sub2">{{p.role}}</span></span></td>
+                    <td>{{p.company}}</td>
+                    <td><span class="pill idle">{{p.kind}}</span></td>
+                    <td><span style="display: flex; flex-direction: column; gap: 2px"><span><span class="pill {{p.cls}}">{{p.status}}</span></span><span class="sub2">{{p.seen}}</span></span></td>
+                    <td>{{p.task}}</td>
+                    <td class="mono">{{p.claims}}</td>
+                    <td>{{p.subs}}</td>
+                    <td style="text-align: right"><a class="btn sm" href="{{p.href}}" aria-label="{{p.label}}">Open agent</a></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <sc-if value="{{noPresence}}" hint-placeholder-val="{{ false }}">
+            <div class="row"><span class="sub2">No agents match this status. The ledger answered; nothing is in this state right now.</span></div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{showShared}}" hint-placeholder-val="{{ false }}">
+        <section aria-label="Shared resources" style="display: flex; flex-direction: column; gap: 14px">
+          <div class="card" style="padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12M4 12h9M4 17h6M18 14l3 3-3 3"/></svg></span>
+            <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 4px">
+              <strong style="font-size: 14px; font-weight: 600">How the waitlist is ordered</strong>
+              <span style="font-size: 13.5px; color: var(--text2)">When a shared resource frees up, waiters are ordered by priority first, then by who has waited longest, then by agent id so the order never flips. Being moved to the front is an invitation to retry, not a grant: the agent still has to claim again.</span>
+            </div>
+          </div>
+          <sc-for list="{{scopes}}" as="s" hint-placeholder-count="4">
+            <article class="card" aria-label="{{s.label}}">
+              <div class="ch" style="flex-wrap: wrap">
+                <span class="mono" style="font-size: 14px; font-weight: 600">{{s.scope}}</span>
+                <span class="sub2" style="flex-grow: 1">{{s.what}}</span>
+                <span class="pill info" tabindex="0" data-tip="Agents holding this scope right now">{{s.holdCount}}</span>
+                <span class="pill {{s.waitCls}}" tabindex="0" data-tip="Agents waiting for this scope, in the order shown below">{{s.waitCount}}</span>
+              </div>
+              <div style="display: flex; flex-wrap: wrap">
+                <div style="flex: 1 1 320px; min-width: 0">
+                  <div class="sect" style="margin-left: 16px">Holders</div>
+                  <sc-for list="{{s.holders}}" as="h" hint-placeholder-count="3">
+                    <div class="row"><span class="dot d-ok" aria-hidden="true"></span><span class="mono" style="font-weight: 600; font-size: 13px">{{h.n}}</span><span class="pill idle">{{h.mode}}</span><span class="sub2" style="margin-left: auto">{{h.left}}</span></div>
+                  </sc-for>
+                </div>
+                <div style="flex: 1 1 320px; min-width: 0; border-left: var(--bw) solid var(--line)">
+                  <div class="sect" style="margin-left: 16px">Waitlist</div>
+                  <sc-for list="{{s.waiters}}" as="w" hint-placeholder-count="2">
+                    <div class="row"><span class="qn" tabindex="0" data-tip="Position in the queue (join order, then arbitration)">{{w.pos}}</span><span class="mono" style="font-weight: 600; font-size: 13px">{{w.n}}</span><span class="sub2">{{w.meta}}</span><span class="pill {{w.cls}}" style="margin-left: auto">{{w.status}}</span></div>
+                  </sc-for>
+                  <sc-if value="{{s.noWait}}" hint-placeholder-val="{{ false }}">
+                    <div class="row"><span class="sub2">No one is waiting.</span></div>
+                  </sc-if>
+                </div>
+              </div>
+            </article>
+          </sc-for>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{showClaims}}" hint-placeholder-val="{{ false }}">
+        <section class="card" aria-labelledby="cl">
+          <div class="ch" style="flex-wrap: wrap">
+            <h2 id="cl">Claims</h2>
+            <span class="sub2">{{claimCount}} · amber rows expire within 3 min</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 12px 16px; border-bottom: var(--bw) solid var(--line)">
+            <div class="fl"><span id="fk">Scope kind</span><div class="tabs fs" role="group" aria-labelledby="fk"><sc-for list="{{fKind}}" as="o" hint-placeholder-count="8"><button type="button" class="seg {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+            <div class="fl"><span id="fm">Mode</span><div class="tabs fs" role="group" aria-labelledby="fm"><sc-for list="{{fMode}}" as="o" hint-placeholder-count="3"><button type="button" class="seg {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+            <div class="fl"><span id="fc">Company</span><div class="tabs fs" role="group" aria-labelledby="fc"><sc-for list="{{fComp}}" as="o" hint-placeholder-count="4"><button type="button" class="seg {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+            <div class="fl"><span id="fa">Agent kind</span><div class="tabs fs" role="group" aria-labelledby="fa"><sc-for list="{{fAgent}}" as="o" hint-placeholder-count="4"><button type="button" class="seg {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead><tr><th scope="col"><span tabindex="0" data-tip="kind:segments. A claim covers its subtree, never another kind. issue:&lt;n&gt; is one GitHub issue.">Scope</span></th><th scope="col">Holder</th><th scope="col">Company</th><th scope="col">Mode</th><th scope="col">Intent</th><th scope="col"><span tabindex="0" data-tip="Every claim expires unless the holder renews it">Expires</span></th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+              <tbody>
+                <sc-for list="{{claims}}" as="c" hint-placeholder-count="14">
+                  <tr class="{{c.rowCls}}">
+                    <td class="mono" style="font-weight: 500">{{c.scope}}</td>
+                    <td><span style="display: flex; flex-direction: column; gap: 2px"><span class="mono" style="font-weight: 600">{{c.holder}}</span><span class="sub2">{{c.kind}} · {{c.task}}</span></span></td>
+                    <td>{{c.company}}</td>
+                    <td><span class="pill idle">{{c.mode}}</span></td>
+                    <td>{{c.intent}}</td>
+                    <td><span style="display: flex; flex-direction: column; gap: 2px"><span><span class="pill {{c.expCls}}">{{c.exp}}</span></span><span class="sub2">{{c.renewed}}</span></span></td>
+                    <td style="text-align: right"><button type="button" class="btn sm" aria-label="{{c.label}}" onClick="{{c.ask}}" data-tip="Sends the same yield request agents send. Silence means hold: if the holder does not answer, the claim stays." data-tip-pos="left">Ask holder to release</button></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <sc-if value="{{noClaims}}" hint-placeholder-val="{{ false }}">
+            <div class="row"><span class="sub2">No claims match these filters. The ledger answered; try All to see every claim.</span></div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{showDev}}" hint-placeholder-val="{{ false }}">
+        <section aria-label="Dev loop" style="display: flex; flex-direction: column; gap: 14px">
+          <div class="card" style="padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></span>
+            <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 4px">
+              <strong style="font-size: 14px; font-weight: 600">Dev loop history by issue <span class="sub2" style="font-weight: 400">(#17091)</span></strong>
+              <span style="font-size: 13.5px; color: var(--text2)">What the dev loop did for each issue and what it cost, including attempts that never ran. Costs are in USD.</span>
+            </div>
+          </div>
+          <sc-for list="{{issues}}" as="i" hint-placeholder-count="4">
+            <article class="card" aria-label="{{i.label}}">
+              <div class="ch" style="flex-wrap: wrap">
+                <span class="mono" style="font-size: 14px; font-weight: 600">{{i.scope}}</span>
+                <span class="sub2" style="flex-grow: 1">{{i.holder}}</span>
+                <span class="pill {{i.cls}}">{{i.state}}</span>
+              </div>
+              <sc-for list="{{i.actions}}" as="a" hint-placeholder-count="3">
+                <div class="hist"><span class="sub2 mono" style="min-width: 44px">{{a.time}}</span><span class="pill {{a.cls}}">{{a.tag}}</span><span style="flex: 1 1 260px; font-size: 13px">{{a.text}}</span><span class="sub2">{{a.cost}}</span></div>
+              </sc-for>
+              <sc-if value="{{i.empty}}" hint-placeholder-val="{{ false }}">
+                <div class="hist" style="flex-direction: column; align-items: flex-start; gap: 4px">
+                  <strong style="font-size: 13.5px; font-weight: 600">No actions yet</strong>
+                  <span class="sub2">The ledger answered and has no dev-loop actions for this issue. This is different from "Couldn't read the ledger", which means Redis was unreachable and the answer is unknown.</span>
+                </div>
+              </sc-if>
+            </article>
+          </sc-for>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{showConflicts}}" hint-placeholder-val="{{ false }}">
+        <section aria-label="Conflicts" style="display: flex; flex-direction: column; gap: 14px">
+          <article class="card cc" aria-labelledby="c1">
+            <div class="ch" style="flex-wrap: wrap"><h2 id="c1">Refused release of another holder's claim</h2><span class="pill warn" tabindex="0" data-tip="Releasing a claim you don't hold is refused and logged. It means two agents disagree who owns this work.">Warning</span></div>
+            <div class="row" style="flex-wrap: wrap">
+              <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 3px">
+                <span style="font-size: 13.5px"><span class="mono" style="font-weight: 600">code-agent</span> tried to release <span class="mono" style="font-weight: 600">path:docs/developer</span>, held by <span class="mono" style="font-weight: 600">code-reviewer</span> (task T-4827, Shared).</span>
+                <span class="sub2">Refused and logged at 10:47. Two agents disagree who owns this work. The claim is unchanged.</span>
+              </div>
+              <a class="btn sm" href="Agents.dc.html" aria-label="Open agent code-agent">Open agent</a>
+              <a class="btn sm" href="Agents.dc.html" aria-label="Open agent code-reviewer">Open agent</a>
+            </div>
+          </article>
+          <article class="card cc" aria-labelledby="c2">
+            <div class="ch" style="flex-wrap: wrap"><h2 id="c2">Expired while held</h2><span class="pill warn" tabindex="0" data-tip="The holder stopped renewing, so the claim ended by itself. Nobody released or deleted it.">Holder crashed</span></div>
+            <div class="row" style="flex-wrap: wrap">
+              <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 3px">
+                <span style="font-size: 13.5px"><span class="mono" style="font-weight: 600">devops-engineer</span> (AutoBot Labs) missed its heartbeat at 10:22. Its claim on <span class="mono" style="font-weight: 600">config:fleet/inventory</span> (task T-4809, Exclusive) expired on its own at 10:37.</span>
+                <span class="sub2">The scope is free again. Check task T-4809 for half-finished work: the task is the record, the claim is gone.</span>
+              </div>
+              <a class="btn sm" href="Agents.dc.html" aria-label="Open agent devops-engineer">Open agent</a>
+            </div>
+          </article>
+          <article class="card cc" aria-labelledby="c3">
+            <div class="ch" style="flex-wrap: wrap"><h2 id="c3">Yield requests unanswered</h2><span class="pill idle" tabindex="0" data-tip="Silence means hold. An unanswered request is a refusal; the claim stays with the holder.">Silence = hold</span></div>
+            <div class="row" style="flex-wrap: wrap">
+              <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 3px">
+                <span style="font-size: 13.5px"><span class="mono" style="font-weight: 600">research-agent</span> asked <span class="mono" style="font-weight: 600">code-agent</span> to release <span class="mono" style="font-weight: 600">path:autobot-backend/agents</span> at 10:44. No answer in 8 min.</span>
+                <span class="sub2">Treated as refused: code-agent (task T-4821, Exclusive, intent "refactor loop") still holds it, expires in 6 min.</span>
+              </div>
+              <button type="button" class="btn sm" onClick="{{askAgents}}" data-tip="Sends the same yield request agents send. Silence means hold: if code-agent does not answer, the claim stays." data-tip-pos="left">Ask holder to release</button>
+              <a class="btn sm" href="Agents.dc.html" aria-label="Open agent code-agent">Open agent</a>
+            </div>
+          </article>
+        </section>
+      </sc-if>
+
+      <aside class="card" aria-labelledby="kg" style="padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; background: var(--surface2)">
+        <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="it2"/><path d="M12 11v5M12 8v.5"/></svg></span>
+        <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 4px">
+          <strong id="kg" style="font-size: 14px; font-weight: 600">Known gaps</strong>
+          <span style="font-size: 13.5px; color: var(--text2)">Peers don't yet have their own identity, so the ledger can't prove which peer sent a request (#16950). Agent-bus messages aren't authenticated yet (#16962). Until both are fixed, treat what one agent says about another as that agent's claim, not proof.</span>
+        </div>
+      </aside>
+    </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const tab = st.tab || 'presence';
+    const down = !!st.down;
+    const fk = st.fk || 'all', fm = st.fm || 'all', fc = st.fc || 'all', fa = st.fa || 'all', fp = st.fp || 'all';
+    const set = (k, v) => () => this.setState({ [k]: v });
+    const segs = (k, now, opts) => opts.map(([id, label]) => ({ label: label, cls: id === now ? 'on' : '', pressed: id === now ? 'true' : 'false', pick: set(k, id) }));
+    const ask = (who, scope) => () => this.setState({ toast: 'Yield request sent to ' + who + ' for ' + scope + '. If ' + who + ' does not answer, the claim stays: silence means hold.' });
+
+    const A = 'AutoBot Labs', N = 'Northwind Studio';
+    const P = [
+      ['code-agent', 'Staff Engineer', A, 'Company OS', 'Busy', 'T-4821 · Refactor agent loop', 2, '1 waiting: research-agent', 'now'],
+      ['research-agent', 'Head of Research', A, 'Company OS', 'Busy', 'T-4833 · Compare retrieval options', 2, '', 'now'],
+      ['documentation-engineer', 'Technical Writer', A, 'Company OS', 'Busy', 'T-4830 · Update ledger docs (waiting on provider:openai)', 0, '', 'now'],
+      ['code-reviewer', 'Reviewer', A, 'Company OS', 'Busy', 'T-4827 · Review PR for docs/developer', 2, '', '5 s ago'],
+      ['performance-engineer', 'Performance Lead', A, 'Company OS', 'Idle', '—', 0, '1 waiting: documentation-engineer', 'idle since 3 min'],
+      ['devops-engineer', 'Ops Lead', A, 'Company OS', 'Offline', 'T-4809 · Fleet inventory update (stalled)', 0, '', 'last seen 14 min ago'],
+      ['content-writer', 'Content lead', N, 'Company OS', 'Busy', 'T-212 · Draft launch page copy', 2, '', 'now'],
+      ['design-agent', 'Designer', N, 'Company OS', 'Idle', '—', 0, '', 'idle since 5 min'],
+      ['chat', 'AI-stack role', '—', 'AI-stack', 'Busy', 'Answering a chat turn', 2, '', 'now'],
+      ['rag', 'AI-stack role', '—', 'AI-stack', 'Idle', '—', 2, '', 'idle since 40 s'],
+      ['system_commands', 'AI-stack role', '—', 'AI-stack', 'Busy', 'Dispatching heartbeat runs', 1, '', 'now'],
+      ['Session · Jane Doe · terminal 2', 'Interactive session', '—', 'Session', 'Busy', 'Issue #17091 · Dev loop', 1, '', 'now'],
+      ['Session · Alex Smith · terminal 1', 'Interactive session', '—', 'Session', 'Idle', '—', 0, '', 'idle since 8 min']
+    ];
+    const stCls = { Busy: 'ok', Idle: 'idle', Offline: 'bad' };
+    const presAll = P.map(r => ({ name: r[0], role: r[1], company: r[2], kind: r[3], status: r[4], cls: stCls[r[4]], task: r[5], claims: String(r[6]), subs: r[7] || '—', seen: r[8], href: r[3] === 'Company OS' ? 'Agents.dc.html' : '#', label: 'Open agent ' + r[0] }));
+    const presence = presAll.filter(r => fp === 'all' || r.status === fp);
+
+    const C = [
+      ['path:autobot-backend/agents', 'code-agent', 'Company OS', A, 'T-4821', 'Exclusive', 'refactor loop', 6, 3],
+      ['provider:openai', 'code-agent', 'Company OS', A, 'T-4821', 'Shared', 'completion calls', 4, 3],
+      ['kb:research/retrieval-notes', 'research-agent', 'Company OS', A, 'T-4833', 'Exclusive', 'write comparison notes', 11, 1],
+      ['provider:openai', 'research-agent', 'Company OS', A, 'T-4833', 'Shared', 'embedding comparison', 8, 2],
+      ['path:docs/developer', 'code-reviewer', 'Company OS', A, 'T-4827', 'Shared', 'review', 2, 5],
+      ['provider:ollama', 'code-reviewer', 'Company OS', A, 'T-4827', 'Shared', 'summarise diff', 5, 1],
+      ['path:site/launch-page', 'content-writer', 'Company OS', N, 'T-212', 'Exclusive', 'draft copy', 9, 0],
+      ['provider:openai', 'content-writer', 'Company OS', N, 'T-212', 'Shared', 'copy drafts', 7, 1],
+      ['provider:openai', 'chat', 'AI-stack', '—', 'no task', 'Shared', 'chat turns', 5, 4],
+      ['cpu:inference', 'chat', 'AI-stack', '—', 'no task', 'Shared', 'interactive reply', 1, 6],
+      ['provider:ollama', 'rag', 'AI-stack', '—', 'no task', 'Shared', 'embedding batch', 3, 2],
+      ['cpu:inference', 'rag', 'AI-stack', '—', 'no task', 'Shared', 'embedding batch', 4, 2],
+      ['queue:heartbeat-runs', 'system_commands', 'AI-stack', '—', 'no task', 'Exclusive', 'dispatch runs', 10, 7],
+      ['issue:17091', 'Session · Jane Doe · terminal 2', 'Session', '—', 'no task', 'Exclusive', 'dev loop fix', 9, 2]
+    ];
+    const claimsAll = C.map(r => ({ scope: r[0], holder: r[1], kind: r[2], company: r[3], task: r[4], mode: r[5], intent: r[6], mins: r[7], n: r[8] }));
+    const claims = claimsAll.filter(c => (fk === 'all' || c.scope.split(':')[0] === fk) && (fm === 'all' || c.mode === fm) && (fc === 'all' || (fc === 'none' ? c.company === '—' : c.company === fc)) && (fa === 'all' || c.kind === fa)).map(c => {
+      const soon = c.mins < 3;
+      return {
+        scope: c.scope, holder: c.holder, kind: c.kind, company: c.company, task: c.task, mode: c.mode, intent: c.intent,
+        rowCls: soon ? 'soon' : '', expCls: soon ? 'warn' : 'idle', exp: 'expires in ' + c.mins + ' min' + (soon ? ' · soon' : ''), renewed: 'renewed ' + c.n + '×',
+        label: 'Ask holder to release ' + c.scope + ', held by ' + c.holder,
+        ask: ask(c.holder, c.scope)
+      };
+    });
+
+    const SC = [
+      ['provider:openai', 'API rate limit', [['code-agent', 'Shared', 'expires in 4 min'], ['research-agent', 'Shared', 'expires in 8 min'], ['content-writer', 'Shared', 'expires in 7 min'], ['chat', 'Shared', 'expires in 5 min']],
+        [['documentation-engineer', 'High priority · waited 4 min', 'Invited to retry', 'info'], ['Session · Jane Doe · terminal 2', 'Normal priority · waited 1 min', 'Waiting', 'idle']]],
+      ['provider:ollama', 'Local model provider', [['rag', 'Shared', 'expires in 3 min'], ['code-reviewer', 'Shared', 'expires in 5 min']], []],
+      ['cpu:inference', 'CPU time on the inference role', [['chat', 'Shared', 'expires in 1 min'], ['rag', 'Shared', 'expires in 4 min']],
+        [['content-writer', 'Normal priority · waited 40 s', 'Waiting', 'idle']]],
+      ['queue:heartbeat-runs', 'Heartbeat run queue', [['system_commands', 'Exclusive', 'expires in 10 min']], []]
+    ];
+    const scopes = SC.map(s => ({
+      scope: s[0], what: s[1], label: s[0] + ' contention',
+      holdCount: s[2].length + (s[2].length === 1 ? ' holder' : ' holders'),
+      waitCount: s[3].length ? 'Waitlist ' + s[3].length : 'No waitlist', waitCls: s[3].length ? 'warn' : 'idle',
+      holders: s[2].map(h => ({ n: h[0], mode: h[1], left: h[2] })),
+      waiters: s[3].map((w, i) => ({ pos: String(i + 1), n: w[0], meta: w[1], status: w[2], cls: w[3] })),
+      noWait: s[3].length === 0
+    }));
+
+    const issues = [
+      { scope: 'issue:17091', holder: 'Held by Session · Jane Doe · terminal 2 (Exclusive, expires in 9 min)', state: 'Held', cls: 'ok', empty: false, actions: [
+        { time: '10:52', tag: 'ran', cls: 'ok', text: 'Ran the test suite for the ledger panel', cost: 'USD 0.38' },
+        { time: '10:49', tag: 'ran', cls: 'ok', text: 'Edited the ledger panel code', cost: 'USD 1.12' },
+        { time: '10:41', tag: 'skipped', cls: 'warn', text: 'code-agent: skipped — held by another session', cost: 'not run' },
+        { time: '10:38', tag: 'claimed', cls: 'info', text: 'Session claimed issue:17091', cost: 'USD 0.00' } ] },
+      { scope: 'issue:17095', holder: 'No active claim', state: 'Free', cls: 'idle', empty: false, actions: [
+        { time: '10:30', tag: 'refused', cls: 'bad', text: 'code-agent: refused — spend budget', cost: 'not run' },
+        { time: '10:12', tag: 'refused', cls: 'bad', text: 'research-agent: refused — rate budget', cost: 'not run' } ] },
+      { scope: 'issue:17088', holder: 'No active claim · last holder released at 10:05', state: 'Free', cls: 'idle', empty: false, actions: [
+        { time: '10:05', tag: 'ran', cls: 'ok', text: 'code-agent: opened a pull request and released the claim', cost: 'USD 2.04' } ] },
+      { scope: 'issue:17102', holder: 'No active claim', state: 'Free', cls: 'idle', empty: true, actions: [] }
+    ].map(i => Object.assign(i, { label: i.scope + ' history' }));
+
+    const base = (n) => down ? '—' : n;
+    const kpis = [
+      { icon: 'M5 8h14v10H5zM12 8V4M9 13h.01M15 13h.01', big: base('8'), label: 'Company OS agents', sub: down ? 'Unknown' : '5 busy · 2 idle · 1 offline', tip: 'Org-chart agents across every company on this install' },
+      { icon: 'M4 6h16v12H4zM8 10l2 2-2 2M12 14h4', big: base('3'), label: 'AI-stack agents', sub: down ? 'Unknown' : '2 busy · 1 idle', tip: 'Role agents: chat, rag, system_commands' },
+      { icon: 'M4 5h16v14H4zM8 10l3 2-3 2M13 14h3', big: base('2'), label: 'Live sessions', sub: down ? 'Unknown' : '1 busy · 1 idle', tip: 'Concurrent interactive and terminal sessions' },
+      { icon: 'M6 4h10a3 3 0 0 1 3 3v13H9a3 3 0 0 1-3-3zM9 9h7', big: base('14'), label: 'Active claims', sub: down ? 'Unknown' : '2 expire within 3 min', tip: 'Claims held right now across all scopes' },
+      { icon: 'M12 3l9 16H3zM12 10v4', big: base('5'), label: 'Refusals, last hour', sub: down ? 'Unknown' : 'Release, yield and budget', tip: 'Refused releases, unanswered yield requests, and dev-loop attempts refused or skipped' },
+      { icon: 'M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', big: base('4 min'), label: 'Longest wait', sub: down ? 'Unknown' : 'documentation-engineer · provider:openai', tip: 'The longest anyone has been on a waitlist right now' }
+    ];
+
+    const tabDefs = [['presence', 'Presence'], ['shared', 'Shared resources'], ['claims', 'Claims'], ['dev', 'Dev loop'], ['conflicts', 'Conflicts']];
+    const toast = st.toast || '';
+    return {
+      theme: cur,
+      storeCls: down ? 'down' : 'live',
+      storeDot: down ? 'd-bad' : 'd-ok',
+      storeText: down ? 'unreachable · Redis' : 'reachable · Redis',
+      storeRead: down ? 'Last good read 10:52:41 · 2 min ago' : 'Last read 4 s ago',
+      storeTip: down ? 'Redis cannot be reached. Claims, presence and history are unknown, not empty.' : 'The ledger answered the latest read. State here is temporary (Redis); the task is the durable record.',
+      downPressed: down ? 'true' : 'false',
+      downLabel: down ? 'Back to normal view' : 'Preview unreachable state',
+      toggleDown: () => this.setState({ down: !down }),
+      hasToast: toast !== '',
+      toast: toast,
+      closeToast: () => this.setState({ toast: '' }),
+      askAgents: ask('code-agent', 'path:autobot-backend/agents'),
+      kpis: kpis,
+      tabs: segs('tab', tab, tabDefs),
+      showDown: down,
+      showPresence: !down && tab === 'presence',
+      showShared: !down && tab === 'shared',
+      showClaims: !down && tab === 'claims',
+      showDev: !down && tab === 'dev',
+      showConflicts: !down && tab === 'conflicts',
+      pStatus: segs('fp', fp, [['all', 'All'], ['Busy', 'Busy'], ['Idle', 'Idle'], ['Offline', 'Offline']]),
+      presence: presence,
+      presenceCount: presence.length + ' of ' + presAll.length + ' agents · 2 companies',
+      noPresence: presence.length === 0,
+      scopes: scopes,
+      fKind: segs('fk', fk, [['all', 'All'], ['path', 'path'], ['kb', 'kb'], ['provider', 'provider'], ['cpu', 'cpu'], ['queue', 'queue'], ['issue', 'issue']]),
+      fMode: segs('fm', fm, [['all', 'All'], ['Exclusive', 'Exclusive'], ['Shared', 'Shared']]),
+      fComp: segs('fc', fc, [['all', 'All'], [A, A], [N, N], ['none', 'No company']]),
+      fAgent: segs('fa', fa, [['all', 'All'], ['Company OS', 'Company OS'], ['AI-stack', 'AI-stack'], ['Session', 'Session']]),
+      claims: claims,
+      claimCount: claims.length + ' of ' + claimsAll.length + ' claims',
+      noClaims: claims.length === 0,
+      issues: issues
+    };
+  }
+}
+</script>
+</body>
+</html>

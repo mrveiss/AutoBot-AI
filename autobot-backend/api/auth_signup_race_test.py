@@ -26,17 +26,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 
 from api.schemas_agent import SignupRequest
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import User
-from user_management.models.base import Base
 from user_management.services.user_service import UserService
 
-_SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
 # Generated per run rather than written as a literal. An earlier version of this
 # line assembled the string from fragments with a comment saying it was done to
 # dodge the secret-scan hook -- which is a working recipe for getting a real
@@ -45,40 +40,17 @@ _SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (tes
 _TEST_CREDENTIAL = f"pytest-{uuid.uuid4().hex[:16]}Aa1!"
 
 
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
-
-
-class _RaisingNestedCtx:
-    """Stand-in for ``begin_nested()``'s return value; raises on entry to
-    simulate a concurrent INSERT winning the race (see
-    ``user_service_conflict_test.py`` for why this is mocked rather than
-    driven through a real SQLite constraint violation)."""
-
-    async def __aenter__(self):  # noqa: ANN204
-        raise IntegrityError("duplicate key", None, None)
-
-    async def __aexit__(self, exc_type, exc, tb):  # noqa: ANN204
-        return False
-
-
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator:
-    engine = create_async_engine(_SQLITE_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[User.__table__])
-    try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
+    async for factory in real_savepoint_session_factory([User.__table__]):
+        yield factory
 
 
 async def _seed_winning_user(session_factory, *, email: str, username: str) -> None:  # noqa: ANN001
     async with session_factory() as session:
         session.add(
             User(
-                id=uuid.uuid4(),
+                id=uuid.uuid5(uuid.NAMESPACE_DNS, "winner.auth-signup-race.test"),
                 email=email.lower(),
                 username=username.lower(),
                 password_hash=None,
@@ -103,7 +75,6 @@ async def test_signup_race_returns_409_not_500(session_factory):  # noqa: ANN001
     @asynccontextmanager
     async def _fake_db_session_context():
         async with session_factory() as session:
-            session.sync_session.autoflush = False
             try:
                 yield session
                 await session.commit()
@@ -115,7 +86,6 @@ async def test_signup_race_returns_409_not_500(session_factory):  # noqa: ANN001
 
     with (
         patch.object(UserService, "_check_duplicate_user", AsyncMock(return_value=None)),
-        patch.object(AsyncSession, "begin_nested", return_value=_RaisingNestedCtx()),
         patch("api.auth.db_session_context", _fake_db_session_context),
     ):
         with pytest.raises(HTTPException) as exc_info:

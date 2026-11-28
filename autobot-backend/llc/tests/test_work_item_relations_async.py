@@ -13,6 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 
 class _Awaitable:
     """Mimic SQLAlchemy's awaitable_attrs: attribute access returns a coroutine."""
@@ -33,15 +35,10 @@ def _rel(rid, target_id="t-1"):
     return SimpleNamespace(id=rid, relation_type="blocks", target_id=target_id)
 
 
-class _FakeSession:
+def _session(*target_rows) -> FakeAsyncSession:
     """Session whose execute() returns the given target column-rows (#11686:
     _relations_to_list bulk-fetches target identifier/title/status by id)."""
-
-    def __init__(self, *target_rows):
-        self._rows = list(target_rows)
-
-    async def execute(self, *_args, **_kwargs):
-        return list(self._rows)
+    return FakeAsyncSession(default_result=list(target_rows))
 
 
 def _target_row(tid, identifier, title, status):
@@ -53,7 +50,7 @@ async def test_relations_to_list_serializes_target_fields():
     from llc.api import work_items
 
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-1")]))
-    session = _FakeSession(_target_row("t-1", "MVT-9", "Target", "open"))
+    session = _session(_target_row("t-1", "MVT-9", "Target", "open"))
 
     rows = await work_items._relations_to_list(item, session)
 
@@ -76,7 +73,7 @@ async def test_relations_to_list_empty_for_freshly_created_item():
     from llc.api import work_items
 
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[]))
-    assert await work_items._relations_to_list(item, _FakeSession()) == []
+    assert await work_items._relations_to_list(item, _session()) == []
 
 
 @pytest.mark.asyncio
@@ -85,7 +82,7 @@ async def test_relations_to_list_handles_null_target():
     from llc.api import work_items
 
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-2")]))
-    rows = await work_items._relations_to_list(item, _FakeSession())  # no target rows
+    rows = await work_items._relations_to_list(item, _session())  # no target rows
     assert rows == [
         {
             "id": "r-2",
@@ -106,19 +103,10 @@ async def test_relations_to_list_single_query_for_many_relations():
     rels = [_rel(f"r-{i}", target_id=f"t-{i}") for i in range(5)]
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=rels))
 
-    class _CountingSession(_FakeSession):
-        def __init__(self, *rows):
-            super().__init__(*rows)
-            self.execute_calls = 0
-
-        async def execute(self, *a, **k):
-            self.execute_calls += 1
-            return await super().execute(*a, **k)
-
-    session = _CountingSession(*[_target_row(f"t-{i}", f"MVT-{i}", f"T{i}", "open") for i in range(5)])
+    session = _session(*[_target_row(f"t-{i}", f"MVT-{i}", f"T{i}", "open") for i in range(5)])
 
     rows = await work_items._relations_to_list(item, session)
 
     assert len(rows) == 5
-    assert session.execute_calls == 1, "targets must be batch-fetched in a single query"
+    assert len(session.statements) == 1, "targets must be batch-fetched in a single query"
     assert rows[3]["target_identifier"] == "MVT-3"

@@ -25,7 +25,8 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from agents.kb_librarian.librarian import KBLibrarian, _build_basic_info_section
+from agents.kb_librarian.librarian import KBLibrarian
+from agents.kb_librarian.tool_document import _build_basic_info_section
 from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase

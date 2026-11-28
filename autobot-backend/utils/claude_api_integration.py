@@ -94,7 +94,7 @@ class ClaudeAPIConfig:
 
 
 @dataclass
-class OptimizationMetrics:
+class ClaudeBatchMetrics:
     """Snapshot metrics for optimization performance (folded from suite, #10796)."""
 
     total_requests: int = 0
@@ -162,7 +162,7 @@ class ClaudeAPIBatchManager:
         self._background_tasks: List[asyncio.Task] = []
 
         # Flat metrics store
-        self._metrics = OptimizationMetrics()
+        self._metrics = ClaudeBatchMetrics()
 
     async def start(self):
         """Start the batch manager and optional background analysis tasks."""
@@ -279,7 +279,7 @@ class ClaudeAPIBatchManager:
     async def _optimize_payload_if_enabled(self, content: str) -> str:
         """Return payload-optimized content string when optimizer is enabled.
 
-        Bugfix (#10945): ``OptimizationResult`` has no ``optimized``/
+        Bugfix (#10945): ``PayloadOptimizationResult`` has no ``optimized``/
         ``optimized_content``/``size_reduction`` attributes (its real fields are
         ``optimization_type``, ``chunks``, ``savings_percent``) — the previous
         implementation raised ``AttributeError`` on every call where the
@@ -540,7 +540,7 @@ class ClaudeAPIBatchManager:
     async def reset_metrics(self):
         """Reset all metrics (thread-safe)."""
         async with self._lock:
-            self._metrics = OptimizationMetrics()
+            self._metrics = ClaudeBatchMetrics()
         logger.info("Metrics reset")
 
     # ------------------------------------------------------------------

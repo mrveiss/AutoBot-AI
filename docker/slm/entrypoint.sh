@@ -11,18 +11,24 @@
 # a Python-3.14 (or any other failing) run yields an actionable traceback via
 # `docker logs <container>` or the mounted log volume, rather than a silent
 # unhealthy state with no captured output.
-set -e
+#
+# #19238: `pipefail`, because every step is piped to `tee`. Without it a pipeline's status was
+# tee's, so a failed migration never reached the retry or FATAL branch, "Migrations complete."
+# always printed, a failed import probe was ignored, and uvicorn started on an unmigrated
+# database. SLM_APP_DIR exists so a test can run this script against a stub; the image uses /app.
+set -eo pipefail
 
-cd /app/autobot-slm-backend
+APP_DIR="${SLM_APP_DIR:-/app}"
+cd "${APP_DIR}/autobot-slm-backend"
 
-mkdir -p /app/logs
+mkdir -p "${APP_DIR}/logs"
 
 echo "Running SLM database migrations..."
-python3 -m migrations.runner 2>&1 | tee -a /app/logs/slm-startup.log || {
+python3 -m migrations.runner 2>&1 | tee -a "${APP_DIR}/logs/slm-startup.log" || {
     echo "ERROR: Migration failed — retrying in 5s..."
     sleep 5
-    python3 -m migrations.runner 2>&1 | tee -a /app/logs/slm-startup.log || {
-        echo "FATAL: Migration failed after retry. Aborting." | tee -a /app/logs/slm-startup.log
+    python3 -m migrations.runner 2>&1 | tee -a "${APP_DIR}/logs/slm-startup.log" || {
+        echo "FATAL: Migration failed after retry. Aborting." | tee -a "${APP_DIR}/logs/slm-startup.log"
         exit 1
     }
 }
@@ -36,7 +42,7 @@ echo "Migrations complete."
 echo "Running SLM import probe..."
 python3 -c "
 import sys, traceback, pathlib
-log = pathlib.Path('/app/logs/slm-startup.log')
+log = pathlib.Path('${APP_DIR}/logs/slm-startup.log')
 try:
     import main  # noqa: F401 — import-only probe; side-effects are intentional
     print('SLM import probe: OK')
@@ -49,6 +55,6 @@ except Exception:
         fh.write('=== SLM import probe FAILED ===\n')
         fh.write(msg)
     sys.exit(1)
-" 2>&1 | tee -a /app/logs/slm-startup.log
+" 2>&1 | tee -a "${APP_DIR}/logs/slm-startup.log"
 
 exec "$@"

@@ -17,7 +17,7 @@ Supported Providers (Issue #746):
 - vLLM (local/server)
 """
 
-from .base import ProviderHealthResult, ProviderStatus
+from .base import ProviderHealthResult, ProviderHealthStatus
 from .manager import ProviderHealthManager
 from .providers import (
     AnthropicHealth,
@@ -30,7 +30,7 @@ from .providers import (
 
 __all__ = [
     "ProviderHealthResult",
-    "ProviderStatus",
+    "ProviderHealthStatus",
     "ProviderHealthManager",
     "OllamaHealth",
     "OpenAIHealth",

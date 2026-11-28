@@ -10,6 +10,11 @@ const mockPost = vi.fn()
 const mockPatch = vi.fn()
 const mockDelete = vi.fn()
 const mockRawRequest = vi.fn()
+const mockFetchWithAuth = vi.fn()
+
+vi.mock('@/utils/fetchWithAuth', () => ({
+  fetchWithAuth: (...args: unknown[]) => mockFetchWithAuth(...args),
+}))
 
 vi.mock('@/plugins/api', () => ({
   useApiClient: () => ({ get: mockGet, post: mockPost, patch: mockPatch, delete: mockDelete, rawRequest: mockRawRequest }),
@@ -195,43 +200,31 @@ describe('useTranscriberApi', () => {
   })
 
   describe('AI', () => {
-    let mockEventSource: Record<string, unknown>
-
-    beforeEach(() => {
-      mockEventSource = {
-        close: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }
-      vi.stubGlobal('EventSource', vi.fn(function EventSource(_url: string) {
-        return mockEventSource
-      }))
-    })
-
-    it('aiAsk creates EventSource with correct URL', () => {
+    it('aiAsk POSTs AiAskRequest to /ai/ask and returns the streaming Response', async () => {
+      const response = { body: {} } as unknown as Response
+      mockFetchWithAuth.mockResolvedValue(response)
       const api = useTranscriberApi()
-      const result = api.aiAsk(42, 'summarize')
+      const result = await api.aiAsk(42, 'summarize')
 
-      expect(global.EventSource).toHaveBeenCalledWith(
-        expect.stringContaining('/api/transcriber/recordings/42/ai/ask?action=summarize')
+      expect(mockFetchWithAuth).toHaveBeenCalledWith(
+        expect.stringContaining('/api/transcriber/recordings/42/ai/ask'),
+        expect.objectContaining({ method: 'POST' })
       )
-      expect(result).toBe(mockEventSource)
+      const init = mockFetchWithAuth.mock.calls[0][1] as RequestInit
+      expect(JSON.parse(init.body as string)).toEqual({ action: 'summarize', custom_question: null })
+      expect(result).toBe(response)
     })
 
-    it('aiAsk includes custom question when provided', () => {
+    it('aiAsk sends the custom question in the body when provided', async () => {
+      mockFetchWithAuth.mockResolvedValue({} as Response)
       const api = useTranscriberApi()
-      api.aiAsk(42, 'custom', 'What is the main topic?')
+      await api.aiAsk(42, 'custom', 'What is the main topic?')
 
-      expect(global.EventSource).toHaveBeenCalledWith(
-        expect.stringContaining('action=custom&q=What%20is%20the%20main%20topic%3F')
-      )
-    })
-
-    it('aiAsk returns mocked EventSource instance', () => {
-      const api = useTranscriberApi()
-      const result = api.aiAsk(1, 'summarize')
-      expect(result).toBe(mockEventSource)
-      expect(result.close).toBeDefined()
+      const init = mockFetchWithAuth.mock.calls[0][1] as RequestInit
+      expect(JSON.parse(init.body as string)).toEqual({
+        action: 'custom',
+        custom_question: 'What is the main topic?',
+      })
     })
   })
 

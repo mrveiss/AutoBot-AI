@@ -2,26 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Concrete MeshGraph/MeshDB adapter bridging PostgreSQL mesh schema to protocol interfaces (#2548).
+"""Concrete NeighborStore/MeshDB adapter bridging PostgreSQL mesh schema to protocol interfaces (#2548).
 
 The ``mesh_db.py`` module defines ``MeshDB`` — a full-featured async PostgreSQL client
 for the mesh tables introduced in #2055.  That class already satisfies every method
 required by the ``MeshDB`` Protocol in ``edge_learner.py``.
 
-The only gap is the ``MeshGraph`` Protocol defined in ``staleness_propagator.py``:
-
-    async def get_neighbors(self, node_id: str) -> list[tuple[str, float]]: ...
-
-``MeshDB.get_neighbors()`` returns ``list[dict]`` (with ``neighbor_id``, ``weight``, …)
-whereas ``MeshGraph.get_neighbors()`` expects ``list[tuple[str, float]]``.
-
-``MeshDBAdapter`` wraps the concrete ``MeshDB`` instance and:
-
-- Forwards all ``MeshDB`` Protocol calls (``get_edge``, ``update_edge``, ``create_edge``,
-  ``get_co_access_count``, ``update_access_count``) unchanged to the underlying client.
-- Implements ``MeshGraph.get_neighbors()`` by delegating to ``MeshDB.get_neighbors()``
-  and reshaping the result into the ``[(neighbor_id, weight)]`` tuples the BFS
-  propagator expects.
+The only gap is the ``NeighborStore`` contract in ``neighbor_store.py``
+(``get_neighbors(node_id, min_weight=0.0) -> list[tuple[str, float]]``).
+``MeshDB.fetch_neighbor_rows()`` returns raw ``list[dict]`` rows (``neighbor_id``, ``weight``, ...),
+so ``MeshDBAdapter`` wraps the concrete ``MeshDB`` instance, forwards all ``MeshDB`` Protocol calls
+unchanged and projects the rows to ``(neighbor_id, weight)`` tuples for PPR and staleness BFS.
 
 Use ``create_mesh_db_adapter()`` at application startup to get an engine-wired instance.
 """
@@ -35,14 +26,7 @@ logger = get_logger(__name__)
 
 
 class MeshDBAdapter:
-    """Adapter that satisfies both the ``MeshDB`` and ``MeshGraph`` protocols (#2548).
-
-    Delegates all ``MeshDB`` operations to the wrapped ``MeshDB`` instance.
-    The only transformation applied is in ``get_neighbors()``: the dict rows
-    returned by ``MeshDB.get_neighbors()`` are projected to ``(neighbor_id, weight)``
-    tuples so the result matches the ``MeshGraph`` Protocol signature consumed by
-    ``propagate_staleness()``.
-    """
+    """Adapter that satisfies both the ``MeshDB`` and ``NeighborStore`` protocols (#2548, #18139)."""
 
     def __init__(self, db: MeshDB) -> None:
         self._db = db
@@ -85,17 +69,15 @@ class MeshDBAdapter:
         await self._db.promote_to_anchor(node_id)
 
     # ------------------------------------------------------------------
-    # MeshGraph protocol — StalenessPropagor surface
+    # NeighborStore contract — PPR and staleness surface
     # ------------------------------------------------------------------
 
-    async def get_neighbors(self, node_id: str) -> list[tuple[str, float]]:
-        """Return ``[(neighbor_id, weight)]`` tuples for ``node_id``.
+    async def get_neighbors(self, node_id: str, min_weight: float = 0.0) -> list[tuple[str, float]]:
+        """Return ``[(neighbor_id, weight)]`` tuples for ``node_id`` (``NeighborStore`` contract, #18139).
 
-        Delegates to ``MeshDB.get_neighbors()`` (returns ``list[dict]``) and
-        projects each row to the ``(neighbor_id, weight)`` tuple shape required
-        by the ``MeshGraph`` Protocol in ``staleness_propagator.py``.
+        Projects the dict rows of ``MeshDB.fetch_neighbor_rows()`` to the shared tuple shape.
         """
-        rows = await self._db.get_neighbors(node_id, min_weight=0.0)
+        rows = await self._db.fetch_neighbor_rows(node_id, min_weight=min_weight)
         result: list[tuple[str, float]] = [(row["neighbor_id"], float(row["weight"])) for row in rows]
         logger.debug(
             "MeshDBAdapter.get_neighbors node=%s found=%d neighbors",
@@ -125,7 +107,7 @@ def create_mesh_db_adapter(engine: AsyncEngine) -> MeshDBAdapter:
         engine: An initialised ``AsyncEngine`` for the PostgreSQL mesh database.
 
     Returns:
-        A ``MeshDBAdapter`` instance that satisfies both ``MeshDB`` and ``MeshGraph``
+        A ``MeshDBAdapter`` instance that satisfies both ``MeshDB`` and ``NeighborStore``
         protocols.
     """
     db = MeshDB(engine)

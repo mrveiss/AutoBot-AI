@@ -24,11 +24,12 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from config.manager import get_config_manager as _get_config_manager
+from knowledge.serving import is_servable
 from llm_shared.types import LLMType
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from services.llm_service import get_llm_service
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_llm_logger("knowledge_extraction")
@@ -63,7 +64,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
         Args:
             llm_interface: LLM interface for fact extraction (optional)
         """
-        super().__init__("knowledge_extraction", DeploymentMode.LOCAL)
+        super().__init__("knowledge_extraction", AgentDeploymentMode.LOCAL)
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -749,9 +750,8 @@ Return the results as a JSON array of facts. Example format:
             Filtered list of facts
         """
         filtered_facts = facts
-
         if active_only:
-            filtered_facts = [f for f in filtered_facts if f.is_active]
+            filtered_facts = [f for f in filtered_facts if is_servable(f)]  # one serving predicate (#18820)
 
         if fact_types:
             filtered_facts = [f for f in filtered_facts if f.fact_type in fact_types]

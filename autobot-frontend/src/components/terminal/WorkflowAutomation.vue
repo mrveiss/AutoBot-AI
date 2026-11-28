@@ -7,34 +7,20 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import {
+  buildAutomationSteps,
+  exampleWorkflow,
+  useAutomationPacing,
+  workflowStartedLines,
+  type AutomationOutputLine as TerminalOutputLine,
+  type AutomationStep as WorkflowStep,
+  type AutomationWorkflow as WorkflowData
+} from '@/composables/useAutomationPacing'
 
 const logger = createLogger('WorkflowAutomation')
-
-interface WorkflowStep {
-  stepNumber: number
-  totalSteps: number
-  command: string
-  description?: string
-  explanation?: string
-  requiresConfirmation?: boolean
-}
-
-interface WorkflowData {
-  name: string
-  steps: Array<{
-    command: string
-    description?: string
-    explanation?: string
-    requiresConfirmation?: boolean
-  }>
-}
-
-interface TerminalOutputLine {
-  content: string
-  type: string
-  timestamp: Date
-}
+const { t } = useI18n()
 
 interface Props {
   automationPaused: boolean
@@ -100,6 +86,14 @@ const waitingForUserConfirmation = computed({
   set: (value: boolean) => emit('update:waiting-for-user-confirmation', value)
 })
 
+// Pacing between steps; its timers are cleared on unmount (#16396, #17942)
+const { processNextAutomationStep, scheduleNextAutomationStep, startFirstAutomationStep } = useAutomationPacing({
+  queue: automationQueue,
+  paused: automationPaused,
+  currentStep: currentWorkflowStep,
+  onStepDue: (step) => requestManualStepConfirmation(step)
+})
+
 // Automation Control Methods
 const toggleAutomationPause = () => {
   automationPaused.value = !automationPaused.value
@@ -107,7 +101,7 @@ const toggleAutomationPause = () => {
   if (automationPaused.value) {
     // Pause automation - user takes control
     emit('add-output-line', {
-      content: '⏸️ AUTOMATION PAUSED - Manual control activated. Type commands freely.',
+      content: t('terminal.automation.paused'),
       type: 'system_message',
       timestamp: new Date()
     })
@@ -118,7 +112,7 @@ const toggleAutomationPause = () => {
   } else {
     // Resume automation
     emit('add-output-line', {
-      content: '▶️ AUTOMATION RESUMED - Continuing workflow execution.',
+      content: t('terminal.automation.resumed'),
       type: 'system_message',
       timestamp: new Date()
     })
@@ -138,13 +132,13 @@ const requestManualStepConfirmation = (stepInfo: WorkflowStep) => {
   waitingForUserConfirmation.value = true
 
   emit('add-output-line', {
-    content: `🤖 AI WORKFLOW: About to execute "${stepInfo.command}"`,
+    content: t('terminal.automation.aboutToExecute', { command: stepInfo.command }),
     type: 'system_message',
     timestamp: new Date()
   })
 
   emit('add-output-line', {
-    content: `📋 Step ${stepInfo.stepNumber}/${stepInfo.totalSteps}: ${stepInfo.description}`,
+    content: t('terminal.automation.stepProgress', { step: stepInfo.stepNumber, total: stepInfo.totalSteps, description: stepInfo.description }),
     type: 'workflow_info',
     timestamp: new Date()
   })
@@ -169,7 +163,7 @@ const confirmWorkflowStep = () => {
 const skipWorkflowStep = () => {
   if (pendingWorkflowStep.value) {
     emit('add-output-line', {
-      content: `⏭️ SKIPPED: ${pendingWorkflowStep.value.command}`,
+      content: t('terminal.automation.skipped', { command: pendingWorkflowStep.value.command }),
       type: 'system_message',
       timestamp: new Date()
     })
@@ -189,7 +183,7 @@ const takeManualControl = () => {
   waitingForUserConfirmation.value = false
 
   emit('add-output-line', {
-    content: '👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.',
+    content: t('terminal.automation.manualControlTaken'),
     type: 'system_message',
     timestamp: new Date()
   })
@@ -206,7 +200,7 @@ const takeManualControl = () => {
 const executeAutomatedCommand = (command: string) => {
   // Mark as automated execution
   emit('add-output-line', {
-    content: `🤖 AUTOMATED: ${command}`,
+    content: t('terminal.automation.automated', { command }),
     type: 'automated_command',
     timestamp: new Date()
   })
@@ -218,110 +212,21 @@ const executeAutomatedCommand = (command: string) => {
   emit('add-running-process', `[AUTO] ${command}`)
 }
 
-const processNextAutomationStep = () => {
-  if (automationQueue.value.length > 0 && !automationPaused.value) {
-    const queue = [...automationQueue.value]
-    const nextStep = queue.shift()
-    automationQueue.value = queue
-
-    if (nextStep) {
-      // Small delay between steps for readability
-      setTimeout(() => {
-        requestManualStepConfirmation(nextStep)
-      }, 1000)
-    }
-  }
-}
-
-const scheduleNextAutomationStep = () => {
-  currentWorkflowStep.value++
-
-  // Small delay before next step
-  setTimeout(() => {
-    processNextAutomationStep()
-  }, 2000)
-}
-
 // API Integration for Workflow Automation
 const startAutomatedWorkflow = (workflowData: WorkflowData) => {
   hasAutomatedWorkflow.value = true
   automationPaused.value = false
   currentWorkflowStep.value = 0
-  workflowSteps.value = workflowData.steps?.map((step, index) => ({
-    stepNumber: index + 1,
-    totalSteps: workflowData.steps.length,
-    command: step.command,
-    description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation,
-    requiresConfirmation: step.requiresConfirmation !== false // Default to true
-  })) || []
+  workflowSteps.value = buildAutomationSteps(workflowData, t)
+  automationQueue.value = buildAutomationSteps(workflowData, t)
 
-  // Clear any previous automation queue
-  automationQueue.value = []
+  for (const line of workflowStartedLines(workflowData, t)) emit('add-output-line', line)
 
-  // Add all steps to automation queue
-  const queue = workflowData.steps.map((step, index) => ({
-    stepNumber: index + 1,
-    totalSteps: workflowData.steps.length,
-    command: step.command,
-    description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation,
-    requiresConfirmation: step.requiresConfirmation !== false // Default to true
-  }))
-  automationQueue.value = queue
-
-  emit('add-output-line', {
-    content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
-    type: 'system_message',
-    timestamp: new Date()
-  })
-
-  emit('add-output-line', {
-    content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
-    type: 'workflow_info',
-    timestamp: new Date()
-  })
-
-  // Start the first step
-  setTimeout(() => {
-    processNextAutomationStep()
-  }, 1500)
+  startFirstAutomationStep()
 }
 
 // Example workflow for testing
-const startExampleWorkflow = () => {
-  const exampleWorkflow: WorkflowData = {
-    name: "System Update and Package Installation",
-    steps: [
-      {
-        command: "sudo apt update",
-        description: "Update package repositories",
-        explanation: "This updates the list of available packages from configured repositories.",
-        requiresConfirmation: true
-      },
-      {
-        command: "sudo apt upgrade -y",
-        description: "Upgrade installed packages",
-        explanation: "This upgrades all installed packages to their latest versions.",
-        requiresConfirmation: true
-      },
-      {
-        command: "sudo apt install -y git curl wget",
-        description: "Install essential tools",
-        explanation: "Install commonly needed development tools.",
-        requiresConfirmation: true
-      },
-      {
-        command: "git --version && curl --version",
-        description: "Verify installations",
-        explanation: "Check that the tools were installed correctly.",
-        requiresConfirmation: false
-      }
-    ]
-  }
-
-  startAutomatedWorkflow(exampleWorkflow)
-}
+const startExampleWorkflow = () => startAutomatedWorkflow(exampleWorkflow(t))
 
 // Listen for workflow events from backend
 const handleWorkflowMessage = (message: string) => {
@@ -333,14 +238,14 @@ const handleWorkflowMessage = (message: string) => {
     } else if (data.type === 'pause_workflow') {
       automationPaused.value = true
       emit('add-output-line', {
-        content: '⏸️ WORKFLOW PAUSED BY SYSTEM',
+        content: t('terminal.automation.pausedBySystem'),
         type: 'system_message',
         timestamp: new Date()
       })
     } else if (data.type === 'resume_workflow') {
       automationPaused.value = false
       emit('add-output-line', {
-        content: '▶️ WORKFLOW RESUMED BY SYSTEM',
+        content: t('terminal.automation.resumedBySystem'),
         type: 'system_message',
         timestamp: new Date()
       })
@@ -354,7 +259,7 @@ const handleWorkflowMessage = (message: string) => {
 // Advanced Modal Methods for parent component
 const executeConfirmedStep = (stepData: WorkflowStep) => {
   emit('add-output-line', {
-    content: `🤖 EXECUTING: ${stepData.command}`,
+    content: t('terminal.automation.executing', { command: stepData.command }),
     type: 'system_message',
     timestamp: new Date()
   })
@@ -364,7 +269,7 @@ const executeConfirmedStep = (stepData: WorkflowStep) => {
 
 const skipCurrentStep = (stepIndex: number) => {
   emit('add-output-line', {
-    content: `⏭️ STEP ${stepIndex + 1} SKIPPED BY USER`,
+    content: t('terminal.automation.stepSkippedByUser', { step: stepIndex + 1 }),
     type: 'system_message',
     timestamp: new Date()
   })
@@ -379,7 +284,7 @@ const executeAllRemainingSteps = () => {
 
 const saveCustomWorkflow = (workflowData: WorkflowData) => {
   emit('add-output-line', {
-    content: `💾 WORKFLOW SAVED: ${workflowData.name}`,
+    content: t('terminal.automation.workflowSaved', { name: workflowData.name }),
     type: 'system_message',
     timestamp: new Date()
   })
@@ -388,7 +293,7 @@ const saveCustomWorkflow = (workflowData: WorkflowData) => {
 const updateWorkflowSteps = (newSteps: WorkflowStep[]) => {
   workflowSteps.value = newSteps
   emit('add-output-line', {
-    content: `📋 WORKFLOW UPDATED: ${newSteps.length} steps configured`,
+    content: t('terminal.automation.workflowUpdated', { count: newSteps.length }),
     type: 'system_message',
     timestamp: new Date()
   })

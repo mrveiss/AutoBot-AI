@@ -36,32 +36,15 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 
-def _int_env(name: str, default: int) -> int:
-    """Parse an int env var, falling back loudly rather than at import (#13865).
-
-    These are read at module scope, and this module is imported by
-    ``agent_loop.loop``. An unparseable value used to raise ``ValueError``
-    during import and take down everything importing the agent loop — with the
-    feature switched off.
-    """
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning("%s=%r is not an integer; using %d", name, raw, default)
-        return default
-
-
 # Env-tunable, never hard-coded (CLAUDE.md).
-SPILL_ENABLED: bool = os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL", "").lower() in ("1", "true", "yes")
-SPILL_THRESHOLD_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000))
+SPILL_ENABLED: bool = env_flag("AUTOBOT_TOOL_OUTPUT_SPILL")
+SPILL_THRESHOLD_CHARS: int = max(1, env_int("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000))
 # Rough fixed cost of an excerpt payload. Deliberately an ESTIMATE and
 # deliberately NOT the safety mechanism: measured overhead ranges 286-1710 chars
 # depending on tool-name length and how much JSON re-escapes the classification
@@ -72,18 +55,18 @@ _EXCERPT_OVERHEAD_CHARS = 400 + 3 * 200
 SPILL_EXCERPT_CHARS: int = max(
     1,
     min(
-        _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT", 2000),
+        env_int("AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT", 2000),
         max(1, SPILL_THRESHOLD_CHARS - _EXCERPT_OVERHEAD_CHARS),
     ),
 )
 # Largest payload written to disk. Above this the stored copy is truncated and
 # marked — serialise + json.dumps + utf-8 encode peaks at roughly 3-4x the
 # payload, so an unbounded result was an unbounded allocation.
-SPILL_MAX_ARTIFACT_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_MAX", 5_000_000))
+SPILL_MAX_ARTIFACT_CHARS: int = max(1, env_int("AUTOBOT_TOOL_OUTPUT_SPILL_MAX", 5_000_000))
 _TRUNCATION_MARKER = "\n[artifact truncated: output exceeded AUTOBOT_TOOL_OUTPUT_SPILL_MAX]"
 # Ceiling on a single re-read. Without it `limit=99999999` hands the whole
 # artifact straight back into context, undoing the offload.
-SPILL_MAX_WINDOW_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_MAX_WINDOW", 8000))
+SPILL_MAX_WINDOW_CHARS: int = max(1, env_int("AUTOBOT_TOOL_OUTPUT_SPILL_MAX_WINDOW", 8000))
 
 _ANCHOR_PREFIX = "autobot:spill"
 
@@ -174,6 +157,40 @@ def _serialise(result: Any) -> str:
         return str(result)
 
 
+def _write_artifact(anchor: str, task_id: str, tool_name: str, payload: str) -> bool:
+    """Write *payload* under *anchor*; False (logged) when it could not be written, so the caller keeps the output.
+
+    Marked, not silently sliced: the excerpt's note quotes the *original* length, so an unmarked truncation makes
+    the artifact contradict it.
+    """
+    truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
+    stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
+    try:
+        path = _artifact_path(anchor)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {"anchor": anchor, "task_id": task_id, "tool": tool_name, "output": stored},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning("Tool-output spill failed for %s (keeping full output): %s", tool_name, exc)
+        return False
+    return True
+
+
+def spill_for_collapse(task_id: str, tool_name: str, payload: str) -> str | None:
+    """Spill *payload* whatever ``AUTOBOT_TOOL_OUTPUT_SPILL`` says and return its anchor, or None on a failed write.
+
+    A continuation prompt collapses an older step to a digest (#16621); the anchor is how the full output is
+    read back with ``read_spilled_output``, so it is written here even for a step the flag never spilled.
+    """
+    anchor = _anchor(task_id, tool_name, payload)
+    return anchor if _write_artifact(anchor, task_id, tool_name, payload) else None
+
+
 def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, bool]:
     """Return ``(context_value, spilled)`` for one tool result.
 
@@ -214,22 +231,7 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
         )
         return result, False
 
-    # Marked, not silently sliced: the excerpt's note quotes the *original*
-    # length, so an unmarked truncation makes the artifact contradict it.
-    truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
-    stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
-    try:
-        path = _artifact_path(anchor)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {"anchor": anchor, "task_id": task_id, "tool": tool_name, "output": stored},
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-    except Exception as exc:
-        logger.warning("Tool-output spill failed for %s (keeping full output): %s", tool_name, exc)
+    if not _write_artifact(anchor, task_id, tool_name, payload):
         return result, False
 
     logger.info(

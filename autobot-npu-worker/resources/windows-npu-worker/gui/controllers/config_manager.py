@@ -7,10 +7,12 @@ Issue #640: Added re-pairing functionality to reset worker pairing with master.
 """
 
 import logging
-import yaml
-from pathlib import Path
-from typing import Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
+import yaml
+from gui.utils.app_config import DEFAULT_WORKER_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +130,7 @@ class ConfigManager:
         return {
             "service": {
                 "host": "0.0.0.0",
-                "port": 8082,
+                "port": DEFAULT_WORKER_PORT,
                 "workers": 1,
             },
             "backend": {

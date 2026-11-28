@@ -22,13 +22,16 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session, service_dep
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP, service_dep
 from user_management.services import TenantContext
 
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
+from ._common import event_actor, moving_as, refused_transition
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
@@ -61,7 +64,6 @@ class BoardUpdateRequest(BaseModel):
 class MoveItemRequest(BaseModel):
     work_item_id: str
     column_id: str
-    actor_id: Optional[str] = None
 
 
 # ------------------------------------------------------------------
@@ -134,7 +136,7 @@ def _board_summary(board: Any) -> Dict[str, Any]:
 
 @router.get("")
 async def list_company_boards(
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -152,7 +154,7 @@ async def list_company_boards(
 @router.post("/kanban", status_code=201)
 async def create_kanban_board(
     body: KanbanBoardRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -165,15 +167,15 @@ async def create_kanban_board(
         board = await svc.get_or_create_kanban(session, body.company_id, body.project_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(400)
     return _board_response(board)
 
 
 @router.post("/sprint", status_code=201)
 async def create_sprint_board(
     body: SprintBoardRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -186,15 +188,15 @@ async def create_sprint_board(
         board = await svc.get_or_create_sprint_board(session, body.company_id, body.sprint_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(400)
     return _board_response(board)
 
 
 @router.get("/{board_id}")
 async def get_board(
     board_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -214,7 +216,7 @@ async def get_board(
 @router.get("/{board_id}/items")
 async def get_board_items(
     board_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -231,8 +233,8 @@ async def get_board_items(
     try:
         result = await svc.get_board_items(session, board_id)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404)
 
     board = result["board"]
     columns_with_items: List[Dict[str, Any]] = []
@@ -259,7 +261,7 @@ async def get_board_items(
 async def update_board(
     board_id: str,
     body: BoardUpdateRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -285,7 +287,7 @@ async def update_board(
 @router.delete("/{board_id}", status_code=204)
 async def delete_board(
     board_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -312,7 +314,7 @@ async def delete_board(
 async def move_item(
     board_id: str,
     body: MoveItemRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -334,7 +336,8 @@ async def move_item(
             board_id=board_id,
             work_item_id=body.work_item_id,
             column_id=body.column_id,
-            actor_id=body.actor_id,
+            actor_id=event_actor(_current_user),
+            **moving_as(_current_user),
         )
         await session.commit()
     except WipLimitExceeded as exc:
@@ -348,18 +351,9 @@ async def move_item(
             },
         )
     except InvalidTransition as exc:
-        # #12740: the service already computed the exact, useful reason
-        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
-        # generic 422 "Internal server error" threw that away, so the UI could
-        # not tell the user what went wrong or what IS allowed. The message is
-        # purely domain-level — statuses and permitted transitions, no internals
-        # — so it is safe to surface. 409 Conflict is the correct code: the
-        # request is well-formed (422 implies malformed), it conflicts with the
-        # item's current state.
-        logger.info("Rejected illegal work-item transition: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise refused_transition(exc)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404)
 
-    return _work_item_summary(updated_item)
+    return _work_item_summary(updated_item, body.column_id)

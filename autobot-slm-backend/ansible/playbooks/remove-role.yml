@@ -14,8 +14,12 @@
 #   systemd_service  - Service unit name (e.g. redis-stack-server, ollama)
 #
 # Optional vars:
+#   remove_xrdp_without_vnc - Remove xrdp from a node without a verified VNC desktop (default: refuse, #22211)
 #   backup_before_removal - Create data backup first (default: false)
 #   role_target_dir  - Target directory to remove (e.g. autobot-npu-worker)
+#
+# Per-role hook (#22211): when roles/<role_name>/tasks/remove.yml exists it runs before the generic service
+# stop (idempotent and non-destructive; see the CONTRACT note at the hook task below).
 #
 # Usage:
 #   ansible-playbook playbooks/remove-role.yml \
@@ -49,7 +53,7 @@
   gather_facts: true
 
   vars:
-    backup_dir: /opt/autobot/backups
+    backup_dir: "{{ autobot.base_dir }}/backups"
     backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     backup_path: "{{ backup_dir }}/{{ role_name }}-{{ backup_timestamp }}"
 
@@ -63,19 +67,81 @@
         - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
         # Real ChromaDB data dir (#11099) — /var/lib/chromadb alone left the
         # live vector store behind on 'remove ai-stack'.
-        - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+        - "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
         # Issue #3097: ai-stack data moved to /var/lib/autobot-ai
         - /var/lib/autobot-ai
       llm:
         - /usr/share/ollama/.ollama
         - /var/lib/ollama
       backend:
-        - /opt/autobot/autobot-backend/data
+        - "{{ autobot.base_dir }}/autobot-backend/data"
       monitoring:
         - /var/lib/prometheus
         - /var/lib/grafana
 
   tasks:
+    # #22030: validated before ANY other task. role_target_dir is deleted as "<base_dir>/<role_target_dir>", so a
+    # value that is empty, absolute, holds a "." / ".." / empty segment, or resolves outside base_dir would delete
+    # the install root or something that is not this role's. The SLM sends a relative, multi-segment path (the agent's
+    # is "autobot-slm-agent/slm/agent"); the same checks run in autobot_shared.install_paths.safe_relative_dir.
+    - name: "Refuse an unsafe role_target_dir before any task runs (#22030)"
+      ansible.builtin.assert:
+        that:
+          - role_target_dir is string
+          - role_target_dir | length > 0
+          - not role_target_dir.startswith('/')
+          - role_target_dir is not regex('[^A-Za-z0-9._/+@-]')
+          - role_target_dir.split('/') | select('in', ['', '.', '..']) | list | length == 0
+        fail_msg: "role_target_dir must be a relative path of plain segments, got {{ role_target_dir | to_json }}"
+        quiet: true
+      when: role_target_dir is defined
+
+    - name: "Resolve the install root and the role directory (#22030)"
+      ansible.builtin.command:
+        argv: [realpath, -m, --, "{{ item }}"]
+      loop:
+        - "{{ autobot.base_dir }}"
+        - "{{ autobot.base_dir }}/{{ role_target_dir }}"
+      register: _real_paths
+      changed_when: false
+      check_mode: false
+      when: role_target_dir is defined
+
+    - name: "Refuse a role directory that is not strictly under the install root (#22030)"
+      ansible.builtin.assert:
+        that:
+          - _real_paths.results[1].stdout.startswith(_real_paths.results[0].stdout ~ '/')
+          - _real_paths.results[1].stdout != _real_paths.results[0].stdout
+        fail_msg: "{{ role_target_dir | to_json }} resolves outside {{ autobot.base_dir }}"
+        quiet: true
+      when: role_target_dir is defined
+
+    # #22211: removing xrdp from a node without a WORKING vnc desktop would leave it with none. The same
+    # verify step provisioning uses runs first (it fails the play when the ports do not answer, and
+    # records vnc_ports_verified when they do); the assert then needs that fact. `remove_xrdp_without_vnc`
+    # is the only bypass.
+    - name: "Verify VNC is up before xrdp is removed (#22211)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: verify
+      when:
+        - role_name == 'xrdp'
+        - role_vnc_active | default(false) | bool
+        - not (remove_xrdp_without_vnc | default(false) | bool)
+
+    - name: "Refuse to remove xrdp from a node without verified VNC (#22211)"
+      ansible.builtin.assert:
+        that:
+          - >-
+            role_name != 'xrdp' or (remove_xrdp_without_vnc | default(false) | bool)
+            or ((role_vnc_active | default(false) | bool) and (vnc_ports_verified | default(false) | bool))
+        fail_msg: >-
+          REFUSING to remove xrdp: this node has no verified VNC desktop (the vnc role is inactive or its ports
+          do not answer), so it would be left with no desktop. Provision the vnc role first, or re-run with
+          remove_xrdp_without_vnc=true to remove anyway.
+        quiet: true
+      when: role_name is defined
+
     - name: Validate required variables
       ansible.builtin.assert:
         that:
@@ -138,6 +204,32 @@
           ansible.builtin.set_fact:
             _backup_performed: "{{ _existing_dirs | length > 0 }}"
             _backup_path: "{{ backup_path }}"
+
+    # #22211: the canonical "role removed -> cleanup" hook. A role that owns more than its primary unit
+    # (the vnc role's websockify unit and firewall rules) ships tasks/remove.yml; it runs here, BEFORE
+    # the generic stop, so a guarded refusal (a live session) happens before something is stopped. Roles
+    # without one are unchanged.
+    #
+    # CONTRACT for a role's tasks/remove.yml: idempotent (a second run, or a node that never had the role,
+    # passes) and non-destructive (stops units, closes ports, purges packages it installed; never deletes
+    # user data, credentials or SLM rows, and never `file: state=absent` on a path -- the guarded
+    # remove_component_dir.yml primitive owns directory removal). Credential removal is proposed to the
+    # approval queue, never done here (#17038).
+    - name: "Look for a per-role remove.yml hook (#22211)"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../roles/{{ role_name }}/tasks/remove.yml"
+      register: _role_remove_hook
+      # the role files live in the controller's checkout, not on the managed node
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      when: role_name is regex('^[A-Za-z0-9_-]+$')
+
+    - name: "Run the {{ role_name }} role's remove.yml hook (#22211)"
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+        tasks_from: remove
+      when: _role_remove_hook.stat.exists | default(false)
 
     # =======================================================================
     # STOP AND REMOVE SERVICE

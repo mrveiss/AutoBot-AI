@@ -8,14 +8,15 @@ Network utility helpers for local-node detection (Issue #2759).
 Consolidates three separate implementations of 'is this the local machine?'
 logic from sync_orchestrator, code_sync, and code_source into one place.
 
-The most robust implementation (from code_source.py, hardened in #2721) is
-used as the base: it runs ``ip -4 addr show`` to enumerate all interface IPs
-and also includes the hostname resolved from ``settings.external_url`` so the
-check works even when the process is behind a reverse proxy.
+``get_local_ips`` enumerates interface addresses (``ip -o -4 addr show``) and the
+``settings.external_url`` host. ``is_local_ip`` is the conservative question built on it:
+local only when provable, remote when unknown or ambiguous (see its docstring for the rule).
 """
 
+import ipaddress
 import logging
 import re
+import socket
 import subprocess
 import time
 from urllib.parse import urlparse
@@ -31,20 +32,42 @@ _ip_cache: set | None = None
 _ip_cache_time: float = 0.0
 
 
+#: Interfaces whose addresses are shared with, or reachable from, other hosts: container
+#: bridges, virtual ethernet pairs, CNI/overlay devices, VPN/tailnet tunnels. The same address
+#: (``172.17.0.1`` on ``docker0``) exists on every Docker host, so matching it proves nothing.
+_SHARED_IFACE_RE = re.compile(
+    r"^(docker\d*|br-.*|veth.*|virbr.*|cni.*|flannel.*|cali.*|weave.*|tailscale.*|ts\d+|wg.*|tun.*|tap.*|zt.*)$"
+)
+
+#: Overlay / CGNAT space (Tailscale hands every node an address here): never proof of locality.
+_SHARED_NETWORKS = (ipaddress.ip_network("100.64.0.0/10"),)
+
+_IFACE_LINE_RE = re.compile(r"^\d+:\s+(\S+)\s+inet (\d+\.\d+\.\d+\.\d+)")
+
+
+def _interfaces() -> list[tuple[str, str]]:
+    """``(interface name, IPv4)`` pairs from ``ip -o -4 addr show``; empty if it cannot run."""
+    try:
+        result = subprocess.run(  # nosec B603 B607  # fixed ip argv for interface enumeration, no user input
+            ["ip", "-o", "-4", "addr", "show"], capture_output=True, text=True, encoding="utf-8", timeout=5
+        )
+    except Exception:
+        return []
+    pairs = []
+    for line in result.stdout.splitlines():
+        match = _IFACE_LINE_RE.match(line.strip())
+        if match:
+            pairs.append((match.group(1).split("@", 1)[0], match.group(2)))
+    return pairs
+
+
 def get_local_ips() -> set:
     """Return all IP addresses (and aliases) that identify this machine.
 
-    Results are cached for ``_IP_CACHE_TTL`` seconds so that repeated calls
-    (e.g., per-request is_local_ip checks) do not spawn a subprocess on every
-    invocation (Issue #2791).
-
-    Includes:
-    - Loopback addresses (127.0.0.1, localhost, ::1)
-    - All IPv4 addresses reported by ``ip -4 addr show``
-    - The hostname extracted from ``settings.external_url`` (SSOT config)
-
-    Returns:
-        A set of strings that are considered local identifiers.
+    Includes loopback, every IPv4 interface address (container bridges and tunnels too, since
+    callers use this to recognise the host's own fleet addresses) and the ``settings.external_url``
+    host. Cached for ``_IP_CACHE_TTL`` seconds (Issue #2791). Not a locality PROOF -- use
+    :func:`is_local_ip` for that.
     """
     global _ip_cache, _ip_cache_time
 
@@ -53,22 +76,7 @@ def get_local_ips() -> set:
         return _ip_cache
 
     local_ips: set = set(_LOOPBACK)
-
-    # Enumerate all interface IPs via ``ip addr``
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed ip argv for interface enumeration, no user input
-            ["ip", "-4", "addr", "show"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=5,
-        )
-        for match in re.finditer(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout):
-            local_ips.add(match.group(1))
-    except Exception:
-        pass
-
-    # Also include the IP/hostname from the configured external_url
+    local_ips.update(ip for _, ip in _interfaces())
     try:
         from config import settings  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
 
@@ -83,16 +91,56 @@ def get_local_ips() -> set:
     return local_ips
 
 
+def _is_genuinely_local(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """One literal address: loopback, or an exact address of a NON-shared interface."""
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    if ip.is_unspecified or ip.is_link_local:
+        return False  # "any address" / per-link: ambiguous by definition
+    if ip.is_loopback:
+        return True
+    if any(ip in net for net in _SHARED_NETWORKS if ip.version == net.version):
+        return False
+    text = str(ip)
+    if any(addr == text and _SHARED_IFACE_RE.match(name) for name, addr in _interfaces()):
+        return False
+    return text in get_local_ips()
+
+
 def is_local_ip(ip: str) -> bool:
-    """Return True if *ip* resolves to this machine.
+    """Return True only when *ip* is PROVABLY this machine; anything unclear is remote.
 
-    Args:
-        ip: An IPv4 address string (or ``localhost`` / ``127.0.0.1``).
+    The result picks local execution over SSH, so a false "local" runs a command on the wrong
+    host while a false "remote" merely costs an SSH hop. The rule, in order:
 
-    Returns:
-        True when the given address is one of the local IPs for this host.
+    * a literal IP is local if it is loopback (``::ffff:127.0.0.1`` included), or EXACTLY
+      matches an interface address (``::ffff:a.b.c.d`` is unwrapped first);
+    * never local: ``0.0.0.0`` / ``::``, link-local (``169.254/16``, ``fe80::/10``), the
+      ``100.64/10`` overlay range, and any address on a container bridge, veth, CNI or
+      VPN/tunnel interface (``docker0``, ``br-*``, ``tailscale0`` ...) -- those exist on many
+      hosts at once;
+    * a hostname is local only if it resolves and EVERY resolved address is local by the
+      rules above (``localhost`` is local); an unresolvable name is remote.
     """
-    return ip in get_local_ips()
+    text = (ip or "").strip().strip("[]")
+    if not text:
+        return False
+    try:
+        return _is_genuinely_local(ipaddress.ip_address(text.split("%", 1)[0]))
+    except ValueError:
+        pass
+    if text.lower() == "localhost":
+        return True
+    try:
+        infos = socket.getaddrinfo(text, None)
+    except OSError:
+        return False
+    resolved = {str(info[4][0]).split("%", 1)[0] for info in infos}
+    try:
+        return bool(resolved) and all(_is_genuinely_local(ipaddress.ip_address(a)) for a in resolved)
+    except ValueError:
+        return False
 
 
 def is_local_host(hostname_or_url: str) -> bool:

@@ -8,6 +8,10 @@ export interface VncHost {
   host: string
   port: number
   description?: string
-  /** If true, an nginx proxy exists for this host so it can be embedded. Default: id === 'main' */
-  proxied?: boolean
+  /** noVNC client page URL, derived by the host app from config or the endpoint API (no literals here). */
+  url: string
+  /** The endpoint's websocket URL, as the API returned it; what a real connect opens. */
+  websocketUrl?: string
+  /** True when the client page may be embedded in an iframe; otherwise it opens in a new tab. */
+  embeddable?: boolean
 }

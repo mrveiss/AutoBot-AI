@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List
 
 
-class TaskStatus(Enum):
+class OverseerTaskStatus(Enum):
     """Status of a task in the execution pipeline."""
 
     PENDING = "pending"
@@ -28,7 +28,7 @@ class TaskStatus(Enum):
     CANCELLED = "cancelled"
 
 
-class StepStatus(Enum):
+class OverseerStepStatus(Enum):
     """Status of an individual step."""
 
     PENDING = "pending"
@@ -82,7 +82,7 @@ class AgentTask:
     command: str | None = None  # The command to execute (if applicable)
     expected_outcome: str | None = None
     dependencies: List[str] = field(default_factory=list)  # Task IDs this depends on
-    status: StepStatus = StepStatus.PENDING
+    status: OverseerStepStatus = OverseerStepStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -134,7 +134,7 @@ class TaskPlan:
 
 
 @dataclass
-class StepResult:
+class StepRunResult:
     """
     Result of executing a single step.
 
@@ -144,7 +144,7 @@ class StepResult:
     task_id: str
     step_number: int
     total_steps: int
-    status: StepStatus
+    status: OverseerStepStatus
     command: str | None = None
     command_explanation: CommandExplanation | None = None
     output: str | None = None
@@ -194,7 +194,7 @@ class StepResult:
 
 
 @dataclass
-class StreamChunk:
+class StepChunk:
     """
     A chunk of streaming output for long-running commands.
 

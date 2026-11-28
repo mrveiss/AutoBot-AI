@@ -1,0 +1,45 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# promtool rule tests for alerts-slm-availability.yml (#20620).
+# Not named alerts-*.yml: see cgroup-memory.promtool-test.yml for why.
+---
+
+rule_files:
+  - alerts-slm-availability.yml
+
+evaluation_interval: 30s
+
+tests:
+  # A restart: down for less than two minutes, no alert.
+  - interval: 30s
+    input_series:
+      - series: 'up{job="slm-backend",instance="slm:8000"}'
+        values: "1 1 0 0 0 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: SLMDown
+        exp_alerts: []
+
+  # An outage: fires after two minutes.
+  - interval: 30s
+    input_series:
+      - series: 'up{job="slm-backend",instance="slm:8000"}'
+        values: "1 0 0 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SLMDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: slm
+              job: slm-backend
+              instance: slm:8000
+            exp_annotations:
+              summary: "The SLM is down on slm:8000"
+              description: >
+                Prometheus has not been able to reach the SLM for 2 minutes. Its watchdog retries
+                every minute, so a longer outage means it can't start: read the journal for
+                autobot-slm-backend and autobot-slm-watchdog.
+              runbook_url: "https://github.com/mrveiss/AutoBot-AI/blob/main/docs/runbooks/EMERGENCY_RECOVERY.md"

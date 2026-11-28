@@ -147,7 +147,7 @@ source venv/bin/activate
 python3 -c "from src.agents import get_agent_orchestrator; print('Multi-agent ready')"
 
 # Check configuration
-python3 -c "from src.config import global_config_manager; print(f'Chat model: {global_config_manager.get_task_specific_model(\"chat\")}')"
+python3 -c "from src.config import config_manager; print(f'Chat model: {config_manager.get_task_specific_model(\"chat\")}')"
 ```
 
 ## Performance Expectations

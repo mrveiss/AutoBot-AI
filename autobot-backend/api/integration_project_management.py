@@ -26,9 +26,9 @@ from api.schemas_code import (
     PMProjectsResponse,
 )
 from api.schemas_workflows import (
-    ConnectionTestRequest,
     IssueCreateRequest,
     IssueUpdateRequest,
+    ProjectManagementConnectionTestRequest,
     ProviderInfo,
 )
 from auth_middleware import check_admin_permission
@@ -97,7 +97,7 @@ def _get_integration(provider: str, config: IntegrationConfig):
     Helper for _get_integration (Issue #61).
     """
     if provider == "jira":
-        return JiraIntegration(config)
+        return JiraIntegration(config, instance_host=True)
     elif provider == "trello":
         return TrelloIntegration(config)
     elif provider == "asana":
@@ -130,7 +130,7 @@ def _validate_provider(provider: str) -> None:
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
 async def test_connection(
-    request: ConnectionTestRequest,
+    request: ProjectManagementConnectionTestRequest,
 ) -> IntegrationHealth:
     """Test connection to a project management provider.
 

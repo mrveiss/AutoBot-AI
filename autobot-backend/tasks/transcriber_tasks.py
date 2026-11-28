@@ -7,13 +7,12 @@ Transcriber Celery Tasks (GH#10128)
 
 Async Celery task that drives the transcription pipeline for each uploaded
 recording.  The task body is synchronous (Celery requirement); all async
-work runs inside ``asyncio.run()``, matching the pattern of
+work runs on the worker loop via ``run_in_worker_loop`` (#20887), like
 ``tasks/mobile_device_tasks.py``.
 """
 
-import asyncio
-
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -34,7 +33,7 @@ def transcribe_recording(recording_id: int) -> dict:
         Dict returned by ``TranscriberOrchestrator.process_recording``.
     """
     logger.info("Celery: transcribe_recording started for recording_id=%d", recording_id)
-    result = asyncio.run(_run_pipeline(recording_id))
+    result = run_in_worker_loop(_run_pipeline(recording_id))
     logger.info("Celery: transcribe_recording done for recording_id=%d", recording_id)
     return result
 

@@ -48,7 +48,7 @@ defineProps<{
   color: var(--text-primary);
 }
 
-.panel-header i {
+.panel-header .icon {
   color: var(--color-info-dark);
 }
 

@@ -1,0 +1,7 @@
+# Frozen baseline for ds-second-kit-component (#17571). Shrink-only: delete a line in the PR that fixes it; never add one.
+# Boundary: app .vue files under autobot-frontend/src and autobot-slm-frontend/src whose basename equals a libs/autobot-ui/src/components/*.vue file. Not covered: same concept under a different name, .ts/.css implementations.
+# Format: repo-relative path[TAB count]. tests/ds_baselines.test.mjs fails if an entry no longer matches.
+autobot-frontend/src/components/llc/ledger/LedgerSectionState.vue
+autobot-frontend/src/components/ui/EmptyState.vue
+autobot-slm-frontend/src/components/common/LanguageSwitcher.vue
+autobot-slm-frontend/src/components/common/SkipLink.vue

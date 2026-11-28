@@ -56,6 +56,8 @@ def device_exists(monkeypatch):
         "services.device_jwt._device_state_cached",
         AsyncMock(return_value="active"),
     )
+    # #20446: the owner-marker gate has its own file (services/device_owner_revocation_test.py).
+    monkeypatch.setattr("services.device_jwt.reject_if_owner_revoked", AsyncMock())
 
 
 def _bearer_request(token: str | None, path: str = "/api/devices/list", method: str = "GET") -> MagicMock:
@@ -66,6 +68,9 @@ def _bearer_request(token: str | None, path: str = "/api/devices/list", method: 
     request.url.path = path
     request.method = method
     request.cookies = {}
+    # A real Request always has a scope; spec=Request cannot see it (an instance attribute). No
+    # endpoint in it means no service opt-in, so the device-JWT path is what gets exercised (#16333).
+    request.scope = {}
     return request
 
 

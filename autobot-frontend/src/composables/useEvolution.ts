@@ -8,6 +8,8 @@
  * Provides reactive state and methods for code evolution mining and analysis.
  */
 
+import { saveBlob } from '@autobot/ui'
+import { isoDateStamp } from '@/utils/formatHelpers'
 import { ref, computed, isRef, type ComputedRef } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -18,7 +20,6 @@ import { getApiBase } from '@/config/ssot-config'
 const logger = createLogger('useEvolution')
 
 export interface EvolutionAnalysisRequest {
-  repo_path: string
   start_date?: string
   end_date?: string
   commit_limit?: number
@@ -97,21 +98,30 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Accepts a plain string or ComputedRef so callers pass a reactive route
    * param without freezing the value at setup time.
    */
+  function currentSourceId(): string | undefined {
+    return isRef(sourceId) ? sourceId.value : sourceId
+  }
+
   function withSourceId(params: Record<string, string> = {}): Record<string, string> {
-    const id = isRef(sourceId) ? sourceId.value : sourceId
+    const id = currentSourceId()
     if (!id) return params
     return { ...params, source_id: id }
   }
+
+  /** #20513: every evolution route requires a source; with none selected no request is made. */
+  const hasSource = (): boolean => !!currentSourceId()
 
   /**
    * Trigger code evolution analysis
    */
   async function analyzeEvolution(request: EvolutionAnalysisRequest): Promise<boolean> {
+    if (!hasSource()) return false
     error.value = null
     try {
       const data = await wrap(() =>
         ApiClient.post<EvolutionAnalysisResponse>(
-          `${getApiBase()}/evolution/analyze`,
+          // #20513: the backend mines the selected source's checkout; there is no path to send
+          `/api/evolution/analyze?${new URLSearchParams(withSourceId()).toString()}`,
           request,
           { timeout: 120000 }
         )
@@ -140,6 +150,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     granularity: string = 'daily',
     metrics: string = 'overall_score,complexity,maintainability'
   ): Promise<void> {
+    if (!hasSource()) return
     error.value = null
     try {
       const params: Record<string, string> = { granularity, metrics }
@@ -174,6 +185,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     start_date?: string,
     end_date?: string
   ): Promise<void> {
+    if (!hasSource()) return
     error.value = null
     try {
       const params: Record<string, string> = {}
@@ -205,6 +217,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Fetch quality trend analysis (Issue #247)
    */
   async function fetchTrends(days: number = 30): Promise<void> {
+    if (!hasSource()) return
     try {
       // Issue #3436: scope to project when sourceId is provided
       const qs = new URLSearchParams(withSourceId({ days: String(days) })).toString()
@@ -224,6 +237,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Fetch evolution summary stats (Issue #247)
    */
   async function fetchSummary(): Promise<void> {
+    if (!hasSource()) return
     try {
       // Issue #3436: scope to project when sourceId is provided
       const params = withSourceId()
@@ -247,12 +261,13 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     start_date?: string,
     end_date?: string
   ): Promise<void> {
+    if (!hasSource()) return
     try {
       const params: Record<string, string> = { format }
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
-      const qs = new URLSearchParams(params).toString()
+      const qs = new URLSearchParams(withSourceId(params)).toString()
       const response = await ApiClient.rawRequest(
         `${getApiBase()}/evolution/export?${qs}`
       )
@@ -264,12 +279,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
         const data = await response.json()
         blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `evolution_data_${new Date().toISOString().slice(0, 10)}.${format}`
-      a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, `evolution_data_${isoDateStamp()}.${format}`)
       logger.info('Evolution data exported as', format)
     } catch (e: unknown) {
       error.value = extractApiErrorMessage(e, 'Export failed')

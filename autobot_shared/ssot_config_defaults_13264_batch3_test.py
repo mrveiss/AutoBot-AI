@@ -16,7 +16,7 @@ rather than carried over from the issue's table, the same way batch 2 was:
     os.getenv("AUTOBOT_POSTGRES_DB", "autobot")
     os.getenv("AUTOBOT_POSTGRES_PORT", "5432")
     os.getenv("AUTOBOT_POSTGRES_USER", "autobot")
-    os.getenv("AUTOBOT_TRACE_SAMPLE_RATE", "1.0")
+    os.getenv("AUTOBOT_TRACE_SAMPLE_RATE", "1.0")  # now AUTOBOT_OTEL_SAMPLE_RATE, default 0.1 (#21685)
     os.environ.get("LOG_LEVEL", "INFO")
 
 Why these nine and not the other 43 still outstanding: each is one where the
@@ -59,11 +59,11 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
     """#13264 batch 3: 9 more defaults the #7437 migration silently dropped."""
 
     def test_environment_name_is_not_empty(self) -> None:
-        from autobot_shared.ssot_config import MiscConfig
+        """#19315 folded ``MiscConfig.env`` into ``AutoBotConfig.environment`` (AUTOBOT_ENV is its alias)."""
+        from autobot_shared.ssot_config import AutoBotConfig
 
         with patch.dict(os.environ, {}, clear=True):
-            cfg = MiscConfig(_env_file=None)
-            assert cfg.env == "development"
+            assert AutoBotConfig(_env_file=None).environment == "production"
 
     def test_gc_thresholds_do_not_disable_collection(self) -> None:
         """A gen-0 threshold of 0 means CPython never collects automatically."""
@@ -81,9 +81,11 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
 
         with patch.dict(os.environ, {}, clear=True):
             cfg = MiscConfig(_env_file=None)
-            assert cfg.postgres_db == "autobot"
+            # #19320: the provisioned identity (postgres_identity), not ``autobot``,
+            # which names no database or role any install path creates.
+            assert cfg.postgres_db == "autobot_users"
             assert cfg.postgres_port == 5432
-            assert cfg.postgres_user == "autobot"
+            assert cfg.postgres_user == "autobot_app"
             assert all(
                 [cfg.postgres_db, cfg.postgres_port, cfg.postgres_user]
             ), "an empty name/user or a port of 0 cannot form a valid DSN"
@@ -93,8 +95,9 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
 
         with patch.dict(os.environ, {}, clear=True):
             cfg = MiscConfig(_env_file=None)
-            assert cfg.trace_sample_rate == 1.0
-            assert cfg.trace_sample_rate > 0.0, "a rate of 0.0 disables tracing entirely"
+            assert float(cfg.otel_sample_rate) == 0.1
+            assert float(cfg.otel_sample_rate) > 0.0, "a rate of 0.0 disables tracing entirely"
+            assert cfg.trace_sample_rate is None, "the deprecated alias is unset unless an operator sets it"
 
     def test_log_level_is_a_level(self) -> None:
         from autobot_shared.ssot_config import MiscConfig
@@ -109,10 +112,10 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
 
         with patch.dict(
             os.environ,
-            {"LOG_LEVEL": "DEBUG", "AUTOBOT_POSTGRES_PORT": "6543", "AUTOBOT_TRACE_SAMPLE_RATE": "0.25"},
+            {"LOG_LEVEL": "DEBUG", "AUTOBOT_POSTGRES_PORT": "6543", "AUTOBOT_OTEL_SAMPLE_RATE": "0.25"},
             clear=True,
         ):
             cfg = MiscConfig(_env_file=None)
             assert cfg.log_level == "DEBUG"
             assert cfg.postgres_port == 6543
-            assert cfg.trace_sample_rate == 0.25
+            assert cfg.otel_sample_rate == "0.25"

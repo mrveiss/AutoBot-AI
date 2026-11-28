@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.database import Node
 from models.schemas import (
     TLSCredentialCreate,
@@ -84,10 +85,7 @@ async def create_tls_credential(
         return _to_response(credential)
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error("Failed to create TLS credential: %s", e)
         raise HTTPException(

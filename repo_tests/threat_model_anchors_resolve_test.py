@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 DOC = REPO_ROOT / "docs" / "developer" / "THREAT_MODEL.md"
 
@@ -95,7 +97,10 @@ def _anchors() -> list[tuple[str, str, int]]:
 #: MOVE THIS ONLY FOR A NEW BOUNDARY, and state the arithmetic when you do.
 #: Prose growth inside the existing sections must still hit this wall -- that is
 #: the property being kept, and raising the number for prose retires it.
-_MAX_LINES = 160
+#:
+#: 160 -> 162 (#21998): +2 lines for one new boundary, what text the error boundary
+#: may return to a client (Cross-cutting, "Error boundary text"). No prose elsewhere grew.
+_MAX_LINES = 162
 
 
 def test_document_exists_and_is_short_enough_to_read_every_review():
@@ -123,7 +128,7 @@ def _format_lines(lines: list[int]) -> str:
 
 def _parse(target: Path) -> ast.Module | None:
     try:
-        return ast.parse(target.read_text(encoding="utf-8"))
+        return parse_cache.parse(target.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):  # pragma: no cover - a tracked file that will not parse
         return None
 

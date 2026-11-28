@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 REPO = repo_root()
 RULES = REPO / "scripts" / "lib" / "hardcoded-value-rules.sh"
 SCAN = REPO / "pipeline-scripts" / "detect-hardcoded-values.sh"
@@ -46,9 +48,8 @@ def _code(path: Path) -> str:
     describes the call. The guard reported green on the exact regression it
     exists to catch -- found by running that mutation rather than by reading it.
     """
-    return "\n".join(
-        line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
-    )
+    # #17941: one shared stripper rather than this file's own copy.
+    return code_text(path.read_text(encoding="utf-8"), name="x.py")
 
 
 def _bash(script: str) -> subprocess.CompletedProcess:

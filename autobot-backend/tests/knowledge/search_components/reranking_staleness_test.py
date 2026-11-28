@@ -7,7 +7,7 @@
 Covers:
 - _apply_rerank_scores() with staleness_map applies the penalty
 - _apply_rerank_scores() without staleness_map (weight=0) is backward-compatible
-- _fetch_staleness_map() returns None when staleness weight is 0
+- fetch_staleness_scores() returns None when staleness weight is 0 (#18141: shared with the vector branch)
 - rerank() integrates the staleness lookup correctly (mocked Redis)
 """
 
@@ -20,6 +20,7 @@ from knowledge.search_components.reranking import (
     RerankWeights,
     ResultReranker,
     compute_blended_score,
+    fetch_staleness_scores,
     staleness_penalty,
 )
 
@@ -170,34 +171,32 @@ class TestApplyRerankScoresStaleness:
 
 
 # =============================================================================
-# _fetch_staleness_map()
+# fetch_staleness_scores()
 # =============================================================================
 
 
 class TestFetchStalenessMap:
-    """_fetch_staleness_map returns None when staleness is disabled."""
+    """fetch_staleness_scores, the one staleness lookup every rerank branch uses (#18141)."""
 
     @pytest.mark.asyncio
     async def test_returns_none_when_weight_zero(self):
         """No Redis calls when staleness weight is 0."""
-        reranker = ResultReranker()
         results = [_make_result("doc-A")]
         weights = RerankWeights(staleness=0.0)
 
-        result = await reranker._fetch_staleness_map(results, weights)
+        result = await fetch_staleness_scores([r["chunk_id"] for r in results], weights)
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_scores_when_weight_nonzero(self):
         """Staleness scores are fetched from Redis when weight > 0."""
-        reranker = ResultReranker()
         results = [_make_result("doc-A"), _make_result("doc-B")]
         weights = RerankWeights(staleness=0.3)
 
         mock_redis = AsyncMock()
 
-        # Patch at the source modules because _fetch_staleness_map uses lazy imports.
+        # Patch at the source modules because fetch_staleness_scores uses lazy imports.
         # #13361: the target is ``get_async_redis_client`` — the SYNC
         # ``get_redis_client`` this used to name is not what the method calls, so
         # the patch was inert and the real async client ran, reaching the
@@ -217,7 +216,7 @@ class TestFetchStalenessMap:
                 new=AsyncMock(side_effect=lambda r, doc_id: 0.7 if doc_id == "doc-A" else 0.0),
             ),
         ):
-            staleness_map = await reranker._fetch_staleness_map(results, weights)
+            staleness_map = await fetch_staleness_scores([r["chunk_id"] for r in results], weights)
 
         assert staleness_map is not None
         assert staleness_map["doc-A"] == pytest.approx(0.7)
@@ -226,7 +225,6 @@ class TestFetchStalenessMap:
     @pytest.mark.asyncio
     async def test_returns_none_on_redis_error(self):
         """Redis failures degrade gracefully — returns None instead of raising."""
-        reranker = ResultReranker()
         results = [_make_result("doc-A")]
         weights = RerankWeights(staleness=0.3)
 
@@ -234,14 +232,13 @@ class TestFetchStalenessMap:
             "autobot_shared.redis_client.get_async_redis_client",
             new=AsyncMock(side_effect=RuntimeError("Redis unavailable")),
         ):
-            staleness_map = await reranker._fetch_staleness_map(results, weights)
+            staleness_map = await fetch_staleness_scores([r["chunk_id"] for r in results], weights)
 
         assert staleness_map is None
 
     @pytest.mark.asyncio
     async def test_deduplicates_chunk_ids(self):
         """Duplicate chunk_ids trigger only one Redis lookup each."""
-        reranker = ResultReranker()
         results = [_make_result("doc-A"), _make_result("doc-A")]  # duplicate
         weights = RerankWeights(staleness=0.3)
 
@@ -265,6 +262,6 @@ class TestFetchStalenessMap:
                 side_effect=_fake_get_staleness,
             ),
         ):
-            await reranker._fetch_staleness_map(results, weights)
+            await fetch_staleness_scores([r["chunk_id"] for r in results], weights)
 
         assert call_count == 1  # deduplication ensures only one lookup

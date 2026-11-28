@@ -207,3 +207,20 @@ sets does, which is the #13845/#13846 lesson. It has already produced a live bug
 swimlane filtering on `'human'` against a backend that only ever writes `'user'`, so the column never
 matched a row. The axis is about to become three-valued (agent / user / contact), so it is tracked as
 #13970 and must be settled rather than mechanically renamed.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13935 — Umbrella: Company OS process canvas — finish the Org Chart surface, adopt visual-operations GUI patterns
+- #13936 — bug(llc): Org Chart human branch can never render — is_human hardcoded False, memberships never joined (closed)
+- #13937 — tech-debt(llc): assignee_type is an untyped String(16) — no AssigneeType enum in the LLC enum SSOT (closed)
+- #13938 — feat(llc/frontend): Org Chart as the native place for teams and people — employee, human and agent in one list (closed)
+- #13939 — feat(llc/frontend): process canvas as a view mode inside Org Chart — reuse WorkflowCanvas, absorb the automation module (closed)
+- #13940 — feat(llc/frontend): canvas node sidebar — fixed slot order (owner/tools/notes/attributes) + icon rail (closed)
+- #13941 — feat(llc/frontend): rule-based node colouring + legend on the Company OS canvas (closed)
+- #13942 — feat(llc/frontend): executor rollup panel — person / automation / AI agent / unassigned (closed)
+- #13943 — feat(llc/frontend): 'View As' role lens on the Company OS canvas (presentation filter, not RBAC) (closed)
+- #13954 — bug(llc): Kanban swimlane humanItems() filters on assignee_type === 'human' but backend only ever writes 'user' (closed)
+- #13969 — feat(llc): contact entity — humans in a process who have no account and must never log in (closed)
+- #13970 — tech-debt(llc): CoWorkerType {agent,human} and AssigneeType {user,agent} fork one axis — already caused #13954 (closed)

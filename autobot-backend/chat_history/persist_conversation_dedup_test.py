@@ -32,7 +32,6 @@ class TestPersistConversationDedup:
         """Create a mock workflow manager with necessary methods."""
         manager = MagicMock()
         manager._save_conversation_history = AsyncMock()
-        manager._append_to_transcript = AsyncMock()
         return manager
 
     @pytest.mark.asyncio

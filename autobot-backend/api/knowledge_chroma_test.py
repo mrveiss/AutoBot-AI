@@ -9,18 +9,18 @@ Tests all 4 endpoints with success cases, error cases, and edge cases.
 Uses pytest with async test support and mocks ChromaDB client.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from api.knowledge_chroma import (
-    SearchRequest,
     get_collection_detail,
     list_collections,
     list_documents,
     search_collection,
 )
+from api.schemas_knowledge_chroma import ChromaSearchRequest
 
 
 @pytest.fixture
@@ -172,6 +172,7 @@ async def test_list_documents_success(mock_chroma_client, mock_chroma_collection
             limit=100,
             offset=0,
             _=True,
+            request=MagicMock(),
         )
 
     assert response.success is True
@@ -207,6 +208,7 @@ async def test_list_documents_pagination(mock_chroma_client, mock_chroma_collect
             limit=50,
             offset=100,
             _=True,
+            request=MagicMock(),
         )
 
     # Verify pagination was used
@@ -234,6 +236,7 @@ async def test_list_documents_empty_collection(mock_chroma_client, mock_chroma_c
         response = await list_documents(
             name="empty_collection",
             _=True,
+            request=MagicMock(),
         )
 
     assert response.success is True
@@ -249,7 +252,7 @@ async def test_list_documents_not_found(mock_chroma_client):
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
-            await list_documents(name="nonexistent", _=True)
+            await list_documents(name="nonexistent", _=True, request=MagicMock())
 
     assert exc_info.value.status_code == 404
 
@@ -273,13 +276,14 @@ async def test_search_collection_success(mock_chroma_client, mock_chroma_collect
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
-    search_req = SearchRequest(query="test query", n_results=10)
+    search_req = ChromaSearchRequest(query="test query", n_results=10)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         response = await search_collection(
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     assert response.success is True
@@ -310,13 +314,14 @@ async def test_search_collection_with_filter(mock_chroma_client, mock_chroma_col
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
-    search_req = SearchRequest(query="test", n_results=5, where={"category": "tech"})
+    search_req = ChromaSearchRequest(query="test", n_results=5, where={"category": "tech"})
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         await search_collection(
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     # Verify filter was passed
@@ -327,7 +332,7 @@ async def test_search_collection_with_filter(mock_chroma_client, mock_chroma_col
 @pytest.mark.asyncio
 async def test_search_collection_empty_query(mock_chroma_client):
     """Test 400 error for empty query."""
-    search_req = SearchRequest(query="", n_results=10)
+    search_req = ChromaSearchRequest(query="", n_results=10)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
@@ -335,6 +340,7 @@ async def test_search_collection_empty_query(mock_chroma_client):
                 name="test_collection",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 400
@@ -344,7 +350,7 @@ async def test_search_collection_empty_query(mock_chroma_client):
 @pytest.mark.asyncio
 async def test_search_collection_whitespace_query(mock_chroma_client):
     """Test 400 error for whitespace-only query."""
-    search_req = SearchRequest(query="   ", n_results=10)
+    search_req = ChromaSearchRequest(query="   ", n_results=10)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
@@ -352,6 +358,7 @@ async def test_search_collection_whitespace_query(mock_chroma_client):
                 name="test_collection",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 400
@@ -371,13 +378,14 @@ async def test_search_collection_no_results(mock_chroma_client, mock_chroma_coll
 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
-    search_req = SearchRequest(query="no matches", n_results=10)
+    search_req = ChromaSearchRequest(query="no matches", n_results=10)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         response = await search_collection(
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     assert response.success is True
@@ -389,7 +397,7 @@ async def test_search_collection_not_found(mock_chroma_client):
     """Test 404 when collection doesn't exist."""
     mock_chroma_client.get_collection = AsyncMock(side_effect=ValueError("Not found"))
 
-    search_req = SearchRequest(query="test", n_results=10)
+    search_req = ChromaSearchRequest(query="test", n_results=10)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
@@ -397,6 +405,7 @@ async def test_search_collection_not_found(mock_chroma_client):
                 name="nonexistent",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 404

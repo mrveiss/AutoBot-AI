@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-function-length"
 
@@ -31,7 +31,7 @@ def _test_git_env() -> dict[str, str]:
     fixture then operates on THAT repository instead of tmp_path's. See
     autobot_shared/paths_test.py and #15246 for the reproduced incident.
     """
-    env = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    env = isolated_git_env()
     # A pre-push run exports pre-commit's own range. Carried into this suite's
     # throwaway repos it names a commit they do not have, and the hook, which
     # now scopes to that range, would fail on it (#16191). Tests set it themselves.
@@ -114,9 +114,7 @@ class TestArgvModeIsNotSilentlyIgnored:
             ["bash", str(HOOK_PATH), "bad.py"], cwd=repo, capture_output=True, text=True, env=_test_git_env()
         )
         assert result.returncode != 0, (
-            "argv mode was ignored -- fell back to the (empty) staged set: "
-            + result.stdout
-            + result.stderr
+            "argv mode was ignored -- fell back to the (empty) staged set: " + result.stdout + result.stderr
         )
 
 

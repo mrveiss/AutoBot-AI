@@ -20,7 +20,7 @@ from autobot_shared.npu import (
     NPUWorkerClient,
     NPUWorkerPool,
 )
-from autobot_shared.npu import process_with_npu_fallback as _shared_process_with_npu_fallback  # noqa: F401
+from autobot_shared.npu import process_with_npu_queue_fallback as _shared_process_with_npu_fallback  # noqa: F401
 from autobot_shared.singleton_factory import async_lazy_singleton
 from autobot_shared.ssot_constants import CircuitState  # noqa: F401  (#12656: re-exported for callers)
 

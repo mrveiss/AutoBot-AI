@@ -24,7 +24,7 @@ from knowledge.pipeline.cognifiers.llm_utils import (
     render_prompt_sentinels,
 )
 from knowledge.pipeline.models.chunk import ProcessedChunk
-from knowledge.pipeline.models.fact import AtomicFact, FactType
+from knowledge.pipeline.models.fact import FactType, PipelineAtomicFact
 from knowledge.pipeline.registry import TaskRegistry
 from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
@@ -168,7 +168,7 @@ class FactExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: UUID | None) -> List[AtomicFact]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: UUID | None) -> List[PipelineAtomicFact]:
         """
         Extract facts from chunks using NLP patterns (Issue #3395).
 
@@ -180,9 +180,9 @@ class FactExtractor(BaseCognifier):
             document_id: Source document ID
 
         Returns:
-            List of extracted AtomicFact objects
+            List of extracted PipelineAtomicFact objects
         """
-        facts: List[AtomicFact] = []
+        facts: List[PipelineAtomicFact] = []
 
         for chunk in chunks:
             sentences = self._split_sentences(chunk.content)
@@ -194,7 +194,7 @@ class FactExtractor(BaseCognifier):
                         obj = match.group(2).strip()
 
                         if subject and obj and len(subject) < 50 and len(obj) < 100:
-                            fact = AtomicFact(
+                            fact = PipelineAtomicFact(
                                 subject=subject,
                                 predicate=predicate,
                                 object=obj,
@@ -249,16 +249,16 @@ class FactExtractor(BaseCognifier):
         logger.info("Extracted %d atomic facts", len(dedup_facts))
         return context
 
-    async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
+    async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[PipelineAtomicFact]:
         """Run LLM-based fact extraction over all chunks in batches."""
-        all_facts: List[AtomicFact] = []
+        all_facts: List[PipelineAtomicFact] = []
         for i in range(0, len(chunks), self.batch_size):
             batch = chunks[i : i + self.batch_size]
             batch_facts = await self._process_batch(batch, context)
             all_facts.extend(batch_facts)
         return all_facts
 
-    async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
+    async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[PipelineAtomicFact]:
         """Extract facts for a batch in ONE LLM call when batching is on (#10647/#11017).
 
         Routes through the shared ``batched_chunk_extract`` helper (index-keyed
@@ -279,7 +279,7 @@ class FactExtractor(BaseCognifier):
             extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
         )
 
-    async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
+    async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[PipelineAtomicFact]:
         """Extract facts from a single chunk using LLM.
 
         Transient LLM errors are caught and return an empty list.
@@ -302,8 +302,8 @@ class FactExtractor(BaseCognifier):
         raw_facts: List[Dict[str, Any]],
         chunk: ProcessedChunk,
         document_id: UUID | None,
-    ) -> List[AtomicFact]:
-        """Convert raw fact dicts to AtomicFact objects."""
+    ) -> List[PipelineAtomicFact]:
+        """Convert raw fact dicts to PipelineAtomicFact objects."""
         facts = []
         for raw in raw_facts:
             try:
@@ -311,7 +311,7 @@ class FactExtractor(BaseCognifier):
                 if fact_type not in VALID_FACT_TYPES:
                     fact_type = "statement"
 
-                fact = AtomicFact(
+                fact = PipelineAtomicFact(
                     subject=raw["subject"].strip(),
                     predicate=raw["predicate"].strip(),
                     object=raw["object"].strip(),
@@ -327,7 +327,7 @@ class FactExtractor(BaseCognifier):
                 logger.warning("Failed to create fact: %s", e)
         return facts
 
-    def _deduplicate_facts(self, facts: List[AtomicFact]) -> List[AtomicFact]:
+    def _deduplicate_facts(self, facts: List[PipelineAtomicFact]) -> List[PipelineAtomicFact]:
         """
         Deduplicate facts by normalized triple (Issue #3395).
 
@@ -340,7 +340,7 @@ class FactExtractor(BaseCognifier):
         Returns:
             Deduplicated list of facts
         """
-        fact_map: Dict[tuple, AtomicFact] = {}
+        fact_map: Dict[tuple, PipelineAtomicFact] = {}
 
         for fact in facts:
             key = self._normalize_triple(fact.subject, fact.predicate, fact.object_)

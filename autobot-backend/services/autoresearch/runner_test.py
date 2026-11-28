@@ -27,7 +27,7 @@ from services.autoresearch.models import (
     ExperimentResult,
     ExperimentState,
     HyperParams,
-    ScorerResult,
+    PromptScoreResult,
 )
 from services.autoresearch.runner import (
     _EXTRA_KEY_PATTERN,
@@ -1008,12 +1008,12 @@ class TestAppendResult:
 
     def test_creates_file_on_first_write(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.9))
         assert result_file.exists()
 
     def test_record_contains_key_and_score(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.9))
         record = json.loads(result_file.read_text(encoding="utf-8").strip())
         assert record["experiment_id"] == "exp1"
         assert record["prompt_id"] == "p1"
@@ -1022,21 +1022,21 @@ class TestAppendResult:
 
     def test_error_record_stored(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="timeout"))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=None, error="timeout"))
         record = json.loads(result_file.read_text(encoding="utf-8").strip())
         assert record["error"] == "timeout"
         assert record["score"] is None
 
     def test_multiple_appends_produce_multiple_lines(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
-        append_result(result_file, "exp1", "p2", ScorerResult(score=0.8))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.9))
+        append_result(result_file, "exp1", "p2", PromptScoreResult(score=0.8))
         lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
         assert len(lines) == 2
 
     def test_creates_parent_directories(self, tmp_path) -> None:
         result_file = tmp_path / "deep" / "nested" / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=1.0))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=1.0))
         assert result_file.exists()
 
 
@@ -1054,8 +1054,8 @@ class TestReorgResults:
 
     def test_deduplicates_last_write_wins(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="first"))
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=None, error="first"))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.9))
         results = reorg_results(result_file)
         assert ("exp1", "p1") in results
         assert results[("exp1", "p1")].score == 0.9
@@ -1063,17 +1063,17 @@ class TestReorgResults:
 
     def test_file_rewritten_without_duplicates(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="err"))
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.7))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=None, error="err"))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.7))
         reorg_results(result_file)
         lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
         assert len(lines) == 1
 
     def test_sorted_output(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p2", ScorerResult(score=0.5))
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.8))
-        append_result(result_file, "exp1", "p3", ScorerResult(score=0.3))
+        append_result(result_file, "exp1", "p2", PromptScoreResult(score=0.5))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.8))
+        append_result(result_file, "exp1", "p3", PromptScoreResult(score=0.3))
         reorg_results(result_file)
         lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
         prompt_ids = [json.loads(l)["prompt_id"] for l in lines]
@@ -1090,10 +1090,10 @@ class TestReorgResults:
 
     def test_returns_correct_scorer_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "exp1", "p1", ScorerResult(score=0.42))
+        append_result(result_file, "exp1", "p1", PromptScoreResult(score=0.42))
         results = reorg_results(result_file)
         sr = results[("exp1", "p1")]
-        assert isinstance(sr, ScorerResult)
+        assert isinstance(sr, PromptScoreResult)
         assert sr.score == pytest.approx(0.42)
 
 
@@ -1112,7 +1112,7 @@ class TestFilterPrompts:
 
     def test_resume_skips_successful_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "e", "p1", ScorerResult(score=0.9))
+        append_result(result_file, "e", "p1", PromptScoreResult(score=0.9))
         prompts = [("e", "p1"), ("e", "p2")]
         remaining = filter_prompts(prompts, result_file, resume=True)
         assert remaining == [("e", "p2")]
@@ -1125,8 +1125,8 @@ class TestFilterPrompts:
 
     def test_retry_failures_requeues_error_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "e", "p1", ScorerResult(score=None, error="timeout"))
-        append_result(result_file, "e", "p2", ScorerResult(score=0.8))
+        append_result(result_file, "e", "p1", PromptScoreResult(score=None, error="timeout"))
+        append_result(result_file, "e", "p2", PromptScoreResult(score=0.8))
         prompts = [("e", "p1"), ("e", "p2"), ("e", "p3")]
         remaining = filter_prompts(prompts, result_file, resume=True, retry_failures=True)
         assert ("e", "p1") in remaining  # error → retried
@@ -1135,7 +1135,7 @@ class TestFilterPrompts:
 
     def test_resume_without_retry_keeps_errors_skipped(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
-        append_result(result_file, "e", "p1", ScorerResult(score=None, error="err"))
+        append_result(result_file, "e", "p1", PromptScoreResult(score=None, error="err"))
         prompts = [("e", "p1"), ("e", "p2")]
         remaining = filter_prompts(prompts, result_file, resume=True, retry_failures=False)
         # Error result without retry_failures: skip (treat as done)
@@ -1150,6 +1150,6 @@ class TestFilterPrompts:
         result_file = tmp_path / "results.jsonl"
         prompts = [("e", "p1"), ("e", "p2")]
         for _, pid in prompts:
-            append_result(result_file, "e", pid, ScorerResult(score=0.5))
+            append_result(result_file, "e", pid, PromptScoreResult(score=0.5))
         remaining = filter_prompts(prompts, result_file, resume=True)
         assert remaining == []

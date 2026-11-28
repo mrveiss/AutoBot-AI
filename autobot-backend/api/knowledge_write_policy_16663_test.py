@@ -123,18 +123,22 @@ async def test_a_failed_admin_visibility_write_is_not_reported_as_success():
 
 
 async def _admin_changes_sharing(kb, action: str):
-    from api import knowledge_ownership as ownership_api
+    from api import knowledge_collaboration as collab_api
 
-    request = MagicMock()
-    request.state.user = {"user_id": "u1"}
+    admin = {"user_id": "root", "role": "admin"}
     kb.ownership_manager.share_fact = AsyncMock(return_value={"owner_id": "u1", "shared_with": ["u2"]})
     kb.ownership_manager.unshare_fact = AsyncMock(return_value={"owner_id": "u1", "shared_with": []})
-    with patch.object(ownership_api, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+    with patch.object(collab_api, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
         if action == "share":
-            return await ownership_api.share_fact(
-                fact_id="f1", request_body=SimpleNamespace(user_ids=["u2"]), request=request, _={}
+            return await collab_api.share_knowledge(
+                fact_id="f1",
+                share_request=SimpleNamespace(user_ids=["u2"], group_ids=None),
+                request=MagicMock(),
+                current_user=admin,
             )
-        return await ownership_api.unshare_fact(fact_id="f1", user_id_to_remove="u2", request=request, _={})
+        return await collab_api.unshare_knowledge(
+            fact_id="f1", entity_id="u2", request=MagicMock(), current_user=admin, entity_type="user"
+        )
 
 
 @pytest.mark.asyncio

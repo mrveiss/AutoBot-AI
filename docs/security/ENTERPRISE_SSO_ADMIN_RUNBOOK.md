@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **Certified** (tested end-to-end, documented, PKCE) | Okta · Microsoft Entra ID (Azure AD) · Google Workspace | OIDC authorization-code + **PKCE (S256)** | Recommended for production. |
 | **Supported** | Generic OIDC (any spec-compliant IdP) · SAML 2.0 · LDAP / Active Directory | OIDC / SAML / LDAP | Functional; SAML **Single Logout** is tracked separately ([#10281](https://github.com/mrveiss/AutoBot-AI/issues/10281)). |
-| **Social (non-enterprise)** | GitHub · Facebook · Google consumer | OAuth2 | Not part of the enterprise tier; unchanged. |
+| **Social (non-enterprise)** | GitHub · Facebook · Google consumer | OAuth2 | Not covered by this runbook; unchanged. |
 
 All OIDC logins use **PKCE (S256)** — the authorization-code flow is bound to a
 per-login verifier, mitigating code-interception.
@@ -70,7 +70,7 @@ Behavior (enforced on **every** login, not just first JIT):
   made (avoids accidental mass-revocation when the claim is temporarily absent).
 - Role names resolve against org-scoped roles first, falling back to system roles
   (`org_id IS NULL`). Names with no matching role are skipped and logged.
-- LLC `MembershipRole` is **out of scope** — group mapping grants instance roles only.
+- Company OS `MembershipRole` is **out of scope** — group mapping grants instance roles only.
 
 Pre-requisite: request the `groups` scope (OIDC) or configure
 `attribute_mapping.groups` (SAML/LDAP) so groups reach AutoBot.
@@ -96,11 +96,11 @@ Pre-requisite: request the `groups` scope (OIDC) or configure
 OAuth client secrets and LDAP bind passwords are **encrypted at rest** with
 AES-256-GCM and stored in the `system_secrets` table (key scheme
 `sso:provider:{id}:{field}`); the provider `config` holds only `{field}_ref`
-references — never plaintext. Field encryption uses `AUTOBOT_FIELD_ENCRYPTION_KEY`.
+references — never plaintext.
 
 ### 5.2 Migrating legacy plaintext secrets (#9687)
 If you are upgrading from a build that stored secrets in plaintext config:
-1. Ensure `AUTOBOT_FIELD_ENCRYPTION_KEY` is set (the migration fails fast otherwise).
+1. Ensure `SLM_ENCRYPTION_KEY` or `SLM_SECRET_KEY` is set (the migration fails fast otherwise).
 2. Run `autobot-slm-backend/migrations/migrate_sso_secrets_to_system_secret.py`.
    It encrypts each `client_secret`/`bind_password`, writes it to `system_secrets`,
    replaces the config value with a `{field}_ref`, and rolls back on any error.
@@ -126,4 +126,4 @@ If you are upgrading from a build that stored secrets in plaintext config:
 | Roles not applied | `groups` scope/claim missing, or mapped role name not found | Confirm the IdP emits groups; check role names exist (org or system). |
 | User keeps access after logout | RS256 authority token (not SLM-issued) | Expected until #10278; shorten token TTL. |
 | Google session persists after logout | Google has no OIDC end_session endpoint | Expected; only the AutoBot session is revoked. |
-| Secret decryption errors | `AUTOBOT_FIELD_ENCRYPTION_KEY` changed/missing | Restore the key; re-enter secrets if lost. |
+| Secret decryption errors | The SLM encryption key changed or is missing | Restore the key; re-enter secrets if lost. |

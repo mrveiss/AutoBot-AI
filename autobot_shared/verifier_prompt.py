@@ -24,6 +24,38 @@ from __future__ import annotations
 
 from typing import Any
 
+from autobot_shared.env_utils import env_registered
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+#: Characters of one argument value shown to the verifier (#21844). An unbounded value forces the call past its
+#: timeout, and a verifier that never answers is an unverified pass.
+VERIFIER_ARG_MAX_CHARS: int = env_registered("AUTOBOT_VERIFIER_ARG_MAX_CHARS")
+
+#: Characters of the whole user prompt sent to the verifier (#21844); the arguments are cut to what is left.
+VERIFIER_PROMPT_MAX_CHARS: int = env_registered("AUTOBOT_VERIFIER_PROMPT_MAX_CHARS")
+
+_TRUNCATION_MARKER = "...[truncated %d chars]"
+
+
+def _cap(text: str, limit: int) -> str:
+    """*text* cut so the result, truncation marker included, is at most *limit* characters."""
+    limit = max(limit, 0)
+    if len(text) <= limit:
+        return text
+    keep = limit - len(_TRUNCATION_MARKER % len(text))
+    if keep <= 0:  # no room for a marker: a plain cut still honours the limit
+        return text[:limit]
+    return text[:keep] + _TRUNCATION_MARKER % (len(text) - keep)
+
+
+def _args_block(args: dict[str, Any], budget: int) -> str:
+    """One line per argument, each value and the whole block capped (#21844)."""
+    lines = [f"  {k}: {_cap(repr(v), VERIFIER_ARG_MAX_CHARS)}" for k, v in args.items()]
+    return _cap("\n".join(lines) if lines else "  (none)", budget)
+
+
 _VERIFIER_SYSTEM = (
     "You are an adversarial safety reviewer. "
     "Your ONLY job is to find flaws, risks, or incorrect assumptions in a proposed agent action. "
@@ -50,18 +82,29 @@ RATIONALE: <two sentences maximum explaining your assessment>
 """
 
 
+_TEMPLATE_MIN_CHARS = len(_VERIFIER_USER_TMPL.format(tool_name="", args_block="", reason=""))
+if VERIFIER_PROMPT_MAX_CHARS < _TEMPLATE_MIN_CHARS:  # a tuning knob never refuses to boot: clamp and say so
+    logger.warning(
+        "AUTOBOT_VERIFIER_PROMPT_MAX_CHARS=%d cannot hold the verifier prompt template; using %d",
+        VERIFIER_PROMPT_MAX_CHARS,
+        _TEMPLATE_MIN_CHARS,
+    )
+
+
 def _build_verifier_prompt(
     tool_name: str,
     args: dict[str, Any],
     reason: str,
 ) -> tuple[str, str]:
-    """Return (system_prompt, user_prompt) for the verifier LLM call."""
-    args_block = "\n".join(f"  {k}: {v!r}" for k, v in args.items()) or "  (none)"
-    user = _VERIFIER_USER_TMPL.format(
-        tool_name=tool_name,
-        args_block=args_block,
-        reason=reason or "No reason provided.",
-    )
+    """Return (system_prompt, user_prompt); the user prompt never exceeds ``VERIFIER_PROMPT_MAX_CHARS`` (#21844)."""
+    limit = max(VERIFIER_PROMPT_MAX_CHARS, _TEMPLATE_MIN_CHARS)  # a too-small knob is clamped, never fatal
+    slack = limit - _TEMPLATE_MIN_CHARS  # a quarter of it bounds the tool name
+    tool_name = _cap(tool_name, min(VERIFIER_ARG_MAX_CHARS, slack // 4))
+    fixed = len(_VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block="", reason=""))
+    remaining = max(limit - fixed, 0)
+    reason = _cap(reason or "No reason provided.", min(VERIFIER_ARG_MAX_CHARS, remaining // 2))
+    args_block = _args_block(args, remaining - len(reason))
+    user = _VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block=args_block, reason=reason)
     return _VERIFIER_SYSTEM, user
 
 

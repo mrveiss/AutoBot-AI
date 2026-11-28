@@ -32,7 +32,7 @@
 #   - autobot-backend/models/approval.py                          (PENDING/APPROVED/REJECTED — approval workflow)
 #   - autobot-backend/services/knowledge/sync_queue.py            (SyncStatus — domain sync states)
 #   - autobot-backend/services/load_balancer.py                   (WorkerStatus — load-balancer states)
-#   - autobot-backend/services/provider_health/base.py            (ProviderStatus — health, separate concept)
+#   - autobot-backend/services/provider_health/base.py            (ProviderHealthStatus — health, separate concept)
 #
 # Suppression: append `# noqa: status-shape` to the offending line (last resort).
 
@@ -73,7 +73,7 @@ EXEMPT_PATHS=(
     "autobot-backend/security/enterprise/sso_integration.py"
     "autobot-backend/api/codebase_analytics/source_models.py"
     "autobot-backend/api/knowledge_grounding_models.py"
-    "autobot-backend/api/registry.py"
+    "autobot-backend/api/registry_catalog.py"
     "autobot-backend/api/schemas_analytics.py"
     "autobot-backend/api/schemas_workflows.py"
     "autobot-backend/async_chat_workflow.py"
@@ -86,6 +86,7 @@ EXEMPT_PATHS=(
     "autobot-backend/utils/service_registry.py"
     "autobot-backend/utils/todowrite_optimizer.py"
     "autobot_shared/plugin_sdk/base.py"
+    "autobot-backend/llc/services/company_os/plan_types.py"
 )
 
 is_exempt() {

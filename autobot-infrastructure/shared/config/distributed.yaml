@@ -47,7 +47,7 @@ infrastructure:
 
     browser:
       host: ""  # Set via AUTOBOT_BROWSER_SERVICE_HOST env var
-      port: 3000
+      port: 9001
       role: "browser-automation"
       services: ["playwright", "web-automation"]
       description: "Playwright browser automation"

@@ -42,20 +42,31 @@ import type { Ref } from 'vue'
 export function useLoadingState(initial = false): {
   isLoading: Ref<boolean>
   wrap: <T>(fn: () => Promise<T>) => Promise<T>
+  reset: () => void
 } {
   let _pending = 0
+  let _epoch = 0
   const isLoading = ref(initial)
 
   async function wrap<T>(fn: () => Promise<T>): Promise<T> {
+    const epoch = _epoch
     if (++_pending === 1) isLoading.value = true
     try {
       return await fn()
     } finally {
-      if (--_pending === 0) isLoading.value = false
+      // A wrap started before reset() no longer owns the count (#21159).
+      if (epoch === _epoch && --_pending === 0) isLoading.value = false
     }
   }
 
-  return { isLoading, wrap }
+  /** Drop every in-flight wrap: pending -> 0, isLoading -> false; their completion is ignored. */
+  function reset(): void {
+    _epoch++
+    _pending = 0
+    isLoading.value = false
+  }
+
+  return { isLoading, wrap, reset }
 }
 
 export default useLoadingState

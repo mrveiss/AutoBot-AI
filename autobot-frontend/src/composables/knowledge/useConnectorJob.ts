@@ -4,8 +4,13 @@
  * useConnectorJob — live sync job state poller for a single connector.
  *
  * Issue #8149: polls GET /knowledge_base/connectors/{id}/job every 5 s
- * while status is "running".  Stops automatically on terminal status or
+ * while a sync is in flight.  Stops automatically on any other answer or
  * when the caller calls stop().
+ *
+ * #20755: the backend answers from the sync's lease, which is held from the moment the sync is
+ * claimed: 'starting' until its first job state is written (after change detection, however
+ * long that takes), then 'running'. So 'no job' always means none is in flight, and no guessed
+ * wait is needed.
  */
 
 import { ref, readonly, onUnmounted } from 'vue'
@@ -17,8 +22,9 @@ import type { ConnectorJobState, ConnectorLeaderState, ConnectorHistoryEntry } f
 const logger = createLogger('useConnectorJob')
 
 const POLL_INTERVAL_MS = 5_000
+const IN_FLIGHT: ReadonlyArray<ConnectorJobState['status']> = ['starting', 'running']
 
-/** Fetch current in-flight job state. Returns null when no job is active (404). */
+/** Fetch current in-flight job state. Returns null when no job is active (404); any other failure throws. */
 export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJobState | null> {
   try {
     return await apiClient.get<ConnectorJobState>(
@@ -29,8 +35,7 @@ export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJ
     if (e?.status === 404 || e?.response?.status === 404) {
       return null
     }
-    logger.error('fetchConnectorJob error', err)
-    return null
+    throw err
   }
 }
 
@@ -63,6 +68,8 @@ export async function fetchSchedulerLeader(): Promise<string | null> {
 export function useConnectorJob() {
   const jobState = ref<ConnectorJobState | null>(null)
   const isPolling = ref(false)
+  /** True when the last progress request failed; the job's state is then unknown, not "running". */
+  const pollFailed = ref(false)
   let timerId: ReturnType<typeof setTimeout> | null = null
 
   function _clearTimer() {
@@ -74,10 +81,19 @@ export function useConnectorJob() {
 
   async function _poll(connectorId: string) {
     if (!isPolling.value) return
-    const state = await fetchConnectorJob(connectorId)
+    let state: ConnectorJobState | null
+    try {
+      state = await fetchConnectorJob(connectorId)
+    } catch (err) {
+      // A failed request is not "no job yet": stop here rather than show Running for a minute.
+      logger.error('fetchConnectorJob error', err)
+      jobState.value = null
+      pollFailed.value = true
+      isPolling.value = false
+      return
+    }
     jobState.value = state
-
-    if (state?.status === 'running' && isPolling.value) {
+    if (state !== null && IN_FLIGHT.includes(state.status) && isPolling.value) {
       timerId = setTimeout(() => _poll(connectorId), POLL_INTERVAL_MS)
     } else {
       isPolling.value = false
@@ -86,6 +102,7 @@ export function useConnectorJob() {
 
   function start(connectorId: string) {
     _clearTimer()
+    pollFailed.value = false
     isPolling.value = true
     _poll(connectorId)
   }
@@ -100,6 +117,7 @@ export function useConnectorJob() {
   return {
     jobState: readonly(jobState),
     isPolling: readonly(isPolling),
+    pollFailed: readonly(pollFailed),
     start,
     stop,
   }

@@ -13,9 +13,9 @@ unchanged.
 """
 
 from autobot_shared.user_management.models.audit import (  # noqa: F401
-    AuditAction,
     AuditLog,
     AuditResourceType,
+    IdentityAuditAction,
 )
 
-__all__ = ["AuditLog", "AuditAction", "AuditResourceType"]
+__all__ = ["AuditLog", "IdentityAuditAction", "AuditResourceType"]

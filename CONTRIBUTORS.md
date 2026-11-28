@@ -99,7 +99,7 @@ Each issue is labeled by complexity. Here's what each level means:
 AutoBot's codebase spans multiple domains. Pick the area that matches your expertise:
 
 - **Frontend** — User interface, dashboard, chat experience
-- **Backend** — API logic, data processing, infrastructure automation
+- **Backend** — API logic, data processing, agent and workflow execution
 - **Infrastructure** — Docker, Ansible, deployment, CI/CD pipelines
 - **Documentation** — Guides, examples, API docs, tutorials
 - **Testing** — Unit tests, integration tests, test tooling, QA

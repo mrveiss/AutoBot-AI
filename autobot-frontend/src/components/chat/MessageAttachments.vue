@@ -9,15 +9,18 @@
         v-for="attachment in attachments"
         :key="attachment.id"
         class="attachment-item"
+        role="button"
+        tabindex="0"
         @click="$emit('view', attachment)"
+        @keydown.enter.self="$emit('view', attachment)"
       >
         <Icon :name="getAttachmentIcon(attachment.type)" />
         <span class="attachment-name">{{ attachment.name }}</span>
-        <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
+        <span class="attachment-size">{{ formatFileSize(attachment.size) }}</span>
         <button
           class="attachment-download"
           @click.stop="$emit('download', attachment)"
-          :aria-label="`Download ${attachment.name}`"
+          :aria-label="$t('chat.messages.downloadAttachment', { name: attachment.name })"
         >
           <Icon name="download" />
         </button>
@@ -40,6 +43,7 @@
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Attachment {
   id: string
@@ -61,47 +65,15 @@ interface Emits {
 defineProps<Props>()
 defineEmits<Emits>()
 
+/** The icon map and size format the message stream always used. */
 const getAttachmentIcon = (type: string): IconName => {
-  const iconMap: Record<string, IconName> = {
-    image: 'file-image',
-    video: 'file-video',
-    audio: 'file-audio',
-    pdf: 'file-pdf',
-    document: 'file-word',
-    spreadsheet: 'file-excel',
-    code: 'file-code',
-    archive: 'file-archive',
-    text: 'file-alt'
-  }
-
-  // Check for specific types
-  if (type.startsWith('image/')) return iconMap.image
-  if (type.startsWith('video/')) return iconMap.video
-  if (type.startsWith('audio/')) return iconMap.audio
-  if (type === 'application/pdf') return iconMap.pdf
-  if (type.includes('word') || type.includes('document')) return iconMap.document
-  if (type.includes('excel') || type.includes('spreadsheet')) return iconMap.spreadsheet
-  if (type.includes('zip') || type.includes('tar') || type.includes('rar')) return iconMap.archive
-  if (
-    type.includes('javascript') ||
-    type.includes('python') ||
-    type.includes('typescript') ||
-    type.includes('json')
-  )
-    return iconMap.code
-  if (type.startsWith('text/')) return iconMap.text
-
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'music'
+  if (type.includes('pdf')) return 'file-pdf'
+  if (type.includes('word')) return 'file-word'
+  if (type.includes('excel')) return 'file-excel'
   return 'file'
-}
-
-const formatSize = (bytes: number): string => {
-  if (!bytes || bytes === 0) return '0 B'
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const k = 1024
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + units[i]
 }
 </script>
 
@@ -144,7 +116,7 @@ const formatSize = (bytes: number): string => {
   background: var(--bg-hover);
 }
 
-.attachment-item i:first-child {
+.attachment-item .icon:first-child {
   width: 20px;
   text-align: center;
   color: var(--text-secondary);

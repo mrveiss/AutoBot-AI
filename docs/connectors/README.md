@@ -11,6 +11,7 @@ Documentation for external platform connectors that sync data into AutoBot's kno
 |---|---|
 | [[writing-a-connector]] | Guide: how to build a new connector |
 | [[onedrive-sharepoint]] | OneDrive and SharePoint connector |
+| [[tool-integration-urls]] | Base URLs, redirects and egress for the tool integrations |
 
 ---
 

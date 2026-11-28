@@ -32,6 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_constants import TTL_1_HOUR
 from llm_shared.fallback_events import emit_fallback_event
+from llm_shared.provider_degradation import AllCredentialsNeedReauthError
 
 logger = get_logger(__name__)
 
@@ -54,10 +55,21 @@ class StreamRetry(Exception):
 
 async def resolve_attempt_provider(
     registry: Any, current_provider_name: str | None, conversation_id: str | None
-) -> Any:
-    """Resolve the provider for one fallback-chain attempt; shared by
-    chat()/stream()."""
-    return await registry.get_provider_for_request(provider_name=current_provider_name, conversation_id=conversation_id)
+) -> tuple[Any, str | None]:
+    """Resolve the provider for one fallback-chain attempt; shared by chat()/stream().
+
+    Returns ``(provider, failure)``. ``provider`` is ``None`` when nothing is
+    usable; ``failure`` is then the reason when it is more specific than "no
+    capacity" -- every candidate credential needs re-auth (#15022), which no
+    retry or fallback hop can fix -- and ``None`` otherwise.
+    """
+    try:
+        provider = await registry.get_provider_for_request(
+            provider_name=current_provider_name, conversation_id=conversation_id
+        )
+    except AllCredentialsNeedReauthError as exc:
+        return None, str(exc)
+    return provider, None
 
 
 def track_attempt(

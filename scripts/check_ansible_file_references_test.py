@@ -153,6 +153,24 @@ def test_a_group_no_inventory_defines_is_reported(tmp_path):
     assert "hosts: browser" in result.stdout
 
 
+def test_a_hosts_key_in_a_group_vars_data_file_is_not_a_play_target(tmp_path):
+    """`hosts:` in group_vars is a data key (#21343); only a play file's `hosts:` names a target."""
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    data = tmp_path / "component" / "ansible" / "inventory" / "group_vars"
+    data.mkdir(parents=True)
+    (data / "infrastructure.yml").write_text(
+        "---\ninfrastructure_hosts: &h\n  slm: x\ninfrastructure:\n  hosts: *h\n  other:\n    hosts: nowhere\n",
+        encoding="utf-8",
+    )
+    _play(tmp_path, "- name: Deploy\n  hosts: frontend\n  tasks: []\n")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+    assert guard._host_patterns("---\n# c\nfoo:\n  hosts: nowhere\n") == []
+    assert guard._host_patterns("---\n# c\n- name: p\n  hosts: nowhere\n") == [(4, "nowhere")]
+
+
 def test_a_group_defined_by_any_inventory_resolves(tmp_path):
     """Several inventories ship, describing different topologies.
 
@@ -340,6 +358,24 @@ def test_a_templated_deploy_root_still_resolves_to_a_repo_path():
     assert unresolvable == [], "the templated value was reported unresolvable, not resolved"
 
 
+def test_a_deploy_root_derived_from_group_vars_still_resolves(tmp_path):
+    """#19147 spells the root `{{ autobot.base_dir }}/src` (the #15632 SSOT).
+
+    That is not a literal, so without rendering group_vars/all the variable is
+    dropped and every reference behind it leaves the population.
+    """
+    group_vars = tmp_path / "component" / "ansible" / "inventory" / "group_vars"
+    group_vars.mkdir(parents=True)
+    (group_vars / "all.yml").write_text('autobot:\n  base_dir: "/opt/autobot"\n', encoding="utf-8")
+    playbook = _TEMPLATED_PLAYBOOK.replace("/opt/autobot/src", '"{{ autobot.base_dir }}/src"')
+
+    resolved, unresolvable = guard._referenced_repo_paths(playbook, guard.inventory_vars(tmp_path))
+
+    assert resolved == [(6, "requirements", "autobot-npu-worker/requirements.txt")]
+    assert unresolvable == []
+    assert guard._referenced_repo_paths(playbook)[0] == [], "rendered without the inventory"
+
+
 def test_a_wrong_path_behind_a_template_is_still_caught():
     """#13744 restated against the templated form.
 
@@ -410,9 +446,10 @@ def test_this_repository_still_resolves_its_deployed_src_references():
     """
     root = pathlib.Path(__file__).resolve().parents[1]
     resolved = 0
+    inventory = guard.inventory_vars(root)
     for play in guard._ansible_files(root):
         try:
-            hits, _ = guard._referenced_repo_paths(play.read_text(encoding="utf-8"))
+            hits, _ = guard._referenced_repo_paths(play.read_text(encoding="utf-8"), inventory)
         except OSError:
             continue
         resolved += len(hits)

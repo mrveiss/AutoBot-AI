@@ -4,6 +4,6 @@
 # Author: mrveiss
 """Shared content-reach backends (browser, etc.) used by multiple source chains."""
 
-from content_reach.backends.browser import BrowserBackend, BrowserSearchBackend
+from content_reach.backends.browser import BrowserContentBackend, BrowserSearchBackend
 
-__all__ = ["BrowserBackend", "BrowserSearchBackend"]
+__all__ = ["BrowserContentBackend", "BrowserSearchBackend"]

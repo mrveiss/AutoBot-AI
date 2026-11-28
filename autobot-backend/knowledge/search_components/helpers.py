@@ -62,3 +62,43 @@ def build_search_result(decoded: Dict[str, str], key: bytes, score: float) -> Di
         "node_id": fact_id,
         "doc_id": fact_id,
     }
+
+
+def extract_search_params(ctx: Any) -> Dict[str, Any]:
+    """Flatten a ``SearchContext`` into the keyword dict the search pipeline reads (Issue #398)."""
+    return {
+        "query": ctx.query_params.query,
+        "limit": ctx.query_params.limit,
+        "offset": ctx.query_params.offset,
+        "tags": ctx.query_params.tags,
+        "tags_match_any": ctx.query_params.tags_match_any,
+        "exclude_terms": ctx.query_params.exclude_terms,
+        "require_terms": ctx.query_params.require_terms,
+        "category": ctx.filters.category,
+        "created_after": ctx.filters.created_after,
+        "created_before": ctx.filters.created_before,
+        "exclude_sources": ctx.filters.exclude_sources,
+        "verified_only": ctx.filters.verified_only,
+        "mode": ctx.options.mode,
+        "enable_reranking": ctx.options.enable_reranking,
+        "min_score": ctx.options.min_score,
+        "enable_query_expansion": ctx.options.enable_query_expansion,
+        "enable_relevance_scoring": ctx.options.enable_relevance_scoring,
+        "enable_clustering": ctx.options.enable_clustering,
+        "track_analytics": ctx.options.track_analytics,
+        "session_id": ctx.session_id,
+    }
+
+
+def map_kb_result_to_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Map one raw KB search row to the canonical result shape. Issue #10740.
+
+    Keys: content, source (node_id with doc_id fallback), score, metadata.
+    Single-item mapper; callers apply it with a list comprehension.
+    """
+    return {
+        "content": raw.get("content", ""),
+        "source": raw.get("node_id", raw.get("doc_id", "")),
+        "score": raw.get("score", 0.0),
+        "metadata": raw.get("metadata", {}),
+    }

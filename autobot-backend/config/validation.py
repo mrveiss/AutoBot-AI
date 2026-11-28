@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from config.loader import ENV_VAR_MAPPINGS
+from config.model_drift import warn_on_selected_model_drift
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,20 @@ def _validate_enums(raw_config: Dict[str, Any], result: ConfigValidationResult) 
             _validate_choice(value, label, allowed, result)
 
 
+def _require_root_key(result: ConfigValidationResult) -> None:
+    """A deployment without a usable secrets root key fails here, at startup, not on first credential read (#17981).
+
+    ``load_root_key`` is the one reader; its error names the setting and which check failed, never the value.
+    Imported here, not at module level: this module is on the logging-manager init path (GH#7765).
+    """
+    from autobot_shared.secrets_envelope import load_root_key
+
+    try:
+        load_root_key()
+    except RuntimeError as exc:
+        result.add_error(str(exc))
+
+
 def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResult:
     """Validate *raw_config* at startup and return a structured result.
 
@@ -243,17 +258,6 @@ def log_startup_config_summary(raw_config: Dict[str, Any]) -> None:
 class ValidationMixin:
     """Mixin providing configuration validation"""
 
-    def is_feature_enabled(self, feature: str) -> bool:
-        """Check if a feature is enabled.
-
-        ``feature`` is a dot-path into the config with an "enabled" leaf,
-        e.g. "multimodal.vision" -> multimodal.vision.enabled, "npu" ->
-        npu.enabled (#11954: was reading a "features.<feature>" namespace
-        that no default config section ever populated, so every feature
-        silently evaluated to False).
-        """
-        return self.get_nested(f"{feature}.enabled", False)
-
     def get_security_config(self) -> Dict[str, Any]:
         """Get security configuration"""
         return self.get_nested(
@@ -290,10 +294,14 @@ class ValidationMixin:
         """
         raw = self._config if hasattr(self, "_config") else {}
         result = validate_startup_config(raw)
+        _require_root_key(result)
 
         # Log override warnings so operators see them at startup.
         for warning in result.warnings:
             logger.warning("Config warning: %s", warning)
+
+        # #15502: report (never rewrite) a config.yaml model that disagrees with the tier map.
+        warn_on_selected_model_drift(raw)
 
         if result.errors:
             for error in result.errors:

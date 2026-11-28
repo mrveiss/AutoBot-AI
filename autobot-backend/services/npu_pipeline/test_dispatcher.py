@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for PipelineDispatcher."""
+"""Unit tests for ShardStreamDispatcher."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ _shard_planner, _dispatcher_mod = _load_real_modules()
 
 LayerRange = _shard_planner.LayerRange
 ShardAssignment = _shard_planner.ShardAssignment
-PipelineDispatcher = _dispatcher_mod.PipelineDispatcher
+ShardStreamDispatcher = _dispatcher_mod.ShardStreamDispatcher
 PipelinePlan = _dispatcher_mod.PipelinePlan
 WorkerDropError = _dispatcher_mod.WorkerDropError
 
@@ -135,7 +135,7 @@ async def test_happy_path_three_workers():
     session_mock.post = mock_post
     session_mock.close = AsyncMock()
 
-    async with PipelineDispatcher(WORKER_URLS) as d:
+    async with ShardStreamDispatcher(WORKER_URLS) as d:
         d._session = session_mock
         tokens = await _collect(d.run_pipeline(plan, PROMPT_TOKENS))
 
@@ -186,7 +186,7 @@ async def test_worker_drop_mid_pass_failover():
     session_mock.post = mock_post
     session_mock.close = AsyncMock()
 
-    async with PipelineDispatcher(WORKER_URLS) as d:
+    async with ShardStreamDispatcher(WORKER_URLS) as d:
         d._session = session_mock
         tokens = await _collect(d.run_pipeline(plan, PROMPT_TOKENS))
 
@@ -216,7 +216,7 @@ async def test_worker_drop_no_peer_raises():
     session_mock.close = AsyncMock()
 
     with pytest.raises(WorkerDropError, match="w0"):
-        async with PipelineDispatcher(WORKER_URLS) as d:
+        async with ShardStreamDispatcher(WORKER_URLS) as d:
             d._session = session_mock
             await _collect(d.run_pipeline(plan, PROMPT_TOKENS))
 
@@ -249,7 +249,7 @@ async def test_single_worker_produces_tokens():
     session_mock.post = mock_post
     session_mock.close = AsyncMock()
 
-    async with PipelineDispatcher(WORKER_URLS) as d:
+    async with ShardStreamDispatcher(WORKER_URLS) as d:
         d._session = session_mock
         tokens = await _collect(d.run_pipeline(plan, PROMPT_TOKENS))
 
@@ -274,7 +274,7 @@ async def test_context_manager_closes_session():
         instance.close = AsyncMock(side_effect=fake_close)
         MockSession.return_value = instance
 
-        async with PipelineDispatcher(WORKER_URLS):
+        async with ShardStreamDispatcher(WORKER_URLS):
             pass
 
     assert close_called

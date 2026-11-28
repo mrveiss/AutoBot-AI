@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _REPO_ROOT = repo_root()
 _CANONICAL = _REPO_ROOT / "scripts" / "hooks" / "post-checkout"
@@ -52,12 +52,10 @@ _PADDINGS = (1, 2, 5, 13, 29)
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would aim these calls,
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would aim these calls,
     ``checkout`` included, at the real repository instead of tmp_path.
     """
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False, env=scrubbed_git_env()
-    )
+    return git(cwd, *args, check=False)
 
 
 def _pad(text: str, count: int) -> str:
@@ -74,9 +72,7 @@ def _seed(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / "scripts" / "hooks").mkdir(parents=True)
     (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
-    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     _git(repo, "branch", "other")
@@ -120,9 +116,9 @@ def test_population_floor_the_hook_still_self_syncs(hook_text: str) -> None:
     """
     for token in (_ANCHOR, 'INSTALLED="${COMMON_HOOKS}/post-checkout"', "$INSTALLED"):
         assert token in hook_text, f"FIX THE SWEEP: {token!r} absent -- the self-sync block this guard covers is gone"
-    assert len(_pad(hook_text, 3).splitlines()) == len(hook_text.splitlines()) + 3, (
-        "FIX THE SWEEP: padding did not change the file, so no byte shift is exercised"
-    )
+    assert (
+        len(_pad(hook_text, 3).splitlines()) == len(hook_text.splitlines()) + 3
+    ), "FIX THE SWEEP: padding did not change the file, so no byte shift is exercised"
 
 
 def test_cp_form_corrupts_the_running_shell(tmp_path: Path, hook_text: str) -> None:

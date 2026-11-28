@@ -14,7 +14,7 @@ from pathlib import Path
 import aiohttp
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_workflow_endpoints():
@@ -23,7 +23,7 @@ async def test_workflow_endpoints():
     print("🧪 Testing AutoBot Workflow API Endpoints")  # noqa: print
     print("=" * 60)  # noqa: print
 
-    base_url = get_test_backend_url() + "/api/workflow"
+    base_url = live_backend_url() + "/api/workflow"
 
     async with aiohttp.ClientSession() as session:
         # Test 1: List workflows
@@ -119,7 +119,7 @@ async def test_workflow_endpoints():
         }
 
         try:
-            async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
+            async with session.post(live_backend_url() + "/api/chat", json=chat_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Chat integration working")  # noqa: print
@@ -174,7 +174,7 @@ async def demonstrate_workflow_orchestration():
         ),
     ]
 
-    base_url = get_test_backend_url() + "/api/workflow"
+    base_url = live_backend_url() + "/api/workflow"
 
     async with aiohttp.ClientSession() as session:
         for i, (request, description) in enumerate(test_requests, 1):

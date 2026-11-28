@@ -17,6 +17,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import type { OverseerStepStatus } from '@/types/_generated/workflow'
 
 const logger = createLogger('useOverseerAgent')
 
@@ -44,7 +45,7 @@ export interface OverseerStep {
   total_steps: number
   description: string
   command?: string | null
-  status: 'pending' | 'running' | 'streaming' | 'explaining' | 'completed' | 'failed'
+  status: OverseerStepStatus
   command_explanation?: CommandExplanation | null
   output?: string
   output_explanation?: OutputExplanation | null
@@ -152,6 +153,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     disconnect: wsDisconnect,
   } = useWebSocket(getWebSocketUrl(), {
     autoConnect: false,
+    companyScoped: true, // the overseer socket opens a chat session (#21997)
     // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
     protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
     autoReconnect: true,

@@ -12,10 +12,10 @@ Hardware dispatch priority (when hardware_backend="auto"):
   GPU  (FAISS_GPU_AVAILABLE via gpu_vector_search)
   CPU  (ChromaDB / basic KB fallback — always available)
 
-Canonical result type: SearchResult dataclass (text, score, metadata, source).
+Canonical result type: VectorSearchResult dataclass (text, score, metadata, source).
 
 All callers should import from this module:
-    from knowledge.vector_search_engine import get_vector_search_engine, SearchResult
+    from knowledge.vector_search_engine import get_vector_search_engine, VectorSearchResult
 from autobot_shared.logging_manager import get_logger
 """
 
@@ -25,6 +25,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.embedding_model import raise_if_embedding_refused
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -36,7 +37,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class SearchResult:
+class VectorSearchResult:
     """Canonical search result returned by VectorSearchEngine.
 
     Fields
@@ -117,16 +118,17 @@ class _NPUBackend:
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
+    ) -> List[VectorSearchResult]:
         engine = await self._get_engine()
-        npu_results, _ = await engine.search(
+        npu_results, metrics = await engine.search(
             query=query,
             similarity_top_k=top_k,
             filters=filters,
             enable_npu_acceleration=True,
         )
+        raise_if_embedding_refused(metrics)  # an outage is not "no matches" (#18185)
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.content,
                 score=r.score,
                 metadata=r.metadata,
@@ -140,8 +142,8 @@ class _GPUBackend:
     """Thin adapter over HybridVectorSearch for use by VectorSearchEngine.
 
     The GPU backend requires an already-generated query embedding. This adapter
-    generates that embedding via the NPU-fallback path before delegating to
-    HybridVectorSearch so the caller always passes plain text queries.
+    embeds the query in the hybrid index's recorded space before delegating to
+    HybridVectorSearch, or refuses when that space is not recorded (#18185).
     """
 
     def __init__(self) -> None:
@@ -158,37 +160,23 @@ class _GPUBackend:
             self._hybrid = await get_hybrid_vector_search(config=config_obj)
         return self._hybrid
 
-    async def _generate_embedding(self, query: str):
-        """Generate a query embedding via the canonical NPU-fallback path.
-
-        Issue #5105: Calls ``services.npu_client.generate_embedding_with_fallback``
-        directly — same pattern as ``knowledge/memory_graph/query_processor.py``.
-        """
-        from services.npu_client import (  # noqa: PLC0415
-            generate_embedding_with_fallback,
-        )
-
-        return await generate_embedding_with_fallback(query)
-
     async def search(
         self,
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
-        import numpy as np  # noqa: PLC0415
+    ) -> List[VectorSearchResult]:
+        from knowledge.index_embedding_space import HYBRID_FAISS_INDEX, embed_in_index_space  # noqa: PLC0415
 
+        embedding_array = await embed_in_index_space(query, HYBRID_FAISS_INDEX)  # its space, or refused
         hybrid = await self._get_hybrid()
-        embedding = await self._generate_embedding(query)
-        embedding_array = np.array(embedding, dtype=np.float32)
-
         gpu_results, _ = await hybrid.search(
             query_embedding=embedding_array,
             top_k=top_k,
             metadata_filter=filters,
         )
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.content or "",
                 score=r.score,
                 metadata=r.metadata,
@@ -206,7 +194,7 @@ class _CPUBackend:
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
+    ) -> List[VectorSearchResult]:
         from knowledge import get_knowledge_base  # noqa: PLC0415
 
         kb = await get_knowledge_base()
@@ -216,7 +204,7 @@ class _CPUBackend:
         # non-recursive leaf: validate, sanitize, query ChromaDB.
         raw = await kb.basic_vector_search(query=query, top_k=top_k, filters=filters)
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.get("content", ""),
                 score=r.get("score", 0.0),
                 metadata=r.get("metadata", {}),
@@ -230,8 +218,8 @@ class _CPUBackend:
 # VectorSearchEngine
 # ---------------------------------------------------------------------------
 
-# Reranker callable type: (query: str, results: List[SearchResult]) -> Awaitable[List[SearchResult]]
-RerankerCallable = Callable[[str, List[SearchResult]], Any]
+# Reranker callable type: (query: str, results: List[VectorSearchResult]) -> Awaitable[List[VectorSearchResult]]
+RerankerCallable = Callable[[str, List[VectorSearchResult]], Any]
 
 
 class VectorSearchEngine:
@@ -284,8 +272,8 @@ class VectorSearchEngine:
         filters: Dict[str, Any] | None = None,
         hardware_backend: str = "auto",
         reranker: RerankerCallable | None = None,
-    ) -> List[SearchResult]:
-        """Execute vector search and return standardized SearchResult list.
+    ) -> List[VectorSearchResult]:
+        """Execute vector search and return standardized VectorSearchResult list.
 
         Parameters
         ----------
@@ -297,7 +285,7 @@ class VectorSearchEngine:
 
         Returns
         -------
-        List[SearchResult] sorted by score descending.
+        List[VectorSearchResult] sorted by score descending.
         """
         if not query.strip():
             return []

@@ -52,3 +52,10 @@ export const ManyWorkflows: Story = {
     })),
   },
 };
+
+/** The workflow runner's dialog fixes the workflow, so no picker is shown. */
+export const FixedWorkflow: Story = {
+  args: {
+    workflowId: 'wf-aaa111',
+  },
+};

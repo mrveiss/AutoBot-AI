@@ -8,11 +8,53 @@ Tier Configuration - Configuration dataclasses for tiered model routing.
 Issue #748: Tiered Model Distribution Implementation.
 """
 
+import json
+import logging
 from dataclasses import dataclass, field
-from typing import Dict
+from functools import lru_cache
+from typing import Any, Dict, Tuple
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL, TRIVIAL_MODEL
 from config.registry import ConfigRegistry
+
+# stdlib logging, as config.registry does (GH#7765): this module is imported on the
+# config import chain.
+logger = logging.getLogger(__name__)
+
+TIERED_ROUTING_KEY = "llm.tiered_routing"
+
+
+@lru_cache(maxsize=8)
+def _decode_tier_config(raw: str) -> Dict[str, Any]:
+    """Decode a JSON-object string; warn and return ``{}`` otherwise.
+
+    Memoized on the raw string: this runs on every chat turn, and a malformed
+    value would otherwise be re-decoded and re-warned each time. Callers must
+    not mutate the result.
+    """
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        decoded = None
+    if isinstance(decoded, dict):
+        return decoded
+    logger.warning("Ignoring %s: expected a JSON object, got an unparseable string", TIERED_ROUTING_KEY)
+    return {}
+
+
+def _tier_config_mapping(raw: Any) -> Dict[str, Any]:
+    """Coerce the value read for ``llm.tiered_routing`` to a dict.
+
+    Redis (and env) hand back a ``str``, never a dict (#18998). A JSON object is
+    decoded; anything else is rejected with a warning and treated as unset, so
+    the caller never calls ``.get`` on a string.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        return dict(_decode_tier_config(raw))
+    logger.warning("Ignoring %s: expected a JSON object, got %s", TIERED_ROUTING_KEY, type(raw).__name__)
+    return {}
 
 
 @dataclass
@@ -89,8 +131,11 @@ class TierConfig:
         Returns:
             TierConfig instance with values from config or defaults
         """
-        tier_config = ConfigRegistry.get("llm.tiered_routing", {})
+        raw = ConfigRegistry.get(TIERED_ROUTING_KEY, {})
+        if not raw:
+            return cls()
 
+        tier_config = _tier_config_mapping(raw)
         if not tier_config:
             return cls()
 
@@ -235,7 +280,22 @@ class TierMetrics:
         }
 
 
+def disabled_route(config: TierConfig) -> Tuple[str, ComplexityResult]:
+    """Selection every strategy returns while tiered routing is disabled.
+
+    The complex-tier model, unscored and unrecorded, so a disabled config
+    behaves the same whichever routing strategy is configured (#18297).
+    """
+    return config.models.complex, ComplexityResult(
+        score=0.0,
+        factors={},
+        tier="complex",
+        reasoning="Tiered routing disabled",
+    )
+
+
 __all__ = [
+    "disabled_route",
     "TierConfig",
     "TierModels",
     "TierLogging",

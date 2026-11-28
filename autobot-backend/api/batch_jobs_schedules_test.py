@@ -98,20 +98,9 @@ if "autobot_shared.redis_client" not in sys.modules:
     _rc.get_redis_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
     sys.modules["autobot_shared.redis_client"] = _rc
 
-if "autobot_shared.error_boundaries" not in sys.modules:
+from testkit.module_stubs import install_error_boundaries_stub  # noqa: E402
 
-    class _ErrorCategory(Enum):
-        # #14881: CLIENT_ERROR removed -- production's ErrorCategory
-        # (utils/error_boundaries/types.py) has 18 members and that is not one
-        # of them; nothing referenced it. A minimal stub is fine, an invented
-        # member is not.
-        SERVER_ERROR = "server_error"
-
-    _eb = types.ModuleType("autobot_shared.error_boundaries")
-    _eb.__package__ = "autobot_shared"
-    _eb.ErrorCategory = _ErrorCategory  # type: ignore[attr-defined]
-    _eb.with_error_handling = lambda *a, **k: (lambda f: f)  # type: ignore[attr-defined]
-    sys.modules["autobot_shared.error_boundaries"] = _eb
+install_error_boundaries_stub()
 
 _pkg_stub("autobot_shared.models")
 _leaf_stub("autobot_shared.models.pagination", PaginationParams=MagicMock())
@@ -249,6 +238,8 @@ class _FakeRedis:
 
     def __init__(self):
         self._store: dict[str, bytes] = {}
+        self._sets: dict[str, set] = {}
+        self._hashes: dict[str, dict[str, bytes]] = {}
 
     def get(self, key):
         return self._store.get(key)
@@ -262,15 +253,48 @@ class _FakeRedis:
     def delete(self, key):
         self._store.pop(key, None)
 
-    def sadd(self, *_a, **_k):
+    # #21650: sets and hashes are real, so the owner index and the list routes can be exercised.
+    def sadd(self, key, *members):
+        self._sets.setdefault(key, set()).update(members)
+        return len(members)
+
+    def srem(self, key, *members):
+        self._sets.get(key, set()).difference_update(members)
+        return len(members)
+
+    def smembers(self, key):
+        return set(self._sets.get(key, set()))
+
+    def zadd(self, *_a, **_k):
         return 1
 
-    def srem(self, *_a, **_k):
+    def zrem(self, *_a, **_k):
         return 1
+
+    def lrange(self, *_a, **_k):
+        return []
+
+    def hset(self, key, field, value):
+        self._hashes.setdefault(key, {})[field] = value.encode("utf-8") if isinstance(value, str) else value
+        return 1
+
+    def hget(self, key, field):
+        return self._hashes.get(key, {}).get(field)
+
+    def hmget(self, key, fields):
+        return [self.hget(key, f) for f in fields]
+
+    def hdel(self, key, *fields):
+        return sum(1 for f in fields if self._hashes.get(key, {}).pop(f, None) is not None)
+
+    def pipeline(self, transaction=True):
+        return FakePipeline(self, transaction=transaction)
 
 
 import api.batch_jobs as _bj  # noqa: E402  (intentionally after sys.modules setup)
 from api.schemas_workflows import BatchSchedule, BatchScheduleUpdate  # noqa: E402
+from services import batch_job_ownership as ownership  # noqa: E402
+from testkit.fake_redis_pipeline import FakePipeline  # noqa: E402
 
 
 def _seed_schedule(redis, schedule_id="sched-1", enabled=True):
@@ -282,6 +306,7 @@ def _seed_schedule(redis, schedule_id="sched-1", enabled=True):
         next_run=datetime.now(tz=timezone.utc),
     )
     redis.set(_bj._get_schedule_key(schedule_id), schedule.model_dump_json())
+    redis.hset(ownership.owners_key(ownership.SCHEDULES), schedule_id, "test")  # #21650: the callers below are "test"
     return schedule
 
 

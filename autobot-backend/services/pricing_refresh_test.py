@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llm_shared.pricing.sources import ModelPricing
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # ModelPricing round-trip
@@ -143,24 +143,7 @@ class _DictRedis:
         return 1 if self.data.pop(key, None) is not None else 0
 
     def pipeline(self):
-        return _DictPipeline(self)
-
-
-class _DictPipeline:
-    def __init__(self, redis: _DictRedis) -> None:
-        self._redis, self._queued = redis, []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return None
-
-    def setex(self, key, ttl, value):
-        self._queued.append((key, ttl, value))
-
-    async def execute(self, raise_on_error=True):
-        return [await self._redis.setex(*queued) for queued in self._queued]
+        return FakeAsyncPipeline(self)
 
 
 @pytest.fixture
@@ -563,9 +546,10 @@ def test_beat_cadence_is_env_backed_not_a_fixed_crontab():
     """celery_app.py is heavy/pytest-stubbed (#7766); read its source like celery_beat_registration_test.py."""
     celery_app_src = (Path(__file__).resolve().parents[1] / "celery_app.py").read_text(encoding="utf-8")
 
-    match = re.search(r'"pricing-refresh-daily":\s*\{[^}]*"schedule":\s*([^,\n]+),', celery_app_src)
-    assert match, "pricing-refresh-daily entry not found in celery_app.py beat_schedule"
-    assert match.group(1).strip() == "timedelta(hours=_PRICING_REFRESH_INTERVAL_HOURS)"
+    from testkit.beat_schedule import beat_schedule_entries
+
+    entry = beat_schedule_entries()["pricing-refresh-daily"]
+    assert entry["schedule"] == "timedelta(hours=_PRICING_REFRESH_INTERVAL_HOURS)"
     assert (
         "from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS"
         in celery_app_src

@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.human_admin import refuse_service_principal
 from services.audit_logger import audit_log
 
 logger = get_logger(__name__)
@@ -65,7 +66,7 @@ class AmendRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _resolve_target_user(
+async def _resolve_target_user(
     current_user: Dict[str, Any],
     target_user_id: Optional[str],
     request: Request,
@@ -73,15 +74,19 @@ def _resolve_target_user(
     """Return the effective user_id for the operation.
 
     Admins may supply ?target_user_id=; non-admins always get their own id.
-    Raises 403 if a non-admin supplies a different target_user_id.
+    Raises 403 if a non-admin supplies a different target_user_id. The internal
+    service key is not a tenant admin, so it never reaches another user's
+    memories (owner decision 2026-10-17, #18688); a human admin passes the
+    canonical gate, which refuses a token revoked by a password change.
     """
     caller_id = current_user.get("user_id") or current_user.get("username", "")
     if not target_user_id or target_user_id == caller_id:
         return caller_id
 
-    # Only admins may operate on another user's memories.
+    # Only human admins may operate on another user's memories.
     try:
-        check_admin_permission(request)
+        refuse_service_principal(request)
+        await check_admin_permission(request)
     except HTTPException:
         raise HTTPException(
             status_code=403,
@@ -121,7 +126,7 @@ async def list_memories(
     """
     from memory.transparency import list_user_memories
 
-    user_id = _resolve_target_user(current_user, target_user_id, request)
+    user_id = await _resolve_target_user(current_user, target_user_id, request)
     memories = await list_user_memories(user_id)
 
     await audit_log(
@@ -164,7 +169,7 @@ async def forget_everywhere(
     from memory.transparency import AmbiguousMemoryId  # noqa: PLC0415
     from memory.transparency import forget_everywhere as _forget_everywhere
 
-    user_id = _resolve_target_user(current_user, target_user_id, request)
+    user_id = await _resolve_target_user(current_user, target_user_id, request)
     try:
         results = await _forget_everywhere(user_id, memory_id)
     except AmbiguousMemoryId as exc:
@@ -221,7 +226,7 @@ async def forget_from_store(
     from memory.transparency import forget_memory
 
     _validate_store(store)
-    user_id = _resolve_target_user(current_user, target_user_id, request)
+    user_id = await _resolve_target_user(current_user, target_user_id, request)
     deleted = await forget_memory(user_id, memory_id, store)
 
     if not deleted:
@@ -265,7 +270,7 @@ async def amend_memory(
     For graph entities, delete and recreate via the knowledge graph API.
     """
     _validate_store(store)
-    user_id = _resolve_target_user(current_user, target_user_id, request)
+    user_id = await _resolve_target_user(current_user, target_user_id, request)
 
     if store == "verbatim":
         updated = await _amend_verbatim(user_id, memory_id, body.content)
@@ -308,7 +313,7 @@ async def export_memory(
     """
     from memory.transparency import export_user_memory
 
-    user_id = _resolve_target_user(current_user, target_user_id, request)
+    user_id = await _resolve_target_user(current_user, target_user_id, request)
     payload = await export_user_memory(user_id)
 
     await audit_log(

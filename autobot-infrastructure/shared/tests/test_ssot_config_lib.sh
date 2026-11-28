@@ -367,7 +367,7 @@ fi
 
 out=$(bash -c "
 export HOME='/nonexistent-home-for-ssot-test'
-unset AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_PORT
+unset AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID SLM_NODE_ID AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_PORT
 source '$LIB'
 echo \"\$AUTOBOT_SSH_KEY|\$AUTOBOT_SSH_USER|\$AUTOBOT_SLM_NODE_ID|\$AUTOBOT_VNC_WEB_PORT|\$AUTOBOT_VNC_SERVER_PORT\"
 ")
@@ -399,6 +399,21 @@ echo \"\$AUTOBOT_SSH_USER:\$AUTOBOT_SLM_NODE_ID\"
 ")
 rm -rf "$tmp_root3"
 check "14173: .env override wins for AUTOBOT_SSH_USER/AUTOBOT_SLM_NODE_ID" "$out" "custom-user:99-Custom-Manager"
+
+# --- #19322: SLM_NODE_ID is a deprecated alias of AUTOBOT_SLM_NODE_ID -------------
+out=$(bash -c "
+unset AUTOBOT_SLM_NODE_ID
+export SLM_NODE_ID='77-Legacy'
+source '$LIB' 2>/dev/null
+echo \"\$AUTOBOT_SLM_NODE_ID\"
+")
+check "19322: the legacy name is honoured when the canonical one is unset" "$out" "77-Legacy"
+out=$(bash -c "
+export AUTOBOT_SLM_NODE_ID='00-SLM-Manager' SLM_NODE_ID='77-Legacy'
+source '$LIB' 2>/dev/null
+echo \"\$AUTOBOT_SLM_NODE_ID\"
+")
+check "19322: the canonical name wins, even set to the default value" "$out" "00-SLM-Manager"
 
 # --- DENIAL / reproduction: status-all-vms.sh's own "SSH key not found"
 #     guard used to fire even when a real key existed at the conventional
@@ -463,7 +478,23 @@ else
     pass=$((pass + 1))
 fi
 
-_distinct_vars=$(git_tracked_files "$REPO_ROOT" -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
+# One `git grep` process over the index, not `ls-files | xargs grep 2>/dev/null` (#21947): the
+# pipeline discarded stderr and every exit status, so a grep or git that failed under host load
+# (killed, EAGAIN, a transient index read error) produced a SHORT list that read as "the matcher
+# regressed". Here the exit status and stderr are kept and reported: 0 = matches, 1 = none, >1 = the
+# scan itself failed, which is never a verdict on the matcher.
+_scan_err="$(mktemp)"
+_scan_out=$(
+    unset "${GIT_ROOT_AMBIENT_VARS[@]}"
+    git -C "$REPO_ROOT" -c grep.lineNumber=false -c grep.column=false grep --no-color -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' -- '*.sh' 2>"$_scan_err"
+)
+_scan_rc=$?
+if [ "$_scan_rc" -gt 1 ]; then
+    echo "FAIL: reach self-check's scan itself failed (git grep exit $_scan_rc): $(head -c 400 "$_scan_err")"
+    fail=$((fail + 1))
+fi
+rm -f "$_scan_err"
+_distinct_vars=$(printf '%s\n' "$_scan_out" | sed -E 's/^\$\{?//' | sort -u)
 _distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
 # 59, not 61: #15127 retired
 # autobot-infrastructure/shared/scripts/utilities/load-env.sh, which was the only
@@ -495,6 +526,25 @@ for _fam_var in AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \
         fail=$((fail + 1))
     fi
 done
+
+# --- #19232: Redis DB numbers come from redis-databases.yaml, overrides vetted like Python --
+_db() { env -i PATH="$PATH" "$@" bash -c "source '$LIB'; autobot_redis_db \"\$_DB_NAME\"" 2>&1; }
+out=$(_db _DB_NAME=celery_broker)
+check "19232: celery_broker from the YAML, no literal" "$out" "14"
+out=$(_db _DB_NAME=knowledge AUTOBOT_REDIS_DB_MAIN=12 AUTOBOT_REDIS_DB_KNOWLEDGE=0)
+check "19232: a valid override moves the database" "$out" "0"
+out=$(_db _DB_NAME=workflows AUTOBOT_REDIS_DB_TASKS=12)
+check "19232: legacy AUTOBOT_REDIS_DB_TASKS still means workflows" "$out" "12"
+out=$(_db _DB_NAME=main AUTOBOT_REDIS_DB_MAIN=zero)
+check "19232: a non-numeric override is refused, said, and the YAML number kept" "$out" \
+    "ssot-config.sh: refused AUTOBOT_REDIS_DB_MAIN=zero: not a Redis database number (0-15) (keeping redis-databases.yaml)
+0"
+out=$(_db _DB_NAME=testing AUTOBOT_REDIS_DB_TESTING=15)
+check "19232: an override colliding with celery_results is refused, said, and the YAML number kept" "$out" \
+    "ssot-config.sh: refused AUTOBOT_REDIS_DB_TESTING=15: collides with celery_results (keeping redis-databases.yaml)
+13"
+env -i PATH="$PATH" bash -c "source '$LIB'; autobot_redis_db nope" >/dev/null 2>&1
+check "19232: an undeclared database fails rather than defaulting" "$?" "1"
 
 echo
 echo "=== $pass passed, $fail failed ==="

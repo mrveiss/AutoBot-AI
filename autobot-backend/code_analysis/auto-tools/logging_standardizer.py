@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
-from datetime import datetime, timezone  # noqa: E402
 from typing import Dict, Tuple  # noqa: E402
 
 from tool_base import ConsoleLogToolBase  # noqa: E402
@@ -176,62 +175,7 @@ class DevLoggingFixer(ConsoleLogToolBase):
     REPORT_HELP = "Path for the conversion report"
     REPORT_COUNT_KEY = "console_logs_converted"
     ERROR_MESSAGE = "File standardization failed"
-
-    def __init__(self, project_root: str, backup_dir: str = None):
-        self.project_root = Path(project_root)
-        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / ".dev-logging-backups"
-        self.report = {
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "files_processed": 0,
-            "files_modified": 0,
-            "console_logs_converted": 0,
-            "errors": [],
-            "details": [],
-        }
-
-        # Directories to skip
-        self.skip_dirs = {
-            "node_modules",
-            "dist",
-            "build",
-            ".git",
-            "__pycache__",
-            "coverage",
-            ".next",
-            ".nuxt",
-            "out",
-            "tests",
-            "test",
-            "__tests__",
-            "e2e",
-            ".cache",
-            "temp",
-            "tmp",
-        }
-
-        # File extensions to process
-        self.target_extensions = {".js", ".jsx", ".ts", ".tsx", ".vue", ".mjs"}
-
-    def should_process_file(self, file_path: Path) -> bool:
-        """Check if file should be processed."""
-        # Skip if in excluded directory
-        for part in file_path.parts:
-            if part in self.skip_dirs:
-                return False
-
-        # Check file extension
-        if file_path.suffix not in self.target_extensions:
-            return False
-
-        # Skip test files
-        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
-            return False
-
-        # Skip minified files
-        if ".min." in file_path.name:
-            return False
-
-        return True
+    BACKUP_DIR_NAME = ".dev-logging-backups"
 
     def _get_dev_logger_js_code(self) -> str:
         """

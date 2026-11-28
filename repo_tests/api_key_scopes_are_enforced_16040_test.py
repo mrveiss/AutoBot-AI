@@ -51,6 +51,9 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
+
 from ._paths import repo_root
 
 SLM = repo_root() / "autobot-slm-backend"
@@ -75,7 +78,7 @@ def _function(tree: ast.Module, name: str) -> ast.AST:
 
 def test_admin_is_not_taken_from_the_user_alone() -> None:
     """`admin` must depend on the key, or a narrow key carries full authority."""
-    tree = ast.parse(_source(AUTH))
+    tree = parse_cache.parse(_source(AUTH))
     func = _function(tree, "get_api_key_user")
 
     returns = [n for n in ast.walk(func) if isinstance(n, ast.Return) and isinstance(n.value, ast.Dict)]
@@ -116,7 +119,7 @@ _PAYLOAD_CLAIMS = {
 @pytest.mark.parametrize("claim", sorted(_PAYLOAD_CLAIMS))
 def test_the_payload_carries_what_the_decision_reads(claim: str) -> None:
     """#16294: this must hold before any route accepts a key."""
-    tree = ast.parse(_source(AUTH))
+    tree = parse_cache.parse(_source(AUTH))
     func = _function(tree, "get_api_key_user")
     returns = [n for n in ast.walk(func) if isinstance(n, ast.Return) and isinstance(n.value, ast.Dict)]
     assert returns, "get_api_key_user no longer returns a dict literal; re-derive this guard"
@@ -143,8 +146,7 @@ def test_scope_matching_has_exactly_one_implementation() -> None:
 
 
 def _is_test_module(relative: Path) -> bool:
-    name = relative.name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in relative.parts
+    return is_test_filename(relative.name, include_js=False) or "tests" in relative.parts
 
 
 def _production_modules(root: Path) -> list[Path]:
@@ -198,7 +200,7 @@ def _uses_outside(name: str, allowed_owner: str) -> list[str]:
     """Every use of *name* in the SLM backend except inside ``services/auth.py``'s *allowed_owner*."""
     offenders = []
     for path in _slm_modules():
-        for owner in _references(ast.parse(path.read_text(encoding="utf-8")), name):
+        for owner in _references(parse_cache.parse(path.read_text(encoding="utf-8")), name):
             if not (path == AUTH and owner == allowed_owner):
                 offenders.append(f"{path.relative_to(SLM)} ({owner or 'module or class level'})")
     return offenders
@@ -249,7 +251,7 @@ def test_the_key_allow_list_is_exactly_the_owners() -> None:
         (str(path.relative_to(SLM)), owner)
         for path in _slm_modules()
         if path != AUTH
-        for owner in _references(ast.parse(path.read_text(encoding="utf-8")), "require_key_permission")
+        for owner in _references(parse_cache.parse(path.read_text(encoding="utf-8")), "require_key_permission")
     }
 
     assert members == set(_KEY_ALLOW_LIST), (
@@ -313,7 +315,7 @@ def _key_header_reads(tree: ast.Module) -> list[int]:
 )
 def test_the_header_detector_finds_reads_and_only_reads(source: str, flagged: bool) -> None:
     """Negative and positive controls for the two guards below."""
-    assert bool(_key_header_reads(ast.parse(source))) is flagged
+    assert bool(_key_header_reads(parse_cache.parse(source))) is flagged
 
 
 def test_the_slm_reads_the_key_header_only_where_keys_are_handled() -> None:
@@ -327,7 +329,7 @@ def test_the_slm_reads_the_key_header_only_where_keys_are_handled() -> None:
     for path in _slm_modules():
         if path in (AUTH, KEY_MIDDLEWARE):
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         named = [n.lineno for n in ast.walk(tree) if _is_key_header(n)]
         offenders += [f"{path.relative_to(SLM)}:{line}" for line in sorted(set(named + _key_header_reads(tree)))]
 
@@ -354,7 +356,7 @@ def test_the_main_backend_accepts_no_user_api_key() -> None:
 
     offenders = []
     for path in modules:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         where = str(path.relative_to(BACKEND))
         offenders += [f"{where}:{line} reads X-API-Key" for line in _key_header_reads(tree)]
         if path != _LLC_AGENT_KEY and _references(tree, "validate_key"):

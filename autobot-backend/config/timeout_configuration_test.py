@@ -18,17 +18,17 @@ from unittest.mock import PropertyMock, patch
 import pytest
 
 from autobot_shared.ssot_config import config
-from config import UnifiedConfigManager
+from config import ConfigManager
 from knowledge.documents import DocumentsMixin
 from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts, kb_timeouts
 
 
 class TestUnifiedConfigTimeouts:
-    """Test UnifiedConfigManager timeout methods"""
+    """Test ConfigManager timeout methods"""
 
     def setup_method(self):
         """Setup for each test"""
-        self.config = UnifiedConfigManager()
+        self.config = ConfigManager()
 
     def test_get_timeout_for_env_production(self):
         """Test environment-specific timeout retrieval for production"""
@@ -201,7 +201,7 @@ class TestBackwardCompatibility:
 
     def setup_method(self):
         """Setup for each test"""
-        self.config = UnifiedConfigManager()
+        self.config = ConfigManager()
 
     def test_legacy_config_get_returns_none_without_timeout_config(self):
         """Config.get() returns None when timeouts section is absent"""

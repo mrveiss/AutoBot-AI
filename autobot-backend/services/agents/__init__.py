@@ -9,10 +9,10 @@ Agents Package - Autonomous subagent spawning and coordination (#4348)
 from .subagent_manager import SubagentManager
 from .subagent_spawner import SubagentSpawner
 from .subagent_task import (
-    ConflictResolution,
+    SubagentConflictResolution,
     SubagentTask,
+    SubagentTaskResult,
     TaskPriority,
-    TaskResult,
     TaskStatus,
 )
 
@@ -20,8 +20,8 @@ __all__ = [
     "SubagentSpawner",
     "SubagentManager",
     "SubagentTask",
-    "TaskResult",
+    "SubagentTaskResult",
     "TaskStatus",
     "TaskPriority",
-    "ConflictResolution",
+    "SubagentConflictResolution",
 ]

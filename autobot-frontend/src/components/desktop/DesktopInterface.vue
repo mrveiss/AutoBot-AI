@@ -203,9 +203,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { HttpError, RequestTimeoutError, saveUrl } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-// MIGRATED: Removed environment.js, using AppConfig.js only
-import appConfig from '@/config/AppConfig.js'
+import { getApiBase } from '@/config/ssot-config'
+import { buildVncBaseUrl, buildVncClientUrl, DESKTOP_VM_HOST_ID, VNC_CLIENT_PATH, VNC_PROBE_TIMEOUT_MS } from '@/config/vnc-client'
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
@@ -215,6 +216,9 @@ import ApiClient from '@/utils/ApiClient'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useDesktopControlLock } from '@/composables/useDesktopControlLock'
 import { createLogger } from '@/utils/debugUtils'
+import { useChatStore } from '@/stores/useChatStore'
+import { controlErrorText } from '@/components/desktop/controlErrors'
+import { desktopVmBlockedKey } from '@/composables/useDesktopVm'
 import type { SelectorHost } from '@/composables/useHostSelector'
 
 /** Optional host prop — when provided, drives the VNC URL directly from the
@@ -234,13 +238,9 @@ const { wrap: wrapCheckConnection } = useLoadingState()
 const errorVnc = ref<Error | null>(null)
 const errorCheck = ref<Error | null>(null)
 
-// Issue #12002 (#11506 T1): DesktopInterface has no real per-session context
-// of its own (single canonical shared desktop -- no chat session/route param
-// here to mirror #11539/#11579's session_id threading against). "default" is
-// the SAME literal both composables already defaulted to independently;
-// naming it here ties them together explicitly instead of relying on two
-// separate defaults coincidentally matching.
-const DESKTOP_CONTROL_SESSION_ID = 'default'
+// #22145: every control acts on the host being shown, so the selected /secrets host
+// id is both the control target and the control-lock key. No host, no controls.
+const selectedHostId = computed(() => props.host?.id ?? '')
 
 // VNC controls (Issue #74)
 // #12931: the shared composable from @autobot/vnc, with this app's ApiClient
@@ -248,7 +248,8 @@ const DESKTOP_CONTROL_SESSION_ID = 'default'
 // preserved — the plugin package cannot import ApiClient itself (vue is its only
 // peer dependency), which is why the transport is a parameter.
 const vncControls = useVncControls({
-  sessionId: DESKTOP_CONTROL_SESSION_ID,
+  baseUrl: getApiBase(),
+  hostId: () => selectedHostId.value,
   request: <T,>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> =>
     method === 'GET' ? ApiClient.get<T>(path) : ApiClient.post<T>(path, body),
 })
@@ -263,7 +264,7 @@ const {
   refreshStatus: refreshControlLockStatus,
   takeControl,
   releaseControl
-} = useDesktopControlLock('desktop', DESKTOP_CONTROL_SESSION_ID)
+} = useDesktopControlLock(selectedHostId)
 
 const controlLockLabel = computed(() => {
   if (!humanActive.value) return t('desktop.controlLock.agentHasControl')
@@ -314,21 +315,19 @@ const openInNewWindow = (): void => {
 const vncUrl = ref('') // Will be loaded on mount
 
 /** Build VNC URL from a SelectorHost record (Issue #4977). */
-const buildHostVncUrl = (h: SelectorHost): string => {
-  const port = h.vnc_port || 6080
-  const scheme = window.location.protocol === 'https:' ? 'https' : 'http'
-  return `${scheme}://${h.host}:${port}/vnc.html?autoconnect=true`
-}
+const chatStore = useChatStore()
+const buildHostVncUrl = (h: SelectorHost): string =>
+  chatStore.currentSessionId ? chatStore.getDesktopUrl(chatStore.currentSessionId, h) : buildVncClientUrl(h)
 
-// Load dynamic VNC URL on component mount
+let loadGeneration = 0 // bumped per load: a blocked check from a superseded load is stale (#22144, as useDesktopControlLock)
 const loadVncUrlFn = async () => {
   // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
-  if (props.host) {
-    vncUrl.value = buildHostVncUrl(props.host)
-  } else {
-    const dynamicVncUrl = await appConfig.getVncUrl('desktop');
-    vncUrl.value = dynamicVncUrl;
-  }
+  if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
+  const startedIn = ++loadGeneration
+  const blocked = props.host.id === DESKTOP_VM_HOST_ID ? await desktopVmBlockedKey() : null
+  if (startedIn !== loadGeneration) return // the selection changed while the check was in flight
+  if (blocked) { vncUrl.value = ''; return handleDesktopError(new Error(t(blocked))) }  // localised state, no iframe; blocked until a lookup succeeds
+  vncUrl.value = buildHostVncUrl(props.host)
   // Clear any previous errors and update status
   error.value = null;
   loading.value = false;
@@ -348,7 +347,7 @@ const loadVncUrl = async () => {
     } else if (err.message && err.message.includes('Network Error')) {
       error.value = t('desktop.interface.errorNetworkConnectivity');
       connectionStatus.value = 'Network Error';
-    } else if (err.message && err.message.includes('timeout')) {
+    } else if (err instanceof RequestTimeoutError) { // by class only (#21581): this path makes no request today, so only the client's typed timeout counts
       error.value = t('desktop.interface.errorConfigTimeout');
       connectionStatus.value = 'Timeout';
     } else {
@@ -403,10 +402,12 @@ const toggleFullscreen = () => {
   }
 }
 
-const reconnect = () => {
+const reconnect = async () => {
   error.value = null
   loading.value = true
   connectionStatus.value = 'Connecting...'
+  await loadVncUrl() // repeats the URL initialisation and the blocked check: a registry down at mount may be back
+  if (!vncUrl.value || error.value) return
 
   // Reload the VNC iframe with cache-bust to force refresh
   if (vncFrame.value) {
@@ -418,26 +419,25 @@ const reconnect = () => {
 }
 
 const checkConnectionFn = async () => {
-  // Check the actual desktop VNC server health (backend server)
-  const vncBaseUrl = await appConfig.getServiceUrl('vnc_desktop');
-
-  // Create controller for timeout
+  // Probe the SELECTED host's noVNC server (#22144), never AutoBot's own.
+  if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-  const response = await fetch(`${vncBaseUrl}/vnc.html`, {
+  const timeoutId = setTimeout(() => controller.abort(), VNC_PROBE_TIMEOUT_MS);
+  // eslint-disable-next-line no-restricted-syntax -- probes the VNC server, a different origin; no-cors gives an opaque response
+  const response = await fetch(`${buildVncBaseUrl(props.host)}${VNC_CLIENT_PATH}`, {
     method: 'HEAD',
+    mode: 'no-cors',
     signal: controller.signal
   });
-
   clearTimeout(timeoutId);
 
-  if (response.ok) {
+  if (!vncUrl.value) return // a reachable server must not hide a blocked or unloaded viewer
+  if (response.ok || response.type === 'opaque') {
     connectionStatus.value = 'Connected'
     loading.value = false
     error.value = null
   } else {
-    throw new Error(`HTTP ${response.status}`)
+    throw new HttpError(response.status)
   }
 }
 
@@ -529,7 +529,7 @@ async function takeScreenshot() {
     showScreenshotModal.value = true
   } else {
     logger.error('Screenshot failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -542,7 +542,7 @@ async function handleTypeText() {
     showTypeDialog.value = false
   } else {
     logger.error('Type text failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -550,7 +550,7 @@ async function sendCtrlAltDel() {
   const result = await vncControls.sendCtrlAltDel()
   if (result.status !== 'success') {
     logger.error('Ctrl+Alt+Del failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -560,7 +560,7 @@ async function pasteFromClipboard() {
     const result = await vncControls.syncClipboard(text)
     if (result.status !== 'success') {
       logger.error('Clipboard sync failed:', result.message)
-      error.value = result.message
+      error.value = controlErrorText(result, t)
     }
   } catch (err) {
     logger.error('Clipboard read failed:', err)
@@ -571,10 +571,7 @@ async function pasteFromClipboard() {
 function downloadScreenshot() {
   if (!screenshotData.value) return
 
-  const link = document.createElement('a')
-  link.href = screenshotData.value
-  link.download = `desktop-screenshot-${Date.now()}.png`
-  link.click()
+  saveUrl(screenshotData.value, `desktop-screenshot-${Date.now()}.png`)
 }
 
 onUnmounted(() => {
@@ -709,7 +706,7 @@ onUnmounted(() => {
 .screenshot-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -759,7 +756,7 @@ onUnmounted(() => {
 .download-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -801,7 +798,7 @@ onUnmounted(() => {
 .type-dialog-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -861,7 +858,7 @@ onUnmounted(() => {
 .type-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -885,7 +882,7 @@ onUnmounted(() => {
   width: 20rem;
   height: 100%;
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-10);
   padding: var(--spacing-4);
   background-color: var(--bg-card);
   border-left: 1px solid var(--border-default);

@@ -47,7 +47,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [Role.__table__, LLCRoleAssignment.__table__, LLCCompanyMembership.__table__]
+    tables = [m.__table__ for m in (harness.LLCActivityLog, Role, LLCRoleAssignment, LLCCompanyMembership)]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)

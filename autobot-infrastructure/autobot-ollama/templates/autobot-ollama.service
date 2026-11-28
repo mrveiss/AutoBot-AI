@@ -14,6 +14,11 @@
 Description=AutoBot Ollama - Local LLM Service
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network.target
+# #20620, #4090: a restarting unit must be able to reach `failed`. The window has to exceed
+# RestartSec * StartLimitBurst, or the limit is never hit and the unit loops forever while
+# showing `activating`. Same values as the role-rendered units.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple

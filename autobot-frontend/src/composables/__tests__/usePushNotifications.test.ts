@@ -24,7 +24,7 @@ vi.mock('@/utils/ApiClient', () => ({
 const mockFetchWithAuth = vi.fn()
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: mockFetchWithAuth }))
 
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
+vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => '' }))
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }))

@@ -13,8 +13,9 @@
  */
 
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { BaseAlert, BaseModal, createLogger, createDateFormatter } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import i18n from '@/i18n'
 
 const logger = createLogger('DeploymentLogViewer')
 
@@ -56,36 +57,36 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 function getLogClass(logType: string): string {
   switch (logType) {
     case 'success':
-      return 'text-green-400'
+      return 'text-autobot-success'
     case 'error':
-      return 'text-red-400'
+      return 'text-autobot-error'
     case 'warning':
-      return 'text-yellow-400'
+      return 'text-autobot-warning'
     case 'task':
-      return 'text-blue-400 font-semibold'
+      return 'text-autobot-info font-semibold'
     case 'info':
-      return 'text-cyan-400'
+      return 'text-autobot-info'
     default:
-      return 'text-gray-300'
+      return 'text-autobot-text-tertiary'
   }
 }
 
 function getStatusBadgeClass(s: string): string {
   switch (s) {
     case 'completed':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'in_progress':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'failed':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     case 'cancelled':
-      return 'bg-orange-100 text-orange-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'connecting':
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -188,14 +189,7 @@ function scrollToBottom(): void {
   })
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
+const formatTime = createDateFormatter({ kind: 'time', locale: () => String(i18n.global.locale), intl: { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 watch(
   () => props.visible,
@@ -233,127 +227,92 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
+  <BaseModal
     v-if="visible"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    @click.self="emit('close')"
-    @keydown.escape="emit('close')"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="deployment-log-title"
+    :model-value="true"
+    :title="$t('deploymentLogViewer.deploymentLog')"
+    width="56rem"
+    :close-label="$t('deploymentLogViewer.closeDeploymentLog')"
+    @close="emit('close')"
   >
-    <div class="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[80vh] flex flex-col">
-      <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <div class="flex items-center gap-3">
-          <h3 id="deployment-log-title" class="text-lg font-semibold text-white">{{ $t('deploymentLogViewer.deploymentLog') }}</h3>
-          <span class="text-sm text-gray-400">{{ deploymentId }}</span>
-          <span
-            :class="[
-              'px-2 py-0.5 text-xs font-medium rounded-full',
-              getStatusBadgeClass(status),
-            ]"
-            role="status"
-          >
-            {{ status }}
-          </span>
-        </div>
-        <button
-          @click="emit('close')"
-          class="text-gray-400 hover:text-white transition-colors"
-          :aria-label="$t('deploymentLogViewer.closeDeploymentLog')"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Progress Bar -->
-      <div v-if="progress > 0" class="px-4 py-2 border-b border-gray-700">
-        <div class="flex items-center gap-3">
-          <div
-            class="flex-1 bg-gray-700 rounded-full h-2"
-            role="progressbar"
-            :aria-valuenow="progress"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-label="$t('deploymentLogViewer.deploymentProgressAria', { percent: progress })"
-          >
-            <div
-              class="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              :style="{ width: `${progress}%` }"
-            />
-          </div>
-          <span class="text-sm text-gray-400 w-12 text-right" aria-hidden="true">{{ progress }}%</span>
-        </div>
-      </div>
-
-      <!-- Log Container -->
-      <div
-        ref="logContainer"
-        class="flex-1 overflow-y-auto p-4 font-mono text-sm bg-gray-950"
-        role="log"
-        :aria-label="$t('deploymentLogViewer.deploymentLogOutput')"
-        aria-live="polite"
+    <template #subtitle>
+      <span class="text-sm text-muted">{{ deploymentId }}</span>
+      <span
+        :class="[
+          'ml-2 px-2 py-0.5 text-xs font-medium rounded-full',
+          getStatusBadgeClass(status),
+        ]"
+        role="status"
       >
+        {{ status }}
+      </span>
+    </template>
+
+    <!-- Progress Bar -->
+    <div v-if="progress > 0" class="pb-3">
+      <div class="flex items-center gap-3">
         <div
-          v-for="(log, index) in logs"
-          :key="index"
-          class="flex gap-2 py-0.5"
+          class="flex-1 bg-tertiary rounded-full h-2"
+          role="progressbar"
+          :aria-valuenow="progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="$t('deploymentLogViewer.deploymentProgressAria', { percent: progress })"
         >
-          <span class="text-gray-500 shrink-0">{{ formatTime(log.timestamp) }}</span>
-          <span :class="getLogClass(log.log_type)">{{ log.message }}</span>
+          <div
+            class="bg-autobot-primary h-2 rounded-full transition-all duration-300"
+            :style="{ width: `${progress}%` }"
+          />
         </div>
-        <div v-if="logs.length === 0" class="text-gray-500 italic">
-          {{ $t('deploymentLogViewer.waitingForDeploymentLogs') }}
-        </div>
+        <span class="text-sm text-muted w-12 text-right" aria-hidden="true">{{ progress }}%</span>
       </div>
+    </div>
 
-      <!-- Error Footer -->
+    <!-- Log Container -->
+    <div
+      ref="logContainer"
+      class="max-h-[60vh] overflow-y-auto p-4 font-mono text-sm bg-autobot-bg-tertiary rounded"
+      role="log"
+      :aria-label="$t('deploymentLogViewer.deploymentLogOutput')"
+      aria-live="polite"
+    >
       <div
-        v-if="error"
-        class="px-4 py-3 bg-red-900 border-t border-red-700 text-red-200"
-        role="alert"
+        v-for="(log, index) in logs"
+        :key="index"
+        class="flex gap-2 py-0.5"
       >
-        <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path
-              fill-rule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-              clip-rule="evenodd"
-            />
-          </svg>
-          <span>{{ error }}</span>
-        </div>
+        <span class="text-autobot-text-tertiary shrink-0">{{ formatTime(log.timestamp) }}</span>
+        <span :class="getLogClass(log.log_type)">{{ log.message }}</span>
       </div>
+      <div v-if="logs.length === 0" class="text-autobot-text-tertiary italic">
+        {{ $t('deploymentLogViewer.waitingForDeploymentLogs') }}
+      </div>
+    </div>
 
-      <!-- Footer -->
-      <div class="flex items-center justify-between px-4 py-3 border-t border-gray-700">
+    <!-- Error -->
+    <BaseAlert v-if="error" variant="error" class="mt-3" :message="error" />
+
+    <template #actions>
+      <div class="flex w-full items-center justify-between">
         <div class="flex items-center gap-2" role="status" :aria-label="isConnected ? 'WebSocket connected' : 'WebSocket disconnected'">
           <span
             :class="[
               'w-2 h-2 rounded-full',
-              isConnected ? 'bg-green-500' : 'bg-red-500',
+              isConnected ? 'bg-autobot-dot-ok' : 'bg-autobot-dot-bad',
             ]"
             aria-hidden="true"
           />
-          <span class="text-sm text-gray-400">
+          <span class="text-sm text-muted">
             {{ isConnected ? $t('deploymentLogViewer.connected') : $t('deploymentLogViewer.disconnected') }}
           </span>
         </div>
         <button
           @click="emit('close')"
-          class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+          class="btn btn-secondary"
         >
           {{ $t('deploymentLogViewer.close') }}
         </button>
       </div>
-    </div>
-  </div>
+    </template>
+  </BaseModal>
 </template>

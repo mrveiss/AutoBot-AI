@@ -22,9 +22,6 @@ recur silently.
 
 from __future__ import annotations
 
-import sys
-import types
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -139,75 +136,47 @@ async def test_generate_ai_response_does_not_call_legacy_generate_response(make_
     llm_service.chat.assert_awaited_once()
 
 
-class TestGetLlmServiceResolvesTheCanonicalModule:
-    """#7047's first defect: a function-scoped ``from llm_service import ...``
-    naming a module that does not exist, so it raised ModuleNotFoundError on
-    the first chat request rather than at import time.
+@pytest.mark.asyncio
+async def test_thinking_on_reaches_the_final_anthropic_sdk_kwargs(make_llm_response: Any) -> None:
+    """#20922: the thinking toggle and budget of a chat reach the SDK request, shaped for the model."""
+    from api.chat import _generate_ai_response
+    from llm_shared.models import LLMRequest
+    from llm_shared.providers.anthropic import AnthropicProvider
 
-    This used to assert the import *statement* appeared in
-    ``inspect.getsource(get_llm_service)`` (#13311) -- which passes when the
-    literal sits in a dead branch and fails on any refactor that moves it.
-    Swapping the module in ``sys.modules`` and observing which class the
-    accessor constructs proves the lookup actually happens, and where.
-    """
+    llm_service = AsyncMock()
+    llm_service.chat = AsyncMock(return_value=make_llm_response(content="ok", error=None))
 
-    @pytest.fixture
-    def canonical_module(self, monkeypatch):
-        """Install a sentinel at the canonical path and yield its class."""
-        sentinel_cls = type("SentinelLLMService", (), {})
-        module = types.ModuleType("services.llm_service")
-        module.LLMService = sentinel_cls
-        monkeypatch.setitem(sys.modules, "services.llm_service", module)
-        return sentinel_cls
+    await _generate_ai_response(
+        llm_service=llm_service,
+        llm_context=[{"role": "user", "content": "hi"}],
+        session_id="s-1",
+        request_id="r-1",
+        reasoning_effort="auto",
+        thinking=(True, 6000),
+    )
 
-    @staticmethod
-    def _request():
-        return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    metadata = llm_service.chat.await_args.kwargs["metadata"]
+    request = LLMRequest(messages=[{"role": "user", "content": "hi"}], metadata=metadata)
+    provider = AnthropicProvider(settings={"api_key": "k"})
+    legacy, _headers, _preserve = provider._build_request_kwargs("claude-sonnet-4-5", request)
+    assert legacy["thinking"] == {"type": "enabled", "budget_tokens": 6000}
+    adaptive, _headers, _preserve = provider._build_request_kwargs("claude-opus-4-7", request)
+    assert adaptive["thinking"] == {"type": "adaptive"}
 
-    def test_constructs_the_class_from_services_llm_service(self, canonical_module) -> None:
-        from api.chat import get_llm_service
 
-        service = get_llm_service(self._request())
+@pytest.mark.asyncio
+async def test_thinking_off_sends_no_thinking_and_keeps_the_effort(make_llm_response: Any) -> None:
+    from api.chat import _generate_ai_response
 
-        assert isinstance(service, canonical_module), (
-            "get_llm_service resolved something other than "
-            "services.llm_service.LLMService -- the canonical post-#3185 path"
-        )
+    llm_service = AsyncMock()
+    llm_service.chat = AsyncMock(return_value=make_llm_response(content="ok", error=None))
 
-    def test_result_is_cached_on_app_state(self, canonical_module) -> None:
-        """Lazy init is what let the broken import fire late; the caching half
-        of that contract still has to hold."""
-        from api.chat import get_llm_service
+    await _generate_ai_response(
+        llm_service=llm_service,
+        llm_context=[{"role": "user", "content": "hi"}],
+        session_id="s-1",
+        request_id="r-1",
+        reasoning_effort="high",
+    )
 
-        request = self._request()
-        first = get_llm_service(request)
-        second = get_llm_service(request)
-
-        assert first is second
-        assert request.app.state.llm_service is first
-
-    # A ``pytest.raises(ModuleNotFoundError): import_module("llm_service")``
-    # check lived here and was dropped: its premise is a global sys.path /
-    # sys.modules property that conftest's ``services.llm_service`` stub and
-    # sibling suites can invalidate, so it passed alone and failed in the
-    # sharded run. It was also redundant --
-    # ``test_constructs_the_class_from_services_llm_service`` above already
-    # goes red when the import is pointed at the legacy module name.
-
-    def test_a_broken_import_surfaces_rather_than_silently_returning_none(self, monkeypatch) -> None:
-        """``lazy_init_singleton`` swallows factory exceptions and returns None.
-
-        That is exactly how #7047 stayed invisible, so pin the observable:
-        a caller must be able to tell resolution failed.
-        """
-        from api.chat import get_llm_service
-
-        broken = types.ModuleType("services.llm_service")
-
-        def _explode(*_args, **_kwargs):
-            raise ModuleNotFoundError("No module named 'llm_service'")
-
-        broken.LLMService = _explode
-        monkeypatch.setitem(sys.modules, "services.llm_service", broken)
-
-        assert get_llm_service(self._request()) is None
+    assert llm_service.chat.await_args.kwargs["metadata"] == {"api_kwargs": {"reasoning_effort": "high"}}

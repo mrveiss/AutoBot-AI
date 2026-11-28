@@ -346,7 +346,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, createRecencyFormatter } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -355,7 +355,7 @@ import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const logger = createLogger('CodeReviewDashboard')
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
@@ -363,7 +363,7 @@ const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
 /** Return params object merged with source_id when a sourceId is available. */
-function withSourceIdParams(params: Record<string, unknown> = {}): Record<string, unknown> {
+function withSourceIdParams(params: Record<string, string> = {}): Record<string, string> {
   const id = sourceId.value
   if (!id) return params
   return { ...params, source_id: id }
@@ -591,16 +591,11 @@ function selectIssue(issue: ReviewIssue) {
   selectedIssue.value = issue
 }
 
-function formatDate(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return t('analytics.codeReview.justNow')
-  if (diff < 3600000) return t('analytics.codeReview.minutesAgo', { count: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t('analytics.codeReview.hoursAgo', { count: Math.floor(diff / 3600000) })
-  return date.toLocaleDateString()
-}
+const formatDate = createRecencyFormatter({
+  justNow: () => t('analytics.codeReview.justNow'),
+  locale: () => locale.value,
+  olderThanMs: 86_400_000,
+})
 
 async function runAnalysis() {
   if (!selectedPath.value) {

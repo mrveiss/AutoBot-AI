@@ -16,8 +16,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import KnowledgeScopeSelector from '@/components/knowledge/KnowledgeScopeSelector.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -426,7 +425,7 @@ watch(() => props.modelValue, (newValue) => {
   color: var(--text-primary);
 }
 
-.preview-header i {
+.preview-header .icon {
   color: var(--color-primary);
 }
 
@@ -491,7 +490,7 @@ watch(() => props.modelValue, (newValue) => {
   color: var(--text-primary);
 }
 
-.form-label i {
+.form-label .icon {
   color: var(--text-secondary);
 }
 
@@ -577,8 +576,8 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-success);
 }
 
-.tag-chip.add i {
-  font-size: 0.5rem;
+.tag-chip.add .icon {
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .tag-chip.remove {
@@ -587,8 +586,8 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-error);
 }
 
-.tag-chip.remove i {
-  font-size: 0.5rem;
+.tag-chip.remove .icon {
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .common-indicator {

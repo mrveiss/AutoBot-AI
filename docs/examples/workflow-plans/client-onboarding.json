@@ -1,0 +1,251 @@
+{
+  "schema_version": "0.2.0",
+  "key": "client-onboarding",
+  "revision": 1,
+  "name": "AutoBot LLC client onboarding",
+  "industry": "consulting",
+  "headcount": 6,
+  "entry_point": "org_chart",
+  "starts_at": "A signed order form arrives",
+  "ends_at": "The client has a working account and a welcome message",
+  "status": "labeled",
+  "lanes": [
+    {
+      "key": "sales",
+      "name": "Sales",
+      "holder_kind": "user",
+      "role_id": "00000000-0000-4000-8000-000000000001",
+      "position": 0
+    },
+    {
+      "key": "ops",
+      "name": "Operations",
+      "holder_kind": "user",
+      "role_id": "00000000-0000-4000-8000-000000000002",
+      "position": 1
+    },
+    {
+      "key": "client",
+      "name": "Client",
+      "holder_kind": "customer",
+      "position": 2
+    }
+  ],
+  "steps": [
+    {
+      "key": "receive",
+      "lane_key": "sales",
+      "label": "Receive the order form",
+      "position": 0
+    },
+    {
+      "key": "check",
+      "lane_key": "sales",
+      "label": "Check the order details",
+      "position": 1
+    },
+    {
+      "key": "setup",
+      "lane_key": "ops",
+      "label": "Set up the account",
+      "position": 2
+    },
+    {
+      "key": "confirm",
+      "lane_key": "client",
+      "label": "Confirm the details",
+      "position": 3
+    },
+    {
+      "key": "welcome",
+      "lane_key": "ops",
+      "label": "Send the welcome message",
+      "position": 4
+    }
+  ],
+  "edges": [
+    {
+      "from_step": "receive",
+      "to_step": "check"
+    },
+    {
+      "from_step": "check",
+      "to_step": "setup"
+    },
+    {
+      "from_step": "setup",
+      "to_step": "confirm"
+    },
+    {
+      "from_step": "confirm",
+      "to_step": "welcome"
+    }
+  ],
+  "handoffs": [
+    {
+      "key": "check->setup",
+      "from_step": "check",
+      "to_step": "setup",
+      "from_lane": "sales",
+      "to_lane": "ops",
+      "wait_note": null
+    },
+    {
+      "key": "setup->confirm",
+      "from_step": "setup",
+      "to_step": "confirm",
+      "from_lane": "ops",
+      "to_lane": "client",
+      "wait_note": null
+    },
+    {
+      "key": "confirm->welcome",
+      "from_step": "confirm",
+      "to_step": "welcome",
+      "from_lane": "client",
+      "to_lane": "ops",
+      "wait_note": null
+    }
+  ],
+  "step_metrics": [
+    {
+      "step_key": "receive",
+      "frequency": {
+        "value": 8,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 10,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "check",
+      "frequency": {
+        "value": 8,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 30,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "setup",
+      "frequency": {
+        "value": 8,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 2,
+        "unit": "hours",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "confirm",
+      "frequency": {
+        "value": 8,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 1,
+        "unit": "days",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "welcome",
+      "frequency": {
+        "value": 8,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 15,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    }
+  ],
+  "one_number": {
+    "title": "Hours spent setting up an account",
+    "step_key": "setup",
+    "return_kind": "hours_back",
+    "direction": "down",
+    "unit": "hours",
+    "baseline": {
+      "value": 2,
+      "unit": "hours",
+      "source": "self_reported",
+      "recorded_at": "2026-01-15T09:00:00Z"
+    },
+    "why_this_one": "Largest recurring block of hands-on time."
+  },
+  "sub_steps": [
+    {
+      "key": "setup-create",
+      "step_key": "setup",
+      "label": "Create the account by hand",
+      "position": 0,
+      "lane_key": "ops",
+      "state": "current"
+    },
+    {
+      "key": "setup-copy",
+      "step_key": "setup",
+      "label": "Copy details from the order form",
+      "position": 1,
+      "lane_key": "ops",
+      "state": "current"
+    },
+    {
+      "key": "setup-fill",
+      "step_key": "setup",
+      "label": "Fill the account from the order form",
+      "position": 0,
+      "lane_key": "ops",
+      "state": "proposed",
+      "classification": "automation",
+      "replaces": [
+        "setup-create",
+        "setup-copy"
+      ],
+      "tool_action": "create_account_from_form"
+    },
+    {
+      "key": "setup-review",
+      "step_key": "setup",
+      "label": "Review the filled account",
+      "position": 1,
+      "lane_key": "ops",
+      "state": "proposed",
+      "classification": "by_hand"
+    }
+  ],
+  "edge_cases": [
+    {
+      "key": "missing-field",
+      "step_key": "setup",
+      "description": "The order form lacks a billing contact",
+      "classification": "by_hand",
+      "handling": "Ask the client before creating the account"
+    }
+  ]
+}

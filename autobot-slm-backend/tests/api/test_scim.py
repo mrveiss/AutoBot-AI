@@ -97,10 +97,19 @@ def _load_scim_module():
         "user_management.services.user_service": _user_service_stub,
     }
     prev = {key: sys.modules.get(key) for key in stubs}
+    before = set(sys.modules)
     sys.modules.update(stubs)
     try:
         _scim_spec.loader.exec_module(_scim_mod)
     finally:
+        # Shared modules first imported under the stubs hold the stubbed ``fastapi`` (a mock HTTPException):
+        # left cached, a later real user of them (the last-platform-admin guard, #21018) raises a mock.
+        for key in [k for k in sys.modules if k not in before and k.startswith("autobot_shared.")]:
+            mod = sys.modules.pop(key)
+            parent_name, _, attr = key.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None and getattr(parent, "__dict__", {}).get(attr) is mod:
+                delattr(parent, attr)
         for key, mod in prev.items():
             if mod is None:
                 sys.modules.pop(key, None)

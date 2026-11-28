@@ -23,16 +23,14 @@ from . import (  # noqa: E402,F401  # intentional re-export
     ssm_kernels,
     token_optimizer,
 )
-from .attention_backend import AttentionBackend as ModelAttentionBackend
 from .attention_backend import (
     AttentionBackendSelector,
-)
-from .attention_backend import ModelConfig as AttentionModelConfig
-from .attention_backend import (
+    AttentionModelConfig,
+    ModelAttentionBackend,
     get_attention_backend_selector,
 )
 from .cloud_batcher import BatchResult, CloudRequestBatcher
-from .connection_pool import ConnectionPoolManager, PoolConfig
+from .connection_pool import ConnectionPoolManager, HttpPoolConfig
 from .flash_attention import (
     AttentionBackend,
     AttentionOutput,
@@ -82,13 +80,13 @@ from .meta_eviction import (
     evict_layer_to_meta,
     get_gpu_memory_allocated,
 )
-from .model_inspector import ModelInfo, clear_cache, inspect_model
+from .model_inspector import ModelArchitectureInfo, clear_cache, inspect_model
 from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
 from .router import (
-    OptimizationCategory,
+    LLMServingOptimizationCategory,
     OptimizationConfig,
     OptimizationRouter,
     get_optimization_router,
@@ -113,7 +111,7 @@ from .token_optimizer import (
 __all__ = [
     # Router
     "OptimizationRouter",
-    "OptimizationCategory",
+    "LLMServingOptimizationCategory",
     "OptimizationConfig",
     "get_optimization_router",
     # Flash Attention
@@ -129,7 +127,7 @@ __all__ = [
     "BatchResult",
     # Connection Pool
     "ConnectionPoolManager",
-    "PoolConfig",
+    "HttpPoolConfig",
     # Rate Limiter
     "RateLimitHandler",
     "RateLimitConfig",
@@ -190,7 +188,7 @@ __all__ = [
     "PipelineConfig",
     "PreparedPipeline",
     # Empty-weight Model Inspector (Issue #1945)
-    "ModelInfo",
+    "ModelArchitectureInfo",
     "inspect_model",
     "clear_cache",
     # SSM / Linear / Hybrid kernels (Issue #10724)

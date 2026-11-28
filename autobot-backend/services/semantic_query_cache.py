@@ -48,6 +48,7 @@ _DEFAULT_RESPONSE_TTL = config.cache.l2.semantic_cache
 _COLLECTION_NAME = "semantic_query_cache"
 _REDIS_KEY_PREFIX = "sem_cache:"
 _REDIS_DATABASE = "cache"
+_SCOPE_FIELD = "scope"  # ChromaDB metadata key holding the visibility scope of an entry (#16664)
 
 
 @dataclass
@@ -88,10 +89,14 @@ class SemanticQueryCache(AsyncInitializable):
     Lifecycle:
         cache = SemanticQueryCache()
         await cache.initialize()
-        hit = await cache.lookup(query_text)
+        hit = await cache.lookup(query_text, scope=scope)
         if hit is None:
             response = <run full pipeline>
-            await cache.store(query_text, response, model)
+            await cache.store(query_text, response, model, scope=scope)
+
+    ``scope`` is the caller's visibility scope key (``services.rag_visibility.cache_scope``).
+    Entries are written under it and looked up only inside it, so one scope never reads
+    another scope's cached response (#16664).
     """
 
     def __init__(
@@ -206,12 +211,15 @@ class SemanticQueryCache(AsyncInitializable):
         self,
         query: str,
         embedding: List[float] | None = None,
+        *,
+        scope: str,
     ) -> SemanticCacheEntry | None:
-        """Search for a semantically similar cached query.
+        """Search for a semantically similar cached query inside *scope*.
 
         Args:
             query: The user query text.
             embedding: Pre-computed embedding (if available).
+            scope: Visibility scope key; only entries stored under it can match (#16664).
 
         Returns:
             A ``SemanticCacheEntry`` on hit, or *None* on miss.
@@ -228,6 +236,7 @@ class SemanticQueryCache(AsyncInitializable):
             results = await self._collection.query(
                 query_embeddings=[embedding],
                 n_results=1,
+                where={_SCOPE_FIELD: scope},
                 include=["metadatas", "distances"],
             )
 
@@ -253,6 +262,7 @@ class SemanticQueryCache(AsyncInitializable):
         model: str,
         embedding: List[float],
         metadata: Dict[str, Any] | None,
+        scope: str,
     ) -> bool:
         """Write entry to Redis + ChromaDB. Ref: #1372."""
         entry_id = str(uuid.uuid4())
@@ -280,6 +290,7 @@ class SemanticQueryCache(AsyncInitializable):
                     "model": model,
                     "cached_at": now,
                     "query_hash": query_hash,
+                    _SCOPE_FIELD: scope,
                 }
             ],
         )
@@ -292,8 +303,10 @@ class SemanticQueryCache(AsyncInitializable):
         model: str,
         embedding: List[float] | None = None,
         metadata: Dict[str, Any] | None = None,
+        *,
+        scope: str,
     ) -> bool:
-        """Cache a query-response pair for future semantic matching.
+        """Cache a query-response pair for future semantic matching inside *scope* (#16664).
 
         Returns:
             *True* on success, *False* otherwise.
@@ -307,7 +320,7 @@ class SemanticQueryCache(AsyncInitializable):
                 if embedding is None:
                     return False
 
-            success = await self._persist_entry(query, response_text, model, embedding, metadata)
+            success = await self._persist_entry(query, response_text, model, embedding, metadata, scope)
             if not success:
                 return False
 

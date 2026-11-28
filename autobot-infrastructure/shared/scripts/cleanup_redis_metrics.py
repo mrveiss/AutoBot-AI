@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_scan import scan_keys
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -113,11 +114,11 @@ async def _scan_all_patterns(redis_client, kb_redis_client, results: dict) -> li
     for pattern in LEGACY_KEY_PATTERNS:
         try:
             # Scan main database
-            keys = await scan_keys(redis_client, pattern)
+            keys = await _scan_key_names(redis_client, pattern)
 
             # Also scan knowledge database for kb_cache_stats
             if kb_redis_client and "kb_cache" in pattern:
-                kb_keys = await scan_keys(kb_redis_client, pattern)
+                kb_keys = await _scan_key_names(kb_redis_client, pattern)
                 keys.extend([f"[knowledge]{k}" for k in kb_keys])
 
             results["keys_by_pattern"][pattern] = len(keys)
@@ -169,14 +170,10 @@ async def _delete_keys(all_keys: list, redis_client, kb_redis_client, results: d
     return deleted_count
 
 
-async def scan_keys(redis_client, pattern: str) -> list:
-    """Scan for keys matching a pattern."""
-    keys = []
-    async for key in redis_client.scan_iter(match=pattern):
-        if isinstance(key, bytes):
-            key = key.decode("utf-8")
-        keys.append(key)
-    return keys
+async def _scan_key_names(redis_client, pattern: str) -> list:
+    """Key names matching ``pattern`` via the shared SCAN walk (#18999), decoded to str."""
+    keys = await scan_keys(redis_client, pattern)
+    return [k.decode("utf-8") if isinstance(k, bytes) else k for k in keys]
 
 
 async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> dict:

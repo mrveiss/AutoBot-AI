@@ -31,23 +31,23 @@ class TestCallerOwnerId:
     """The caller identity must match how owner_id is written on create."""
 
     def test_prefers_id_then_user_id(self):
-        from api.codebase_analytics.endpoints.shared import _caller_owner_id
+        from api.codebase_analytics.endpoints.shared import caller_owner_id
 
-        assert _caller_owner_id({"id": "alice", "user_id": "ignored"}) == "alice"
-        assert _caller_owner_id({"user_id": "bob"}) == "bob"
+        assert caller_owner_id({"id": "alice", "user_id": "ignored"}) == "alice"
+        assert caller_owner_id({"user_id": "bob"}) == "bob"
 
     def test_none_only_for_service_key_not_other_identityless(self):
         """Only the internal service key ({"service": True}) is unscoped; any other
         identity-less authenticated caller (e.g. a sub-only token) fails closed."""
-        from api.codebase_analytics.endpoints.shared import _NO_OWNER_ID, _caller_owner_id
+        from api.codebase_analytics.endpoints.shared import _NO_OWNER_ID, caller_owner_id
 
-        assert _caller_owner_id(None) is None
+        assert caller_owner_id(None) is None
         # Real internal-service dict (auth_middleware.py: minted with service=True).
-        assert _caller_owner_id({"username": "service:slm", "role": "admin", "service": True}) is None
+        assert caller_owner_id({"username": "service:slm", "role": "admin", "service": True}) is None
         # #12375 item c: an SLM-minted token carrying identity only in sub/username
         # (no id/user_id and NOT the service key) must NOT get unscoped see-all.
-        assert _caller_owner_id({"sub": "carol", "role": "admin"}) == _NO_OWNER_ID
-        assert _caller_owner_id({"username": "dave", "role": "admin"}) == _NO_OWNER_ID
+        assert caller_owner_id({"sub": "carol", "role": "admin"}) == _NO_OWNER_ID
+        assert caller_owner_id({"username": "dave", "role": "admin"}) == _NO_OWNER_ID
 
 
 class TestAuthorizeSourceAccess:
@@ -242,12 +242,13 @@ class TestPatternAnalyzeBodyAuthz:
     async def _call(self, user, src):
         from api.codebase_analytics.endpoints import pattern_analysis as pa
 
-        req = pa.PatternAnalysisRequest(source_id="s1", path="/tmp/proj")
+        req = pa.PatternAnalysisRequest(source_id="s1", path="sub")
         delay = _FakeDelay()
         with (
+            patch.object(pa, "scan_path_in_source", AsyncMock(return_value="/srv/s1/sub")),
             patch.object(pa.run_pattern_analysis, "delay", delay),
             patch.object(pa, "store_latest_task_id", AsyncMock()),
-            patch("auth_middleware.get_current_user", AsyncMock(return_value=user)),
+            patch("api.codebase_analytics.endpoints.pattern_analysis.get_current_user", AsyncMock(return_value=user)),
             patch(
                 "api.codebase_analytics.source_storage.get_source",
                 AsyncMock(return_value=src),

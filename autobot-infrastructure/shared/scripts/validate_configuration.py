@@ -22,51 +22,31 @@ logger = logging.getLogger(__name__)
 _HTTP_PROTOCOLS = ("http://", "https://")
 _WS_PROTOCOLS = ("ws://", "wss://")
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-# #14518: the first-party imports below carried a stale ``backend.`` package
-# prefix -- no ``backend`` package exists -- and autobot-backend was never on
-# sys.path, so this script raised ModuleNotFoundError on its own import block
-# before doing any work. Add the directory the way the other operator entry
-# points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+project_root = Path(__file__).parent.parent  # shared/, where docker/compose lives
 
 
 def test_default_configuration():
-    """Test configuration with default values"""
+    """Test configuration with default values (read from the SSOT, #18094)."""
     logger.info("Testing Default Configuration...")
 
     try:
-        from config import (
-            API_BASE_URL,
-            BACKEND_PORT,
-            HTTP_PROTOCOL,
-            OLLAMA_PORT,
-            REDIS_PORT,
-            REDIS_PROTOCOL,
-            REDIS_URL,
-            WS_BASE_URL,
-            WS_PROTOCOL,
-        )
+        from autobot_shared.ssot_config import config as ssot_config
 
         # Test URLs are properly formed (Issue #380: use module-level constants)
-        assert API_BASE_URL.startswith(_HTTP_PROTOCOLS)
-        assert REDIS_URL.startswith("redis://")
-        assert WS_BASE_URL.startswith(_WS_PROTOCOLS)
+        assert ssot_config.backend_url.startswith(_HTTP_PROTOCOLS)
+        assert ssot_config.redis_url.startswith(("redis://", "rediss://"))
+        assert ssot_config.websocket_url.startswith(_WS_PROTOCOLS)
 
         # Test ports are integers
-        assert isinstance(BACKEND_PORT, int)
-        assert isinstance(OLLAMA_PORT, int)
-        assert isinstance(REDIS_PORT, int)
-
-        # Test protocols are valid
-        assert HTTP_PROTOCOL in {"http", "https"}
-        assert WS_PROTOCOL in {"ws", "wss"}
-        assert REDIS_PROTOCOL == "redis"
+        assert isinstance(ssot_config.port.backend, int)
+        assert isinstance(ssot_config.port.ollama, int)
+        assert isinstance(ssot_config.port.redis, int)
 
         logger.info("Default configuration validation passed")
         return True
@@ -77,49 +57,27 @@ def test_default_configuration():
 
 
 def test_custom_configuration():
-    """Test configuration with custom environment variables"""
+    """Test that AUTOBOT_* overrides reach the SSOT after a reload."""
     logger.info("Testing Custom Configuration...")
 
-    # Set custom environment variables
     test_env = {
-        "AUTOBOT_HTTP_PROTOCOL": "https",
         "AUTOBOT_BACKEND_PORT": "8002",
-        "AUTOBOT_OLLAMA_HOST": "192.168.1.100",
         "AUTOBOT_OLLAMA_PORT": "11435",
         "AUTOBOT_REDIS_PORT": "6380",
     }
-
-    # Save original environment
-    original_env = {}
-    for key in test_env:
-        original_env[key] = os.environ.get(key)
-        os.environ[key] = test_env[key]
+    original_env = {key: os.environ.get(key) for key in test_env}
+    os.environ.update(test_env)
 
     try:
-        # Reload configuration with new environment
-        import importlib
+        from autobot_shared.ssot_config import config as ssot_config
+        from autobot_shared.ssot_config import reload_config
 
-        import config
+        reload_config()
 
-        importlib.reload(config)
-
-        from config import (
-            API_BASE_URL,
-            BACKEND_PORT,
-            HTTP_PROTOCOL,
-            OLLAMA_HOST_IP,
-            OLLAMA_PORT,
-            REDIS_PORT,
-        )
-
-        # Verify custom values are applied
-        assert HTTP_PROTOCOL == "https"
-        assert BACKEND_PORT == 8002
-        assert OLLAMA_PORT == 11435
-        assert REDIS_PORT == 6380
-        assert OLLAMA_HOST_IP == "192.168.1.100"
-        assert API_BASE_URL.startswith("https://")
-        assert f":{BACKEND_PORT}" in API_BASE_URL
+        assert ssot_config.port.backend == 8002
+        assert ssot_config.port.ollama == 11435
+        assert ssot_config.port.redis == 6380
+        assert f":{ssot_config.port.backend}" in ssot_config.backend_url
 
         logger.info("Custom configuration validation passed")
         return True
@@ -129,12 +87,14 @@ def test_custom_configuration():
         return False
 
     finally:
-        # Restore original environment
         for key, value in original_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+        from autobot_shared.ssot_config import reload_config
+
+        reload_config()
 
 
 def test_backend_configuration():

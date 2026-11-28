@@ -15,11 +15,15 @@ import logging
 import sys
 from pathlib import Path
 
-# Add project root to Python path
-project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(project_root))
+# Runs from any directory with no PYTHONPATH: the repository root for `autobot_shared`, the
+# backend for `knowledge_factory` (#19310).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _path in (_REPO_ROOT, _REPO_ROOT / "autobot-backend"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
-from knowledge_base import KnowledgeBase
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs  # noqa: E402
+from knowledge_factory import get_knowledge_base_async  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,10 +106,12 @@ async def main():
     try:
         # Initialize knowledge base
         logger.info("Initializing knowledge base...")
-        kb = KnowledgeBase()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         # Check if AutoBot identity document exists
-        identity_file = project_root / "data" / "system_knowledge" / "autobot_identity.md"
+        identity_file = system_knowledge_dirs().runtime / "autobot_identity.md"
 
         if not identity_file.exists():
             logger.error("AutoBot identity file not found at %s", identity_file)

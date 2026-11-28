@@ -19,6 +19,7 @@ from unittest.mock import create_autospec
 import pytest
 
 from api.chat_knowledge_manager import ChatKnowledgeManager
+from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
@@ -28,15 +29,24 @@ def _manager_with_mock_kb(results):
     manager = object.__new__(ChatKnowledgeManager)
     manager.knowledge_base = create_autospec(KnowledgeBase, instance=True)
     manager.knowledge_base.search.return_value = results
+    manager.knowledge_base.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     manager.chat_contexts = {}
     return manager
 
 
 @pytest.mark.asyncio
 async def test_search_chat_knowledge_returns_real_content():
-    manager = _manager_with_mock_kb([{"content": "AutoBot uses Redis for caching", "metadata": {}, "score": 0.9}])
+    manager = _manager_with_mock_kb(
+        [
+            {
+                "content": "AutoBot uses Redis for caching",
+                "metadata": {"owner_id": "alice", "visibility": "private"},
+                "score": 0.9,
+            }
+        ]
+    )
 
-    results = await manager.search_chat_knowledge("redis", include_temporary=False)
+    results = await manager.search_chat_knowledge("redis", include_temporary=False, user_id="alice")
 
     assert len(results) == 1
     assert results[0]["content"] == "AutoBot uses Redis for caching"

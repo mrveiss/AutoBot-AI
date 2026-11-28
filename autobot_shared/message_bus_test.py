@@ -8,7 +8,7 @@ Uses mock Redis to verify publish, get_message, and
 get_correlation_chain behavior without a live Redis connection.
 
 The ``autobot_shared.redis_client`` module depends on backend internals
-(``utils.redis_management``) that are unavailable in the shared-only test
+(``autobot_shared.redis_management``) that are unavailable in the shared-only test
 environment.  We inject a stub *before* importing ``message_bus`` so the
 real redis_client is never loaded.
 """

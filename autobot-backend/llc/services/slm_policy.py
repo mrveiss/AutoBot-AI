@@ -13,6 +13,7 @@ dataclass + coercion logic.
 import json
 import logging
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from services.slm_client import get_slm_client
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,9 @@ async def fetch_slm_policy_json(key: str) -> dict | None:
     try:
         session = await client._get_session()
         url = client._rest_url(f"/api/settings/{key}")
-        async with session.get(url) as response:
+        # #17576: the SLM URL is operator config (allowlisted), and a redirect would escape the check.
+        await assert_egress_policy(url)
+        async with session.get(url, allow_redirects=False) as response:
             if response.status != 200:
                 return None
             setting = await response.json()

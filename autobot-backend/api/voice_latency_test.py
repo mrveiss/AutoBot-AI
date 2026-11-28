@@ -215,10 +215,10 @@ async def test_streaming_synthesize_sends_first_audio_after_the_first_chunk():
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
-        with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            blocking_ttfb, blocking_body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user"})
+        with patch("api.voice.resolve_tts_provider", return_value=TTSClient()):
+            blocking_ttfb, blocking_body, _ = await _time_to_first_byte(app, {"text": "hi"})
             _, streaming_body, released = await _time_to_first_byte(
-                app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
+                app, {"text": "hi", "stream": "true"}, _stream_progress(http_client)
             )
 
     assert blocking_body == WHOLE_WAV
@@ -239,10 +239,10 @@ async def test_a_route_that_buffers_the_utterance_is_caught():
             yield chunk
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
-        with patch("api.voice.get_tts_client", return_value=TTSClient()):
+        with patch("api.voice.resolve_tts_provider", return_value=TTSClient()):
             with patch("api.voice._framed_audio_chunks", _buffered):
                 _, body, released = await _time_to_first_byte(
-                    app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
+                    app, {"text": "hi", "stream": "true"}, _stream_progress(http_client)
                 )
 
     assert body  # the buffering route still answers in full
@@ -256,8 +256,8 @@ async def test_streaming_response_carries_every_chunk_in_order():
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
-        with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            _, body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user", "stream": "true"})
+        with patch("api.voice.resolve_tts_provider", return_value=TTSClient()):
+            _, body, _ = await _time_to_first_byte(app, {"text": "hi", "stream": "true"})
 
     decoded, offset = [], 0
     while offset < len(body):
@@ -275,8 +275,8 @@ def test_non_streaming_synthesize_still_returns_a_single_wav():
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
-        with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            response = client.post("/api/voice/synthesize", data={"text": "hi", "user_role": "user"})
+        with patch("api.voice.resolve_tts_provider", return_value=TTSClient()):
+            response = client.post("/api/voice/synthesize", data={"text": "hi"})
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
@@ -304,3 +304,24 @@ async def test_ws_path_still_speaks_when_worker_lacks_stream_route():
     assert audio, "stale worker produced no audio at all"
     assert base64.b64decode(audio[0]["data"]) == WHOLE_WAV
     assert types[0] == "tts_start" and types[-1] == "tts_end"
+
+
+def test_voice_tts_provider_resolves_through_the_capability_registry():
+    """#22270: api.voice picks its TTS provider via CapabilityRegistry, falling back to the canonical client."""
+    from unittest.mock import patch
+
+    from api import voice
+    from integrations.capability_registry import TTS, CapabilityRegistry
+
+    registry = CapabilityRegistry()
+    registered = object()
+    registry.register(TTS, registered)
+    with patch("api.voice.get_capability_registry", return_value=registry):
+        assert voice.resolve_tts_provider() is registered
+
+    sentinel = object()
+    with (
+        patch("api.voice.get_capability_registry", return_value=CapabilityRegistry()),
+        patch("api.voice._canonical_tts_client", return_value=sentinel),
+    ):
+        assert voice.resolve_tts_provider() is sentinel

@@ -36,7 +36,8 @@ Exit code
 ---------
   0 — clean
   1 — banned patterns found
-  2 — usage error
+  2 — vacuous scan: root not a git toplevel, git failed, nothing reached,
+      or a full-repo sweep landed under its floor (#14896)
 """
 
 from __future__ import annotations
@@ -49,7 +50,8 @@ from pathlib import Path
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
+from _check_harness import format_finding, run_anchored  # noqa: E402
+from _scan_helpers import PY_FLOOR, scan_python_files  # noqa: E402
 
 # LLM-service method names whose return value is LLMResponse. Variables
 # assigned from these calls are tracked.
@@ -175,45 +177,51 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
     return findings
 
 
+_HOOK = "no-llm-response-dict-access"
+
+
+def _summary(n: int) -> str:
+    return (
+        f"\n{n} LLMResponse dict-access violation(s) found.\n"
+        "LLMResponse is a Pydantic BaseModel — use attribute access (.content, .response):\n"
+        "  ❌ response.get('content', '')\n"
+        "  ❌ response['content']\n"
+        "  ✅ response.content\n"
+        "  ✅ getattr(response, 'content', '')\n"
+    )
+
+
+def _rel_posix(path: Path, repo_root: Path) -> str:
+    """*path* relative to the repo (POSIX) when it is inside it, else as given."""
+    try:
+        return str(path.relative_to(repo_root)).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
+
+
+def _file_findings(path: Path, repo_root: Path) -> list[str]:
+    """Finding lines for one file; an allowlisted or unreadable file has none."""
+    rel = _rel_posix(path, repo_root)
+    if rel in ALLOWLIST:
+        return []
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [format_finding(rel, lineno, msg) for lineno, msg in _scan_file(path, source)]
+
+
+def _collect(args: list[str], repo_root: Path) -> tuple[int, list[str]]:
+    """``(files reached, finding lines)`` for *args* (empty = whole repo)."""
+    files, _ = scan_python_files(args, repo_root)
+    return len(files), [line for path in files for line in _file_findings(path, repo_root)]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    files, full_repo = scan_python_files(args, repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
-    # hands this hook an argv with no Python in it.
-    if enforce_reach(len(files), PY_FLOOR, hook="no-llm-response-dict-access", full_repo=full_repo):
-        return 1
-
-    total_violations = 0
-    for f in files:
-        try:
-            rel = f.relative_to(repo_root)
-        except ValueError:
-            rel = f
-        rel_str = str(rel).replace("\\", "/")
-        if rel_str in ALLOWLIST:
-            continue
-        try:
-            source = f.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        findings = _scan_file(f, source)
-        for lineno, msg in findings:
-            print(f"{rel_str}:{lineno}: {msg}", file=sys.stderr)
-            total_violations += 1
-
-    if total_violations:
-        print(
-            f"\n{total_violations} LLMResponse dict-access violation(s) found.\n"
-            f"LLMResponse is a Pydantic BaseModel — use attribute access (.content, .response):\n"
-            f"  ❌ response.get('content', '')\n"
-            f"  ❌ response['content']\n"
-            f"  ✅ response.content\n"
-            f"  ✅ getattr(response, 'content', '')\n",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
+    # hands this hook an argv with no Python in it. Exit 2 = the scan proved nothing.
+    return run_anchored(_HOOK, _collect, args, anchor=Path(__file__), floor=PY_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

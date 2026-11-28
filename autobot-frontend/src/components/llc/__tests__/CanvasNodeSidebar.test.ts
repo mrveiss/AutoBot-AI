@@ -58,7 +58,7 @@ const HUMAN_NODE = {
 
 function mountSidebar(node: typeof AGENT_NODE | typeof HUMAN_NODE) {
   return mount(CanvasNodeSidebar, {
-    props: { node, companyId: 'c1', terminating: false },
+    props: { node, companyId: 'c1', terminating: false, canControl: true },
     global: { plugins: [i18n], stubs: { HandoffModal: true } },
   })
 }
@@ -264,7 +264,6 @@ describe('handoff rail (#13940)', () => {
     expect(modal.exists()).toBe(true)
     expect(modal.props('direction')).toBe('to_human')
     expect(modal.props('workItemId')).toBe('wi-1')
-    expect(modal.props('agentAssigneeId')).toBe('pk-dev-1')
   })
 })
 

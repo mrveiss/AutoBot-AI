@@ -53,6 +53,21 @@ _PLANNING_PROMPT_TEMPLATE = """\
         """
 
 
+# #13809: the chat workflow path runs each step's ``inputs.command`` in a
+# terminal. The template above asks only for agent tasks, so without this the
+# planner never writes a command and every step degrades to an echo of its own
+# action name. Appended (not a template slot) so every other caller's prompt is
+# byte-identical to before.
+_SHELL_COMMAND_CONTRACT = """
+        Command contract -- this plan runs in a terminal, one step at a time, and a
+        human approves each step before it runs:
+        - Every task MUST put the exact shell command it runs in
+          "inputs": {"command": "<one POSIX shell command line>"}.
+        - Use only commands the goal asks for; add nothing it does not need.
+        - A task without a command cannot run on this path and is dropped.
+        """
+
+
 def _render_learned_template_section(learned_prompt_template: str | None, goal: str) -> str:
     """Render the learned-template advisory block for #10580.
 
@@ -126,6 +141,7 @@ def build_planning_prompt(
     *,
     learned_prompt_template: str | None = None,
     similar_trajectories: List[Any] | None = None,
+    shell_commands: bool = False,
 ) -> str:
     """Render the workflow planning prompt.
 
@@ -133,13 +149,15 @@ def build_planning_prompt(
     LearnedStrategy and injects it as an advisory hint before the task list.
     #10581: Accepts ``similar_trajectories`` (Trajectory objects or dicts) and
     injects a few-shot prior block so the planner can reuse proven decompositions.
-    Both kwargs default to None — callers that do not supply them get the
+    #13809: ``shell_commands`` appends the contract a terminal-executed plan needs.
+    All kwargs default to off — callers that do not supply them get the
     identical prompt as before.
     """
-    return _PLANNING_PROMPT_TEMPLATE.format(
+    prompt = _PLANNING_PROMPT_TEMPLATE.format(
         goal=goal,
         capabilities_json=capabilities_json,
         ledger_rule=LEDGER_VS_EXECUTOR_RULE,
         learned_template_section=_render_learned_template_section(learned_prompt_template, goal),
         similar_trajectories_section=_render_similar_trajectories_section(similar_trajectories),
     )
+    return prompt + _SHELL_COMMAND_CONTRACT if shell_commands else prompt

@@ -46,6 +46,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -148,7 +149,7 @@ def _direct_invocations() -> tuple[list[str], int]:
         # `git init`/`git add` calls, none of which the structural predicate
         # matches — so including it costs nothing and closes the hole.
         try:
-            tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (SyntaxError, OSError) as exc:
             unreadable.append(f"{rel}: {exc}")
             continue
@@ -301,7 +302,9 @@ def test_the_detector_reads_the_args_keyword_form() -> None:
     cannot see the change it exists for.
     """
     call = next(
-        n for n in ast.walk(ast.parse('subprocess.run(args=["git", "ls-files", "*.py"])')) if isinstance(n, ast.Call)
+        n
+        for n in ast.walk(parse_cache.parse('subprocess.run(args=["git", "ls-files", "*.py"])'))
+        if isinstance(n, ast.Call)
     )
     assert call.args == [], "fixture must use the keyword form for this to mean anything"
     assert invokes_ls_files(call)
@@ -309,7 +312,9 @@ def test_the_detector_reads_the_args_keyword_form() -> None:
 
 def test_the_detector_does_not_report_an_unrelated_subprocess() -> None:
     """Contrast: reading the keyword must not flag every `args=` call."""
-    call = next(n for n in ast.walk(ast.parse('subprocess.run(args=["git", "status"])')) if isinstance(n, ast.Call))
+    call = next(
+        n for n in ast.walk(parse_cache.parse('subprocess.run(args=["git", "status"])')) if isinstance(n, ast.Call)
+    )
     assert not invokes_ls_files(call)
 
 
@@ -429,7 +434,7 @@ def test_every_argv_form_is_read_positional_and_keyword(source: str) -> None:
     parameter `args`, so one predicate covers six spellings — and this asserts
     that rather than waiting for a fourth review to name `Popen(args=)`.
     """
-    call = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+    call = next(n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.Call))
     assert invokes_ls_files(call), f"missed: {source}"
 
 
@@ -440,7 +445,9 @@ def test_a_non_git_command_carrying_the_word_is_not_reported() -> None:
     baseline would then move for a subprocess call that never touched git, and
     the census would be measuring something other than what it names.
     """
-    call = next(n for n in ast.walk(ast.parse('subprocess.run(["printf", "ls-files"])')) if isinstance(n, ast.Call))
+    call = next(
+        n for n in ast.walk(parse_cache.parse('subprocess.run(["printf", "ls-files"])')) if isinstance(n, ast.Call)
+    )
     assert not invokes_ls_files(call)
 
 
@@ -475,7 +482,7 @@ def test_the_call_execution_apis_are_covered(source: str) -> None:
     I widened the KEYWORD axis ahead of a report and left the FUNCTION-NAME axis
     to be reported. Both are the same generalisation; only one got made in time.
     """
-    call = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+    call = next(n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.Call))
     assert invokes_ls_files(call)
 
 
@@ -486,5 +493,5 @@ def test_a_name_merely_containing_an_executor_word_is_not_matched() -> None:
     anything else whose name contains the word.
     """
     for source in ('recall(["git", "ls-files"])', 'my.caller(["git", "ls-files"])'):
-        node = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+        node = next(n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.Call))
         assert not invokes_ls_files(node), source

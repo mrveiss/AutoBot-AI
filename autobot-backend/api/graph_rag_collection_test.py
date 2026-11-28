@@ -18,6 +18,7 @@ spinning up the full FastAPI app (and its Redis dependency at import time).
 from __future__ import annotations
 
 import json
+import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -33,6 +34,11 @@ from api.graph_rag import (  # noqa: E402
     collection_graph,
     graph_rag_health,
 )
+from autobot_memory_graph.owner_scope import OwnerScope  # noqa: E402
+from autobot_shared.user_management.base_service import TenantContext  # noqa: E402
+
+_TENANT = TenantContext(user_id=uuid.UUID("11111111-1111-1111-1111-111111111111"))
+_OWNER = OwnerScope.from_tenant(_TENANT)
 
 
 def test_serialize_graph_nodes_maps_fields():
@@ -62,7 +68,7 @@ async def test_collect_collection_edges_dedupes():
     # Same edge returned twice (e1 then duplicate path) must dedupe to one.
     service.graph = MagicMock()
     service.graph.get_relations = AsyncMock(return_value={"relations": [rel]})
-    edges = await _collect_collection_edges(service, ["e1", "e1"])
+    edges = await _collect_collection_edges(service, ["e1", "e1"], _OWNER)
     assert len(edges) == 1
     assert edges[0]["type"] == "OWNS"
 
@@ -78,7 +84,7 @@ async def test_collection_graph_returns_nodes_and_edges():
     service.graph = MagicMock()
     service.graph.search_entities = AsyncMock(return_value=entities)
 
-    async def _rels(entity_id, direction="both"):
+    async def _rels(entity_id, direction="both", owner=None):
         return {"relations": [rel]} if entity_id == "e1" else {"relations": []}
 
     service.graph.get_relations = AsyncMock(side_effect=_rels)
@@ -86,7 +92,7 @@ async def test_collection_graph_returns_nodes_and_edges():
     response = await collection_graph(
         collection_id="col-123",
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
 
     body = json.loads(bytes(response.body).decode("utf-8"))
@@ -99,6 +105,7 @@ async def test_collection_graph_returns_nodes_and_edges():
     service.graph.search_entities.assert_awaited_once()
     _, kwargs = service.graph.search_entities.await_args
     assert kwargs.get("tags") == ["col-123"]
+    assert kwargs.get("owner") == _OWNER  # #18825: scoped to the caller, not graph-wide
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +237,7 @@ async def test_path_endpoint_returns_the_traversal():
     response = await graph_rag_path(
         path_request=GraphRAGPathRequest(from_entity="Redis Config", to_entity="Incident 7"),
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
 
     body = json.loads(bytes(response.body).decode("utf-8"))
@@ -256,7 +263,7 @@ async def test_path_endpoint_forwards_every_query_parameter():
             timeout=5.0,
         ),
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
 
     service.find_connection_path.assert_awaited_once_with(
@@ -266,6 +273,7 @@ async def test_path_endpoint_forwards_every_query_parameter():
         max_depth=3,
         direction="incoming",
         timeout=5.0,
+        owner=_OWNER,
     )
 
 
@@ -278,7 +286,7 @@ async def test_path_endpoint_always_carries_a_deadline_by_default():
     await graph_rag_path(
         path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
 
     assert service.find_connection_path.await_args.kwargs["timeout"] is not None
@@ -295,7 +303,7 @@ async def test_path_endpoint_reports_a_timeout_as_504_not_as_no_path():
         await graph_rag_path(
             path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
             service=service,
-            current_user={"id": "u1"},
+            tenant=_TENANT,
         )
 
     assert exc_info.value.status_code == 504
@@ -312,7 +320,7 @@ async def test_path_endpoint_does_not_leak_the_exception_message():
         await graph_rag_path(
             path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
             service=service,
-            current_user={"id": "u1"},
+            tenant=_TENANT,
         )
 
     assert exc_info.value.status_code == 500
@@ -339,7 +347,7 @@ async def test_path_endpoint_returns_200_when_unconnected():
     response = await graph_rag_path(
         path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
 
     body = json.loads(bytes(response.body).decode("utf-8"))
@@ -368,7 +376,7 @@ async def test_path_endpoint_404s_on_unresolvable_entity():
         await graph_rag_path(
             path_request=GraphRAGPathRequest(from_entity="A", to_entity="Does Not Exist"),
             service=service,
-            current_user={"id": "u1"},
+            tenant=_TENANT,
         )
 
     assert exc_info.value.status_code == 404

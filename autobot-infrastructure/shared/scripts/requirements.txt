@@ -15,6 +15,7 @@
 # store against the legacy langchain_community.vectorstores.redis path. Without
 # this the modern arm is never measured, and the report reads as a two-arm
 # comparison that found the legacy path adequate (#14871).
+-c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
 langchain-redis>=0.2.0
 
 # run_benchmarks.sh --save-results produces the machine-readable benchmark
@@ -26,7 +27,7 @@ pytest-json-report>=1.5.0
 # comprehensive_log_aggregator.py and logging/log_forwarder.py collect container
 # logs through the Docker SDK; both guard-import it and drop container log
 # sources entirely when it is absent (#14872).
-docker>=7.2.0
+docker
 
 # monitor_services.py serves the service-monitor dashboard through Flask and
 # needs CORS on it for the browser front end. Both are guard-imported and the

@@ -172,7 +172,7 @@ def test_budget_exhausted_mid_sweep_stops_before_the_next_pr(retry, monkeypatch)
     )
     api = _api(retry, transport)
     monkeypatch.setenv("CI_RETRY_MAX_RERUNS", "1")
-    monkeypatch.setattr(retry, "build_api", lambda: api)
+    monkeypatch.setattr(retry, "build_api", lambda *_a, **_k: api)
 
     rc = retry.run(dry_run=False)
 
@@ -193,7 +193,7 @@ def test_capacity_at_ceiling_declines_the_sweep(retry, monkeypatch):
         jobs={601: _starved_job(9101, 1)},
     )
     api = _api(retry, transport)
-    monkeypatch.setattr(retry, "build_api", lambda: api)
+    monkeypatch.setattr(retry, "build_api", lambda *_a, **_k: api)
 
     rc = retry.run(dry_run=False)
 
@@ -214,7 +214,7 @@ def test_unreadable_rate_limit_declines_rather_than_proceeding(retry, monkeypatc
         jobs={701: _starved_job(9201, 1)},
     )
     api = _api(retry, transport)
-    monkeypatch.setattr(retry, "build_api", lambda: api)
+    monkeypatch.setattr(retry, "build_api", lambda *_a, **_k: api)
 
     rc = retry.run(dry_run=False)
 
@@ -233,7 +233,7 @@ def test_run_attempt_two_or_more_is_left_red_not_retried(retry, monkeypatch):
         jobs={801: _starved_job(9301, 2)},  # already at attempt 2
     )
     api = _api(retry, transport)
-    monkeypatch.setattr(retry, "build_api", lambda: api)
+    monkeypatch.setattr(retry, "build_api", lambda *_a, **_k: api)
 
     rc = retry.run(dry_run=False)
 
@@ -253,7 +253,7 @@ def test_sweep_reaches_an_open_prs_head_sha_not_a_base_tip(retry, monkeypatch):
         jobs={901: _starved_job(9401, 1)},
     )
     api = _api(retry, transport)
-    monkeypatch.setattr(retry, "build_api", lambda: api)
+    monkeypatch.setattr(retry, "build_api", lambda *_a, **_k: api)
 
     rc = retry.run(dry_run=False)
 

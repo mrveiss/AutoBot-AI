@@ -27,6 +27,8 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import require_principal_id, resolve_principal_id
+from services.workflow_automation.command_step import require_command_permission
 from services.workflow_automation.routes import get_workflow_manager
 from services.workflow_serializer import WorkflowSerializer
 from services.workflow_sharing_service import WorkflowSharingService
@@ -76,7 +78,7 @@ async def export_workflow(
 
         logger.info(
             "User %s exported workflow %s",
-            current_user.get("user_id"),
+            resolve_principal_id(current_user),
             workflow_id,
         )
         return {"success": True, "export": doc.to_dict()}
@@ -130,8 +132,9 @@ async def import_workflow(
     """
     Import a workflow from an export document and create it under the requesting user.
     """
+    require_command_permission(current_user)  # #19807: imported steps run shell commands
     try:
-        owner_id = current_user.get("user_id")
+        owner_id = require_principal_id(current_user)
         new_id = await serializer.import_workflow(
             data=body.export_document,
             owner_id=owner_id,
@@ -170,7 +173,7 @@ async def share_workflow(
     Share a workflow.  Returns a share_id that others can use to clone it.
     """
     try:
-        owner_id = current_user.get("user_id")
+        owner_id = require_principal_id(current_user)
         share_id = await sharing.share_workflow(
             workflow_id=body.workflow_id,
             owner_id=owner_id,
@@ -209,7 +212,7 @@ async def unshare_workflow(
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Share '{share_id}' not found.")
 
-        logger.info("User %s revoked share %s", current_user.get("user_id"), share_id)
+        logger.info("User %s revoked share %s", resolve_principal_id(current_user), share_id)
         return {"success": True, "share_id": share_id}
 
     except HTTPException:
@@ -231,8 +234,8 @@ async def list_shared_workflows(
     Returns shares that are public, targeted at the user, or owned by the user.
     The embedded workflow payload is omitted to keep the response lightweight.
     """
+    user_id = require_principal_id(current_user)  # before the try: its 401 must not become a 500
     try:
-        user_id = current_user.get("user_id")
         shares = await sharing.list_shared(user_id=user_id)
         return {"success": True, "shares": shares, "total_count": len(shares)}
 
@@ -254,8 +257,9 @@ async def clone_shared_workflow(
 
     Creates a new independent workflow owned by the requesting user.
     """
+    require_command_permission(current_user)  # #19807: cloned steps run shell commands
     try:
-        new_owner_id = current_user.get("user_id")
+        new_owner_id = require_principal_id(current_user)
         new_id = await sharing.clone_workflow(
             share_id=share_id,
             new_owner_id=new_owner_id,

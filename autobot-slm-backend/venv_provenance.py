@@ -508,7 +508,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Clear AUTOBOT_PROVENANCE dist-info husks from a venv (#17332).")
-    parser.add_argument("venv", help="path to the virtualenv to repair, e.g. /opt/autobot/autobot-backend/venv")
+    parser.add_argument("venv", help="path to the virtualenv to repair, e.g. <install root>/autobot-backend/venv")
     args = parser.parse_args(argv)
 
     venv_dir = Path(args.venv)

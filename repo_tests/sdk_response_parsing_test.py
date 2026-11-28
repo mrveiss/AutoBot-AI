@@ -54,6 +54,7 @@ from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry
 from knowledge.schemas.ingestion import AddTextResponse
 from knowledge.schemas.operations import KnowledgeStatsResponse
 from knowledge.schemas.search import KnowledgeSearchResponse
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
@@ -91,7 +92,7 @@ def _returned_dict_keys(source_file: Path, function: str) -> frozenset[str]:
     ``name = {...}`` followed by ``return name`` (``_build_message_dict``, which then
     adds two keys conditionally -- hence the subset assertion at that call site).
     """
-    tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(source_file.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != function:
             continue

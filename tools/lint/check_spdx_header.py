@@ -69,6 +69,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -176,6 +177,16 @@ def in_scope(path: Path) -> bool:
         return False
     posix = path.as_posix()
     return not EXCLUDE_RE.search(posix)
+
+
+def lacks_header(path: Path, read: Callable[[], str]) -> bool:
+    """True when *path* is in scope and the text *read* returns has no header (#21535).
+
+    The one definition of "a file that must carry the header and does not", for a caller that judges a
+    file's COMMITTED text (the train content gate, the pre-board lane) and not the working tree. *read*
+    is called only for an in-scope path, so an out-of-scope file is never read.
+    """
+    return in_scope(path) and not has_header(read())
 
 
 def _argv_candidates(files: list[str]) -> list[tuple[str, Path]]:

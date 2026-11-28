@@ -3,10 +3,11 @@
     v-if="visible"
     variant="warning"
     size="sm"
-    class="provider-fallback-chip"
+    tone="solid"
+    class="ms-2 align-middle"
     :title="tooltip"
   >
-    <Icon name="exclamation-triangle" class="chip-icon" />
+    <template #icon><Icon name="exclamation-triangle" size="xs" /></template>
     {{ t('chat.message.fallback.badge') }}
   </BaseBadge>
 </template>
@@ -52,14 +53,3 @@ const tooltip = computed<string>(() => {
   return t('chat.message.fallback.tooltip', { primary, fallback })
 })
 </script>
-
-<style scoped>
-.provider-fallback-chip {
-  margin-inline-start: var(--spacing-1-5);
-  vertical-align: middle;
-}
-
-.chip-icon {
-  margin-inline-end: var(--spacing-1);
-}
-</style>

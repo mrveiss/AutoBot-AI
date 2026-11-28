@@ -14,6 +14,8 @@ import subprocess
 import time
 from typing import Dict, List
 
+from autobot_shared.ssot_config import config
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - HostDNS - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,7 @@ class HostContainerDNS:
         """Get container name to IP mappings from Docker network"""
         try:
             # Get network info
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
                 ["docker", "network", "inspect", self.network_name],
                 capture_output=True,
                 text=True,
@@ -116,7 +118,7 @@ class HostContainerDNS:
             content = "\n".join(all_lines)
 
             # Use sudo to write
-            process = subprocess.run(
+            process = subprocess.run(  # nosec B603 B607  # fixed argv; the hosts path is a constant
                 ["sudo", "tee", self.hosts_file],
                 input=content,
                 text=True,
@@ -165,7 +167,7 @@ class HostContainerDNS:
             "autobot-frontend": [5173],
             "autobot-ai-stack": [8080],
             "autobot-npu-worker": [8081],
-            "autobot-browser": [3000],
+            "autobot-browser": [config.port.browser],  # #19324
             "autobot-seq": [80],
         }
 

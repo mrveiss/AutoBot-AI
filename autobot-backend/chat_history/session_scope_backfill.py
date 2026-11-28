@@ -31,6 +31,12 @@ renamed, or moved.
 Not auto-run: nothing here executes on import, there is no scheduled or Celery
 hook, and the CLI defaults to a dry run. Writing requires ``--apply``.
 
+#21997 (owner decision): no chat is re-tagged automatically. Untagged chats, these legacy CEO chats included, are
+listed as Unassigned and a person assigns each to a company through ``POST /chat/sessions/{id}/company``, which
+leaves an audit record. This module must therefore keep no caller (no startup, migration, task or agent invokes
+it); ``api/chat_company_scope_21997_test.py`` pins that. Its ``--apply`` is a manual operator tool that writes no
+audit record, so a person assigning through the route is the supported path.
+
 Usage::
 
     python -m chat_history.session_scope_backfill              # dry run, writes nothing
@@ -49,7 +55,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Set
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
+from utils.validators import validate_uuid
 
 logger = get_logger(__name__)
 
@@ -62,8 +69,6 @@ _AGENT_TITLE = re.compile(
     r"^(?P<role>[^\W\d_][\w .\-]*)\s+·\s+(?P<company_id>[0-9a-fA-F-]{8,})$",
     re.UNICODE,
 )
-
-_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
 
 @dataclass
@@ -120,7 +125,12 @@ def classify(session: Dict[str, Any], known_company_ids: Set[str]) -> Candidate:
         return candidate
 
     parsed = match.group("company_id").lower()
-    if not _UUID.match(parsed):
+    # #18093: was a local `_UUID` identical to the canonical pattern but spelled with
+    # `re.I` instead of lowering first. The value is already lowered here, so the two
+    # agreed -- which is exactly how a copy survives until it quietly stops agreeing.
+    try:
+        validate_uuid(parsed)
+    except ValueError:
         candidate.reason = "the id in the title is not a company id"
         return candidate
     if parsed not in known_company_ids:
@@ -267,4 +277,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

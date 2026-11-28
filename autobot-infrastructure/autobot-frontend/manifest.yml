@@ -6,12 +6,13 @@ target_node: frontend
 deploy:
   source: autobot-frontend/
   destination: /opt/autobot/autobot-frontend/
+  sync_target: "{base_dir}/autobot-frontend"   # #21974: the install directory the unit runs from (= `destination`)
   shared: false
   infrastructure: true
 
 system_dependencies:
   - nginx
-  - nodejs   # v20 via NodeSource
+  - nodejs   # major = node_major (= .nvmrc), via NodeSource
 
 # #15603: no build oneshot. This declared exec_start: "bash -c 'cd ... && npm
 # ci && npm run build'" — unstaged, the exact defect
@@ -43,6 +44,13 @@ health:
   timeout: "10s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  frontend:
+    checked: true
+    port: 443
+    path: /api/health
 
 secrets:
   own:

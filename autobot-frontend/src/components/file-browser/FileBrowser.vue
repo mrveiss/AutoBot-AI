@@ -84,9 +84,11 @@
 </template>
 
 <script setup lang="ts">
+import { saveUrl } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useUserStore } from '@/stores/useUserStore'
 import { useFileBrowser } from '@/composables/file-browser/useFileBrowser'
@@ -97,8 +99,8 @@ import type { FileBrowserItem, FileBrowserTreeNode, FilePreviewData } from '@/co
 type PreviewDownloadFile = Pick<FilePreviewData, 'name' | 'url'>
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
-
 const { t } = useI18n()
+const { showToast } = useToast()
 const { confirm } = useConfirmDialog()
 
 // Issue #608: Activity logger for session tracking
@@ -144,7 +146,6 @@ const viewMode = ref<'tree' | 'list'>('tree')
 const sortField = ref('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const showPreview = ref(false)
-
 const _userStore = useUserStore()
 
 // Computed properties
@@ -240,24 +241,24 @@ const triggerFileUpload = () => {
 
 const { execute: uploadFiles, loading: _isUploadingFiles } = useAsyncHandler(
   async (fileList: FileList) => {
-    await composableUploadFiles(fileList, currentPath.value)
+    const outcome = await composableUploadFiles(fileList, currentPath.value)
     await refreshFiles()
+    // #22015: each refused file is named with the server's reason, never a bare status.
+    const reasons = outcome
+      ? outcome.failed.map(f => `${f.name}: ${f.reason}`).join('; ')
+      : t('fileBrowser.browser.uploadFailedHint')
+    if (reasons) showToast(t('fileBrowser.browser.uploadFailed', { error: reasons }), 'error')
 
-    // Issue #608: Log file upload activity
-    if (props.chatContext) {
-      const fileNames = Array.from(fileList).map(f => f.name).join(', ')
-      const totalSize = Array.from(fileList).reduce((sum, f) => sum + f.size, 0)
+    // Issue #608: Log the files that were stored
+    if (props.chatContext && outcome?.uploaded.length) {
+      const stored = Array.from(fileList).filter(f => outcome.uploaded.includes(f.name))
       logFileActivity('upload', currentPath.value, {
-        fileNames,
-        fileCount: fileList.length,
-        totalSize
+        fileNames: outcome.uploaded.join(', '), fileCount: stored.length,
+        totalSize: stored.reduce((sum, f) => sum + f.size, 0)
       })
     }
   },
   {
-    onError: () => {
-      alert(t('fileBrowser.browser.uploadFailed', { error: 'Please check file size limits and format requirements' }))
-    },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
   }
@@ -305,7 +306,7 @@ const { execute: performDelete, loading: _isDeletingFile } = useAsyncHandler(
   },
   {
     onError: () => {
-      alert(t('fileBrowser.browser.errorDeletingFile'))
+      showToast(t('fileBrowser.browser.errorDeletingFile'), 'error')
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -336,7 +337,7 @@ const { execute: performRename, loading: _isRenamingFile } = useAsyncHandler(
   },
   {
     onError: () => {
-      alert(t('fileBrowser.browser.errorRenamingFile'))
+      showToast(t('fileBrowser.browser.errorRenamingFile'), 'error')
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -366,7 +367,7 @@ const { execute: performCreateFolder, loading: _isCreatingFolder } = useAsyncHan
   },
   {
     onError: () => {
-      alert(t('fileBrowser.browser.errorCreatingFolder'))
+      showToast(t('fileBrowser.browser.errorCreatingFolder'), 'error')
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -387,12 +388,7 @@ const closePreview = () => {
 }
 
 const downloadPreviewFile = (file: PreviewDownloadFile) => {
-  if (file.url) {
-    const a = document.createElement('a')
-    a.href = file.url
-    a.download = file.name
-    a.click()
-  }
+  if (file.url) saveUrl(file.url, file.name)
 }
 
 const toggleNode = (item: FileBrowserTreeNode) => {
@@ -690,13 +686,13 @@ onMounted(() => {
 }
 
 .file-info p strong {
-  color: var(--color-electric-500, #3b82f6);
+  color: var(--color-electric-500);
 }
 
 .download-btn {
   margin-top: var(--spacing-5);
   padding: var(--spacing-2-5) var(--spacing-5);
-  background-color: var(--color-electric-600, #2563eb);
+  background-color: var(--color-electric-600);
   color: white;
   border: none;
   border-radius: var(--radius-default);
@@ -706,7 +702,7 @@ onMounted(() => {
 }
 
 .download-btn:hover {
-  background-color: var(--color-electric-700, #1d4ed8);
+  background-color: var(--color-electric-700);
 }
 
 /* Responsive Design */

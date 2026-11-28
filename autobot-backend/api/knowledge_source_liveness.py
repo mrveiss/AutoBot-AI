@@ -26,7 +26,7 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends, Query
 
-from api.feature_flags import require_admin
+from api.feature_flags import require_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.source_liveness import (
@@ -52,7 +52,7 @@ _MAX_SWEEP_LIMIT = 5000
     operation="source_liveness_census",
     error_code_prefix="SOURCE_LIVENESS",
 )
-async def get_source_liveness_census(_admin: Dict = Depends(require_admin)) -> Dict:
+async def get_source_liveness_census(_admin: Dict = Depends(require_admin_role)) -> Dict:
     """Per-ingest-class counts of every source state.
 
     ``never_checked`` and ``no_locator`` are their own buckets: *did not look*
@@ -71,7 +71,7 @@ async def get_source_liveness_census(_admin: Dict = Depends(require_admin)) -> D
 )
 async def post_source_liveness_sweep(
     limit: int = Query(DEFAULT_SWEEP_LIMIT, ge=1, le=_MAX_SWEEP_LIMIT),
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
 ) -> Dict:
     """Probe the least-recently-checked page of filesystem locators.
 

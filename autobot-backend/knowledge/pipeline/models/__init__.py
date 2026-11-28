@@ -11,7 +11,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 from .chunk import ProcessedChunk
 from .entity import Entity, EntityType
 from .event import EventType, TemporalEvent, TemporalType
-from .fact import AtomicFact, FactType
+from .fact import FactType, PipelineAtomicFact
 from .relationship import Relationship, RelationType
 from .summary import Summary, SummaryLevel
 
@@ -29,7 +29,7 @@ __all__ = [
     "TemporalType",
     "EventType",
     # Fact
-    "AtomicFact",
+    "PipelineAtomicFact",
     "FactType",
     # Summary
     "Summary",

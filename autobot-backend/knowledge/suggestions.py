@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso
+from knowledge.search_filters import filter_for_user_id
+from knowledge.suggestion_text import build_snippet, kb_document_title
 
 if TYPE_CHECKING:
     import aioredis
@@ -81,6 +83,7 @@ class SuggestionsMixin:
         limit: int = 5,
         min_confidence: float = 0.3,
         similarity_limit: int = 20,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Suggest tags for content based on similar documents (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -90,7 +93,7 @@ class SuggestionsMixin:
             return error_response
 
         try:
-            similar_docs = await self._find_similar_documents(content, similarity_limit)
+            similar_docs = await self._find_similar_documents(content, similarity_limit, user_id)
             if not similar_docs:
                 return self._no_similar_docs_response()
 
@@ -122,6 +125,7 @@ class SuggestionsMixin:
         limit: int = 3,
         min_confidence: float = 0.3,
         similarity_limit: int = 20,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Suggest categories based on similar documents (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -131,7 +135,7 @@ class SuggestionsMixin:
             return error_response
 
         try:
-            similar_docs = await self._find_similar_documents(content, similarity_limit)
+            similar_docs = await self._find_similar_documents(content, similarity_limit, user_id)
             if not similar_docs:
                 return self._no_similar_docs_response()
 
@@ -183,6 +187,7 @@ class SuggestionsMixin:
         category_limit: int = 3,
         min_confidence: float = 0.3,
         similarity_limit: int = 20,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Suggest both tags and categories in a single call (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -191,7 +196,7 @@ class SuggestionsMixin:
             return self._empty_suggestion_response("Content is required")
 
         try:
-            similar_docs = await self._find_similar_documents(content, similarity_limit)
+            similar_docs = await self._find_similar_documents(content, similarity_limit, user_id)
             if not similar_docs:
                 return self._empty_suggestion_response()
 
@@ -262,6 +267,7 @@ class SuggestionsMixin:
         apply_tags: bool = True,
         apply_category: bool = True,
         min_confidence: float = 0.85,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Auto-apply high-confidence suggestions to a fact (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -276,7 +282,9 @@ class SuggestionsMixin:
         }
 
         try:
-            suggestions = await self.suggest_all(content, tag_limit=10, category_limit=3, min_confidence=min_confidence)
+            suggestions = await self.suggest_all(
+                content, tag_limit=10, category_limit=3, min_confidence=min_confidence, user_id=user_id
+            )
 
             if not suggestions.get("success"):
                 return {
@@ -303,13 +311,16 @@ class SuggestionsMixin:
                 "error": "Failed to apply suggestions",
             }
 
-    async def _find_similar_documents(self, content: str, limit: int) -> List[Dict[str, Any]]:
+    async def _find_similar_documents(
+        self, content: str, limit: int, user_id: str | None = None
+    ) -> List[Dict[str, Any]]:
         """
         Find similar documents using embedding similarity.
 
         Args:
             content: Content to find similar documents for
             limit: Maximum number of similar documents
+            user_id: Only facts this user may read are returned; none returns nothing (#16665)
 
         Returns:
             List of similar documents with scores and metadata
@@ -321,6 +332,7 @@ class SuggestionsMixin:
                 top_k=limit,
                 mode="vector",
             )
+            results = await filter_for_user_id(results, self, user_id)  # #16665
 
             # Filter to only include results with decent similarity
             min_similarity = 0.3
@@ -544,50 +556,12 @@ class SuggestionsMixin:
             return 0.5
 
     def _build_snippet(self, content: str, snippet_length: int) -> str:
-        """
-        Extract a short preview snippet from raw document content.
-
-        Trims to the nearest word boundary and appends ellipsis when truncated.
-
-        Args:
-            content: Full document text.
-            snippet_length: Maximum character length of the snippet.
-
-        Returns:
-            Snippet string, at most snippet_length characters + ellipsis.
-        """
-        if not content:
-            return ""
-        text = content.strip()
-        if len(text) <= snippet_length:
-            return text
-        truncated = text[:snippet_length].rsplit(" ", 1)[0]
-        return truncated + self._SNIPPET_ELLIPSIS
+        """Short preview of *content*, cut at a word boundary (see ``suggestion_text``)."""
+        return build_snippet(content, snippet_length, self._SNIPPET_ELLIPSIS)
 
     def _extract_title(self, content: str, metadata: Dict[str, Any]) -> str:
-        """
-        Derive a human-readable title for a KB document.
-
-        Priority: metadata["title"] > metadata["source"] > first non-empty line.
-
-        Args:
-            content: Document text.
-            metadata: Fact metadata dict.
-
-        Returns:
-            Title string (never empty — falls back to truncated content).
-        """
-        for key in ("title", "source"):
-            val = metadata.get(key, "")
-            if val and isinstance(val, str) and val.strip():
-                return val.strip()
-
-        for line in content.splitlines():
-            line = line.strip()
-            if line:
-                return line[:120]
-
-        return content[:60].strip() or "Untitled"
+        """Human-readable title of a KB document (see ``suggestion_text``)."""
+        return kb_document_title(content, metadata)
 
     async def suggest_by_context(
         self,
@@ -596,6 +570,7 @@ class SuggestionsMixin:
         recency_weight: float = 0.2,
         min_score: float = 0.3,
         snippet_length: int = 200,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Return KB documents ranked by relevance to current context (Issue #3284).
@@ -612,6 +587,7 @@ class SuggestionsMixin:
             recency_weight: 0 = purely semantic, 1 = purely recency.
             min_score: Minimum combined score threshold.
             snippet_length: Maximum snippet character length.
+            user_id: The user the suggestions are read for (#16665); none means no facts.
 
         Returns:
             Dict with:
@@ -632,7 +608,7 @@ class SuggestionsMixin:
         try:
             # Fetch more candidates than needed so scoring can filter/sort properly.
             fetch_limit = min(limit * 4, 50)
-            raw_results = await self._find_similar_documents(context, fetch_limit)
+            raw_results = await self._find_similar_documents(context, fetch_limit, user_id)
             total_candidates = len(raw_results)
 
             suggestions = []

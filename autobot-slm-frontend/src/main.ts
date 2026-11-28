@@ -12,12 +12,13 @@ import i18n, { initI18n } from './i18n'
 
 import './assets/styles/main.css'
 
-// @autobot/ui shared kit: token contract fallbacks first, then the SLM adapter
-// (mapping --aui-* onto the SLM control plane's own design tokens). Loaded AFTER
-// main.css so the SLM tokens the adapter references are already defined — the
-// SLM keeps its own color identity; only the token contract is shared (#10860).
+// @autobot/ui shared kit: token contract fallbacks first, then the kit's one
+// adapter (mapping --aui-* onto the shared semantic token names, which main.css
+// and slm-scheme.css define with the SLM's own values). Loaded AFTER main.css so
+// those tokens are already defined — the SLM keeps its own color identity; only
+// the token names are shared (#10860).
 import '@autobot/ui/tokens'
-import './assets/styles/aui-theme.css'
+import '@autobot/ui/adapter'
 
 const app = createApp(App)
 

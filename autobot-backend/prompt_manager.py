@@ -19,8 +19,10 @@ from typing import Any, Dict, List
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+import browser_tool_prompt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.supported_languages import SUPPORTED_LANGUAGES
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
@@ -655,9 +657,8 @@ class PromptManager:
         Raises:
             KeyError: If prompt key is not found
         """
-        # Issue #6724: inject SSOT VM/port defaults so templates can use {{ vm_main }}
-        # etc. without each caller needing to pass them. Caller kwargs win on conflict.
-        merged_kwargs = {**_get_ssot_template_vars(), **kwargs}
+        # #6724 SSOT VM/port defaults + #21772 generated sections; caller kwargs win on conflict.
+        merged_kwargs = {**_get_ssot_template_vars(), **browser_tool_prompt.template_vars(), **kwargs}
 
         # Issue #4484: handle YAML section overrides
         if overrides and prompt_key in self.yaml_sections:
@@ -669,7 +670,7 @@ class PromptManager:
             if fallback_prompt is None:
                 available_keys = sorted(self.prompts)
                 raise KeyError(f"Prompt '{prompt_key}' not found. Available prompts: " f"{available_keys}")
-            return fallback_prompt
+            return self.jinja_env.from_string(fallback_prompt).render(**merged_kwargs)
 
         try:
             template = self.templates[prompt_key]
@@ -1423,26 +1424,6 @@ def reload_prompts() -> None:
     Convenience function to reload all prompts.
     """
     get_prompt_manager().reload()
-
-
-# Issue #1327: Supported languages for prompt language injection.
-# Canonical copy lives in personality_service.SUPPORTED_LANGUAGES;
-# duplicated here to avoid circular-import issues at call time.
-SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "pt": "Portuguese",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "ar": "Arabic",
-    "ru": "Russian",
-    "it": "Italian",
-    "nl": "Dutch",
-    "hi": "Hindi",
-}
 
 
 def resolve_language(request_language=None):

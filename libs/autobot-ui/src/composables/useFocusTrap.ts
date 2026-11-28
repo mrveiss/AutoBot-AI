@@ -22,7 +22,7 @@
  *   <template><div ref="dialogRef" @keydown="onKeydown">...</div></template>
  */
 
-import type { Ref } from 'vue'
+import { getCurrentScope, onScopeDispose, type Ref } from 'vue'
 
 /**
  * CSS selector matching natively-focusable elements plus anything with an
@@ -71,12 +71,29 @@ export function isTabbable(el: HTMLElement): boolean {
   return true
 }
 
+export interface UseFocusTrapOptions {
+  /** `deactivate()` refocuses the element that was focused at `activate()`. Default false. */
+  restoreFocus?: boolean
+  /** `activate()` focuses the first tabbable element in the container. Default false. */
+  initialFocus?: boolean
+  /**
+   * `activate()` also listens for `keydown` on `document` (removed by
+   * `deactivate()`), for callers that cannot bind `onKeydown` on the container.
+   * Default false.
+   */
+  listenOnDocument?: boolean
+}
+
 export interface UseFocusTrapReturn {
   /**
    * `keydown` handler to bind on the container. No-op for non-Tab keys and
    * when the container ref is unset — safe to attach unconditionally.
    */
   onKeydown: (event: KeyboardEvent) => void
+  /** Records the focused element and focuses the first tabbable, per the options. */
+  activate: () => void
+  /** Removes the document listener and restores focus, per the options. Idempotent. */
+  deactivate: () => void
 }
 
 /**
@@ -86,34 +103,64 @@ export interface UseFocusTrapReturn {
  *                      should be wrapped. When null, the handler no-ops —
  *                      callers don't need a guard for the "before mounted"
  *                      window.
+ * @param options       Opt-in focus restoration, initial focus and a
+ *                      document-level listener; all off by default, so a
+ *                      caller that only binds `onKeydown` is unchanged.
  */
 export function useFocusTrap(
-  containerRef: Ref<HTMLElement | null>
+  containerRef: Ref<HTMLElement | null>,
+  options: UseFocusTrapOptions = {}
 ): UseFocusTrapReturn {
+  let previousFocus: HTMLElement | null = null
+  let active = false
+
+  function tabbables(): HTMLElement[] {
+    if (!containerRef.value) return []
+    return Array.from(
+      containerRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    ).filter(isTabbable)
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Tab' || !containerRef.value) return
 
     // CSS-match → tabbability filter. The filter excludes aria-hidden /
     // inert / display:none descendants that the browser would skip
     // during Tab navigation but querySelectorAll returns by structure.
-    const focusables = Array.from(
-      containerRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-    ).filter(isTabbable)
+    const focusables = tabbables()
     if (focusables.length === 0) return
 
     const first = focusables[0]
     const last = focusables[focusables.length - 1]
-    const active = document.activeElement
+    const current = document.activeElement
 
-    if (event.shiftKey && active === first) {
+    if (event.shiftKey && current === first) {
       event.preventDefault()
       last.focus()
-    } else if (!event.shiftKey && active === last) {
+    } else if (!event.shiftKey && current === last) {
       event.preventDefault()
       first.focus()
     }
     // Otherwise allow default Tab behavior.
   }
 
-  return { onKeydown }
+  function activate(): void {
+    if (active) return
+    active = true
+    previousFocus = document.activeElement as HTMLElement | null
+    if (options.listenOnDocument) document.addEventListener('keydown', onKeydown)
+    if (options.initialFocus) tabbables()[0]?.focus()
+  }
+
+  function deactivate(): void {
+    if (!active) return
+    active = false
+    if (options.listenOnDocument) document.removeEventListener('keydown', onKeydown)
+    if (options.restoreFocus && previousFocus) previousFocus.focus()
+    previousFocus = null
+  }
+
+  if (getCurrentScope()) onScopeDispose(deactivate)
+
+  return { onKeydown, activate, deactivate }
 }

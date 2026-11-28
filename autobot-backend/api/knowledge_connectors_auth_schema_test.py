@@ -24,6 +24,7 @@ import dataclasses
 from unittest.mock import patch
 
 import pytest
+from fastapi import BackgroundTasks
 
 # #13702: create_connector derives the credential owner from the authenticated
 # caller; a direct call must supply one or it 401s, same as a real request.
@@ -174,7 +175,7 @@ async def _create_via_api(request: CreateConnectorRequest, http_client_patch_tar
         patch.object(mod, "_save_connector", _fake_save),
         patch(http_client_patch_target, return_value=fake_client),
     ):
-        result = await mod.create_connector(request, user=_TEST_USER)
+        result = await mod.create_connector(request, BackgroundTasks(), user=_TEST_USER)
     return result, saved["cfg"]
 
 
@@ -214,7 +215,7 @@ async def test_create_confluence_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.confluence.get_http_client", fake_client)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.atlassian_base.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL
@@ -239,7 +240,7 @@ async def test_create_jira_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.jira.get_http_client", fake_client)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.atlassian_base.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL

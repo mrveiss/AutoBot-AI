@@ -10,7 +10,8 @@ that file was already at ``scripts/check_python_file_size.py``'s recorded
 ceiling, a grandfathered ratchet whose file "may not grow" past it, so the
 one line ``_perform_all_session_cleanup`` needs to call this module's new
 ``_cleanup_chat_knowledge_context`` had no room. Moving the six pre-existing
-``_cleanup_knowledge_base_facts``/``_cleanup_conversation_transcript`` and
+``_cleanup_knowledge_base_facts``/``_cleanup_conversation_transcript`` (the
+latter retired by #18293: a session delete now only proposes its removal) and
 their small helpers (#620's Extract-Method split) out here first --
 unchanged -- shrinks
 ``chat_sessions.py`` enough to lower that ceiling instead of raising it, and
@@ -147,63 +148,6 @@ async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> di
         kb_cleanup_result["cleanup_error"] = str(kb_cleanup_error)
 
     return kb_cleanup_result
-
-
-async def _cleanup_conversation_transcript(session_id: str) -> dict:
-    """
-    Clean up conversation transcript file from data/conversation_transcripts/.
-
-    This removes the duplicate transcript storage used by ChatWorkflowManager.
-
-    Args:
-        session_id: Chat session ID being deleted
-
-    Returns:
-        Dict with cleanup result
-    """
-    import os
-
-    from autobot_shared.security.path_validator import validate_relative_path
-    from constants.path_constants import PATH
-
-    result = {"transcript_deleted": False, "error": None}
-
-    try:
-        if "/" in session_id or "\\" in session_id or ".." in session_id:
-            raise ValueError("Invalid session ID")
-
-        transcript_path = validate_relative_path(
-            f"{session_id}.json",
-            PATH.DATA_DIR / "conversation_transcripts",
-        )
-
-        # CodeQL py/path-injection only credits a realpath + startswith(root + os.sep) guard in the
-        # sink's own scope (#16229, #16236); validate_relative_path above stays the real validator.
-        # The one name this adds a refusal for resolves to the directory itself, which os.remove refuses too.
-        root = os.path.realpath(str(PATH.DATA_DIR / "conversation_transcripts"))
-        real = os.path.realpath(str(transcript_path))
-        if not real.startswith(root + os.sep):
-            raise ValueError("Invalid session ID")
-
-        if os.path.exists(real):
-            os.remove(real)
-            result["transcript_deleted"] = True
-            logger.info("Deleted conversation transcript for session %s", session_id)
-        else:
-            logger.debug(
-                "No conversation transcript found for session %s (may not exist)",
-                session_id,
-            )
-
-    except Exception as e:
-        logger.warning(
-            "Failed to delete conversation transcript for session %s: %s",
-            session_id,
-            e,
-        )
-        result["error"] = str(e)
-
-    return result
 
 
 async def _cleanup_chat_knowledge_context(request: Request, session_id: str) -> dict:

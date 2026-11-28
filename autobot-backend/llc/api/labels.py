@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import SESSION_DEP, assert_company_access, service_dep
 from user_management.services import TenantContext
 
 from ..models.label import LLCLabel
@@ -39,8 +39,11 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
+from ._common import acting_user_id, actor_id, require_work_item_id
 
-router = APIRouter(prefix="/companies/{company_id}/labels", tags=["llc-labels"])
+router = APIRouter(
+    prefix="/companies/{company_id}/labels", tags=["llc-labels"], dependencies=[Depends(require_work_item_id)]
+)
 _service = service_dep(LLCLabelService)
 
 
@@ -87,7 +90,6 @@ class LabelCreate(BaseModel):
     name: str = Field(..., max_length=128)
     color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     description: Optional[str] = None
-    created_by: Optional[str] = None
 
 
 class LabelUpdate(BaseModel):
@@ -98,7 +100,6 @@ class LabelUpdate(BaseModel):
 
 class LabelAssign(BaseModel):
     label_ids: List[str]
-    assigned_by: Optional[str] = None
 
 
 # ------------------------------------------------------------------
@@ -110,7 +111,7 @@ class LabelAssign(BaseModel):
 async def create_label(
     company_id: str,
     body: LabelCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -122,7 +123,7 @@ async def create_label(
             name=body.name,
             color=body.color,
             description=body.description,
-            created_by=body.created_by,
+            created_by=str(actor_id(_current_user)),  # the session's, never the body (#20521)
         )
         await session.commit()
         return _label_to_dict(label)
@@ -133,7 +134,7 @@ async def create_label(
 @router.get("")
 async def list_labels(
     company_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -146,7 +147,7 @@ async def update_label(
     company_id: str,
     label_id: str,
     body: LabelUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -172,7 +173,7 @@ async def update_label(
 async def delete_label(
     company_id: str,
     label_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -195,7 +196,7 @@ async def assign_labels(
     company_id: str,
     work_item_id: str,
     body: LabelAssign,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -207,7 +208,8 @@ async def assign_labels(
             session,
             work_item_id=work_item_id,
             label_ids=body.label_ids,
-            assigned_by=body.assigned_by,
+            assigned_by=str(actor_id(_current_user)),
+            actor_user_id=acting_user_id(_current_user),
         )
         await session.commit()
         return {
@@ -223,7 +225,7 @@ async def remove_label(
     company_id: str,
     work_item_id: str,
     label_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -234,6 +236,7 @@ async def remove_label(
             session,
             work_item_id=work_item_id,
             label_id=label_id,
+            actor_user_id=acting_user_id(_current_user),
         )
         await session.commit()
     except WorkItemNotFound:

@@ -5,7 +5,7 @@
 """``secrets_baseline_legacy_keys.json`` is excluded from detect-secrets, and
 that exclusion can never hide a real secret (#17130).
 
-The file records 1,355 ``(filename, type, hashed_secret)`` triples --
+The file records 1,336 ``(filename, type, hashed_secret)`` triples --
 bookkeeping about *already-audited* findings elsewhere in the repo, not
 source material of its own. Every ``hashed_secret`` is a 40-hex-char SHA1
 digest, which is itself indistinguishable from a "Hex High Entropy String"

@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .complexity_scorer import TaskComplexityScorer
-from .tier_config import ComplexityResult, TierConfig, TierMetrics
+from .tier_config import ComplexityResult, TierConfig, TierMetrics, disabled_route
 
 logger = get_logger(__name__)
 
@@ -73,6 +73,8 @@ class CostRouter:
         messages: List[Dict],
         requested_model: str | None = None,
     ) -> Tuple[str, ComplexityResult]:
+        if not self.config.enabled:
+            return disabled_route(self.config)
         self._total_requests += 1
 
         # Score complexity to know minimum quality bar
@@ -81,11 +83,7 @@ class CostRouter:
         candidates = self._candidates(complexity)
         selected = self._cheapest(candidates)
 
-        # Track savings vs always using complex model
-        complex_cost = _blended_cost(self.config.models.complex)
-        selected_cost = _blended_cost(selected)
-        if complex_cost > selected_cost:
-            self._cost_savings_usd += (complex_cost - selected_cost) / 1_000_000
+        self._record_savings(selected)
 
         result = ComplexityResult(
             score=complexity.score,
@@ -98,6 +96,13 @@ class CostRouter:
         self._metrics.record(result)
         logger.debug("CostRouter: %s (blended cost $%.4f/1M)", selected, _blended_cost(selected))
         return selected, result
+
+    def _record_savings(self, selected: str) -> None:
+        """Track savings vs always using the complex model."""
+        complex_cost = _blended_cost(self.config.models.complex)
+        selected_cost = _blended_cost(selected)
+        if complex_cost > selected_cost:
+            self._cost_savings_usd += (complex_cost - selected_cost) / 1_000_000
 
     def _candidates(self, complexity: ComplexityResult) -> List[str]:
         """Return eligible candidates given complexity floor.
@@ -123,6 +128,11 @@ class CostRouter:
         base["total_requests"] = self._total_requests
         base["estimated_cost_savings_usd"] = round(self._cost_savings_usd, 6)
         return base
+
+    def reset_metrics(self) -> None:
+        self._metrics = TierMetrics()
+        self._total_requests = 0
+        self._cost_savings_usd = 0.0
 
 
 __all__ = ["CostRouter"]

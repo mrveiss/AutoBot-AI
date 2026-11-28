@@ -16,11 +16,19 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from autobot_shared.audit_chain_writer import require_chain_key
+from autobot_shared.ssot_config import config as config_ssot
 from config import settings
+from models.auth_revocation import PasswordEpoch, RevokedToken
 from models.database import Base, Setting
+from models.post_sync_action_run import PostSyncActionRun
+
+# Tables whose models live outside models/database.py (its file-size ceiling). Imported
+# here so they are on Base.metadata before create_all runs (#17455).
+_EXTRA_MODELS = (PostSyncActionRun, RevokedToken, PasswordEpoch)  # auth revocation: #18663
 
 # SSOT-derived seed defaults — env vars match PortConfig/VMConfig aliases
-_BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
+_BACKEND_HOST = config_ssot.vm.main
 _PROMETHEUS_PORT = os.getenv("AUTOBOT_PROMETHEUS_PORT", "9090")
 _GRAFANA_PORT = os.getenv("AUTOBOT_GRAFANA_PORT", "3000")
 _SSOT_PROMETHEUS_URL = f"http://{_BACKEND_HOST}:{_PROMETHEUS_PORT}"
@@ -37,11 +45,19 @@ class DatabaseService:
         self.session_factory = None
         self._initialized = False
 
+    def describe_failure(self, exc: BaseException) -> str:
+        """Where the connection was attempted and how it failed, never credentials (#18665)."""
+        from services.db_transaction_errors import describe_connect_failure
+
+        return describe_connect_failure(exc, settings.database_url)
+
     async def initialize(self) -> None:
         """Initialize the database connection and create tables (#786)."""
         if self._initialized:
             return
 
+        # Fail closed (#17219): without the audit-chain MAC key no audit_logs row can be written.
+        require_chain_key()
         database_url = settings.database_url
         logger.info("Connecting to PostgreSQL database")
 
@@ -64,6 +80,12 @@ class DatabaseService:
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        # #18663: the shared password-epoch rule reads and writes this database from the
+        # moment it has a session -- installed BEFORE anything below can fail, so a
+        # half-initialized SLM never falls back to a Redis it does not own.
+        from services.password_epoch_store import install as install_epoch_store
+
+        install_epoch_store()
 
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

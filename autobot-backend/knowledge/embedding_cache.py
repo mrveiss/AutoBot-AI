@@ -15,11 +15,11 @@ Issue #8156 - Replace fixed LRU with ARC for hot-query resilience.
 
 import asyncio
 import hashlib
-import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monotonic_clock import Clock, elapsed_since, monotonic_now
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_1_HOUR
 
@@ -51,17 +51,24 @@ class EmbeddingCache:
     Reads default maxsize from SSOT config.cache.l1.embedding
     """
 
-    def __init__(self, maxsize: int = None, ttl_seconds: int = TTL_1_HOUR):
+    def __init__(
+        self,
+        maxsize: int = None,
+        ttl_seconds: int = TTL_1_HOUR,
+        clock: Clock = monotonic_now,
+    ):
         """
         Initialize ARC embedding cache.
 
         Args:
             maxsize: Maximum items across T1+T2 (default from SSOT config.cache.l1.embedding)
             ttl_seconds: Time-to-live for cached embeddings (default: 1 hour)
+            clock: Monotonic clock for TTL checks (#18888); injectable for tests
         """
         # Issue #743: Read from SSOT config, allow explicit override
         self._maxsize = maxsize if maxsize is not None else config.cache.l1.embedding
         self._ttl_seconds = ttl_seconds
+        self._clock = clock
 
         # ARC lists: T1 (recent once), T2 (frequent), B1/B2 (ghost directories)
         # OrderedDict maintains insertion order — oldest key is first (LRU tail).
@@ -103,7 +110,8 @@ class EmbeddingCache:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _make_key(self, model: str, query: str) -> str:
+    @staticmethod
+    def make_key(model: str, query: str) -> str:
         """Create cache key from (model, query) using SHA-256 hash.
 
         Issue #12251: the embedding model id is folded into the key so the
@@ -119,7 +127,7 @@ class EmbeddingCache:
         ts = self._timestamps.get(key)
         if ts is None:
             return True
-        return (time.time() - ts) > self._ttl_seconds
+        return elapsed_since(ts, self._clock) > self._ttl_seconds
 
     def _remove_live(self, key: str) -> None:
         """Remove a key from whichever live list (T1 or T2) contains it."""
@@ -183,7 +191,7 @@ class EmbeddingCache:
         Returns:
             Cached embedding or None if not found/expired
         """
-        key = self._make_key(model, query)
+        key = self.make_key(model, query)
 
         async with self._lock:
             # --- Check T1 ---
@@ -195,7 +203,7 @@ class EmbeddingCache:
                     return None
                 embedding = self._t1.pop(key)
                 self._t2[key] = embedding
-                self._timestamps[key] = time.time()  # refresh timestamp on promotion
+                self._timestamps[key] = self._clock()  # refresh timestamp on promotion
                 self._hits += 1
                 logger.debug("Embedding cache HIT (T1->T2 promotion) for query: %s...", query[:50])
                 return embedding
@@ -209,7 +217,7 @@ class EmbeddingCache:
                     return None
                 # Move to MRU end of T2
                 self._t2.move_to_end(key)
-                self._timestamps[key] = time.time()
+                self._timestamps[key] = self._clock()
                 self._hits += 1
                 logger.debug("Embedding cache HIT (T2) for query: %s...", query[:50])
                 return self._t2[key]
@@ -230,19 +238,19 @@ class EmbeddingCache:
             embedding: Computed embedding vector
             model: Embedding model id (part of the cache key — Issue #12251)
         """
-        key = self._make_key(model, query)
+        key = self.make_key(model, query)
 
         async with self._lock:
             # If already live, update value and timestamp (update in place)
             if key in self._t1:
                 self._t1[key] = embedding
                 self._t1.move_to_end(key)
-                self._timestamps[key] = time.time()
+                self._timestamps[key] = self._clock()
                 return
             if key in self._t2:
                 self._t2[key] = embedding
                 self._t2.move_to_end(key)
-                self._timestamps[key] = time.time()
+                self._timestamps[key] = self._clock()
                 return
 
             if key in self._b1:
@@ -252,7 +260,7 @@ class EmbeddingCache:
                 del self._b1[key]
                 self._make_room()
                 self._t2[key] = embedding
-                self._timestamps[key] = time.time()
+                self._timestamps[key] = self._clock()
                 logger.debug("ARC B1 ghost hit — p increased to %d", self._p)
                 return
 
@@ -263,7 +271,7 @@ class EmbeddingCache:
                 del self._b2[key]
                 self._make_room()
                 self._t2[key] = embedding
-                self._timestamps[key] = time.time()
+                self._timestamps[key] = self._clock()
                 logger.debug("ARC B2 ghost hit — p decreased to %d", self._p)
                 return
 
@@ -278,7 +286,7 @@ class EmbeddingCache:
                         self._b2.popitem(last=False)
             self._make_room()
             self._t1[key] = embedding
-            self._timestamps[key] = time.time()
+            self._timestamps[key] = self._clock()
 
     def evict(self, count: int) -> int:
         """
@@ -342,7 +350,7 @@ class EmbeddingCache:
 
 # Global embedding cache instance
 # Issue #743: Uses SSOT config defaults (no explicit size needed)
-_embedding_cache = EmbeddingCache(ttl_seconds=3600)
+_embedding_cache = EmbeddingCache(ttl_seconds=TTL_1_HOUR)
 
 
 def get_embedding_cache() -> EmbeddingCache:

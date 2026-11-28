@@ -28,20 +28,20 @@ import slmApiClient from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 export type LLMProviderConfig = components['schemas']['LLMProviderConfig']
-export type LLMConfig = components['schemas']['LLMConfig']
-export type LLMConfigResponse = components['schemas']['LLMConfigResponse']
+export type SlmLLMConfig = components['schemas']['SlmLLMConfig']
+export type SlmLLMConfigResponse = components['schemas']['SlmLLMConfigResponse']
 export type LLMTestRequest = components['schemas']['LLMTestRequest']
 export type LLMTestResponse = components['schemas']['LLMTestResponse']
 export type LLMApplyRequest = components['schemas']['LLMApplyRequest']
 export type LLMApplyResponse = components['schemas']['LLMApplyResponse']
 
 export function useLlmConfigApi() {
-  async function getConfig(): Promise<LLMConfigResponse> {
-    return slmApiClient.get<LLMConfigResponse>('/settings/admin/llm')
+  async function getConfig(): Promise<SlmLLMConfigResponse> {
+    return slmApiClient.get<SlmLLMConfigResponse>('/settings/admin/llm')
   }
 
-  async function saveConfig(config: LLMConfig): Promise<LLMConfigResponse> {
-    return slmApiClient.put<LLMConfigResponse>('/settings/admin/llm', config)
+  async function saveConfig(config: SlmLLMConfig): Promise<SlmLLMConfigResponse> {
+    return slmApiClient.put<SlmLLMConfigResponse>('/settings/admin/llm', config)
   }
 
   async function testConnection(

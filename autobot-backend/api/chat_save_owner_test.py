@@ -107,7 +107,7 @@ class TestTheEndpointActuallyPassesIt:
         manager = MagicMock()
         manager.save_session = AsyncMock(return_value={"session_id": "chat-1"})
         with patch.object(chat_api, "get_chat_history_manager", MagicMock(return_value=manager)):
-            with patch.object(chat_api, "_merge_chat_messages", AsyncMock(return_value=[])):
+            with patch.object(chat_api, "_merge_chat_messages", AsyncMock(return_value=([], frozenset()))):
                 await chat_api.save_chat_by_id(
                     chat_id="chat-1",
                     current_user=_ALICE,

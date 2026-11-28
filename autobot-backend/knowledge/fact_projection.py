@@ -32,17 +32,15 @@ relationship between the stores, not about what a fact is.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from collections import Counter, defaultdict
 from typing import Any, Dict
 
+from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.logging_manager import get_logger
+from knowledge.category_quarantine import take_fact_hash
 
 logger = get_logger(__name__)
-
-#: Width of the deduplication fingerprint carried by ``content_hash:<hash>``.
-_CONTENT_HASH_WIDTH = 16
 
 
 class FactProjectionMixin:
@@ -130,7 +128,7 @@ class FactProjectionMixin:
         from knowledge import fact_store
 
         try:
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:_CONTENT_HASH_WIDTH]
+            content_hash = fact_dedup_key(content)
             existing_id = await asyncio.to_thread(self.redis_client.get, "content_hash:%s" % content_hash)
 
             if isinstance(existing_id, bytes):
@@ -171,8 +169,11 @@ class FactProjectionMixin:
         await fact_store.persist_fact(fact_id, content, metadata, hash_content=hash_content)
         return True
 
-    async def _durable_delete(self, fact_id: str) -> bool:
-        """Remove the row and the hash. ``False`` when neither held the fact.
+    async def _durable_delete(self, fact_id: str) -> tuple[bool, str | None]:
+        """Remove the row and the hash. ``(False, ...)`` when neither held the fact.
+
+        The second item is the ``category_id`` the hash held at the moment it was removed (``None`` if
+        none), read in the same script as the DEL so a concurrent reassignment cannot slip between (#21984).
 
         Both returns matter. Redis DEL reports how many keys it removed and the
         durable delete whether a row was affected; if neither removed anything, a
@@ -183,8 +184,8 @@ class FactProjectionMixin:
         from knowledge import fact_store
 
         durable_removed = await fact_store.delete_fact(fact_id)
-        projection_removed = await asyncio.to_thread(self.redis_client.delete, "fact:%s" % fact_id)
-        return bool(durable_removed or projection_removed)
+        projection_removed, category_id = await take_fact_hash(self.redis_client, fact_id)
+        return bool(durable_removed or projection_removed), category_id
 
     async def _record_vector_observation(self, fact_id: str) -> None:
         """Note on the durable row that ChromaDB was seen holding this vector.

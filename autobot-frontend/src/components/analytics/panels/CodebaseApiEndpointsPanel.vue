@@ -8,7 +8,7 @@
     <h3>
       <Icon name="plug" /> {{ $t('analytics.codebase.apiCoverage.title') }}
       <span v-if="analysis" class="total-count">
-        ({{ analysis.coverage_percentage?.toFixed(1) || 0 }}% coverage)
+        ({{ $t('analytics.codebase.shared.coveragePercent', { percent: analysis.coverage_percentage?.toFixed(1) || 0 }) }})
       </span>
       <button
         @click="emit('refresh')"
@@ -115,7 +115,7 @@
           <transition name="accordion">
             <div v-if="isExpanded('orphaned')" class="accordion-items">
               <div
-                v-for="(ep, index) in analysis.orphaned.slice(0, 30)"
+                v-for="(ep, index) in visible('orphaned', analysis.orphaned)"
                 :key="'orphan-' + index"
                 class="list-item item-warning"
               >
@@ -125,11 +125,7 @@
                 </div>
                 <div class="item-location">📁 {{ ep.file_path }}:{{ ep.line_number }}</div>
               </div>
-              <div v-if="analysis.orphaned.length > 30" class="show-more">
-                <span class="muted">
-                  Showing 30 of {{ analysis.orphaned.length }} orphaned endpoints
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('orphaned', analysis.orphaned.length)" :total="analysis.orphaned.length" :step="30" @show-more="showMore('orphaned')" />
             </div>
           </transition>
         </div>
@@ -156,7 +152,7 @@
           <transition name="accordion">
             <div v-if="isExpanded('missing')" class="accordion-items">
               <div
-                v-for="(ep, index) in analysis.missing.slice(0, 30)"
+                v-for="(ep, index) in visible('missing', analysis.missing)"
                 :key="'missing-' + index"
                 class="list-item item-critical"
               >
@@ -167,11 +163,7 @@
                 <div class="item-location">📁 {{ ep.file_path }}:{{ ep.line_number }}</div>
                 <div v-if="ep.details" class="item-details">{{ ep.details }}</div>
               </div>
-              <div v-if="analysis.missing.length > 30" class="show-more">
-                <span class="muted">
-                  Showing 30 of {{ analysis.missing.length }} missing endpoints
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('missing', analysis.missing.length)" :total="analysis.missing.length" :step="30" @show-more="showMore('missing')" />
             </div>
           </transition>
         </div>
@@ -198,7 +190,7 @@
           <transition name="accordion">
             <div v-if="isExpanded('used')" class="accordion-items">
               <div
-                v-for="(usage, index) in analysis.used?.slice(0, 30)"
+                v-for="(usage, index) in visible('used', analysis.used)"
                 :key="'used-' + index"
                 class="list-item item-success"
               >
@@ -208,17 +200,13 @@
                     :class="usage.endpoint?.method?.toLowerCase()"
                   >{{ usage.endpoint?.method }}</span>
                   <span class="item-path">{{ usage.endpoint?.path }}</span>
-                  <span class="call-count-badge">{{ usage.call_count }} calls</span>
+                  <span class="call-count-badge">{{ $t('analytics.codebase.shared.calls', { count: usage.call_count }, usage.call_count ?? 0) }}</span>
                 </div>
                 <div class="item-location">
                   📁 {{ usage.endpoint?.file_path }}:{{ usage.endpoint?.line_number }}
                 </div>
               </div>
-              <div v-if="(analysis.used?.length ?? 0) > 30" class="show-more">
-                <span class="muted">
-                  Showing 30 of {{ analysis.used?.length ?? 0 }} used endpoints
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('used', (analysis.used?.length ?? 0))" :total="(analysis.used?.length ?? 0)" :step="30" @show-more="showMore('used')" />
             </div>
           </transition>
         </div>
@@ -240,8 +228,11 @@
 
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from '../TruncationNotice.vue'
 import { useExpansion } from '@/composables/useExpansion'
 import Icon from '@/components/ui/Icon.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface ApiEndpointInfo {
   path: string
@@ -273,11 +264,15 @@ interface ApiEndpointAnalysisResult {
   [key: string]: unknown
 }
 
-defineProps<{
+const props = defineProps<{
   analysis: ApiEndpointAnalysisResult | null
   loading: boolean
   error: string | null
 }>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 30
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.analysis)
 
 const emit = defineEmits<{
   refresh: []
@@ -294,14 +289,7 @@ function getCoverageClass(percentage: number): string {
   return 'success'
 }
 
-function formatTimestamp(timestamp: string | number | Date | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped src="@/design-system/styles/panel-api-cross-shared.css"></style>

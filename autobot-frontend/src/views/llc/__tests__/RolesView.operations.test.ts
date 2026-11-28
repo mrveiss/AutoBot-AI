@@ -30,16 +30,28 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { companyId: 'c1' } }),
   useRouter: () => ({ push: vi.fn() }),
 }))
+// The workflows picker is the kit's select, whose popper does not run in jsdom.
+vi.mock('reka-ui', async () => (await import('@/test/rekaSelectStub')).rekaSelectStub())
 
 import RolesView from '../RolesView.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
+import RoleWorkflowsPanel from '@/components/llc/RoleWorkflowsPanel.vue'
 
 const ROLE = { id: 'r1', company_id: 'c1', name: 'Head of Sales', is_system: false }
 const OTHER_ROLE = { id: 'r2', company_id: 'c1', name: 'SRE', is_system: false }
 const HOLDER = { id: 'a1', role_id: 'r1', holder_type: 'user', holder_id: 'u-9', ended_at: null }
+// #21241: the company's workflows (the picker's options) and the viewer's standing (who sees the controls).
+const COMPANY_WORKFLOWS = [
+  { workflow_id: 'wf-1', name: 'One', kind: 'workflow' },
+  { workflow_id: 'wf-2', name: 'Two', kind: 'workflow' },
+]
+const MEMBERS = { members: [], viewer_grantable_roles: [], viewer_can_manage: true }
 
 function respond(): void {
   get.mockImplementation((url: string) => {
+    // The company-level reads contain '/workflows' and must not be served the role's lists.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve(COMPANY_WORKFLOWS)
+    if (url.endsWith('/members')) return Promise.resolve(MEMBERS)
     if (url.includes('/holders')) return Promise.resolve([HOLDER])
     if (url.includes('/permissions')) return Promise.resolve(['knowledge.read'])
     if (url.includes('/workflows')) return Promise.resolve(['wf-1'])
@@ -93,17 +105,13 @@ describe('RolesView operations (#14221 step 6b)', () => {
     const wrapper = await mountView()
 
     const titles = wrapper.findAllComponents(RoleAttachmentPanel).map((p) => p.props('title'))
-    expect(titles).toEqual([
-      en.llcRoles.permissions,
-      en.llcRoles.workflows,
-      en.llcRoles.tools,
-      en.llcRoles.credentials,
-    ])
+    // The workflows panel is its own component (#21241); the other three keep the shared panel.
+    expect(titles).toEqual([en.llcRoles.permissions, en.llcRoles.tools, en.llcRoles.credentials])
+    expect(wrapper.findComponent(RoleWorkflowsPanel).exists()).toBe(true)
   })
 
   it.each([
     [en.llcRoles.permissions, 'knowledge.write', '/permissions', { permission: 'knowledge.write' }],
-    [en.llcRoles.workflows, 'wf-2', '/workflows', { workflow_id: 'wf-2' }],
     [en.llcRoles.tools, 'llc.record_decision', '/tools', { tool_name: 'llc.record_decision' }],
     [en.llcRoles.credentials, 'sec-2', '/credentials', { secret_id: 'sec-2' }],
   ])('adds to %s via its endpoint', async (title, value, suffix, body) => {
@@ -118,7 +126,6 @@ describe('RolesView operations (#14221 step 6b)', () => {
 
   it.each([
     [en.llcRoles.permissions, 'knowledge.read', '/permissions/knowledge.read'],
-    [en.llcRoles.workflows, 'wf-1', '/workflows/wf-1'],
     [en.llcRoles.tools, 'llc.create_work_item', '/tools/llc.create_work_item'],
     [en.llcRoles.credentials, 'sec-1', '/credentials/sec-1'],
   ])('removes from %s via its endpoint', async (title, value, suffix) => {
@@ -129,6 +136,76 @@ describe('RolesView operations (#14221 step 6b)', () => {
     await flushPromises()
 
     expect(del).toHaveBeenCalledWith(`/api/llc/roles/c1/r1${suffix}`)
+  })
+
+  it('attaches a workflow picked from the company list, then reloads the role from the server', async () => {
+    respond()
+    const wrapper = await mountView()
+    const before = get.mock.calls.length
+
+    await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledWith('/api/llc/roles/c1/r1/workflows', { workflow_id: 'wf-2' })
+    expect(get.mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it('detaches an attached workflow through its endpoint', async () => {
+    respond()
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-testid="role-workflow-detach-wf-1"]').trigger('click')
+    await flushPromises()
+
+    expect(del).toHaveBeenCalledWith('/api/llc/roles/c1/r1/workflows/wf-1')
+  })
+
+  it('keeps the workflows panel mounted across a role reload: no second workflows or standing request, controls stay', async () => {
+    respond()
+    const wrapper = await mountView()
+    const panel = wrapper.findComponent(RoleWorkflowsPanel).element
+    const workflowGets = () => get.mock.calls.filter(([url]) => String(url).startsWith('/api/llc/workflows/')).length
+    const memberGets = () => get.mock.calls.filter(([url]) => String(url).endsWith('/members')).length
+    const holderGets = () => get.mock.calls.filter(([url]) => String(url).includes('/holders')).length
+    const [workflowsBefore, membersBefore, holdersBefore] = [workflowGets(), memberGets(), holderGets()]
+    expect(workflowsBefore).toBeGreaterThan(0)
+    expect(holdersBefore).toBeGreaterThan(0)
+
+    await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledTimes(1)
+    // The role detail was reloaded (holders GET), the panel was not remounted: same element, no new requests.
+    expect(holderGets()).toBe(holdersBefore + 1)
+    expect(wrapper.findComponent(RoleWorkflowsPanel).element).toBe(panel)
+    expect(workflowGets()).toBe(workflowsBefore)
+    expect(memberGets()).toBe(membersBefore)
+    expect(wrapper.find('[data-testid="role-workflows-controls"]').exists()).toBe(true)
+  })
+
+  it('locks the other panels while a workflow write is in flight, and unlocks them after', async () => {
+    respond()
+    let finish!: () => void
+    post.mockImplementation(() => new Promise<void>((r) => (finish = () => r())))
+    const wrapper = await mountView()
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(false)
+
+    await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(true)
+    expect(panelFor(wrapper, en.llcRoles.tools).props('busy')).toBe(true)
+    // And a permission write started now is refused by the view, as any overlapping mutation is.
+    panelFor(wrapper, en.llcRoles.permissions).vm.$emit('add', 'knowledge.write')
+    await flushPromises()
+    expect(post).toHaveBeenCalledTimes(1)
+
+    finish()
+    await flushPromises()
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(false)
   })
 
   it('encodes a value that would otherwise break the path', async () => {
@@ -232,12 +309,7 @@ describe('RolesView operations (#14221 step 6b)', () => {
       const wrapper = await mountView(locale)
 
       const ids = wrapper.findAll('input[id^="attachment-"]').map((i) => i.attributes('id'))
-      expect(ids).toEqual([
-        'attachment-permissions',
-        'attachment-workflows',
-        'attachment-tools',
-        'attachment-credentials',
-      ])
+      expect(ids).toEqual(['attachment-permissions', 'attachment-tools', 'attachment-credentials'])
       expect(new Set(ids).size).toBe(ids.length)
     },
   )

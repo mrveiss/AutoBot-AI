@@ -57,6 +57,20 @@ THOUGHT_END_PATTERN = re.compile(r"\[/THOUGHT\]", re.IGNORECASE)
 PLANNING_TAG_PATTERN = re.compile(r"\[PLANNING\]", re.IGNORECASE)
 PLANNING_END_PATTERN = re.compile(r"\[/PLANNING\]", re.IGNORECASE)
 
+#: The bracket-marker families this backend can EMIT, named once so the set is a
+#: fact rather than four scattered literals (#18065).
+#:
+#: It exists because the frontend has to strip every one of them and had no way
+#: to know what they are: it carries its own hardcoded list
+#: (`autobot-frontend/src/utils/llmProtocolTags.ts`), and a family added here
+#: would have reached a reader as raw text until somebody noticed. The contract
+#: is a SUBSET one, checked by `repo_tests/protocol_tag_parity_18065_test.py`:
+#: every family here must appear there. The reverse is deliberately allowed --
+#: the frontend also strips `DEBUG` and `SOURCES`, which nothing in this backend
+#: declares or produces, and stripping a marker that never arrives is harmless
+#: whereas rendering one that does is the defect.
+BRACKET_MARKER_FAMILIES: FrozenSet[str] = frozenset({"THOUGHT", "PLANNING"})
+
 #: Closed markdown code regions, longest delimiter first so a fence is consumed
 #: whole rather than as three inline spans.
 _CLOSED_CODE_REGION_RE = re.compile(r"```.*?```|~~~.*?~~~|``[^`]*``|`[^`\n]*`", re.DOTALL)
@@ -166,3 +180,62 @@ def find_new_segment_start(llm_response: str, new_type: str, previous_type: str 
         match = candidate
 
     return llm_response[match.end() :] if match else ""
+
+
+#: Stands for one complete tool call in text given to ``split_reasoning_blocks``; an unclosed block ends there (#21880).
+TOOL_CALL_MARK = "\ue000"
+
+_REASONING_BLOCK_RE = re.compile(
+    rf"\[(THOUGHT|PLANNING)\](.*?)(?:\[/\1\]|(?=\[(?:THOUGHT|PLANNING)\]|{TOOL_CALL_MARK}))",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
+    """(``(type, body)`` of each thought/planning block, the text without them) (#21904).
+
+    The live view types a block as ``thought`` / ``planning`` and badges it; the stored reply kept the markers'
+    text inline, and a reload strips only the markers, so the reasoning showed as part of the answer. Markers in
+    code regions are not blocks (#17513). A block ends at its closing marker, at the next opener, or at a
+    ``TOOL_CALL_MARK`` (#21880: a thought left open before its tool call). An unclosed block with none stays in
+    the text: live it runs to the end, but storing it that way would swallow the answer.
+    """
+    masked = mask_code_regions(text)
+    blocks: list[tuple[str, str]] = []
+    rest: list[str] = []
+    pos = 0
+    for match in _REASONING_BLOCK_RE.finditer(masked):
+        rest.append(text[pos : match.start()])
+        body = text[match.start(2) : match.end(2)].strip()
+        if body:
+            blocks.append((match.group(1).lower(), body))
+        pos = match.end()
+    rest.append(text[pos:])
+    return blocks, "".join(rest).strip()
+
+
+#: Wrapper tags the model invents (``[TAG]x[/TAG]``, #22249): a PAIRED upper-case word, ``[X]...[/X]``.
+#: An unpaired ``[ERROR]`` / ``[OK]`` / ``[API]`` is prose or a log line, and a bracket followed by ``(`` or ``:``
+#: is a link or a reference (``[README](url)``); none of those is touched.
+#: The families the system handles itself keep their own handling and are never unwrapped.
+_HANDLED_TAG_NAMES: FrozenSet[str] = frozenset(BRACKET_MARKER_FAMILIES | {"TOOL_CALL", "DEBUG", "SOURCES"})
+_INVENTED_PAIR_RE = re.compile(r"\[([A-Z][A-Z0-9_]{1,31})\](?![(:])(.*?)\[/\1\](?![(:])", re.DOTALL)
+
+
+def unwrap_invented_tags(text: str) -> str:
+    """*text* with each paired ``[TAG]x[/TAG]`` replaced by its content ``x`` (#22249).
+
+    The one cleaner for streamed and stored text. Unpaired tags, links and references are kept, and so are
+    markers in code regions (examples, #17513).
+    """
+    if not text or "[" not in text:
+        return text
+    out, pos = [], 0
+    for match in _INVENTED_PAIR_RE.finditer(mask_code_regions(text)):
+        if match.group(1) in _HANDLED_TAG_NAMES:
+            continue
+        out.append(text[pos : match.start()])
+        out.append(unwrap_invented_tags(text[match.start(2) : match.end(2)]))
+        pos = match.end()
+    out.append(text[pos:])
+    return "".join(out)

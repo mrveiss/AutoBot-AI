@@ -235,7 +235,9 @@ MUST_STAY_VISIBLE = {
         "llm_key_rotation_interval_minutes",
         "tokenizers_parallelism",
     ],
-    "tls": ["ca_cert", "cert_dir", "remote_cert_dir"],
+    # ca_cert / ca_key / management_ssh_key_path are file PATHS (the PKI tooling reads them), not key material;
+    # cert_validity_days is an int. None holds a secret value (#17312).
+    "tls": ["ca_cert", "ca_key", "management_ssh_key_path", "cert_validity_days", "cert_dir", "remote_cert_dir"],
     "path": [
         # Service-account inter-node key (#12429) -- location of a credential,
         # not the credential; `is_credential_field` already excludes it via the
@@ -245,7 +247,7 @@ MUST_STAY_VISIBLE = {
         "vnc_passwd_file",
         # Operator's own key (#14173), deliberately a SEPARATE field from
         # ssh_key_path above (different owner, different consumer -- see the
-        # field comment in autobot_shared/ssot_config.py). Classified the SAME
+        # field comment in autobot_shared/ssot_ssh.py). Classified the SAME
         # as its sibling for the SAME reason: it is a path to a key, not key
         # material, and its default (~/.ssh/autobot_key) names no real
         # user/host/environment. A deployment-supplied override could in
@@ -256,6 +258,10 @@ MUST_STAY_VISIBLE = {
     ],
     "auth": ["google_oauth_client_id", "microsoft_oauth_client_id"],
     "llm": ["searxng_basic_auth_user"],
+    # Public provider token ENDPOINT URLs (#19241): an address saying where a token is obtained, not a token.
+    # Defaults are "" (operator-supplied) or https://huggingface.co/oauth/token; no userinfo is embedded, and
+    # the redactor keeps the host of a ``token_url``-named field (secret_redaction_vocabulary.py).
+    "llm_oauth": ["openai_token_url", "anthropic_token_url", "huggingface_token_url"],
 }
 
 CANARY = "CANARY-VALUE-13325-MUST-NOT-APPEAR"

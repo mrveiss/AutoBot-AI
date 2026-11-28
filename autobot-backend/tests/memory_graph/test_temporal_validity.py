@@ -49,6 +49,7 @@ for name, mod in [
 
 # Now import the modules under test (after stubs are in place)
 from autobot_memory_graph.entities import EntityOperationsMixin  # noqa: E402
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope  # noqa: E402
 from autobot_memory_graph.queries import (  # noqa: E402
     QueryOperationsMixin,
     _is_entity_valid,
@@ -165,7 +166,7 @@ class TestIsEntityValidAt:
 class TestEntityTemporalFields:
     def test_prepare_metadata_includes_valid_fields(self):
         graph = _make_graph()
-        meta = graph._prepare_entity_metadata(None, None)
+        meta = graph._prepare_entity_metadata(None, None, OwnerScope.for_user("user-a"))
         assert "valid_from" in meta
         assert meta["valid_to"] is None
         # valid_from should be parseable ISO-8601
@@ -327,7 +328,7 @@ class TestQueryTemporalFiltering:
         graph.redis_client.scan_iter = fake_scan_iter
         graph.redis_client.pipeline = MagicMock(return_value=pipe_mock)
 
-        results = await graph._fallback_search("", "TASK", 50)
+        results = await graph._fallback_search("", "TASK", 50, owner=UNSCOPED_ALL_USERS)
         names = [e["name"] for e in results]
         assert "Active Task" in names
         assert "Expired Task" not in names
@@ -349,7 +350,7 @@ class TestQueryTemporalFiltering:
         graph.redis_client.scan_iter = fake_scan_iter
         graph.redis_client.pipeline = MagicMock(return_value=pipe_mock)
 
-        results = await graph._fallback_search("", "TASK", 50, include_expired=True)
+        results = await graph._fallback_search("", "TASK", 50, include_expired=True, owner=UNSCOPED_ALL_USERS)
         names = [e["name"] for e in results]
         assert "Active Task" in names
         assert "Expired Task" in names
@@ -389,7 +390,7 @@ class TestQueryTemporalFiltering:
         graph.redis_client.scan_iter = fake_scan_iter
         graph.redis_client.pipeline = MagicMock(return_value=pipe_mock)
 
-        results = await graph.get_entities_as_of("TASK", _iso(now))
+        results = await graph.get_entities_as_of("TASK", _iso(now), owner=UNSCOPED_ALL_USERS)
         names = [e["name"] for e in results]
 
         assert "Current Entity" in names

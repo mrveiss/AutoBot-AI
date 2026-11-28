@@ -228,3 +228,32 @@ class TestCrossProcessLock:
         assert (canonical_dir / "secrets.key").read_bytes() == b"legacy-key-material"
         assert not (legacy_data_dir / "secrets.key").exists()
         assert not stale_lock.exists()
+
+
+class TestEnsureAndReadSharedKeyFilename:
+    """#17855: the audit log's ``.audit_key`` uses this mint, not its own copy."""
+
+    def test_default_filename_is_unchanged(self, tmp_path):
+        key = migration_module.ensure_and_read_shared_key(tmp_path)
+        assert (tmp_path / "secrets.key").read_bytes() == key
+
+    def test_custom_filename_is_minted_once_atomically_with_0600(self, tmp_path):
+        first = migration_module.ensure_and_read_shared_key(tmp_path, key_filename=".audit_key")
+        again = migration_module.ensure_and_read_shared_key(tmp_path, key_filename=".audit_key")
+        path = tmp_path / ".audit_key"
+        assert first == again == path.read_bytes()
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert not (tmp_path / ".audit_key.tmp").exists()
+        assert not (tmp_path / "secrets.key").exists()
+
+    def test_concurrent_first_boot_mints_one_key(self, tmp_path):
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(8) as pool:
+            keys = list(
+                pool.map(
+                    lambda _: migration_module.ensure_and_read_shared_key(tmp_path, key_filename=".audit_key"),
+                    range(8),
+                )
+            )
+        assert len(set(keys)) == 1

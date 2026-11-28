@@ -21,10 +21,15 @@ import logging
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type
+
+from autobot_shared.plugin_attribution import registering_for_plugin
+from autobot_shared.testfile_names import is_test_filename
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
+from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
+from .lifecycle import initialize_attributed, reload_with_fresh_code, reverse_registrations, rollback_failed_load
 from .registry import get_registry
 
 if TYPE_CHECKING:
@@ -122,13 +127,11 @@ def is_non_production_module(name: str) -> bool:
     """True for package modules that must never be imported at plugin-load time.
 
     Importing the package's own tests drags pytest into the production process
-    (~100ms), and where pytest is absent the import fails, is swallowed, and —
-    because failed imports are not cached — retries for every plugin on every
-    startup. A `conftest.py` would do the same; it has no trigger in this
-    package today, which is exactly why the rule is stated here where it can be
-    tested rather than inlined where it cannot (#13677 review).
+    (~100ms), and where pytest is absent the import fails, is swallowed, and — because
+    failed imports are not cached — retries for every plugin on every startup. The canonical test-file
+    name rule decides (#21078); see `non_production_module_21078_test.py` for what it adds.
     """
-    return name.endswith("_test") or name.startswith("test_") or name == "conftest"
+    return is_test_filename(f"{name}.py", include_js=False)
 
 
 def canonicalise_plugin_sdk() -> List[str]:
@@ -203,14 +206,16 @@ class PluginLoader:
     Discovers plugins from filesystem, loads manifests, and instantiates plugins.
     """
 
-    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
-        """
-        Initialize plugin loader.
-
-        Args:
-            plugin_dirs: List of directories to search for plugins
-        """
+    def __init__(
+        self,
+        plugin_dirs: List[Path] | None = None,
+        credential_resolvers: Dict[str, Callable[[str], str]] | None = None,
+        trusted_roots: List[Path] | None = None,
+    ) -> None:
+        """Search ``plugin_dirs``; ``credential_resolvers`` reach only plugins under ``trusted_roots`` (#18094)."""
         self.plugin_dirs = plugin_dirs or []
+        self.credential_resolvers = credential_resolvers or {}
+        self.trusted_roots = trusted_roots or []
         self.registry = PluginRegistry()
         # Maps plugin name -> directory containing its plugin.json (set during discover_plugins)
         self._manifest_dirs: Dict[str, Path] = {}
@@ -252,19 +257,10 @@ class PluginLoader:
 
                     manifest = PluginManifest(**data)
 
-                    # #14280: a `plugin.json` describes a Plugin (`kind="plugin"`,
-                    # the field's default) OR documents a component that lives in
-                    # a DIFFERENT subsystem (`kind="extension"`, `kind="skill"`) —
-                    # see ManifestContract. Only "plugin" kind belongs to this
-                    # loader. Before this check, `telemetry-prompt-middleware`
-                    # shipped a manifest for a class that subclassed `Extension`,
-                    # not `BasePlugin`: this loader discovered it, `load_plugin`
-                    # inevitably logged "No plugin class found in module", and the
-                    # #13677 health tally counted a component that was never a
-                    # plugin as a load FAILURE. Skipping here — rather than
-                    # letting `load_plugin` fail later — keeps discovery counts
-                    # honest and stops every non-plugin manifest from being
-                    # imported as though it might satisfy `BasePlugin`.
+                    # #14280: only `kind="plugin"` belongs to this loader; `extension`/`skill`
+                    # manifests document components of other subsystems. Skipping them here
+                    # keeps the #13677 load tally honest (they would otherwise count as
+                    # load FAILURES) and stops non-plugin modules being imported as BasePlugin.
                     if manifest.kind != "plugin":
                         logger.debug(
                             "Skipping non-plugin manifest %s (kind=%r) at %s — " "not this loader's territory",
@@ -328,87 +324,79 @@ class PluginLoader:
         Returns:
             Loaded plugin instance or None on failure
         """
+        registered = manifest_registered = False
         try:
-            # Check dependencies
-            missing_deps = self._check_dependencies(manifest)
-            if missing_deps:
-                logger.error(
-                    "Cannot load plugin %s: missing dependencies %s",
-                    manifest.name,
-                    missing_deps,
-                )
+            if not self._preflight(manifest, config):
                 return None
-
-            # Validate declared hooks against HOOK_REGISTRY (GH#6970)
-            if manifest.hooks:
-                validate_hook_names(manifest.hooks, plugin_name=manifest.name)
-
-            # Check required environment variables (GH#6971)
-            missing_required, missing_optional = self._check_required_env(manifest)
-            if missing_required:
-                raise PluginLoadError(
-                    f"Cannot load plugin '{manifest.name}': " f"required env vars not set: {missing_required}"
-                )
-            if missing_optional:
-                logger.info(
-                    "Plugin %s loaded with optional env vars unset: %s",
-                    manifest.name,
-                    missing_optional,
-                )
-
-            # GH#11522: validate config_schema and supplied config at load time
-            if manifest.config_schema:
-                _validate_config_schema(manifest.name, manifest.config_schema)
-                if config:
-                    _validate_config_against_schema(manifest.name, config, manifest.config_schema)
+            if self.registry.get_plugin(manifest.name):  # a duplicate must not construct under the live plugin's name
+                logger.warning("Plugin %s is already loaded; not loading it again", manifest.name)
+                return None
 
             # Import plugin module — pass on-disk directory for file-path fallback (#10294)
             plugin_dir = self._manifest_dirs.get(manifest.name)
-            plugin_class = self._import_plugin_class(manifest.entry_point, plugin_dir)
-            if not plugin_class:
+            # Module-scope and constructor registrations are attributed to the plugin (#19302).
+            with registering_for_plugin(manifest.name):
+                plugin_class = self._import_plugin_class(manifest.entry_point, plugin_dir)
+                plugin = plugin_class(manifest, config) if plugin_class else None
+            if plugin is None:
                 return None
 
-            # Instantiate plugin
-            plugin = plugin_class(manifest, config)
-
-            # Initialize plugin
-            await plugin.initialize()
-            plugin.status = PluginStatus.LOADED
-
-            # Register with plugin registry and unified registry
+            # Registered (UNLOADED, so inactive) before initialize(): its callbacks wait for ENABLED (#19302).
             self.registry.register(plugin)
+            registered = True
+            plugin.credential_resolver = bound_resolver(
+                manifest.name, plugin_dir, self.credential_resolvers, self.trusted_roots
+            )
+            await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
+            plugin.status = PluginStatus.LOADED
             get_registry().register(manifest)
-
+            manifest_registered = True
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
 
         except Exception as e:
             logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
+            rollback_failed_load(self.registry, get_registry, manifest.name, registered, manifest_registered)
             return None
 
+    def _preflight(self, manifest: PluginManifest, config: Dict | None) -> bool:
+        """The checks that run before any plugin code is imported; False when a dependency is missing."""
+        missing_deps = self._check_dependencies(manifest)
+        if missing_deps:
+            logger.error("Cannot load plugin %s: missing dependencies %s", manifest.name, missing_deps)
+            return False
+        if manifest.hooks:  # GH#6970
+            validate_hook_names(manifest.hooks, plugin_name=manifest.name)
+        missing_required, missing_optional = self._check_required_env(manifest)  # GH#6971
+        if missing_required:
+            raise PluginLoadError(
+                f"Cannot load plugin '{manifest.name}': required env vars not set: {missing_required}"
+            )
+        if missing_optional:
+            logger.info("Plugin %s loaded with optional env vars unset: %s", manifest.name, missing_optional)
+        if manifest.config_schema:  # GH#11522: validate config_schema and supplied config at load time
+            _validate_config_schema(manifest.name, manifest.config_schema)
+            if config:
+                _validate_config_against_schema(manifest.name, config, manifest.config_schema)
+        return True
+
     async def unload_plugin(self, name: str) -> bool:
-        """
-        Unload a plugin.
-
-        Args:
-            name: Plugin name
-
-        Returns:
-            True if successfully unloaded
-        """
+        """Unload a plugin; True if it was unloaded. A raising shutdown() still leaves nothing registered (#19302)."""
         try:
             plugin = self.registry.get_plugin(name)
             if not plugin:
                 logger.warning("Plugin not found: %s", name)
                 return False
 
-            # Shutdown plugin
-            await plugin.shutdown()
-            plugin.status = PluginStatus.UNLOADED
-
-            # Unregister from plugin registry and unified registry
-            self.registry.unregister(name)
-            get_registry().unregister(name)
+            try:
+                await plugin.shutdown()
+            finally:
+                plugin.status = PluginStatus.UNLOADED
+                try:
+                    reverse_registrations(name)
+                finally:  # the registries are cleared even when reversal itself raises
+                    self.registry.unregister(name)
+                    get_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
@@ -433,11 +421,9 @@ class PluginLoader:
                 logger.warning("Plugin not found: %s", name)
                 return False
 
-            # Use plugin's reload method
-            await plugin.reload()
-
-            logger.info("Reloaded plugin: %s", name)
-            return True
+            reloaded = await reload_with_fresh_code(self, plugin)
+            logger.info("Reload of plugin %s: %s", name, "done" if reloaded else "not done")
+            return reloaded
 
         except Exception as e:
             logger.error("Failed to reload plugin %s: %s", name, e, exc_info=True)

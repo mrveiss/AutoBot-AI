@@ -20,10 +20,10 @@ Access: admin role required.
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from services.audit.audit import EventType, query_events  # GH#8290 Phase 2
+from services.audit.audit import ComplianceEventType, query_events  # GH#8290 Phase 2
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])
 logger = get_logger(__name__)
@@ -43,7 +43,7 @@ async def list_event_logs(
     to_ts: float | None = Query(None, description="Unix timestamp upper bound"),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> dict:
     """Return compliance events with optional filters.
 
@@ -66,5 +66,5 @@ async def list_event_logs(
         "count": len(events),
         "limit": limit,
         "offset": offset,
-        "available_event_types": [e.value for e in EventType],
+        "available_event_types": [e.value for e in ComplianceEventType],
     }

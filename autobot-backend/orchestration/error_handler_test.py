@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from constants.status_enums import TaskStatus
-from tests.helpers.fake_redis import SyncHashFakeRedis
+from tests.helpers._fake_redis import SyncHashFakeRedis
 
 from .error_handler import (
     CHECKPOINT_TTL,

@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from .enums import MemoryCategory, TaskPriority, TaskStatus
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -47,6 +51,62 @@ class TaskExecutionRecord:
     parent_task_id: str | None = None
     subtask_ids: List[str] | None = None
     metadata: Dict[str, Any] | None = None
+
+    def elapsed_seconds(self, completed_at: datetime) -> float | None:
+        """Seconds from ``started_at`` to *completed_at*, or ``None`` if unknowable.
+
+        #13344: ``MemoryManager.update_task_status`` rejects a negative
+        ``duration_seconds``, and that ``ValueError`` escaped through
+        ``TaskExecutionTracker.track_task``, which re-raises — so a bookkeeping
+        inconsistency failed the caller's *real* work. One observed run reported
+        "Contextual decision making failed" for a decision that had succeeded.
+
+        **The cause of ``started_at > completed_at`` is not established.** Every
+        production writer stores an aware UTC value and the SQLite round-trip is
+        lossless, so neither hypothesis on #13344 is demonstrable from the code;
+        a wall-clock step and an untyped ``update_task_status(started_at=...)``
+        kwarg both remain possible and neither is provable here.
+
+        What does not depend on the cause: an unknowable duration must not be
+        invented, and must not abort the tracked operation. So this returns
+        ``None`` — *we do not know* — and logs both instants and the delta, so
+        the next occurrence names its own cause. It deliberately does **not**
+        clamp to ``0``: a zero is a measurement, and writing one would hide the
+        skew behind a plausible number.
+
+        A naive instant meeting an aware one is the same kind of unknowable, and
+        is checked *before* the subtraction: ``datetime - datetime`` across that
+        boundary raises ``TypeError``, which would abort the tracked operation
+        exactly as the ``ValueError`` above did — the fallback below could never
+        run. It returns ``None`` rather than assuming a zone for the naive side,
+        because picking UTC would invent the very measurement this refuses to
+        invent. Normalising at the write boundary is the real repair (#18103).
+        """
+        if not self.started_at:
+            return None
+        if (self.started_at.tzinfo is None) is not (completed_at.tzinfo is None):
+            self._log_unmeasurable(completed_at, "one instant is timezone-naive and the other aware")
+            return None
+        duration = (completed_at - self.started_at).total_seconds()
+        if duration >= 0:
+            return duration
+        self._log_unmeasurable(completed_at, f"started_at is AFTER completed_at by {-duration:.3f}s")
+        return None
+
+    def _log_unmeasurable(self, completed_at: datetime, reason: str) -> None:
+        """Record an unknowable duration, naming both instants (#13344).
+
+        Shared by both unmeasurable cases so their wording cannot drift apart.
+        """
+        logger.error(
+            "Task %s: duration unmeasurable — %s. started_at=%s completed_at=%s. Recording "
+            "duration_seconds=None rather than a clamped value; the tracked operation is "
+            "unaffected (#13344).",
+            self.task_id,
+            reason,
+            self.started_at.isoformat() if self.started_at else None,
+            completed_at.isoformat(),
+        )
 
     def to_db_tuple(self) -> Tuple:
         """Convert to tuple for SQLite insertion (Issue #372 - reduces feature envy).

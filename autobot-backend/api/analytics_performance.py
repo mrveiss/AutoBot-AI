@@ -28,10 +28,10 @@ from api.schemas_analytics import (
     PerformanceCategoriesResponse,
     PerformanceHistoryResponse,
     PerformanceHotspotsResponse,
-    PerformanceIssue,
     PerformancePatternCategory,
     PerformancePatternDefinition,
     PerformancePatternDetailResponse,
+    PerformancePatternIssue,
     PerformancePatternsListResponse,
     PerformancePatternToggleResponse,
     PerformanceSummaryResponse,
@@ -245,7 +245,7 @@ class PerformanceVisitor(ast.NodeVisitor):
     def __init__(self, filename: str):
         """Initialize visitor with filename and tracking state."""
         self.filename = filename
-        self.issues: list[PerformanceIssue] = []
+        self.issues: list[PerformancePatternIssue] = []
         self.in_async_function = False
         self.in_loop = False
         self.loop_depth = 0
@@ -266,7 +266,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         for default in node.args.defaults:
             if isinstance(default, _MUTABLE_DEFAULT_TYPES):  # Issue #380
                 self.issues.append(
-                    PerformanceIssue(
+                    PerformancePatternIssue(
                         id=f"issue-{len(self.issues)}",
                         pattern_id="PERF-M001",
                         name="Global Mutable Default",
@@ -290,7 +290,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         # Check for nested loops (O(n²))
         if old_depth > 0:
             self.issues.append(
-                PerformanceIssue(
+                PerformancePatternIssue(
                     id=f"issue-{len(self.issues)}",
                     pattern_id="PERF-L001",
                     name="Nested Loop O(n²)",
@@ -318,7 +318,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         # Check for nested loops (O(n²))
         if old_depth > 0:
             self.issues.append(
-                PerformanceIssue(
+                PerformancePatternIssue(
                     id=f"issue-{len(self.issues)}",
                     pattern_id="PERF-L001",
                     name="Nested Loop O(n²)",
@@ -348,7 +348,7 @@ class PerformanceVisitor(ast.NodeVisitor):
 
             if func_name in _BLOCKING_CALLS:  # Issue #380: use module constant
                 self.issues.append(
-                    PerformanceIssue(
+                    PerformancePatternIssue(
                         id=f"issue-{len(self.issues)}",
                         pattern_id="PERF-A001",
                         name="Sync Call in Async Function",
@@ -364,7 +364,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def analyze_with_ast(filepath: str, content: str) -> list[PerformanceIssue]:
+def analyze_with_ast(filepath: str, content: str) -> list[PerformancePatternIssue]:
     """Analyze code using AST for performance issues."""
     try:
         tree = ast.parse(content)
@@ -382,9 +382,9 @@ def analyze_with_ast(filepath: str, content: str) -> list[PerformanceIssue]:
 
 def analyze_with_regex(
     filepath: str, content: str, patterns: dict[str, PerformancePatternDefinition]
-) -> list[PerformanceIssue]:
+) -> list[PerformancePatternIssue]:
     """Analyze code using regex patterns."""
-    issues: list[PerformanceIssue] = []
+    issues: list[PerformancePatternIssue] = []
     lines = content.split("\n")
 
     for pattern_id, pattern in patterns.items():
@@ -408,7 +408,7 @@ def analyze_with_regex(
                 )
 
                 issues.append(
-                    PerformanceIssue(
+                    PerformancePatternIssue(
                         id=f"issue-{len(issues)}",
                         pattern_id=pattern_id,
                         name=pattern.name,
@@ -453,7 +453,7 @@ async def _get_files_to_analyze(target_path: Path) -> list[Path]:
     return []  # Path not found
 
 
-def _deduplicate_issues(issues: list[PerformanceIssue]) -> list[PerformanceIssue]:
+def _deduplicate_issues(issues: list[PerformancePatternIssue]) -> list[PerformancePatternIssue]:
     """Remove duplicate issues by file/line/pattern (Issue #398: extracted)."""
     seen = set()
     unique = []
@@ -466,7 +466,7 @@ def _deduplicate_issues(issues: list[PerformanceIssue]) -> list[PerformanceIssue
 
 
 def _calculate_analysis_score(
-    issues: list[PerformanceIssue],
+    issues: list[PerformancePatternIssue],
 ) -> tuple[int, int, int, int, int]:
     """Calculate issue counts and performance score (Issue #398: extracted).
 
@@ -513,7 +513,7 @@ async def analyze_path(
             status_code=200,
         )
 
-    all_issues: list[PerformanceIssue] = []
+    all_issues: list[PerformancePatternIssue] = []
     for filepath in files_to_analyze:
         try:
             content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
@@ -558,12 +558,12 @@ async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
     admin_check: bool = Depends(check_admin_permission),
-) -> list[PerformanceIssue]:
+) -> list[PerformancePatternIssue]:
     """Analyze arbitrary code content for performance issues.
 
     Issue #744: Requires admin authentication.
     """
-    issues: list[PerformanceIssue] = []
+    issues: list[PerformancePatternIssue] = []
 
     # Regex analysis
     regex_issues = analyze_with_regex(filename, content, PERFORMANCE_PATTERNS)
@@ -769,7 +769,7 @@ async def get_hotspots(
 
     Issue #744: Requires admin authentication.
     """
-    file_issues: dict[str, list[PerformanceIssue]] = {}
+    file_issues: dict[str, list[PerformancePatternIssue]] = {}
 
     for analysis in _analysis_history[:10]:
         for issue in analysis.issues:

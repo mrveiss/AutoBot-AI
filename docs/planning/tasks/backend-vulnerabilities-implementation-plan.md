@@ -35,7 +35,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.1: Schema Initialization Method
 - **Description:** Create `initialize()` method in ConversationFileManager
 - **Effort:** 4 hours
-- **Agent:** database-engineer
+- **Agent:** autobot-dev-skills:senior-developer (database-engineer lens)
 - **Dependencies:** None
 - **Files Affected:**
   - `src/conversation_file_manager.py` (add initialize method)
@@ -58,7 +58,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.2: Schema Versioning System
 - **Description:** Implement schema version tracking and migration framework
 - **Effort:** 6 hours
-- **Agent:** database-engineer
+- **Agent:** autobot-dev-skills:senior-developer (database-engineer lens)
 - **Dependencies:** Task 1.1
 - **Files Affected:**
   - `src/conversation_file_manager.py` (version tracking)
@@ -77,7 +77,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.3: Schema Integrity Verification
 - **Description:** Verify all required tables exist with health check integration
 - **Effort:** 3 hours
-- **Agent:** database-engineer
+- **Agent:** autobot-dev-skills:senior-developer (database-engineer lens)
 - **Dependencies:** Task 1.1
 - **Files Affected:**
   - `src/conversation_file_manager.py` (add verification)
@@ -99,7 +99,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.4: Backend Startup Integration
 - **Description:** Update backend startup to call initialize()
 - **Effort:** 2 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Tasks 1.1, 1.2
 - **Files Affected:**
   - `backend/app_factory.py` (startup sequence)
@@ -115,7 +115,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.5: Unit Tests for DB Initialization
 - **Description:** Comprehensive unit tests for schema initialization
 - **Effort:** 4 hours
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Dependencies:** Tasks 1.1, 1.2, 1.3
 - **Files Affected:**
   - `tests/unit/test_conversation_file_manager.py` (new file)
@@ -135,7 +135,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 #### Task 1.6: Distributed Integration Testing
 - **Description:** Test DB initialization across 6-VM distributed architecture
 - **Effort:** 3 hours
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Dependencies:** Task 1.5
 - **Files Affected:**
   - `tests/distributed/test_db_initialization.py` (new file)
@@ -166,7 +166,7 @@ Day 5:   Task 1.6 (Integration tests)
 **Phase 1: Development (Day 1-3)**
 - Implement all changes locally
 - Local testing with test database
-- Code review by code-reviewer agent
+- Code review by autobot-dev-skills:reviewer (code-reviewer lens) agent
 
 **Phase 2: Staging (Day 4)**
 - Deploy to staging environment
@@ -200,7 +200,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.1: Convert Redis Client to Async
 - **Description:** Replace synchronous Redis client with async version
 - **Effort:** 8 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Issue #1 complete
 - **Files Affected:**
   - `src/chat_workflow_manager.py` line 449 (redis client init)
@@ -224,7 +224,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.2: Convert File I/O to Async
 - **Description:** Replace synchronous file operations with async using aiofiles
 - **Effort:** 6 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** None (parallel with 2.1)
 - **Files Affected:**
   - `src/chat_workflow_manager.py` lines 126-137 (_append_to_transcript)
@@ -247,7 +247,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.3: Add Async Timeout Wrappers
 - **Description:** Wrap all async operations with timeouts to prevent hanging
 - **Effort:** 4 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Tasks 2.1, 2.2
 - **Files Affected:**
   - `src/chat_workflow_manager.py` (all async operations)
@@ -267,7 +267,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.4: Create Async Redis Helper Functions
 - **Description:** Build reusable async Redis helper utilities
 - **Effort:** 3 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Task 2.1
 - **Files Affected:**
   - `autobot-backend/utils/async_redis_helpers.py` (new file)
@@ -283,7 +283,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.5: Performance Load Testing
 - **Description:** Validate async operations under 50+ concurrent users
 - **Effort:** 6 hours
-- **Agent:** performance-engineer
+- **Agent:** autobot-dev-skills:senior-developer (performance-engineer lens)
 - **Dependencies:** Tasks 2.1, 2.2, 2.3
 - **Files Affected:**
   - `tests/performance/test_async_operations.py` (new file)
@@ -300,7 +300,7 @@ Day 5:   Task 1.6 (Integration tests)
 #### Task 2.6: Async Pattern Code Review
 - **Description:** Comprehensive review of all async patterns
 - **Effort:** 3 hours
-- **Agent:** code-reviewer
+- **Agent:** autobot-dev-skills:reviewer (code-reviewer lens)
 - **Dependencies:** Tasks 2.1, 2.2, 2.3, 2.4
 - **Files Affected:** All modified files
 - **Verification Criteria:**
@@ -370,7 +370,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.1: Session Ownership Validation Implementation
 - **Description:** Implement proper session ownership validation with Redis
 - **Effort:** 8 hours
-- **Agent:** security-auditor + backend-engineer (pair programming)
+- **Agent:** autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) (pair programming)
 - **Dependencies:** Issue #2 (async Redis required)
 - **Files Affected:**
   - `autobot-backend/api/conversation_files.py` lines 151-167 (replace TODO)
@@ -406,7 +406,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.2: Audit Logging System
 - **Description:** Create comprehensive audit logging to Redis DB 10
 - **Effort:** 6 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** None (parallel with 3.1)
 - **Files Affected:**
   - `backend/services/audit_logger.py` (new file)
@@ -432,7 +432,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.3: Session Ownership Backfill
 - **Description:** Backfill existing sessions with ownership data
 - **Effort:** 4 hours
-- **Agent:** database-engineer
+- **Agent:** autobot-dev-skills:senior-developer (database-engineer lens)
 - **Dependencies:** None (parallel with 3.1, 3.2)
 - **Files Affected:**
   - `scripts/migration/backfill_session_ownership.py` (new file)
@@ -449,7 +449,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.4: Log-Only Mode Implementation
 - **Description:** Deploy validation in log-only mode before enforcement
 - **Effort:** 3 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Tasks 3.1, 3.2
 - **Files Affected:**
   - `autobot-backend/api/conversation_files.py` (add feature flag)
@@ -473,7 +473,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.5: Security Penetration Testing
 - **Description:** Comprehensive security testing across 6 VMs
 - **Effort:** 8 hours
-- **Agent:** security-auditor
+- **Agent:** autobot-dev-skills:reviewer (security-auditor lens)
 - **Dependencies:** Tasks 3.1, 3.2, 3.4
 - **Files Affected:**
   - `tests/security/test_access_control.py` (new file)
@@ -492,7 +492,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 #### Task 3.6: Gradual Enforcement Rollout
 - **Description:** Enable enforcement gradually with monitoring
 - **Effort:** 2 hours
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Dependencies:** Task 3.5
 - **Files Affected:**
   - Deployment configuration
@@ -561,7 +561,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 #### Task 4.1: Token Estimation Implementation
 - **Description:** Implement proper token estimation using model tokenizers
 - **Effort:** 5 hours
-- **Agent:** ai-ml-engineer
+- **Agent:** autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 - **Dependencies:** None
 - **Files Affected:**
   - `backend/services/token_estimator.py` (new file)
@@ -586,7 +586,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 #### Task 4.2: AI Stack Model Capabilities Integration
 - **Description:** Query AI Stack for model context window limits
 - **Effort:** 4 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** None (parallel with 4.1)
 - **Files Affected:**
   - `backend/services/ai_stack_client.py` (add get_model_info)
@@ -607,7 +607,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 #### Task 4.3: Smart Context Selection
 - **Description:** Implement intelligent context selection algorithm
 - **Effort:** 8 hours
-- **Agent:** ai-ml-engineer
+- **Agent:** autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 - **Dependencies:** Tasks 4.1, 4.2
 - **Files Affected:**
   - `backend/services/smart_context_manager.py` (new file)
@@ -656,7 +656,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 #### Task 4.4: Update Chat Endpoints
 - **Description:** Replace simple context limit with smart selection
 - **Effort:** 3 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Task 4.3
 - **Files Affected:**
   - `autobot-backend/api/chat_enhanced.py` (update context preparation)
@@ -677,7 +677,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 #### Task 4.5: Context Quality A/B Testing
 - **Description:** Validate response quality with smart context selection
 - **Effort:** 6 hours
-- **Agent:** ai-ml-engineer
+- **Agent:** autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 - **Dependencies:** Task 4.4
 - **Files Affected:**
   - `tests/ai/test_context_quality.py` (new file)
@@ -744,7 +744,7 @@ Day 5:   Task 4.5 (A/B testing)
 #### Task 5.1: Distributed Locking Implementation
 - **Description:** Implement Redis distributed locks for cross-VM coordination
 - **Effort:** 6 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Issue #2 (async Redis required)
 - **Files Affected:**
   - `src/chat_workflow_manager.py` lines 126-137 (_append_to_transcript)
@@ -778,7 +778,7 @@ Day 5:   Task 4.5 (A/B testing)
 #### Task 5.2: Atomic File Operations
 - **Description:** Implement write-then-rename pattern for atomic writes
 - **Effort:** 4 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Task 5.1
 - **Files Affected:**
   - `src/chat_workflow_manager.py` (_atomic_write_transcript method)
@@ -814,7 +814,7 @@ Day 5:   Task 4.5 (A/B testing)
 #### Task 5.3: Lock Timeout Handling
 - **Description:** Implement graceful handling of lock acquisition failures
 - **Effort:** 3 hours
-- **Agent:** backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Dependencies:** Task 5.1
 - **Files Affected:**
   - `src/chat_workflow_manager.py` (error handling)
@@ -839,7 +839,7 @@ Day 5:   Task 4.5 (A/B testing)
 #### Task 5.4: Concurrent Access Testing
 - **Description:** Test race condition handling with 10 VMs writing simultaneously
 - **Effort:** 8 hours
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Dependencies:** Tasks 5.1, 5.2, 5.3
 - **Files Affected:**
   - `tests/distributed/test_race_conditions.py` (new file)
@@ -877,7 +877,7 @@ Day 5:   Task 4.5 (A/B testing)
 #### Task 5.5: Performance Validation
 - **Description:** Measure lock contention and throughput impact
 - **Effort:** 4 hours
-- **Agent:** performance-engineer
+- **Agent:** autobot-dev-skills:senior-developer (performance-engineer lens)
 - **Dependencies:** Task 5.4
 - **Files Affected:**
   - `tests/performance/test_distributed_locking.py` (new file)
@@ -941,7 +941,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.1: Unit Testing (Per Issue)
 - **Effort:** 3-4 hours per issue
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Coverage Target:** 80%+ code coverage
 - **Test Files:**
   - `tests/unit/test_conversation_file_manager.py`
@@ -951,7 +951,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.2: Integration Testing (Cross-VM)
 - **Effort:** 4-6 hours per issue
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Test Files:**
   - `tests/distributed/test_db_initialization.py`
   - `tests/distributed/test_async_operations.py`
@@ -965,7 +965,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.3: Security Testing
 - **Effort:** 12 hours total (Week 3-4)
-- **Agent:** security-auditor
+- **Agent:** autobot-dev-skills:reviewer (security-auditor lens)
 - **Test Files:**
   - `tests/security/test_access_control.py`
   - `tests/security/test_session_ownership.py`
@@ -979,7 +979,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.4: Performance Testing
 - **Effort:** 10 hours total (Week 2-4)
-- **Agent:** performance-engineer
+- **Agent:** autobot-dev-skills:senior-developer (performance-engineer lens)
 - **Test Files:**
   - `tests/performance/test_async_operations.py`
   - `tests/performance/test_distributed_locking.py`
@@ -992,7 +992,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.5: Chaos Engineering Testing
 - **Effort:** 8 hours (Week 5)
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Test Files:**
   - `tests/chaos/test_vm_failures.py`
   - `tests/chaos/test_network_partitions.py`
@@ -1005,7 +1005,7 @@ Day 5:   Task 5.5 (Performance validation)
 
 #### 6.6: End-to-End Testing
 - **Effort:** 6 hours (Week 5)
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Test Files:**
   - `tests/e2e/test_complete_workflows.py`
 - **E2E Scenarios:**
@@ -1214,7 +1214,7 @@ async def health_check():
 **8 Specialized Agent Tracks (Maximize Parallelism):**
 
 #### Track 1: Database Engineering
-**Agent:** database-engineer
+**Agent:** autobot-dev-skills:senior-developer (database-engineer lens)
 **Timeline:** Week 1, 3, 4
 ```
 Week 1:
@@ -1228,7 +1228,7 @@ Week 4:
 ```
 
 #### Track 2: Backend Core Development
-**Agent:** senior-backend-engineer
+**Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **Timeline:** Week 2-4
 ```
 Week 2:
@@ -1245,7 +1245,7 @@ Week 4:
 ```
 
 #### Track 3: AI/ML Engineering
-**Agent:** ai-ml-engineer
+**Agent:** autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 **Timeline:** Week 4
 ```
 Week 4:
@@ -1255,7 +1255,7 @@ Week 4:
 ```
 
 #### Track 4: Security Engineering
-**Agent:** security-auditor
+**Agent:** autobot-dev-skills:reviewer (security-auditor lens)
 **Timeline:** Week 3-5
 ```
 Week 3:
@@ -1268,7 +1268,7 @@ Week 5:
 ```
 
 #### Track 5: Testing & QA
-**Agent:** testing-engineer
+**Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 **Timeline:** All weeks
 ```
 Week 1:
@@ -1286,7 +1286,7 @@ Week 5:
 ```
 
 #### Track 6: Performance Engineering
-**Agent:** performance-engineer
+**Agent:** autobot-dev-skills:senior-developer (performance-engineer lens)
 **Timeline:** Week 2, 4-5
 ```
 Week 2:
@@ -1300,7 +1300,7 @@ Week 5:
 ```
 
 #### Track 7: Code Review & Quality
-**Agent:** code-reviewer
+**Agent:** autobot-dev-skills:reviewer (code-reviewer lens)
 **Timeline:** All weeks (ongoing)
 ```
 Week 1: DB init review (Day 3)
@@ -1311,7 +1311,7 @@ Week 5: Final code audit (Day 1-2)
 ```
 
 #### Track 8: DevOps & Deployment
-**Agent:** devops-engineer
+**Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 **Timeline:** All weeks (deployment phases)
 ```
 Week 1: DB init deployment (Day 5)
@@ -1331,19 +1331,19 @@ Week 1: Database Init → Week 2: Async Ops → Week 3: Access Control → Week 
 **Parallel Tracks (Can Execute Simultaneously):**
 ```
 Week 2:
-  - Async Redis (backend-engineer)
-  - Async File I/O (backend-engineer, parallel)
-  - Test preparation (testing-engineer)
+  - Async Redis (autobot-dev-skills:senior-developer (senior-backend-engineer lens))
+  - Async File I/O (autobot-dev-skills:senior-developer (senior-backend-engineer lens), parallel)
+  - Test preparation (autobot-dev-skills:senior-developer (testing-engineer lens))
 
 Week 3:
-  - Session validation (backend-engineer + security-auditor)
-  - Audit logging (backend-engineer, parallel)
-  - Session backfill (database-engineer, parallel)
+  - Session validation (autobot-dev-skills:senior-developer (senior-backend-engineer lens) + autobot-dev-skills:reviewer (security-auditor lens))
+  - Audit logging (autobot-dev-skills:senior-developer (senior-backend-engineer lens), parallel)
+  - Session backfill (autobot-dev-skills:senior-developer (database-engineer lens), parallel)
 
 Week 4:
-  - Token estimation (ai-ml-engineer)
-  - Model capabilities (backend-engineer, parallel)
-  - Distributed locking (backend-engineer, parallel)
+  - Token estimation (autobot-dev-skills:senior-developer (ai-ml-engineer lens))
+  - Model capabilities (autobot-dev-skills:senior-developer (senior-backend-engineer lens), parallel)
+  - Distributed locking (autobot-dev-skills:senior-developer (senior-backend-engineer lens), parallel)
 ```
 
 ### Agent Communication & Coordination
@@ -1642,49 +1642,49 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
 
 ### Agent Roles & Responsibilities
 
-1. **database-engineer**
+1. **autobot-dev-skills:senior-developer (database-engineer lens)**
    - Schema initialization and versioning
    - Session ownership backfill
    - Database integrity verification
    - Migration system development
 
-2. **senior-backend-engineer**
+2. **autobot-dev-skills:senior-developer (senior-backend-engineer lens)**
    - Async Redis conversion
    - Async file I/O implementation
    - Distributed locking
    - Session ownership validation
 
-3. **ai-ml-engineer**
+3. **autobot-dev-skills:senior-developer (ai-ml-engineer lens)**
    - Token estimation implementation
    - Smart context selection
    - Context quality A/B testing
    - Model capabilities integration
 
-4. **security-auditor**
+4. **autobot-dev-skills:reviewer (security-auditor lens)**
    - Access control security testing
    - Penetration testing
    - Audit logging validation
    - Final security audit
 
-5. **testing-engineer**
+5. **autobot-dev-skills:senior-developer (testing-engineer lens)**
    - Unit test development
    - Integration testing
    - Chaos engineering
    - E2E test scenarios
 
-6. **performance-engineer**
+6. **autobot-dev-skills:senior-developer (performance-engineer lens)**
    - Load testing and benchmarks
    - Latency optimization
    - Lock contention analysis
    - Throughput validation
 
-7. **code-reviewer**
+7. **autobot-dev-skills:reviewer (code-reviewer lens)**
    - Async pattern validation
    - Security code review
    - Concurrency review
    - Final code audit
 
-8. **devops-engineer**
+8. **autobot-dev-skills:senior-developer (devops-engineer lens)**
    - Deployment automation
    - Feature flag management
    - Canary deployments
@@ -1693,14 +1693,14 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
 ### Estimated Effort Summary
 
 **Total Effort by Agent:**
-- database-engineer: 17 hours (Week 1, 3)
-- senior-backend-engineer: 38 hours (Week 2-4)
-- ai-ml-engineer: 19 hours (Week 4)
-- security-auditor: 24 hours (Week 3-5)
-- testing-engineer: 41 hours (All weeks)
-- performance-engineer: 24 hours (Week 2, 4-5)
-- code-reviewer: 15 hours (Ongoing)
-- devops-engineer: 12 hours (All weeks)
+- autobot-dev-skills:senior-developer (database-engineer lens): 17 hours (Week 1, 3)
+- autobot-dev-skills:senior-developer (senior-backend-engineer lens): 38 hours (Week 2-4)
+- autobot-dev-skills:senior-developer (ai-ml-engineer lens): 19 hours (Week 4)
+- autobot-dev-skills:reviewer (security-auditor lens): 24 hours (Week 3-5)
+- autobot-dev-skills:senior-developer (testing-engineer lens): 41 hours (All weeks)
+- autobot-dev-skills:senior-developer (performance-engineer lens): 24 hours (Week 2, 4-5)
+- autobot-dev-skills:reviewer (code-reviewer lens): 15 hours (Ongoing)
+- autobot-dev-skills:senior-developer (devops-engineer lens): 12 hours (All weeks)
 
 **Total Project Effort:** ~190 hours over 5 weeks
 
@@ -1722,7 +1722,7 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
            "observations": [
                "Database initialization tasks defined",
                "6 tasks, 22 hours total effort",
-               "database-engineer, backend-engineer, testing-engineer assigned"
+               "autobot-dev-skills:senior-developer (database-engineer lens), autobot-dev-skills:senior-developer (senior-backend-engineer lens), autobot-dev-skills:senior-developer (testing-engineer lens) assigned"
            ]
        }
    ])
@@ -1736,7 +1736,7 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
 
 3. **✅ Launch Week 1 Implementation**
    - Create task entities in Memory MCP
-   - Assign database-engineer to Task 1.1
+   - Assign autobot-dev-skills:senior-developer (database-engineer lens) to Task 1.1
    - Set up monitoring dashboards
    - Initialize CI/CD pipeline
 

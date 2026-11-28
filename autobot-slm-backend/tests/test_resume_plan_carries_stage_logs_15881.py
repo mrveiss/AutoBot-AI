@@ -28,39 +28,17 @@ from pathlib import Path
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _API = Path(__file__).resolve().parents[1] / "api"
 
 
-class _FakeResult:
-    def __init__(self, existing):
-        self._existing = existing
-
-    def scalar_one_or_none(self):
-        return self._existing
-
-
-class _FakeSession:
+class _FakeSession(FakeAsyncSession):
     """Captures what the writer stores, so the assertion reads the real value."""
 
     def __init__(self, existing=None):
         self.existing = existing
-        self.added = []
-        self.committed = False
-
-    async def execute(self, _stmt):
-        return _FakeResult(self.existing)
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def commit(self):
-        self.committed = True
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
+        super().__init__(default_result=[] if existing is None else [existing])
 
 
 def _install_fake_db(monkeypatch, session):

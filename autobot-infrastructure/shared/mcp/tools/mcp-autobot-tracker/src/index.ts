@@ -47,7 +47,7 @@ const TaskSchema = z.object({
   message_index: z.number(),
   dependencies: z.array(z.string()).optional(),
   error_correlations: z.array(z.string()).optional(),
-  context: z.record(z.any()).optional(),
+  context: z.record(z.string(), z.any()).optional(),
 });
 
 const ErrorSchema = z.object({

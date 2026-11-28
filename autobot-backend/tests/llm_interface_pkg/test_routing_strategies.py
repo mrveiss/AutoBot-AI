@@ -376,3 +376,45 @@ class TestLongContextRouter:
         router = _router_with_eligible(config, ["mamba-256k", "mamba-64k"])
         model, _ = router.route(LONG_MSG)
         assert model == "mamba-256k"
+
+
+# ─── reset_metrics on every strategy (#18297) ───────────────────────────────
+# LLMService now holds whichever strategy the registry selects, and the admin
+# reset endpoint (api/llm.py) calls reset_metrics() on it, so every strategy
+# must implement it.
+
+
+@pytest.mark.parametrize("router_cls", [ComplexityRouter, CostRouter, LatencyRouter, LongContextRouter])
+def test_reset_metrics_zeroes_request_count(config, router_cls):
+    router = router_cls(config)
+    with _patched_prices({}):
+        router.route(SIMPLE_MSG)
+    assert router.get_metrics()["total_requests"] == 1
+    router.reset_metrics()
+    assert router.get_metrics()["total_requests"] == 0
+
+
+# ─── config.enabled honoured by every strategy (#18297) ─────────────────────
+
+
+def _disabled(config):
+    config.enabled = False
+    return config
+
+
+@pytest.mark.parametrize("router_cls", [CostRouter, LatencyRouter, LongContextRouter])
+def test_disabled_matches_disabled_complexity_router(config, router_cls):
+    expected = ComplexityRouter(_disabled(config)).route(SIMPLE_MSG)
+    router = router_cls(config)
+    with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
+        assert router.route(SIMPLE_MSG) == expected
+    assert router.get_metrics()["total_requests"] == 0
+
+
+@pytest.mark.parametrize("router_cls", [CostRouter, LatencyRouter, LongContextRouter])
+def test_enabled_routes_simple_request_to_simple_model(config, router_cls):
+    router = router_cls(config)
+    with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
+        model, result = router.route(SIMPLE_MSG)
+    assert (model, result.tier) == ("cheap-model", "simple")
+    assert router.get_metrics()["total_requests"] == 1

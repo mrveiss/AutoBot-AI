@@ -103,6 +103,7 @@
       when:
         - ansible_facts['os_family'] == "Debian"
         - _esm_upgradable | default([]) | length > 0
+      check_mode: false
 
     - name: Build ESM installed-version lookup dict from dpkg-query output
       ansible.builtin.set_fact:

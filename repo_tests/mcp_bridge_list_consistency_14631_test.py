@@ -38,6 +38,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.auth.mcp_bridge_scan import bridge_files, bridge_name
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 
@@ -48,7 +49,7 @@ _LINT_SRC = REPO_ROOT / "tools" / "lint" / "check_mcp_tool_permission_coverage.p
 def _module(path: Path) -> ast.Module:
     """Parse *path*, failing loudly rather than reporting an empty list."""
     assert path.is_file(), f"{path.relative_to(REPO_ROOT)} is missing — this guard cannot run"
-    return ast.parse(path.read_text(encoding="utf-8"))
+    return parse_cache.parse(path.read_text(encoding="utf-8"))
 
 
 def _assigned(tree: ast.Module, name: str) -> ast.expr:

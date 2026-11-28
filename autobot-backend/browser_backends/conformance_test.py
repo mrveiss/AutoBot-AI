@@ -19,7 +19,7 @@ import pytest
 from autobot_shared.browser.base import (
     ActionRequest,
     BrowserBackend,
-    Capability,
+    BrowserCapability,
     ContentFormat,
     ExtractRequest,
     NavigateRequest,
@@ -46,7 +46,7 @@ def test_declares_a_name_and_capabilities(cls):
     backend = cls()
     assert isinstance(backend.name, str) and backend.name
     assert backend.capabilities
-    assert all(isinstance(c, Capability) for c in backend.capabilities)
+    assert all(isinstance(c, BrowserCapability) for c in backend.capabilities)
 
 
 def test_capability_claims_match_the_audited_matrix():
@@ -56,20 +56,20 @@ def test_capability_claims_match_the_audited_matrix():
     container = ContainerBrowserBackend()
 
     # Only in-process captures MHTML and hands off to a human.
-    assert Capability.MHTML in in_process.capabilities
-    assert Capability.HUMAN_HANDOFF in in_process.capabilities
-    assert Capability.MHTML not in worker.capabilities | container.capabilities
-    assert Capability.HUMAN_HANDOFF not in worker.capabilities | container.capabilities
+    assert BrowserCapability.MHTML in in_process.capabilities
+    assert BrowserCapability.HUMAN_HANDOFF in in_process.capabilities
+    assert BrowserCapability.MHTML not in worker.capabilities | container.capabilities
+    assert BrowserCapability.HUMAN_HANDOFF not in worker.capabilities | container.capabilities
 
     # Only the worker has stable element refs and interaction.
-    assert {Capability.ELEMENT_REFS, Capability.INTERACT} <= worker.capabilities
-    assert not ({Capability.ELEMENT_REFS, Capability.INTERACT} & in_process.capabilities)
-    assert not ({Capability.ELEMENT_REFS, Capability.INTERACT} & container.capabilities)
+    assert {BrowserCapability.ELEMENT_REFS, BrowserCapability.INTERACT} <= worker.capabilities
+    assert not ({BrowserCapability.ELEMENT_REFS, BrowserCapability.INTERACT} & in_process.capabilities)
+    assert not ({BrowserCapability.ELEMENT_REFS, BrowserCapability.INTERACT} & container.capabilities)
 
     # research_browser_manager has no screenshot path — verified in ADR-009.
-    assert Capability.SCREENSHOT not in in_process.capabilities
-    assert Capability.SCREENSHOT in container.capabilities
-    assert Capability.SCREENSHOT in worker.capabilities
+    assert BrowserCapability.SCREENSHOT not in in_process.capabilities
+    assert BrowserCapability.SCREENSHOT in container.capabilities
+    assert BrowserCapability.SCREENSHOT in worker.capabilities
 
 
 def test_locality_is_declared_and_exclusive():
@@ -80,12 +80,12 @@ def test_locality_is_declared_and_exclusive():
     could be routed into the process it is avoiding.
     """
     for backend in (InProcessBrowserBackend(), ContainerBrowserBackend(), WorkerBrowserBackend()):
-        locality = backend.capabilities & {Capability.IN_PROCESS, Capability.OUT_OF_PROCESS}
+        locality = backend.capabilities & {BrowserCapability.IN_PROCESS, BrowserCapability.OUT_OF_PROCESS}
         assert len(locality) == 1, f"{backend.name} declares {locality or 'no'} locality"
 
-    assert Capability.IN_PROCESS in InProcessBrowserBackend().capabilities
-    assert Capability.OUT_OF_PROCESS in ContainerBrowserBackend().capabilities
-    assert Capability.OUT_OF_PROCESS in WorkerBrowserBackend().capabilities
+    assert BrowserCapability.IN_PROCESS in InProcessBrowserBackend().capabilities
+    assert BrowserCapability.OUT_OF_PROCESS in ContainerBrowserBackend().capabilities
+    assert BrowserCapability.OUT_OF_PROCESS in WorkerBrowserBackend().capabilities
 
 
 @pytest.mark.asyncio
@@ -262,14 +262,14 @@ def test_extract_formats_match_what_each_stack_actually_returns():
     worker = WorkerBrowserBackend()
     container = ContainerBrowserBackend()
 
-    assert Capability.EXTRACT_HTML in container.capabilities
-    assert Capability.EXTRACT_HTML not in worker.capabilities | in_process.capabilities
+    assert BrowserCapability.EXTRACT_HTML in container.capabilities
+    assert BrowserCapability.EXTRACT_HTML not in worker.capabilities | in_process.capabilities
 
-    assert Capability.EXTRACT_TEXT in worker.capabilities
-    assert Capability.EXTRACT_TEXT in in_process.capabilities
+    assert BrowserCapability.EXTRACT_TEXT in worker.capabilities
+    assert BrowserCapability.EXTRACT_TEXT in in_process.capabilities
 
-    assert Capability.EXTRACT_STRUCTURED in in_process.capabilities
-    assert Capability.EXTRACT_STRUCTURED not in worker.capabilities | container.capabilities
+    assert BrowserCapability.EXTRACT_STRUCTURED in in_process.capabilities
+    assert BrowserCapability.EXTRACT_STRUCTURED not in worker.capabilities | container.capabilities
 
 
 @pytest.mark.asyncio
@@ -292,7 +292,7 @@ async def test_web_fetch_requirements_resolve_to_the_container():
             patch.object(WorkerBrowserBackend, "probe", AsyncMock(return_value=True)),
             patch.object(InProcessBrowserBackend, "probe", AsyncMock(return_value=True)),
         ):
-            chosen = await resolve_backend({Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+            chosen = await resolve_backend({BrowserCapability.EXTRACT_HTML, BrowserCapability.OUT_OF_PROCESS})
     finally:
         clear_backends()
 

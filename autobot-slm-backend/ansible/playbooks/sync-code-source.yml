@@ -48,6 +48,7 @@
         src: "{{ controller_repo_root }}/"
         dest: "{{ _code_source_dest }}/"
         rsync_opts:
+          - "--chmod=o-w"  # #19503
           - "--exclude=.git"
           - "--exclude=*.pyc"
           - "--exclude=__pycache__"

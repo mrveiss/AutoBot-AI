@@ -37,7 +37,7 @@ async def test_cost_is_not_charged_without_a_company():
     def session_factory():
         return mock_session
 
-    with patch("llc.services.budget.BudgetService") as MockBS:
+    with patch("llc.services.accessors.get_budget_service") as MockBS:
         MockBS.return_value.ingest_cost_event = AsyncMock()
 
         adapter = AutoBotAgentAdapter(

@@ -16,13 +16,14 @@
  * Related to Issue #3381
  */
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { formatBytes } from '@/utils/formatHelpers'
+import { formatFleetTime } from '@/composables/useTimezone'
+import { ref, computed, watch } from 'vue'
 import i18n from '@/i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type { NodeService, ServiceActionResponse } from '@/types/slm'
 import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
+import { BaseAlert, BaseModal, PollingPausedAlert, formatBytes, createLogger } from '@autobot/ui'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 
 type RedisServiceAction = 'start' | 'stop' | 'restart'
 
@@ -61,7 +62,6 @@ const successMessage = ref<string | null>(null)
 const showStopConfirm = ref(false)
 const logsServiceName = ref<string | null>(null)
 
-let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const hasTarget = computed(() => Boolean(props.nodeId && props.serviceName))
 const isRunning = computed(() => service.value?.status === 'running')
@@ -89,21 +89,21 @@ const memoryText = computed(() =>
 
 function statusDotClass(status: string | undefined): string {
   switch (status) {
-    case 'running': return 'bg-green-500'
-    case 'stopped': return 'bg-gray-400'
+    case 'running': return 'bg-autobot-dot-ok'
+    case 'stopped': return 'bg-autobot-dot-idle'
     case 'failed':
-    case 'crash-loop': return 'bg-red-500'
-    default: return 'bg-yellow-400'
+    case 'crash-loop': return 'bg-autobot-dot-bad'
+    default: return 'bg-autobot-dot-warn'
   }
 }
 
 function statusTextClass(status: string | undefined): string {
   switch (status) {
-    case 'running': return 'text-green-700'
-    case 'stopped': return 'text-gray-600'
+    case 'running': return 'text-autobot-pill-ok-fg'
+    case 'stopped': return 'text-autobot-text-secondary'
     case 'failed':
-    case 'crash-loop': return 'text-red-700'
-    default: return 'text-yellow-700'
+    case 'crash-loop': return 'text-autobot-pill-bad-fg'
+    default: return 'text-autobot-pill-warn-fg'
   }
 }
 
@@ -111,7 +111,11 @@ function statusTextClass(status: string | undefined): string {
 // API calls
 // -----------------------------------------------------------------------
 
+/** Whether the last status read failed; the poller counts this, not the shared errorMessage. */
+const statusFailed = ref(false)
+
 async function fetchStatus(): Promise<void> {
+  statusFailed.value = false
   if (!props.nodeId || !props.serviceName) {
     service.value = null
     return
@@ -126,12 +130,20 @@ async function fetchStatus(): Promise<void> {
     logger.error('Failed to fetch Redis status:', err)
     // A failed read says nothing about the unit now, so drop the last value
     service.value = null
+    statusFailed.value = true
     errorMessage.value = t('redisServicePanel.fetchStatusFailed')
   } finally {
     isLoading.value = false
     hasFetched.value = true
   }
 }
+
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+// errorMessage is shared with performAction, so the tick reads its own statusFailed flag.
+const statusPoller = useDashboardPoller(async () => {
+  await fetchStatus()
+  if (statusFailed.value) throw new Error(errorMessage.value ?? 'status read failed')
+}, POLL_INTERVAL_MS)
 
 async function performAction(action: RedisServiceAction): Promise<void> {
   if (isActionInProgress.value || !props.nodeId || !props.serviceName) return
@@ -184,35 +196,33 @@ watch(
   () => [props.nodeId, props.serviceName],
   () => {
     hasFetched.value = false
-    fetchStatus()
+    statusPoller.start(`${props.nodeId}:${props.serviceName}`)
   },
   { immediate: true },
 )
-
-onMounted(() => {
-  pollInterval = setInterval(fetchStatus, POLL_INTERVAL_MS)
-})
-
-onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval)
-})
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-gray-200">
+  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+    <PollingPausedAlert
+      :poller="statusPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="statusPoller.start(`${props.nodeId}:${props.serviceName}`)"
+    />
     <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
       <div class="flex items-center gap-3">
         <!-- Redis icon -->
-        <div class="w-8 h-8 rounded-md bg-red-100 flex items-center justify-center">
-          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-8 h-8 rounded-md bg-autobot-pill-bad-bg flex items-center justify-center">
+          <svg class="w-5 h-5 text-autobot-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
           </svg>
         </div>
         <div>
-          <h3 class="text-base font-semibold text-gray-900">{{ $t('redisServicePanel.redisService') }}</h3>
-          <p class="text-xs text-gray-500">{{ $t('redisServicePanel.inMemoryDataStore') }}</p>
+          <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('redisServicePanel.redisService') }}</h3>
+          <p class="text-xs text-autobot-text-tertiary">{{ $t('redisServicePanel.inMemoryDataStore') }}</p>
         </div>
         <!-- Status badge -->
         <div v-if="hasTarget && hasFetched && !isLoading" class="flex items-center gap-1.5">
@@ -221,7 +231,7 @@ onUnmounted(() => {
             {{ service ? service.status : $t('redisServicePanel.unknown') }}
           </span>
         </div>
-        <div v-else-if="isLoading" class="flex items-center gap-1.5 text-gray-400 text-sm">
+        <div v-else-if="isLoading" class="flex items-center gap-1.5 text-autobot-text-tertiary text-sm">
           <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
@@ -232,9 +242,9 @@ onUnmounted(() => {
 
       <!-- Refresh button -->
       <button
-        @click="fetchStatus"
+        @click="statusPoller.start(`${props.nodeId}:${props.serviceName}`)"
         :disabled="!hasTarget || isLoading || isActionInProgress"
-        class="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors"
+        class="p-1.5 text-autobot-text-tertiary hover:text-autobot-text-secondary disabled:opacity-40 transition-colors"
         :title="$t('redisServicePanel.refreshStatus')"
         :aria-label="$t('redisServicePanel.refreshStatus')"
       >
@@ -246,47 +256,49 @@ onUnmounted(() => {
     </div>
 
     <!-- No node holds the redis role -->
-    <div v-if="!hasTarget" class="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+    <div v-if="!hasTarget" class="px-4 py-3 border-b border-autobot-border text-sm text-autobot-text-secondary">
       {{ $t('redisServicePanel.noRedisNode') }}
     </div>
     <!-- The node does not report the unit -->
-    <div v-else-if="isNotReported" class="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+    <div v-else-if="isNotReported" class="px-4 py-3 border-b border-autobot-border text-sm text-autobot-text-secondary">
       {{ $t('redisServicePanel.notReported', { service: serviceName, node: nodeId }) }}
     </div>
 
     <!-- Success / Error banners -->
-    <div v-if="successMessage" class="px-4 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center justify-between">
-      <span>{{ successMessage }}</span>
-      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-    <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
-      <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="successMessage"
+      variant="success"
+      size="compact"
+      :message="successMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="successMessage = null"
+    />
+    <BaseAlert
+      v-if="errorMessage"
+      variant="error"
+      size="compact"
+      :message="errorMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="errorMessage = null"
+    />
 
     <!-- Metrics grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100 border-b border-gray-200">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-autobot-bg-tertiary border-b border-autobot-border">
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.state') }}</div>
-        <div class="text-sm font-semibold text-gray-900">{{ stateText }}</div>
+        <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.state') }}</div>
+        <div class="text-sm font-semibold text-autobot-text-primary">{{ stateText }}</div>
       </div>
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.mainPid') }}</div>
-        <div class="text-sm font-semibold text-gray-900">
+        <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.mainPid') }}</div>
+        <div class="text-sm font-semibold text-autobot-text-primary">
           {{ service?.main_pid ?? $t('redisServicePanel.unknown') }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.memoryUsed') }}</div>
-        <div class="text-sm font-semibold text-gray-900">{{ memoryText }}</div>
+        <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.memoryUsed') }}</div>
+        <div class="text-sm font-semibold text-autobot-text-primary">{{ memoryText }}</div>
       </div>
     </div>
 
@@ -297,7 +309,7 @@ onUnmounted(() => {
         @click="performAction('start')"
         :disabled="!hasTarget || isActionInProgress || isRunning"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-green-700 border-green-300 bg-green-50 hover:bg-green-100
+               text-autobot-pill-ok-fg border-autobot-success-light bg-autobot-success-bg hover:bg-autobot-pill-ok-bg
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg v-if="currentAction === 'start'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -315,7 +327,7 @@ onUnmounted(() => {
         @click="requestStop"
         :disabled="!hasTarget || isActionInProgress || !isRunning"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-red-700 border-red-300 bg-red-50 hover:bg-red-100
+               text-autobot-pill-bad-fg border-autobot-error-light bg-autobot-pill-bad-bg hover:bg-(--bad-bg-hover)
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg v-if="currentAction === 'stop'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -333,7 +345,7 @@ onUnmounted(() => {
         @click="performAction('restart')"
         :disabled="!hasTarget || isActionInProgress"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100
+               text-autobot-text-primary border-autobot-primary-light bg-autobot-info-bg hover:bg-autobot-pill-info-bg
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg v-if="currentAction === 'restart'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -352,7 +364,7 @@ onUnmounted(() => {
         @click="openLogs"
         :disabled="!hasTarget"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-gray-700 border-gray-300 bg-white hover:bg-gray-50
+               text-autobot-text-secondary border-autobot-border-strong bg-white hover:bg-autobot-bg-hover
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -363,7 +375,7 @@ onUnmounted(() => {
       </button>
 
       <!-- Last checked -->
-      <span v-if="service?.last_checked" class="ml-auto text-xs text-gray-400">{{ $t('redisServicePanel.checkedValue0', { value0: new Date(service.last_checked).toLocaleTimeString() }) }}</span>
+      <span v-if="service?.last_checked" class="ml-auto text-xs text-autobot-text-tertiary">{{ $t('redisServicePanel.checkedValue0', { value0: formatFleetTime(service.last_checked) }) }}</span>
     </div>
 
     <!-- Journal for the unit on its node -->
@@ -375,30 +387,29 @@ onUnmounted(() => {
     />
 
     <!-- Stop confirmation dialog -->
-    <teleport to="body">
-      <div v-if="showStopConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/50" @click="cancelStop"></div>
-        <div class="relative bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-          <h3 class="text-base font-semibold text-gray-900 mb-2">{{ $t('redisServicePanel.stopRedisService') }}</h3>
-          <p class="text-sm text-gray-600 mb-5">
-            {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              @click="cancelStop"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              {{ $t('redisServicePanel.cancel') }}
-            </button>
-            <button
-              @click="confirmStop"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
-            >
-              {{ $t('redisServicePanel.stopRedis') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
+    <BaseModal
+      v-model="showStopConfirm"
+      :title="$t('redisServicePanel.stopRedisService')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <p class="text-sm text-autobot-text-secondary">
+        {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}
+      </p>
+      <template #actions>
+        <button
+          @click="cancelStop"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
+        >
+          {{ $t('redisServicePanel.cancel') }}
+        </button>
+        <button
+          @click="confirmStop"
+          class="px-4 py-2 text-sm font-medium text-(--text-on-error) bg-autobot-error-solid border border-transparent rounded-md hover:bg-(--color-error-solid-hover)"
+        >
+          {{ $t('redisServicePanel.stopRedis') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

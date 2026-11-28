@@ -21,17 +21,17 @@ import time
 from typing import List
 
 import aiohttp
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.agent_events import BROADCAST_CHANNEL, owner_channel, publish_event_safe, publish_goal_events
+from api.agent_kb_context import _enhance_context_with_kb
+from api.agent_local_registry import local_registry_agents
 from api.schemas_agent import (
-    AgentAvailableData,
     AgentCommandApprovalResponse,
     AgentCommandExecuteResponse,
     AgentHealthResponse,
     AgentResearchData,
-    AgentStatusData,
     DevelopmentAnalysisData,
     GoalData,
     MultiAgentCoordinationData,
@@ -44,17 +44,21 @@ from api.schemas_agent_requests import (
     MultiAgentTaskPayload,
     ResearchTaskRequest,
 )
+from api.schemas_agent_roster import AgentAvailableData, AgentStatusData
 from api.schemas_common import AgentMessageResponse, DataResponse
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.auth.permissions import role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
-from dependencies import get_config, get_knowledge_base
+from dependencies import provide_config_manager, provide_knowledge_base
 from exceptions import InternalError, SubprocessError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id, scoped_reader
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from type_defs.ai_stack_agents import agent_names
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
@@ -225,7 +229,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
             {"command": command, "reason": "timeout"},
         )
         raise SubprocessError(
-            message="Command execution timed out after 5 minutes",
+            message=f"Command execution timed out after {TimingConstants.VERY_LONG_TIMEOUT}s",
             command=command[:200],
             return_code=None,
         )
@@ -675,7 +679,7 @@ async def receive_goal(
 
     goal = payload.goal
     use_phi2 = payload.use_phi2
-    user_role = payload.user_role
+    user_role = role_value(current_user.get("role"))  # #22143: never the payload
 
     # Check permission (Issue #620: uses helper)
     permission_error = _check_goal_permission(security_layer, user_role, goal)
@@ -706,8 +710,8 @@ async def receive_goal(
 )
 async def pause_agent_api(
     request: Request,
-    user_role: str = Form("user"),
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Pauses the agent's current operation (Issue #744: requires admin authentication).
@@ -716,6 +720,7 @@ async def pause_agent_api(
     backend integration.
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))  # #22143: never a Form field
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
         raise HTTPException(
@@ -749,8 +754,8 @@ async def pause_agent_api(
 )
 async def resume_agent_api(
     request: Request,
-    user_role: str = Form("user"),
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Resumes the agent's operation if paused (Issue #744: requires admin authentication).
@@ -759,6 +764,7 @@ async def resume_agent_api(
     Full implementation will be added with backend integration.
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))  # #22143: never a Form field
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
         raise HTTPException(
@@ -794,6 +800,7 @@ async def command_approval(
     request: Request,
     payload: CommandApprovalPayload,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Receives user approval/denial for a command execution.
@@ -806,7 +813,7 @@ async def command_approval(
 
     task_id = payload.task_id
     approved = payload.approved
-    user_role = payload.user_role
+    user_role = role_value(current_user.get("role"))  # #22143: never the payload
 
     # Check permission (Issue #620: uses helper)
     permission_error = _check_approval_permission(security_layer, user_role, task_id, approved)
@@ -854,7 +861,7 @@ async def execute_command(
                       or a 500 error if an internal error occurs.
     """
     security_layer = request.app.state.security_layer
-    command, user_role = payload.command, payload.user_role
+    command, user_role = payload.command, role_value(current_user.get("role"))  # #22143
     channel = owner_channel(current_user)  # #17354: not every signed-in client
 
     # Validate command request (Issue #281: uses helper)
@@ -950,30 +957,6 @@ async def _select_agents_for_goal(ai_client, payload, available_agents: list) ->
     return await get_optimal_agents_for_goal(payload.goal, available_agents)
 
 
-async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
-    """Enhance context with knowledge base results (Issue #398: extracted).
-
-    Args:
-        payload: Goal payload with context and KB settings
-        knowledge_base: Knowledge base instance or None
-
-    Returns:
-        Augmented context string or original context
-    """
-    if not (payload.use_knowledge_base and knowledge_base):
-        return payload.context
-
-    try:
-        # Issue #13009: exclude quarantined research facts (#12622).
-        kb_results = await knowledge_base.search(query=payload.goal, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
-        if kb_results:
-            kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
-            return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
-    except Exception as e:
-        logger.warning("Knowledge base context enhancement failed: %s", e)
-    return payload.context
-
-
 def _determine_coordination_mode(payload, selected_agents: list) -> str:
     """Determine coordination mode for multi-agent execution (Issue #398: extracted)."""
     if payload.coordination_mode != "intelligent":
@@ -1000,8 +983,8 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 async def execute_orchestrated_goal(
     payload: GoalPayload,
     request: Request,
-    config=Depends(get_config),
-    knowledge_base=Depends(get_knowledge_base),
+    config=Depends(provide_config_manager),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """Execute goal via multi-agent orchestration with AI Stack coordination.
@@ -1014,14 +997,14 @@ async def execute_orchestrated_goal(
     # Get available agents
     try:
         agents_info = await ai_client.list_available_agents()
-        available_agents = agents_info.get("agents", [])
+        available_agents = agent_names(agents_info)
     except Exception as e:
         logger.warning("Could not get agent list: %s", e)
         available_agents = list(_FALLBACK_AGENTS)
 
     # Issue #398: Use extracted helpers
     selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
-    kb_context = await _enhance_context_with_kb(payload, knowledge_base)
+    kb_context = await _enhance_context_with_kb(payload, knowledge_base, scoped_reader(current_user))
     coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
     execution_start = time.monotonic()
@@ -1075,9 +1058,8 @@ async def coordinate_multi_agent_task(
     try:
         ai_client = await get_ai_stack_client()
 
-        # Validate agent availability
         agents_info = await ai_client.list_available_agents()
-        available_agents = agents_info.get("agents", [])
+        available_agents = agent_names(agents_info)
 
         unavailable_agents = [agent for agent in payload.agents if agent not in available_agents]
         if unavailable_agents:
@@ -1123,7 +1105,7 @@ async def coordinate_multi_agent_task(
 )
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest,
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1150,6 +1132,7 @@ async def comprehensive_research_task(
                 kb_results = await knowledge_base.search(
                     query=request_data.research_query, top_k=3, filters=RESEARCH_QUARANTINE_FILTER
                 )
+                kb_results = await filter_for_user_id(kb_results, knowledge_base, scoped_reader(current_user))  # #16665
                 if kb_results:
                     kb_context = "\n".join([f"- {item.get('content', '')[:150]}..." for item in kb_results])
                     research_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"
@@ -1231,7 +1214,7 @@ async def _ai_stack_available_agents() -> List[dict]:
         return []
 
     agents_with_caps = []
-    for agent in agents_info.get("agents", []):
+    for agent in agent_names(agents_info):
         # Issue #281: capabilities from module constant, with fallback for unknown agents
         agent_info = AGENT_CAPABILITIES.get(
             agent,
@@ -1244,29 +1227,6 @@ async def _ai_stack_available_agents() -> List[dict]:
         agent_info["status"] = "available"
         agents_with_caps.append(agent_info)
     return agents_with_caps
-
-
-def _local_registry_agents() -> List[dict]:
-    """Agents from the canonical in-process AgentCapabilityRegistry (#6828).
-
-    Exposes the orchestration profiles (capabilities + specializations) through
-    the same response shape as AI Stack agents so /agents/available is the one
-    unified "find an agent that can do X" entry point.
-    """
-    from orchestration.agent_registry import get_default_capability_registry
-
-    agents = []
-    for profile in get_default_capability_registry().get_all().values():
-        capabilities = sorted({c.value for c in profile.capabilities} | set(profile.specializations))
-        agents.append(
-            {
-                "name": profile.agent_id,
-                "description": f"Local orchestration agent ({profile.agent_type})",
-                "capabilities": capabilities,
-                "status": profile.availability_status,
-            }
-        )
-    return agents
 
 
 @router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
@@ -1287,7 +1247,7 @@ async def list_available_agents(capability: str | None = None):
     """
     agents_with_caps = await _ai_stack_available_agents()
     known = {a["name"] for a in agents_with_caps}
-    agents_with_caps.extend(a for a in _local_registry_agents() if a["name"] not in known)
+    agents_with_caps.extend(a for a in local_registry_agents() if a["name"] not in known)
 
     if capability:
         needle = capability.lower()
@@ -1323,15 +1283,16 @@ async def get_agents_status():
             ai_client.list_available_agents(),
         )
 
+        names = agent_names(agents_info)
         return create_success_response(
             {
                 "ai_stack_status": health_status["status"],
-                "total_agents": len(agents_info.get("agents", [])),
+                "total_agents": len(names),
                 "available_agents": agents_info.get("agents", []),
                 "multi_agent_coordination": True,
-                "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
-                "research_capabilities": any(agent in agents_info.get("agents", []) for agent in RESEARCH_AGENT_NAMES),
-                "development_tools": ("development_speedup" in agents_info.get("agents", [])),
+                "npu_acceleration": "npu_code_search" in names,
+                "research_capabilities": any(agent in names for agent in RESEARCH_AGENT_NAMES),
+                "development_tools": "development_speedup" in names,
             }
         )
 

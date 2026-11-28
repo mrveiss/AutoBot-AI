@@ -83,13 +83,18 @@ websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', tr
 # the tag archive IS the distribution. It is self-contained — .gitmodules is empty
 # and vendor/pako is fully populated.
 novnc_version: "1.7.0"
+# Overridable for an air-gapped mirror (#22146); the upstream tag archive is the default.
+novnc_release_base_url: "{{ lookup('env', 'AUTOBOT_NOVNC_RELEASE_BASE_URL') | default('https://github.com/novnc/noVNC/archive/refs/tags', true) }}"
+# Scratch download: one definition for the download and unarchive tasks; set novnc_archive_dir to relocate it (#22146).
+novnc_archive_path: "{{ novnc_archive_dir | default('/tmp') }}/noVNC-{{ novnc_version }}.tar.gz"
+novnc_archive_url: "{{ novnc_release_base_url }}/v{{ novnc_version }}.tar.gz"
 novnc_archive_sha256: b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6
 
 # Versioned install root + stable symlink, so a rollback is a symlink flip.
 # novnc_path deliberately does NOT point at /usr/share/novnc: that directory is
 # dpkg-owned by the distro package, and replacing it with a symlink collides.
 novnc_install_root: "/opt/noVNC-{{ novnc_version }}"
-novnc_path: /opt/novnc
+# novnc_path: one home in inventory/group_vars/all.yml (#22146); the backend env reads it too.
 
 # Security - password auto-generated to /etc/autobot/vnc-secrets.env
 #
@@ -112,8 +117,9 @@ vnc_always_shared: "{{ lookup('env', 'VNC_ALWAYS_SHARED') | default('0', true) }
 # running as vnc_user) and websockify --ssl-only (also vnc_user). The shared node
 # key at /etc/autobot/certs/server-key.pem is root:root 0600 and is consumed by
 # nginx, Redis and PostgreSQL, so it must not be opened up to vnc_user.
-vnc_tls_cert: /etc/autobot/certs/vnc-cert.pem
-vnc_tls_key: /etc/autobot/certs/vnc-key.pem
+vnc_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
+vnc_tls_cert: "{{ vnc_tls_cert_dir }}/vnc-cert.pem"
+vnc_tls_key: "{{ vnc_tls_cert_dir }}/vnc-key.pem"
 
 # Service management
 vnc_service_name: vnc-server
@@ -126,4 +132,5 @@ vnc_register_credentials: true
 # backend on co-located hosts, so SLM auth there returns 401.
 slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}/slm"
 slm_admin_user: "admin"
-slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"
+# slm_admin_password has no default: tasks/register-credentials.yml resolves it through
+# _shared/tasks/read_slm_admin_password.yml, the one reader (#19318).

@@ -8,11 +8,17 @@
 # so a fresh Postgres database is fully bootstrapped before uvicorn accepts
 # connections (#9759). Mirrors the SLM entrypoint pattern (docker/slm).
 #
-# Migrations only apply to Postgres-backed user modes; the default single_user
-# mode has no Postgres schema, so the step is skipped entirely.
+# User management is always Postgres-backed (#10636), so migrations always run.
+# The retired single_user mode used to skip them; skipping now would leave the
+# users schema missing (#18729).
 set -eu
 
-USER_MODE="${AUTOBOT_USER_MODE:-single_user}"
+USER_MODE="${AUTOBOT_USER_MODE:-single_company}"
+
+# The one retry below re-runs `upgrade head` after a partial failure. That is safe only
+# because every non-transactional migration (autocommit_block) is resumable: enum values
+# use ADD VALUE IF NOT EXISTS, and a concurrent index build drops an invalid leftover
+# before rebuilding. repo_tests/docker_admin_seed_18729_test.py pins both.
 
 # Subshell keeps the app's cwd at the image WORKDIR (/app) — the backend
 # writes relative paths from there, so leaking the cd into exec would
@@ -21,17 +27,26 @@ run_migrations() {
     (cd /app/autobot-backend && python3 -m alembic -c migrations/alembic.ini upgrade head)
 }
 
-if [ "$USER_MODE" != "single_user" ]; then
-    echo "Running backend database migrations (user mode: ${USER_MODE})..."
+echo "Running backend database migrations (user mode: ${USER_MODE})..."
+run_migrations || {
+    echo "ERROR: Migration failed — retrying in 5s..."
+    sleep 5
     run_migrations || {
-        echo "ERROR: Migration failed — retrying in 5s..."
-        sleep 5
-        run_migrations || {
-            echo "FATAL: Migration failed after retry. Aborting."
-            exit 1
-        }
+        echo "FATAL: Migration failed after retry. Aborting."
+        exit 1
     }
-    echo "Migrations complete."
-fi
+}
+echo "Migrations complete."
+
+# #19869, #19738: the pinned speech-to-text and code-embedding models, into the cache volume (HF_HOME).
+# In the background, and never fatal: both are optional at runtime, so a slow link or a host with no
+# internet must not hold up or stop the backend. AUTOBOT_PREFETCH_MODELS=false skips it.
+case "${AUTOBOT_PREFETCH_MODELS:-true}" in
+    false | False | FALSE | 0 | no | off) echo "Model pre-fetch skipped (AUTOBOT_PREFETCH_MODELS=${AUTOBOT_PREFETCH_MODELS})" ;;
+    *)
+        echo "Fetching the pinned models into ${HF_HOME:-the default cache}, in the background..."
+        (python3 -m autobot_shared.model_prefetch || echo "WARNING: a pinned model could not be fetched (see FAILED above). Speech-to-text or code embeddings download it at first use, or fail offline.") &
+        ;;
+esac
 
 exec "$@"

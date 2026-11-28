@@ -13,6 +13,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.role_group_ownership import merge_declared_roles
 from models.database import NodeRole, RoleStatus
 
 logger = logging.getLogger(__name__)
@@ -40,3 +41,17 @@ async def sync_slm_node_roles(session: AsyncSession, node_id: str, all_roles: li
                 row.status = desired_status
         else:
             session.add(NodeRole(node_id=node_id, role_name=role_name, status=desired_status, assignment_type="auto"))
+
+
+async def heal_existing_slm_node_roles(session: AsyncSession, node, node_id: str, slm_roles: list) -> None:
+    """Heal an existing SLM node's roles on self-registration.
+
+    ``detected_roles`` is reset to the SLM roles so the fleet view shows them running (older
+    rows predate this). The SLM roles are DECLARED too -- merged, never removed -- so the
+    inventory, which gates redis/database on declared or self-detected ownership, can't drop
+    them from the SLM node (#19197).
+    """
+    if list(node.detected_roles or []) != slm_roles:
+        node.detected_roles = slm_roles
+    node.roles = merge_declared_roles(node.roles, slm_roles)
+    await sync_slm_node_roles(session, node_id, list(node.roles), slm_roles)

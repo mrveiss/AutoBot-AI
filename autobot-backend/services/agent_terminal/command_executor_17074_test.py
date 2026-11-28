@@ -22,7 +22,7 @@ from services.agent_terminal import command_executor as executor_module
 from services.agent_terminal.command_executor import TIMED_OUT_RETURN_CODE, TRUNCATED_NOTE, CommandExecutor
 from services.agent_terminal.models import AgentTerminalSession
 from services.command_approval_manager import AgentRole
-from tests.helpers.fake_pty_shell import FakeManager, FakeShell
+from tests.helpers._fake_pty_shell import FakeManager, FakeShell
 
 
 @pytest.fixture

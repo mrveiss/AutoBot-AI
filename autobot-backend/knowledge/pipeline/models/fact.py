@@ -28,7 +28,7 @@ FactType = Literal[
 ]
 
 
-class AtomicFact(BaseModel):
+class PipelineAtomicFact(BaseModel):
     """
     Represents an atomic factual statement extracted from document processing.
 

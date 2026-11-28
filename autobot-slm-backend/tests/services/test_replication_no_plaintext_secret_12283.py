@@ -11,6 +11,7 @@ plaintext credential is NEVER written to the playbook file and is instead
 passed to the ansible-playbook subprocess through the environment.
 """
 
+import asyncio
 import importlib
 import sys
 from pathlib import Path
@@ -54,10 +55,12 @@ async def _run_capture(tmp_path: Path) -> dict:
     async def fake_exec(*args, **kwargs):
         # args: ("ansible-playbook", "<playbook_path>", "-i", ...)
         playbook_path = Path(args[1])
-        captured["content"] = playbook_path.read_text(encoding="utf-8")
+        captured["content"] = await asyncio.to_thread(playbook_path.read_text, encoding="utf-8")
         captured["env"] = kwargs.get("env")
         proc = MagicMock()
-        proc.communicate = AsyncMock(return_value=(b"", None))
+        # #19475: a run is a success only with a PLAY RECAP showing the target ran (ok>=1)
+        recap = b"PLAY RECAP *****\n10.0.0.5 : ok=3 changed=1 unreachable=0 failed=0 skipped=0\n"
+        proc.communicate = AsyncMock(return_value=(recap, None))
         proc.returncode = 0
         return proc
 

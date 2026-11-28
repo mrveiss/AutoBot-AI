@@ -106,11 +106,11 @@ All dashboards are accessible via: **Monitoring → Dashboards** in AutoBot UI
 
 ### Phase 1: Installation (Completed)
 
-**Script**: `scripts/install-prometheus-stack.sh`
+**Installer**: the Ansible `monitoring` role (`autobot-slm-backend/ansible/roles/monitoring/`), run through the builtin updater. The original `install-prometheus-stack.sh` was folded into the role and removed (#18556).
 
 - Installed Prometheus 2.47.0 on the database role
 - Installed Grafana 10.2.0 on the database role
-- Installed AlertManager 0.26.0 on the database role
+- Installed AlertManager 0.26.0 on the database role -- **opt-in**: `monitoring_install_alertmanager` defaults to `false`, so a default updater run does not install it. The role then downloads the release into `alertmanager_install_dir` (`{{ autobot.base_dir | dirname }}/alertmanager`), installs `alertmanager.yml` (validated with `amtool`), a systemd unit, and points Prometheus at it. It listens on loopback only (`alertmanager_listen_address`), with no firewall rule. Enable it on the one node that hosts alert routing by setting `monitoring_install_alertmanager: true` in that node's host_vars (or group_vars for that role).
 - Created systemd services for automatic startup
 - Configured 30-day data retention
 
@@ -133,7 +133,7 @@ async def metrics_endpoint():
 
 ### Phase 3: Prometheus Configuration (Completed)
 
-**File**: `config/prometheus/prometheus.yml`
+**File**: `autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2`
 
 ```yaml
 scrape_configs:
@@ -379,10 +379,10 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 - **Custom Queries**: Use Grafana's Query Explorer or PromQL directly
 
 ### Configuration Files
-- `config/prometheus/prometheus.yml` - Prometheus scrape config
+- `autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2` - Prometheus scrape config
 - `config/prometheus/alertmanager.yml` - Alert routing rules
 - `config/prometheus/alertmanager_rules.yml` - Alert definitions
-- `config/grafana/provisioning/datasources/prometheus.yml` - Grafana datasource
+- `autobot-slm-backend/ansible/roles/monitoring/templates/grafana-datasource.yml.j2` - Grafana datasource
 - `config/grafana/dashboards/*.json` - Dashboard definitions
 
 ---

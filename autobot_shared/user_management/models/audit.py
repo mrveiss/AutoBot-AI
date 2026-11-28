@@ -19,11 +19,14 @@ keeps SLM's shorter comment wording; every enum/constant value is unchanged.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from autobot_shared.user_management.models.audit_chain_anchor import AuditChainAnchor  # noqa: F401
 from autobot_shared.user_management.models.base import Base
+
+CHAIN_SEQ_INDEX = "uq_audit_logs_chain_seq"
 
 
 class AuditLog(Base):
@@ -31,7 +34,12 @@ class AuditLog(Base):
     Audit log entry.
 
     Records all security-relevant actions for compliance and debugging.
-    Immutable - entries are never updated or deleted.
+
+    Tamper-evident, not immutable (#17219): every row written after the chain's genesis anchor
+    carries ``chain_seq``/``prev_hash``/``row_hash``/``row_mac`` (``autobot_shared/audit_chain.py``,
+    sealed by ``audit_chain_writer``), so a modified, removed or reordered row is detectable.
+    Rows from before the genesis are unchained. The database does not yet refuse a change
+    (#22004), and ``user_id``/``org_id`` become NULL when their user or organisation is deleted.
     """
 
     __tablename__ = "audit_logs"
@@ -103,7 +111,42 @@ class AuditLog(Base):
         nullable=True,
     )
 
-    # Timestamp (immutable)
+    # --- Canonical audit-trail columns (#17225 D1) --------------------------
+    # This table is the audit trail's system of record. The four columns below
+    # carry what the canonical AuditEvent records and the original schema could
+    # not: actors and resources that are not user/row UUIDs (an agent, "system",
+    # a path), the session, and the category that selects the retention period.
+    # All additive: nullable, or a server default, so no existing row is rewritten.
+    category: Mapped[str] = mapped_column(
+        String(32),
+        server_default="security",
+        nullable=False,
+        index=True,
+    )
+    actor: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    session_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    resource_ref: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
+    # --- Tamper-evident chain (#17219) ---------------------------------------
+    # All nullable, no default: a pre-chain row keeps NULLs and is never rewritten. The hash
+    # covers ``actor`` and ``org_ref`` (text), not the ``user_id``/``org_id`` foreign keys.
+    chain_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    row_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    row_mac: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    key_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    org_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Timestamp (set by the chain writer when the caller gave none, so the hashed value is the stored one)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -116,6 +159,15 @@ class AuditLog(Base):
         Index("idx_audit_org_created", "org_id", "created_at"),
         Index("idx_audit_user_created", "user_id", "created_at"),
         Index("idx_audit_action_created", "action", "created_at"),
+        Index("idx_audit_actor_created", "actor", "created_at"),
+        # The chain's backstop: two writers can never hold one sequence number (#17219).
+        Index(
+            CHAIN_SEQ_INDEX,
+            "chain_seq",
+            unique=True,
+            postgresql_where=text("chain_seq IS NOT NULL"),
+            sqlite_where=text("chain_seq IS NOT NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
@@ -123,7 +175,7 @@ class AuditLog(Base):
 
 
 # Standard audit actions
-class AuditAction:
+class IdentityAuditAction:
     """Standard audit action constants."""
 
     # Authentication
@@ -152,6 +204,7 @@ class AuditAction:
     USER_DELETED = "user_deleted"
     USER_ACTIVATED = "user_activated"
     USER_DEACTIVATED = "user_deactivated"
+    PLATFORM_ADMIN_CHANGED = "platform_admin_changed"  # #20670
 
     # Teams
     TEAM_CREATED = "team_created"
@@ -203,3 +256,9 @@ class AuditResourceType:
     SESSION = "session"
     SETTINGS = "settings"
     ENDPOINT = "endpoint"  # GH #6511: resource type for permission-deny audit events
+
+
+# Seal every new row (#17219). Registered here so the backend and the SLM both get it.
+from autobot_shared.audit_chain_writer import install_chain_listener  # noqa: E402
+
+install_chain_listener(AuditLog)

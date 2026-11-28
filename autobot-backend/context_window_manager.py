@@ -20,14 +20,13 @@ code happened to cut last.
 
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from pathlib import Path
 from typing import Callable, Dict, List
 
 _CONTEXT_HEADROOM: float = 0.85
 _CONTEXT_HARD_MAX: int = 200_000
 
-import yaml
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from constants.model_constants import ModelConfig, ModelConstants
 
@@ -124,7 +123,7 @@ class ContextWindowManager:
         self.current_model = self.config["models"]["default"]["name"]
 
     def _load_config(self, config_path: str) -> Dict:
-        """Load model configuration from YAML.
+        """Load model configuration from YAML via the shared loader (#17855).
 
         Args:
             config_path: Path to YAML file
@@ -132,29 +131,16 @@ class ContextWindowManager:
         Returns:
             Configuration dictionary
         """
-        path = Path(config_path)
-        if not path.exists():
-            logger.warning("Config not found: %s, using defaults", config_path)
+        config = load_config_file(config_path, self._get_default_config, "Context window").values
+        # If models is a list it's the LLM provider registry (PR #3257 schema),
+        # not the context-window config dict this class expects.
+        if not isinstance(config.get("models"), dict):
+            logger.warning(
+                "Config %s uses list-format model registry; using context-window defaults",
+                config_path,
+            )
             return self._get_default_config()
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-
-            # If models is a list it's the LLM provider registry (PR #3257 schema),
-            # not the context-window config dict this class expects.
-            if not isinstance(config.get("models"), dict):
-                logger.warning(
-                    "Config %s uses list-format model registry; using context-window defaults",
-                    config_path,
-                )
-                return self._get_default_config()
-
-            logger.info("✅ Loaded config for %s models", len(config["models"]))
-            return config
-        except Exception as e:
-            logger.error("Failed to load config: %s, using defaults", e)
-            return self._get_default_config()
+        return config
 
     def _get_default_config(self) -> Dict:
         """Fallback config if YAML not found.
@@ -421,21 +407,14 @@ class ContextWindowManager:
         return allocated, tokens
 
     def get_prompt_budget(self, model_name: str | None = None) -> int:
-        """Tokens available to the *prompt*, after reserving room to answer (#13640).
+        """Tokens available to the *prompt*, after reserving room to answer (#13640, #22016).
 
-        ``get_adaptive_context_length`` returns the whole declared window. A
-        prompt that fills it leaves the model nowhere to generate, and the
-        system prompt is sent separately (Ollama ``system`` field) so it
-        consumes window while being invisible to the allocator. Both are
-        subtracted here.
+        Measured against the window the request really sends, with the reply reserve, the YAML
+        ``safety_margin`` and the declared system reserve taken off; see ``chat_workflow.prompt_window``.
         """
-        window = self.get_adaptive_context_length(model_name)
-        info = self.get_model_info(model_name)
-        reserved = int(info.get("max_output_tokens", 0) or 0)
-        reserved += int((info.get("message_budget") or {}).get("system_prompt", 0) or 0)
-        # Never reserve the window away entirely: a pathological config must
-        # still leave a usable prompt budget rather than zero.
-        return max(window // 4, window - reserved)
+        from chat_workflow.prompt_window import prompt_budget_tokens
+
+        return prompt_budget_tokens(self, model_name)
 
     def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.

@@ -20,7 +20,6 @@ import pytest
 PIPELINE_MODULES = [
     ("media.document.pipeline", "DocumentPipeline"),
     ("media.link.pipeline", "LinkPipeline"),
-    ("media.audio.pipeline", "AudioPipeline"),
     ("media.video.pipeline", "VideoPipeline"),
     ("media.image.pipeline", "ImagePipeline"),
 ]

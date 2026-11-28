@@ -74,6 +74,18 @@ class TranscriptCleanupResult(BaseModel):
     error: str | None = None
 
 
+class KnowledgeContextCleanupResult(BaseModel):
+    """Nested chat-knowledge-context cleanup sub-payload within SessionDeleteData.
+
+    Fields mirror exactly what ``_cleanup_chat_knowledge_context`` returns
+    (#16490) -- no ``cleanup_error`` here, unlike its siblings, because that
+    producer has no error branch to report.
+    """
+
+    context_deleted: bool
+    file_associations_removed: int
+
+
 class SessionDeleteData(BaseModel):
     """data payload for DELETE /chat/sessions/{session_id}."""
 
@@ -83,6 +95,10 @@ class SessionDeleteData(BaseModel):
     terminal_cleanup: TerminalCleanupResult | None = None
     kb_cleanup: KbCleanupResult | None = None
     transcript_cleanup: TranscriptCleanupResult | None = None
+    #: Undeclared until #16502: the handler set it, this model did not list it,
+    #: and no `extra: allow` is in force -- so Pydantic dropped it at
+    #: serialization and the caller never learned whether the context went.
+    knowledge_context_cleanup: KnowledgeContextCleanupResult | None = None
 
 
 class ChatResetData(BaseModel):
@@ -662,52 +678,6 @@ class SessionMcpCallData(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
-
-
-# ── Chat Folder schemas (GH#8987) ────────────────────────────────────────────
-
-
-class FolderCreate(BaseModel):
-    """Request body for POST /chat/folders."""
-
-    name: str = Field(..., min_length=1, max_length=100, description="Folder display name")
-    parent_id: str | None = Field(None, description="Parent folder ID for nesting (max 3 levels)")
-
-
-class FolderUpdate(BaseModel):
-    """Request body for PUT /chat/folders/{folder_id}."""
-
-    name: str | None = Field(None, min_length=1, max_length=100, description="New folder name")
-    parent_id: str | None = Field(None, description="New parent folder ID (None = root)")
-    pinned: bool | None = Field(None, description="Pin folder to top of list")
-    archived: bool | None = Field(None, description="Archive folder (hidden from main list, still searchable)")
-
-
-class FolderData(BaseModel):
-    """Single folder object returned by the API."""
-
-    id: str
-    name: str
-    parent_id: str | None = None
-    owner: str
-    pinned: bool = False
-    archived: bool = False
-    created_at: str
-    session_ids: List[str] = Field(default_factory=list)
-    session_count: int = 0
-
-
-class FolderListData(BaseModel):
-    """data payload for GET /chat/folders."""
-
-    folders: List[FolderData]
-    count: int
-
-
-class SessionFolderAssign(BaseModel):
-    """Request body for PUT /chat/sessions/{session_id}/folder."""
-
-    folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")
 
 
 # ── Context Overflow Protection schemas (GH#9043) ────────────────────────────

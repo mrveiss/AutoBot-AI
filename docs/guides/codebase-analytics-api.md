@@ -228,14 +228,12 @@ BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
-async def index_project(root_path: str, source_id: str = None) -> dict:
-    """Index a local project for codebase analytics.
+async def index_project(root_path: str = None, source_id: str = None) -> dict:
+    """Index a project for codebase analytics. Pass exactly one of the two targets.
 
     Args:
-        root_path: Absolute filesystem path to the project directory.
-                   Defaults to PROJECT_ROOT if omitted.
-        source_id: Optional code source registry ID. When provided,
-                   analytics data is scoped to that source.
+        root_path: Dev mode: absolute path under an allowed project root.
+        source_id: Code source registry ID; analytics data is scoped to that source.
 
     Returns:
         Final indexing status dict with result or error.
@@ -243,9 +241,8 @@ async def index_project(root_path: str, source_id: str = None) -> dict:
     connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         # Start indexing
-        payload = {"root_path": root_path}
-        if source_id:
-            payload["source_id"] = source_id
+        # Exactly one target: a source, or (dev mode) a root path.
+        payload = {"source_id": source_id} if source_id else {"root_path": root_path}
 
         resp = await session.post(f"{API}/index", json=payload)
         data = await resp.json()
@@ -466,19 +463,19 @@ problems) and Redis (stats, hardcodes, indexing state).
 
 Start background indexing of a codebase path.
 
-**Request body** (all fields optional):
+**Request body**: exactly one of `source_id` and `root_path` is required (a body with
+neither, or with both, is rejected with HTTP 422).
 
 ```json
 {
-  "root_path": "/opt/autobot/autobot-backend",
   "source_id": "github-abc123"
 }
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `root_path` | string | PROJECT_ROOT | Absolute path to scan |
-| `source_id` | string | null | Code source registry ID (resolves to clone_path) |
+| `source_id` | string | null | Code source registry ID (resolves to clone_path). Exclusive with `root_path` |
+| `root_path` | string | null | Dev mode: absolute path under an allowed project root. Exclusive with `source_id` |
 
 **Response** (started):
 
@@ -1729,12 +1726,10 @@ class CodebaseAnalyticsClient:
         Returns:
             Dict with task_id and status.
         """
-        body = {}
-        if root_path:
-            body["root_path"] = root_path
-        if source_id:
-            body["source_id"] = source_id
-        return await self._post("/index", json=body or None)
+        if bool(root_path) == bool(source_id):
+            raise ValueError("pass exactly one of root_path and source_id")
+        body = {"source_id": source_id} if source_id else {"root_path": root_path}
+        return await self._post("/index", json=body)
 
     async def get_index_status(self, task_id: str) -> dict:
         """Check indexing task status.
@@ -2229,7 +2224,9 @@ mkdir -p /opt/autobot/data/chromadb/
 
 # If corrupted, clear and re-index
 curl -sk -X DELETE "https://<backend-ip>:8443/api/analytics/codebase/cache"
-curl -sk -X POST "https://<backend-ip>:8443/api/analytics/codebase/index"
+curl -sk -X POST "https://<backend-ip>:8443/api/analytics/codebase/index" \
+  -H "Content-Type: application/json" \
+  -d '{"source_id": "<source_id>"}'
 ```
 
 ### Redis connection failed (using in-memory storage)

@@ -18,16 +18,43 @@ export interface Problem {
   line?: number
   line_number?: number
   category?: string
+  /** Server-assigned file category (`code`, `test`, ...), #20493. */
+  file_category?: string
   suggestion?: string
 }
 
+/** One place a duplicated block lives (#22157). */
+export interface DuplicateLocation {
+  file: string
+  start_line: number
+  end_line: number
+}
+
+/** One duplicate CLUSTER: a group of matching blocks and every location (#22157). */
 export interface DuplicateCode {
   similarity: number
   lines: number
   file1: string
   file2: string
-  start1?: number
-  start2?: number
+  /** Legacy (no `locations`) wire fields; absent on the ChromaDB fallback, which carries no positions. */
+  start_line1?: number
+  end_line1?: number
+  start_line2?: number
+  end_line2?: number
+  /** exact (identical code) | structural (identical once string text is ignored) | similar. */
+  kind?: string
+  locations?: DuplicateLocation[]
+}
+
+/** The scan's true size; the rows are only the first `returned_count` clusters (#22157). */
+export interface DuplicateSummary {
+  totalCount: number
+  truncated: boolean
+  /** null when the payload carries no total and its rows cannot establish one (a cut or timed-out list). */
+  totalLocations: number | null
+  exactCount: number
+  structuralCount: number
+  excludedDirs: string[]
 }
 
 export interface Declaration {
@@ -192,3 +219,10 @@ export const CODE_SMELL_TYPES = new Set([
   'performance_sequential_awaits',
   'performance_unbatched_api_calls',
 ])
+
+/** Backend analyzers emit `code_smell_<pattern>` types beyond the whitelist above. */
+export const CODE_SMELL_TYPE_PREFIX = 'code_smell_'
+
+/** The ONE predicate for "is this finding a code smell" (#20493). */
+export const isCodeSmellType = (type?: string | null): boolean =>
+  !!type && (CODE_SMELL_TYPES.has(type) || type.startsWith(CODE_SMELL_TYPE_PREFIX))

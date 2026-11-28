@@ -6,8 +6,8 @@
 
 from autobot_shared.models.pagination import PaginationParams, apply_pagination
 from autobot_shared.models.service_message import (
-    MessageType,
     ServiceMessage,
+    ServiceMessageType,
     ServiceName,
     create_reply,
     deserialize_message,
@@ -26,7 +26,7 @@ __all__ = [
     "apply_pagination",
     "ServiceMessage",
     "ServiceName",
-    "MessageType",
+    "ServiceMessageType",
     "serialize_message",
     "deserialize_message",
     "create_reply",

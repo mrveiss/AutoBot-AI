@@ -26,6 +26,7 @@ import pytest
 from fastapi import HTTPException, Request
 
 from autobot_shared.auth.jwt_core import encode_jwt
+from testkit.canonical_gate import install_canonical_resolver
 
 _HS256_SECRET = "s" * 40  # deterministic test secret >=32 chars
 
@@ -100,7 +101,7 @@ class TestGetCurrentUserInfoMissingUsername:
     async def _call_me(self, auth_module, monkeypatch, user_data):
         auth_mw = MagicMock()
         auth_mw.get_user_from_request.return_value = user_data
-        monkeypatch.setattr(auth_module, "get_auth_middleware", lambda: auth_mw)
+        install_canonical_resolver(monkeypatch, "api.auth_me.resolve_human_user", auth_mw)
 
         request = MagicMock(spec=Request)
         return await auth_module.get_current_user_info(request)

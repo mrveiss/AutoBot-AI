@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 
 from api_schemas import NPUTaskRequest, NPUTaskResponse
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from worker_settings import DEFAULT_PORT, DEFAULT_SEMANTIC_SEARCH_TOP_K, config
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 class WorkerRoutesMixin:
     """Route registration and handlers for :class:`WindowsNPUWorker`."""
+
+    _preload_failed: bool
 
     def setup_routes(self):
         """Register all API routes. Issue #2346: decomposed from monolithic method."""
@@ -59,9 +62,10 @@ class WorkerRoutesMixin:
             """Health check with NPU metrics"""
             npu_metrics = await self.get_npu_metrics()
             stats = await self.task_stats.get_all()
+            ready = not self._preload_failed or bool(self.loaded_models)
 
-            return {
-                "status": "healthy",
+            result = {
+                "status": "healthy" if ready else "unhealthy",
                 "worker_id": self.worker_id,
                 "platform": "windows",
                 "port": config.get("service", {}).get("port", DEFAULT_PORT),
@@ -73,6 +77,9 @@ class WorkerRoutesMixin:
                 "timestamp": datetime.now().isoformat(),
                 "paired": self.pairing_status.get("paired", False),
             }
+            if not ready:
+                return JSONResponse(status_code=503, content=result)
+            return result
 
         @self.app.get("/stats")
         async def get_detailed_stats():
@@ -215,7 +222,7 @@ class WorkerRoutesMixin:
             )
         except Exception as e:
             logger.error(f"Inference failed for task {task_id}: {e}")
-            return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
+            raise HTTPException(status_code=500, detail="Inference failed") from e
 
     async def _handle_embedding_generate(
         self,
@@ -231,7 +238,9 @@ class WorkerRoutesMixin:
         """
         try:
             start_time = time.time()
-            embeddings = await self.generate_npu_embeddings(texts, model_name, use_cache, optimization_level)
+            embeddings, mock = await self._generate_npu_embeddings_with_origin(
+                texts, model_name, use_cache, optimization_level
+            )
             processing_time = (time.time() - start_time) * 1000
 
             model_info = self.loaded_models.get(model_name, {})
@@ -240,6 +249,7 @@ class WorkerRoutesMixin:
 
             return {
                 "embeddings": embeddings,
+                "mock": mock,
                 "model_used": model_name,
                 "processing_time_ms": processing_time,
                 "texts_processed": len(texts),
@@ -249,7 +259,7 @@ class WorkerRoutesMixin:
             }
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail="Embedding generation failed")
+            raise HTTPException(status_code=500, detail="Embedding generation failed") from e
 
     async def _handle_semantic_search(
         self,

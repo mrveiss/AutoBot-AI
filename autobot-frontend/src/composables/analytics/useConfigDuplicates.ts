@@ -31,6 +31,7 @@ export function useConfigDuplicates(deps: UseCodeIntelAnalysisDeps) {
     {
       path: '/api/analytics/codebase/config-duplicates',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) =>
         r.status === 'success'
           ? {

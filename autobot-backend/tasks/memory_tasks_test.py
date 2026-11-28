@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
 
@@ -132,54 +132,71 @@ class TestAsyncExtractFacts:
 
 
 class TestAsyncUpdateGraph:
-    """Unit tests for the async helper backing memory.update_graph."""
+    """Unit tests for the async helper backing memory.update_graph (#18414)."""
 
-    @pytest.mark.asyncio
-    async def test_writes_entities_and_relations(self):
-        """Should call add_or_update_entity and add_relation for each item."""
-        mock_graph = AsyncMock()
-        mock_graph.initialize = AsyncMock()
-        mock_graph.add_or_update_entity = AsyncMock()
-        mock_graph.add_relation = AsyncMock()
+    @staticmethod
+    def _graph(created=True):
+        """Mock restricted to the real AutoBotMemoryGraph interface."""
+        from autobot_memory_graph import AutoBotMemoryGraph
 
-        mock_graph_class = MagicMock(return_value=mock_graph)
+        graph = create_autospec(AutoBotMemoryGraph, instance=True)
+        graph.get_or_create_entity.return_value = ({"id": "e1", "name": "Redis"}, created)
+        return graph
 
-        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(AutoBotMemoryGraph=mock_graph_class)}):
-
+    @staticmethod
+    async def _run(graph, entities, relations):
+        with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=graph):
             import tasks.memory_tasks as mt
 
-            result = await mt._async_update_graph(
-                "sess-1",
-                [{"name": "Redis", "type": "service", "properties": {}}],
-                [{"source": "App", "target": "Redis", "relation_type": "uses", "properties": {}}],
-            )
+            return await mt._async_update_graph("sess-1", entities, relations, "user-1")  # #18825: owner required
 
+    @pytest.mark.asyncio
+    async def test_creates_new_entity_and_relation(self):
+        graph = self._graph(created=True)
+        result = await self._run(
+            graph,
+            [{"name": "Redis", "type": "service", "properties": {"port": 6379}}],
+            [{"source": "App", "target": "Redis", "relation_type": "uses", "properties": {}}],
+        )
+        assert graph.get_or_create_entity.await_args.kwargs["observations"] == ["port: 6379"]
+        graph.add_observations.assert_not_awaited()
+        graph.create_relation.assert_awaited_once()
+        assert (result["entities_written"], result["relations_written"], result["status"]) == (1, 1, "ok")
+
+    @pytest.mark.asyncio
+    async def test_existing_entity_gets_observations_not_a_duplicate(self):
+        graph = self._graph(created=False)
+        result = await self._run(graph, [{"name": "Redis", "type": "service", "properties": {"v": 7}}], [])
+        graph.add_observations.assert_awaited_once_with(entity_name="Redis", observations=["v: 7"])
+        graph.create_entity.assert_not_awaited()
         assert result["entities_written"] == 1
-        assert result["relations_written"] == 1
 
     @pytest.mark.asyncio
-    async def test_counts_partial_failures(self):
-        """Entity write failures should be counted but not stop relation writes."""
-        mock_graph = AsyncMock()
-        mock_graph.initialize = AsyncMock()
-        mock_graph.add_or_update_entity = AsyncMock(side_effect=RuntimeError("write failed"))
-        mock_graph.add_relation = AsyncMock()
+    async def test_lookup_error_is_a_failure_not_a_create(self, caplog):
+        """#18417: an unreadable lookup must never fall through to a second entity."""
+        graph = self._graph()
+        graph.get_or_create_entity.side_effect = ConnectionError("redis down")
+        with caplog.at_level("WARNING"):
+            result = await self._run(graph, [{"name": "Redis", "type": "service", "properties": {}}], [])
+        graph.create_entity.assert_not_awaited()
+        assert (result["entities_written"], result["entities_failed"]) == (0, 1)
+        assert "Redis" in caplog.text
 
-        mock_graph_class = MagicMock(return_value=mock_graph)
-
-        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(AutoBotMemoryGraph=mock_graph_class)}):
-
-            import tasks.memory_tasks as mt
-
-            result = await mt._async_update_graph(
-                "sess-1",
+    @pytest.mark.asyncio
+    async def test_failures_are_counted_and_logged_with_the_item(self, caplog):
+        graph = self._graph()
+        graph.get_or_create_entity.side_effect = RuntimeError("write failed")
+        with caplog.at_level("WARNING"):
+            result = await self._run(
+                graph,
                 [{"name": "Bad", "type": "x", "properties": {}}],
                 [{"source": "A", "target": "B", "relation_type": "r", "properties": {}}],
             )
-
-        # Entity failed → 0 written; relation succeeded → 1 written
-        assert result["entities_written"] == 0
-        assert result["relations_written"] == 1
+        assert (result["entities_written"], result["entities_failed"]) == (0, 1)
+        assert (result["relations_written"], result["relations_failed"]) == (1, 0)
+        assert result["status"] == "partial"
+        assert result["failures"] == [{"kind": "entity", "item": "Bad", "error": "write failed"}]
+        assert "Bad" in caplog.text
 
 
 # ---------------------------------------------------------------------------

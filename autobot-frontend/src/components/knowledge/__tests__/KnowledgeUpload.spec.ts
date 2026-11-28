@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import { nextTick } from 'vue'
 
@@ -44,6 +44,28 @@ vi.mock('vue-i18n', () => ({
 // Controllers / composables replaced with lightweight stubs
 vi.mock('@/models/controllers', () => ({
   useKnowledgeController: vi.fn()
+}))
+
+// #19712 / #19713: both limits come from the backend, each from its own route. The single-shot limit is
+// 10 MB, and so is the document ceiling, so the size tests below measure one number; media is the only
+// kind the resumable route accepts beyond it. `chunkedStarts` records what reached the resumable route.
+const { chunkedStarts, UPLOAD_LIMITS } = vi.hoisted(() => ({
+  chunkedStarts: [] as Array<{ url: string; body: Record<string, unknown> }>,
+  UPLOAD_LIMITS: {
+    chunk_bytes: 1024 * 1024,
+    document_max_bytes: 10 * 1024 * 1024,
+    media_max_bytes: 100 * 1024 * 1024,
+    media_extensions: ['.mp3']
+  }
+}))
+vi.mock('@/utils/ApiClient', () => ({
+  default: {
+    get: (url: string) => Promise.resolve(url.endsWith('/uploads/limits') ? UPLOAD_LIMITS : { max_mb: 10 }),
+    rawRequest: (url: string, init: { body: Record<string, unknown> }) => {
+      chunkedStarts.push({ url, body: init.body })
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: { code: 'upload.refused' } }) })
+    }
+  }
 }))
 
 vi.mock('@/composables/knowledge/useKnowledgeIcons', () => ({
@@ -297,6 +319,7 @@ describe('KnowledgeUpload — file upload section', () => {
 
   it('sets an error alert when a file exceeds the 10 MB limit', async () => {
     const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+    await flushPromises()
 
     // 10 MB + 1 byte
     await selectFiles(wrapper, [makeFile('big.txt', 10 * 1024 * 1024 + 1)])
@@ -309,6 +332,7 @@ describe('KnowledgeUpload — file upload section', () => {
 
   it('accepts a file exactly at the 10 MB limit', async () => {
     const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+    await flushPromises()
 
     await selectFiles(wrapper, [makeFile('exact.txt', 10 * 1024 * 1024)])
 
@@ -387,6 +411,24 @@ describe('KnowledgeUpload — file upload section', () => {
     await nextTick()
 
     expect(wrapper.find('.file-item.completed').exists()).toBe(true)
+  })
+
+  // #19713: a recording is not read into memory and posted whole; it goes to the resumable route as a transcript.
+  it('sends a media file to the resumable route as a transcript, never through addFileDocument', async () => {
+    chunkedStarts.length = 0
+    const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+    await flushPromises()
+
+    await selectFiles(wrapper, [new File(['audio'], 'talk.mp3', { type: 'audio/mpeg' })])
+    expect(wrapper.find('.selected-files').exists()).toBe(true)
+
+    await wrapper.find('.upload-btn').trigger('click')
+    await flushPromises()
+
+    expect(controllerMock.addFileDocument).not.toHaveBeenCalled()
+    expect(chunkedStarts).toHaveLength(1)
+    expect(chunkedStarts[0].url).toContain('/knowledge_base/uploads')
+    expect(chunkedStarts[0].body).toMatchObject({ filename: 'talk.mp3', target: 'transcript' })
   })
 
   it('marks a file item as "failed" after an upload error', async () => {

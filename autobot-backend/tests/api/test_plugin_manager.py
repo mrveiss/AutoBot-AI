@@ -171,6 +171,7 @@ def _make_load_endpoint_mocks(trust_tier, capabilities):
 
     loaded_plugin = MagicMock()
     loaded_plugin.name = "test-plugin"
+    loaded_plugin.enable = AsyncMock()  # the route enables the plugin it loaded (#19302)
 
     loader = MagicMock()
     loader.discover_plugins.return_value = [manifest]
@@ -187,13 +188,14 @@ async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
     TypeError at runtime; the endpoint must call it with positional
     manifest + config only.
     """
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [PluginCapability.KB_READ])
 
     with (
         patch("plugin_manager.get_plugin_loader", return_value=loader),
         patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.require_enabled", new=AsyncMock()),  # an admin enabled it (#17421)
         patch("plugin_manager.CapabilityChecker"),
     ):
         await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
@@ -208,14 +210,15 @@ async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
 @pytest.mark.asyncio
 async def test_load_plugin_endpoint_auto_grants_official_plugin_capabilities():
     """#9049 contract: official plugins auto-grant on load."""
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    granted = [Capability.KB_READ, Capability.LLM_CALL]
+    granted = [PluginCapability.KB_READ, PluginCapability.LLM_CALL]
     loader, manifest, _ = _make_load_endpoint_mocks(TrustTier.OFFICIAL, granted)
 
     with (
         patch("plugin_manager.get_plugin_loader", return_value=loader),
         patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.require_enabled", new=AsyncMock()),  # an admin enabled it (#17421)
         patch("plugin_manager.CapabilityChecker") as checker_cls,
     ):
         checker_instance = checker_cls.return_value
@@ -232,13 +235,14 @@ async def test_load_plugin_endpoint_does_not_auto_grant_community_plugin():
     Positive control for the OFFICIAL test above — proves the endpoint is
     actually gating on trust_tier, not blindly granting every load.
     """
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [PluginCapability.KB_READ])
 
     with (
         patch("plugin_manager.get_plugin_loader", return_value=loader),
         patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.require_enabled", new=AsyncMock()),  # an admin enabled it (#17421)
         patch("plugin_manager.CapabilityChecker") as checker_cls,
     ):
         checker_instance = checker_cls.return_value
@@ -246,3 +250,25 @@ async def test_load_plugin_endpoint_does_not_auto_grant_community_plugin():
 
     assert result["status"] == "success"
     checker_instance.grant_capabilities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_endpoint_unloads_a_plugin_whose_activation_fails():
+    """A plugin that loaded but could not be enabled is not left registered (#19302)."""
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
+
+    loader, _, loaded_plugin = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [PluginCapability.KB_READ])
+    loaded_plugin.enable = AsyncMock(side_effect=RuntimeError("enable failed"))
+    loader.unload_plugin = AsyncMock(return_value=True)
+
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager.require_enabled", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker"),
+        pytest.raises(HTTPException) as failed,
+    ):
+        await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
+
+    assert failed.value.status_code == 500  # the error boundary turns the activation failure into a 500
+    assert "PLUGIN_LOAD" in str(failed.value.detail)
+    loader.unload_plugin.assert_awaited_once_with("test-plugin")

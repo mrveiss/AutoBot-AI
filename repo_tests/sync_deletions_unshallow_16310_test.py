@@ -49,6 +49,8 @@ from repo_tests.sync_deletions_ansible_wiring_16310_test import (
     _shared_task,
 )
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _DEPLOY_ARTIFACTS = _REPO_ROOT / "autobot-slm-backend" / "services" / "deploy_artifacts.py"
 _ENSURE_FULL_HISTORY_MARKER = "ensure-full-history"
@@ -81,7 +83,7 @@ def _read_literal_string(source: str, var_name: str) -> str:
     deploy_artifacts.py's own imports too (see
     ``sync_deletions_ansible_wiring_16310_test.py``'s
     ``_read_literal_string_collection``, the same rationale)."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in ast.walk(tree):
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             target_names = [node.target.id]
@@ -128,7 +130,7 @@ def test_ensure_full_history_uses_the_same_cli_the_deletion_plans_use(rel_path: 
     """Never an ad-hoc `git fetch --unshallow` in the playbook itself --
     routed through scripts/sync_deletion_planner.py, the same CLI
     roles/_shared/tasks/sync_deletions.yml calls for diff/bootstrap plans,
-    so there is exactly one place `run_git` is invoked from (#16310)."""
+    so there is exactly one place `run_git_capture` is invoked from (#16310)."""
     tasks = _flatten(_load_tasks(rel_path))
     sync_index = _index_of(tasks, lambda t: sync_task_name in str(t.get("name", "")))
     assert sync_index != -1, f"{rel_path}: sync task {sync_task_name!r} not found"

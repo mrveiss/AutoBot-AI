@@ -80,6 +80,8 @@ function respond({ processNodesDeferred = false }: { processNodesDeferred?: bool
     : Promise.resolve({ nodes: [] })
 
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url === '/api/llc/companies/c1/org-chart') return Promise.resolve({ nodes: [CEO] })
     if (url === '/api/llc/companies/c1/process-nodes') return processNodesPromise
     if (url === '/api/llc/companies/c1/tool-nodes') return Promise.resolve({ nodes: [] })

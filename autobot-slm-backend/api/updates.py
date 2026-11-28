@@ -26,9 +26,8 @@ from autobot_shared import async_compat, time_utils
 from models.database import (
     CodeStatus,
     EventSeverity,
-    EventType,
     Node,
-    NodeEvent,
+    NodeEventType,
     UpdateInfo,
     UpdateJob,
     UpdateJobStatus,
@@ -53,6 +52,7 @@ from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_f
 from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
 from services.database import get_db
+from services.node_events import create_node_event
 from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
@@ -63,28 +63,6 @@ _running_jobs: Dict[str, asyncio.Task] = {}
 
 # Track running discovery jobs (in-memory, transient)
 _discover_jobs: Dict[str, dict] = {}
-
-
-async def _create_node_event(
-    db: AsyncSession,
-    node_id: str,
-    event_type: EventType,
-    severity: EventSeverity,
-    message: str,
-    details: dict = None,
-) -> NodeEvent:
-    """Helper to create a node event."""
-    event = NodeEvent(
-        event_id=str(uuid.uuid4())[:16],
-        node_id=node_id,
-        event_type=event_type.value,
-        severity=severity.value,
-        message=message,
-        details=details or {},
-    )
-    db.add(event)
-    await db.flush()
-    return event
 
 
 async def _broadcast_job_update(job_id: str, status: str, progress: int, message: str = None) -> None:
@@ -195,10 +173,10 @@ async def _handle_successful_update(
     await db.commit()
     await _broadcast_job_update(job.job_id, "completed", 100, f"Completed: {len(updates)} updates applied")
 
-    await _create_node_event(
+    await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_COMPLETED,
+        NodeEventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Update job {job.job_id} completed: {len(updates)} applied",
         {"job_id": job.job_id, "applied": len(updates)},
@@ -218,10 +196,10 @@ async def _handle_failed_update(db: AsyncSession, job: UpdateJob, node_id: str, 
     await db.commit()
     await _broadcast_job_update(job.job_id, "failed", job.progress, job.error)
 
-    await _create_node_event(
+    await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_FAILED,
+        NodeEventType.DEPLOYMENT_FAILED,
         EventSeverity.WARNING,
         f"Update job {job.job_id} failed",
         {"job_id": job.job_id, "error": job.error},
@@ -887,10 +865,10 @@ async def _create_and_dispatch_update_job(
         total_steps=len(updates),
     )
     db.add(job)
-    await _create_node_event(
+    await create_node_event(
         db,
         request.node_id,
-        EventType.DEPLOYMENT_STARTED,
+        NodeEventType.DEPLOYMENT_STARTED,
         EventSeverity.INFO,
         f"Update job started: {len(updates)} package(s)",
         {"job_id": job_id, "update_ids": request.update_ids},

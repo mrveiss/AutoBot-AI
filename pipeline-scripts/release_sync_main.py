@@ -95,16 +95,18 @@ from typing import AbstractSet, Any, Dict, List, NamedTuple, Optional, Sequence,
 # one transport, one place where a transport failure becomes a status code.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ci_dispatch_watchdog import (  # noqa: E402
-    DEFAULT_API_ROOT,
+from github_api import (  # noqa: E402,F401
     GitHubApi,
     WatchdogApiError,
     WatchdogConfigError,
     WatchdogError,
+    build_api,
 )
 
 # The one definition of "the release-sync PR", shared with the watchdog (#16272).
 from release_sync_pull import RELEASE_SYNC_BASE, RELEASE_SYNC_HEAD, is_sync_pull  # noqa: E402
+
+from tools.lint._comment_syntax import code_lines
 
 SYNC_TITLE = "release: sync release from main"
 DEFAULT_HEAD = RELEASE_SYNC_HEAD
@@ -188,14 +190,11 @@ def decide(open_sync_pulls: Sequence[Dict[str, Any]], ahead_by: int) -> SyncDeci
 
 def _uncommented(text: str) -> List[str]:
     """Non-blank lines with whole-line and trailing `#` comments removed."""
-    lines: List[str] = []
-    for line in text.splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        code = line.split(" #", 1)[0].rstrip()
-        if code.strip():
-            lines.append(code)
-    return lines
+    # #17941: the previous trailing strip was `line.split(" #", 1)[0]`, which
+    # is not quote-aware -- a `#` inside a string, as in `echo "a # b"`,
+    # truncated a real line at its own data. The shared scanner tracks quote
+    # state, so only a marker outside quotes ends a line.
+    return [entry.text.rstrip() for entry in code_lines(text, name="x.sh", strip_trailing=True) if entry.text.strip()]
 
 
 def _on_block(lines: Sequence[str]) -> List[str]:
@@ -548,17 +547,6 @@ def _extras_exit(decision: SyncDecision) -> int:
     listed = ", ".join(f"#{number}" for number in decision.extras)
     _emit(f"release-sync: duplicate sync PRs open, close by hand: {listed}", err=True)
     return 1
-
-
-def build_api() -> GitHubApi:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if not token:
-        raise WatchdogConfigError("GITHUB_TOKEN is required")
-    if "/" not in repository:
-        raise WatchdogConfigError("GITHUB_REPOSITORY must be 'owner/repo'")
-    api_root = os.environ.get("GITHUB_API_URL", DEFAULT_API_ROOT).strip() or DEFAULT_API_ROOT
-    return GitHubApi(token, repository, api_root)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

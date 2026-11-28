@@ -29,7 +29,7 @@ The Standardized Agent system addresses the critical code duplication identified
 ### **Before: Duplicate Implementation**
 ```python
 class OldAgent(BaseAgent):
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         try:
             action = request.action
             payload = request.payload
@@ -40,7 +40,7 @@ class OldAgent(BaseAgent):
 
                 result = await self.process_chat_message(message, context)
 
-                return AgentResponse(
+                return StandardizedAgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="success",
@@ -50,14 +50,14 @@ class OldAgent(BaseAgent):
                 # Similar duplicate pattern...
                 pass
             else:
-                return AgentResponse(
+                return StandardizedAgentResponse(
                     request_id=request.request_id,
                     agent_type=self.agent_type,
                     status="error",
                     error=f"Unknown action: {action}"
                 )
         except Exception as e:
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",

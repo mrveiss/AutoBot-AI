@@ -3,10 +3,11 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-OS-level integration helpers: shell commands, Markdown conversion.
+OS-level integration helpers: shell commands, platform info, web fetch delegation.
 
-Provides utilities for executing system commands, reading platform info,
-and converting HTML/Markdown content via the optional markdownify dep.
+Provides utilities for executing system commands and reading platform info.
+``web_fetch`` delegates to :class:`web_fetch.WebFetcher`, which owns content
+extraction and Content-Type dispatch (#7401, #18826).
 """
 
 import json
@@ -16,18 +17,6 @@ import subprocess  # nosec B404  # required for system commands
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-
-# #7166: markdownify is an optional dependency. Hard-import made the whole
-# module unimportable in any environment that didn't install it (any module
-# that imports SystemIntegration inherited the requirement). Use the
-# project-standard MissingDep pattern (#6691) so the module loads even when
-# the dep is absent; calls to md() raise ImportError with a clear message
-# at the actual usage point.
-from autobot_shared.missing_dep import optional_import
-
-globals().update(optional_import("markdownify", ["markdownify"]))
-md = markdownify  # type: ignore[name-defined]  # noqa: F821 — populated by optional_import
-
 
 logger = get_logger(__name__)
 
@@ -392,33 +381,6 @@ class SystemIntegration:
         if not url.startswith("http://") and not url.startswith("https://"):
             return "https://" + url
         return url
-
-    def _process_web_content(self, url: str, content_type: str, content: str) -> Dict[str, Any]:
-        """
-        Process web content based on its content type.
-
-        Converts HTML to markdown, passes through text/plain and JSON. Issue #620.
-        """
-        if "text/html" in content_type:
-            return {
-                "status": "success",
-                "url": url,
-                "content_type": "text/markdown",
-                "content": md(content),
-            }
-        elif "text/plain" in content_type or "application/json" in content_type:
-            return {
-                "status": "success",
-                "url": url,
-                "content_type": content_type,
-                "content": content,
-            }
-        else:
-            return {
-                "status": "error",
-                "message": ("Unsupported content type for direct text " f"extraction: {content_type}"),
-                "url": url,
-            }
 
     async def web_fetch(self, url: str) -> Dict[str, Any]:
         """Fetch content from a URL and return markdown.

@@ -31,13 +31,14 @@ Config keys (under ``ConnectorConfig.config``):
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from autobot_shared.auth import BasicAuth
-from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import AbstractConnector, RetryableError, instance_host_egress
+from knowledge.connectors.atlassian_base import (
+    AtlassianConnector,
+    build_atlassian_source_id,
+    parse_atlassian_source_id,
+)
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -50,7 +51,7 @@ logger = get_logger(__name__)
 
 
 @ConnectorRegistry.register("confluence")
-class ConfluenceConnector(AbstractConnector):
+class ConfluenceConnector(AtlassianConnector):
     """Knowledge connector that pulls pages from Confluence spaces.
 
     Each page becomes one KB fact keyed by
@@ -60,6 +61,7 @@ class ConfluenceConnector(AbstractConnector):
     """
 
     connector_type = "confluence"
+    vendor_name = "Confluence"
     # Issue #4421: needs an Atlassian API token — tier 2 (credentialed).
     tier = 2
     max_concurrency = 4
@@ -87,9 +89,6 @@ class ConfluenceConnector(AbstractConnector):
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._email: str = cfg.get("username", "")
-        self._api_token: str = cfg.get("password", "")
-        self._base_url: str = cfg.get("base_url", "").rstrip("/")
         self._space_keys: List[str] = cfg.get("space_keys", [])
         self._page_size: int = int(cfg.get("page_size", 25))
 
@@ -220,33 +219,6 @@ class ConfluenceConnector(AbstractConnector):
             )
         return None
 
-    async def _get(self, path: str) -> Dict[str, Any]:
-        """Make an authenticated GET request to the Confluence REST API."""
-        url = "%s%s" % (self._base_url, path)
-        auth = aiohttp.BasicAuth(login=self._email, password=self._api_token)
-        try:
-            timeout = aiohttp.ClientTimeout(total=30.0)
-            # Operator-configured instance host — private opt-in applies (#13625).
-            async with get_http_client().tracked_request(
-                "GET",
-                url,
-                auth=auth,
-                timeout=timeout,
-                suppress_error_log=True,
-                guard_egress=instance_host_egress(),
-            ) as resp:
-                if resp.status == 429:
-                    raise RetryableError("Confluence rate-limited", status_code=429)
-                if resp.status >= 500:
-                    raise RetryableError("Confluence server error %d" % resp.status, status_code=resp.status)
-                body = await resp.json(content_type=None)
-                return {"status_code": resp.status, "body": body}
-        except RetryableError:
-            raise
-        except aiohttp.ClientError as exc:
-            self.logger.warning("Confluence request to %s failed: %s", url, exc)
-            return {"status_code": 0, "error": str(exc)}
-
 
 # ---------------------------------------------------------------------------
 # Module-level helpers (no state)
@@ -257,15 +229,12 @@ class ConfluenceConnector(AbstractConnector):
 
 
 def _build_source_id(connector_id: str, page_id: str) -> str:
-    return "confluence:%s:page:%s" % (connector_id, page_id)
+    return build_atlassian_source_id("confluence", connector_id, "page", page_id)
 
 
 def _parse_page_id(source_id: str) -> Optional[str]:
-    parts = source_id.split(":")
     # Format: confluence:{connector_id}:page:{page_id}
-    if len(parts) != 4 or parts[2] != "page":
-        return None
-    return parts[3]
+    return parse_atlassian_source_id("page", source_id)
 
 
 def _page_to_source_info(connector_id: str, page: Dict[str, Any], space_key: str) -> SourceInfo:

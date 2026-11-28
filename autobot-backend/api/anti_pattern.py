@@ -12,9 +12,10 @@ feature envy, circular dependencies, and more.
 Issue: #221
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
+from api.anti_pattern_type_catalog import build_anti_pattern_type_definitions
 from api.schemas_code import (
     AnalysisResponse,
     AntiPatternAnalysisRequest,
@@ -29,10 +30,17 @@ from api.schemas_code import (
     AntiPatternTypesResultResponse,
     SeveritySummary,
 )
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-router = APIRouter()
+# #16375: nine routes, seven of them POST, all reachable anonymously. These
+# analyse the codebase -- god classes, circular dependencies, dead code, health
+# score -- so they are developer operations on shared code rather than on a
+# user's own data, and they neither execute anything nor write shared state.
+# `get_current_user` is therefore the right level: an admin gate would stop
+# ordinary developers reading analysis of their own repository.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for refactoring recommendation keywords (Issue #326)
@@ -41,78 +49,9 @@ REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}
 # Issue #380: Module-level frozenset for code smell pattern types
 _CODE_SMELL_TYPES = frozenset({"long_method", "long_parameter_list", "lazy_class", "data_clump"})
 
-# Issue #281: Anti-pattern type definitions extracted from list_anti_pattern_types
-# Tuple of 8 anti-pattern type definitions with thresholds and severity
-ANTI_PATTERN_TYPE_DEFINITIONS = (
-    {
-        "type": "god_class",
-        "name": "God Class",
-        "description": "Classes with too many responsibilities",
-        "thresholds": {
-            "method_count": ">20",
-            "attribute_count": ">15",
-            "lines_of_code": ">500",
-        },
-        "severity_range": ["medium", "critical"],
-        "principle_violated": "Single Responsibility Principle",
-    },
-    {
-        "type": "feature_envy",
-        "name": "Feature Envy",
-        "description": "Methods that use other classes more than their own",
-        "thresholds": {"external_ref_ratio": ">3x self references"},
-        "severity_range": ["medium", "high"],
-        "principle_violated": "Encapsulation",
-    },
-    {
-        "type": "circular_dependency",
-        "name": "Circular Dependency",
-        "description": "Modules that depend on each other in a cycle",
-        "thresholds": {"cycle_detection": "DFS graph traversal"},
-        "severity_range": ["medium", "high"],
-        "principle_violated": "Acyclic Dependencies Principle",
-    },
-    {
-        "type": "long_method",
-        "name": "Long Method",
-        "description": "Methods that are too long to easily understand",
-        "thresholds": {"lines": ">50"},
-        "severity_range": ["medium", "high"],
-        "principle_violated": "Single Responsibility Principle",
-    },
-    {
-        "type": "long_parameter_list",
-        "name": "Long Parameter List",
-        "description": "Methods with too many parameters",
-        "thresholds": {"parameter_count": ">5"},
-        "severity_range": ["medium", "high"],
-        "principle_violated": "Interface Segregation",
-    },
-    {
-        "type": "lazy_class",
-        "name": "Lazy Class",
-        "description": "Classes that don't do enough to justify existence",
-        "thresholds": {"method_count": "<=2", "lines_of_code": "<=20"},
-        "severity_range": ["low"],
-        "principle_violated": "None (code smell)",
-    },
-    {
-        "type": "dead_code",
-        "name": "Dead Code",
-        "description": "Unreferenced classes or functions",
-        "thresholds": {"reference_count": "0"},
-        "severity_range": ["low"],
-        "principle_violated": "None (housekeeping)",
-    },
-    {
-        "type": "data_clump",
-        "name": "Data Clump",
-        "description": "Groups of parameters that appear together frequently",
-        "thresholds": {"group_size": ">=3 parameters", "occurrences": ">=3 methods"},
-        "severity_range": ["low", "medium"],
-        "principle_violated": "Don't Repeat Yourself (DRY)",
-    },
-)
+# Issue #281 / #18099: type definitions are derived from the canonical
+# AntiPatternType enum in api/anti_pattern_type_catalog.py.
+ANTI_PATTERN_TYPE_DEFINITIONS = build_anti_pattern_type_definitions()
 
 # Lazy initialization for detector (thread-safe)
 import asyncio

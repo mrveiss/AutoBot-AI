@@ -25,7 +25,7 @@
 
   vars:
     autobot_user: autobot
-    autobot_home: /opt/autobot
+    autobot_home: "{{ autobot.base_dir }}"
     known_hosts_path: "{{ autobot_home }}/.ssh/known_hosts"
 
   tasks:

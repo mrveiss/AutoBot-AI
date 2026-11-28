@@ -20,10 +20,10 @@ from typing_extensions import Annotated
 from autobot_shared.auth.permissions import Permission
 from models.database import (
     EventSeverity,
-    EventType,
     MaintenanceWindow,
     Node,
     NodeEvent,
+    NodeEventType,
     NodeStatus,
 )
 from models.schemas import (
@@ -401,7 +401,7 @@ async def _set_node_maintenance_status(
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node_id,
-            event_type=EventType.MANUAL_ACTION.value,
+            event_type=NodeEventType.MANUAL_ACTION.value,
             severity=EventSeverity.INFO.value,
             message=f"Node {node.hostname} entered maintenance mode",
             details={"window_id": window_id, "previous_status": old_status},
@@ -425,7 +425,7 @@ async def _set_node_maintenance_status(
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node_id,
-            event_type=EventType.MANUAL_ACTION.value,
+            event_type=NodeEventType.MANUAL_ACTION.value,
             severity=EventSeverity.INFO.value,
             message=f"Node {node.hostname} exited maintenance mode",
             details={"window_id": window_id, "restored_status": pre_maintenance_status},

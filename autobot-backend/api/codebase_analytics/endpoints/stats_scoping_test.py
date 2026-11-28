@@ -3,51 +3,46 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Regression test for Issue #12399 (sibling of #12393/#12398).
+Source-root scoping of the stats ``/problems`` path validation (#12399, #20513).
 
-``stats._fetch_problems_from_chromadb`` validates indexed problem paths
-against a root that falls back to ``get_project_root()`` (hardcoded
-``parents[4]``) when no ``source_root`` was resolved. In the deployed
-standalone rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not
-the analyzable repo -- so the fallback must instead use
-``resolve_project_root()`` (git-walk-up / deployed ``code_source`` probe,
-#10730), matching the fix already applied to ``resolve_scan_root`` (#12393)
-and ``report._fetch_problems_from_chromadb`` (#12399).
+``stats._fetch_problems_from_chromadb`` validates indexed problem paths against the
+SOURCE'S root. It used to fall back to AutoBot's own tree when no root was
+resolved; #20513 removed that fallback, so the root is required and a source with
+no checkout is a 404 from the route.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
-class TestFetchProblemsFromChromaDBFallback:
-    """Issue #12399: sibling of #12393's resolve_scan_root fix."""
-
-    def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
-        """When source_root is None, path validation must resolve against
-        resolve_project_root(), not the plain parents[4] get_project_root()."""
+class TestProblemsUseTheSourceRoot:
+    def test_path_validation_resolves_against_the_source_root(self, tmp_path):
         from api.codebase_analytics.endpoints import stats as stats_mod
 
-        deployed_root = tmp_path / "opt_autobot" / "code_source"
-        wrong_root = tmp_path / "opt_autobot"
+        source_root = tmp_path / "proj"
         captured: dict = {}
 
         def fake_filter(problems, root):
             captured["root"] = root
             return problems
 
-        fake_collection = MagicMock()
-
         with (
-            patch.object(
-                stats_mod,
-                "get_all_paginated",
-                return_value={"metadatas": [{"file_path": "x.py"}]},
-            ),
+            patch.object(stats_mod, "get_all_paginated", return_value={"metadatas": [{"file_path": "x.py"}]}),
             patch.object(stats_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
-            patch.object(stats_mod, "resolve_project_root", return_value=str(deployed_root)),
         ):
             stats_mod._fetch_problems_from_chromadb(
-                fake_collection, problem_type=None, source_id=None, source_root=None
+                MagicMock(), problem_type=None, source_id="src1", source_root=source_root
             )
 
-        assert captured["root"] == deployed_root
-        assert captured["root"] != wrong_root
+        assert captured["root"] == source_root
+
+    async def test_a_source_with_no_checkout_is_a_404_not_autobots_tree(self):
+        from api.codebase_analytics.endpoints import shared
+        from api.codebase_analytics.endpoints import stats as stats_mod
+
+        with patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)):
+            with pytest.raises(shared.UnresolvedSourceError) as caught:
+                await stats_mod.get_codebase_problems(source_id="ghost")
+
+        assert caught.value.status_code == 404

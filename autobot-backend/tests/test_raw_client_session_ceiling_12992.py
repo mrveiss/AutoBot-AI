@@ -128,6 +128,8 @@ Refs #12979, #12981, #12989, #12992, #13041.
 import ast
 import pathlib
 
+from autobot_shared.testfile_names import is_test_filename
+
 BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 #: Recorded ceiling on raw ``aiohttp.ClientSession(...)`` constructions in the
@@ -219,8 +221,7 @@ def _is_excluded(path: pathlib.Path) -> bool:
     for part in _directory_parts(path):
         if part in EXCLUDED_DIR_NAMES or EXCLUDED_DIR_SUBSTRING in part:
             return True
-    name = path.name
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(path.name, include_js=False)
 
 
 def _is_exempt(path: pathlib.Path) -> bool:

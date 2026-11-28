@@ -48,8 +48,8 @@ defineProps<{
   color: var(--text-primary);
 }
 
-.panel-header i {
-  color: var(--chart-red, #ef4444);
+.panel-header .icon {
+  color: var(--chart-red);
 }
 
 .count-badge {

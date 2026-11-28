@@ -29,8 +29,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.time_utils import now_utc
 from llc.models.secret import LLCSecret
+from llc.services.actor import resolve_actor
 from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
+from ..exceptions import PublicMessageMixin
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
@@ -45,7 +47,7 @@ _ENV_MASTER_KEY = "LLC_SECRET_MASTER_KEY"
 _derive_fernet_key = derive_llc_company_fernet
 
 
-class SecretNotFound(Exception):
+class SecretNotFound(PublicMessageMixin, Exception):
     """Raised when the named secret does not exist or is revoked."""
 
     def __init__(self, company_id: str, name: str) -> None:
@@ -126,21 +128,23 @@ class SecretService(LLCServiceBase):
         await session.flush()
         await session.refresh(secret)
 
-        if self.activity_log:
-            await self.activity_log.record(
-                session=session,
-                company_id=company_id,
-                actor_id=actor,
-                event_type="secret.set",
-                entity_type="llc_secret",
-                entity_id=str(secret.id),
-                after={"name": name, "version": secret.version},
-            )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type="secret.set",
+            entity_type="llc_secret",
+            entity_id=str(secret.id),
+            after={"name": name, "version": secret.version},
+        )
 
-        # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
-        logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
-            "Secret '%s' set for company %s (version=%d, actor=%s)",
-            name,
+        # Secret names double as env var names; log the id, never the name or value.
+        logger.info(
+            "Secret %s set for company %s (version=%d, actor=%s)",
+            secret.id,
             company_id,
             secret.version,
             actor,
@@ -166,12 +170,12 @@ class SecretService(LLCServiceBase):
         """
         secret = await self._fetch_active(session, company_id, name)
         if llc_unified_read_enabled():
-            unified = await self._unified_get(session, secret, company_id)
+            unified = await self._envelope_store_get(session, secret, company_id)
             if unified is not None:
                 return unified
         return self._fernet(company_id).decrypt(secret.value).decode("utf-8")
 
-    async def _unified_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
+    async def _envelope_store_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
         """Best-effort unified-store read for an already-resolved active secret row."""
         from autobot_shared.secrets_envelope import load_root_key
 
@@ -196,21 +200,23 @@ class SecretService(LLCServiceBase):
         secret.updated_at = now_utc()
         await session.flush()
 
-        if self.activity_log:
-            await self.activity_log.record(
-                session=session,
-                company_id=company_id,
-                actor_id=actor,
-                event_type="secret.revoked",
-                entity_type="llc_secret",
-                entity_id=str(secret.id),
-                after={"name": name, "revoked_at": secret.revoked_at.isoformat()},
-            )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type="secret.revoked",
+            entity_type="llc_secret",
+            entity_id=str(secret.id),
+            after={"name": name, "revoked_at": secret.revoked_at.isoformat()},
+        )
 
-        # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
-        logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
-            "Secret '%s' revoked for company %s (actor=%s)",
-            name,
+        # Secret names double as env var names; log the id, never the name or value.
+        logger.info(
+            "Secret %s revoked for company %s (actor=%s)",
+            secret.id,
             company_id,
             actor,
         )

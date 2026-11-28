@@ -121,7 +121,10 @@ async def test_set_get_clear_approval_categories():
     redis = _FakeRedis()
     svc = _svc_with_redis(redis)
     await svc.set_approval_categories("s1", ["pushing commits", "destructive operations"])
-    assert await svc.get_approval_categories("s1") == ["pushing commits", "destructive operations"]
+    assert await svc.get_approval_categories("s1") == [
+        "pushing commits",
+        "destructive operations",
+    ]
     await svc.clear_approval_categories("s1")
     assert await svc.get_approval_categories("s1") == []
 
@@ -145,7 +148,7 @@ def test_session_categories_hold_tool_at_seam_end_to_end():
     overlays) → the PRE-EXECUTION seam gate holds a matching tool (correct stage)."""
     from types import SimpleNamespace
 
-    from chat_workflow.tool_handler import ToolHandlerMixin
+    from tests.unit.chat_workflow.test_ai_line_support import run_guard
 
     # What _apply_session_role puts on the context when the gate flag is on.
     context = {"requires_approval_before": ["pushing commits"]}
@@ -154,11 +157,34 @@ def test_session_categories_hold_tool_at_seam_end_to_end():
         requires_approval_before=context["requires_approval_before"],
         work_item_id=None,
     )
-    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    ctx.context = {}
     results: list[dict] = []
     # git_push is in "pushing commits" → held pending approval BEFORE execution.
-    held = mixin._enforce_work_item_approval({"name": "git_push"}, ctx, results)
+    held, _ = run_guard({"name": "git_push"}, ctx, results)
     assert held is not None and held.type == "approval_required"
     assert results[0]["status"] == "pending_approval"
     # web_search is not in any declared category → not held.
-    assert mixin._enforce_work_item_approval({"name": "web_search"}, ctx, []) is None
+    assert run_guard({"name": "web_search"}, ctx, [])[0] is None
+
+
+def test_body_identity_keys_are_replaced_by_the_verified_principal_16692(caplog):
+    """User B sending ``context.user_id=A`` reads as B on every ``context`` reader (stop hook, reasoning preference)."""
+    from chat_workflow.session_role import apply_auth_role
+
+    body = {"user_id": "user-a", "tenant_id": "org-a", "org_id": "org-a", "keep": 1}
+    with caplog.at_level("WARNING"):
+        out = apply_auth_role(body, "user", {"user_id": "user-b", "org_id": "org-b"})
+    assert (out["user_id"], out["tenant_id"], out["org_id"], out["keep"]) == (
+        "user-b",
+        "org-b",
+        "org-b",
+        1,
+    )
+    assert "disagrees with the authenticated principal" in caplog.text
+
+
+def test_body_identity_keys_are_dropped_without_a_principal_16692():
+    from chat_workflow.session_role import apply_auth_role
+
+    out = apply_auth_role({"user_id": "user-a", "tenant_id": "org-a"}, None, None)
+    assert "user_id" not in out and "tenant_id" not in out

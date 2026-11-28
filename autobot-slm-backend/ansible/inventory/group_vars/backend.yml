@@ -112,18 +112,7 @@ backend:
     AUTOBOT_NPU_WORKER_HOST: "{{ npu_worker_host }}"
     AUTOBOT_NPU_WORKER_PORT: "{{ npu_worker_port }}"
 
-    # Database configuration
-    AUTOBOT_REDIS_DB_MAIN: 0
-    AUTOBOT_REDIS_DB_KNOWLEDGE: 1
-    AUTOBOT_REDIS_DB_PROMPTS: 2
-    AUTOBOT_REDIS_DB_AGENTS: 3
-    AUTOBOT_REDIS_DB_METRICS: 4
-    AUTOBOT_REDIS_DB_LOGS: 5
-    AUTOBOT_REDIS_DB_SESSIONS: 6
-    AUTOBOT_REDIS_DB_WORKFLOWS: 7
-    AUTOBOT_REDIS_DB_VECTORS: 8
-    AUTOBOT_REDIS_DB_MODELS: 9
-    AUTOBOT_REDIS_DB_TESTING: 15
+    # Redis database numbers: redis-databases.yaml (#19232); no per-host copy here.
 
     # AI/ML configuration
     TF_USE_LEGACY_KERAS: 1
@@ -134,7 +123,9 @@ backend:
     # #11671: reference the canonical backend_user_mode var, never a scattered
     # literal, so full user management stays single-sourced (no single_user).
     AUTOBOT_USER_MODE: "{{ backend_user_mode }}"    # User management: single_company/multi_company/provider
-    AUTOBOT_BACKEND_HOST: "0.0.0.0"
+    # #18810: bind and advertised host are separate settings; 0.0.0.0 is only ever the bind.
+    AUTOBOT_BACKEND_BIND_HOST: "{{ backend_host }}"
+    AUTOBOT_BACKEND_HOST: "{{ backend_advertised_host }}"
     AUTOBOT_BACKEND_PORT: 8001
 
 # ==========================================

@@ -93,6 +93,8 @@ yaml = pytest.importorskip("yaml")
 
 from repo_tests import ansible_manifest_resolution as resolution  # noqa: E402
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 # Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
@@ -126,7 +128,11 @@ _MIN_PIP_SITES = 15  # 17 carried at least one name: entry; 16 after #15684 (rol
 # and moved roles/browser's four-package list to `requirements:` (4 packages) --
 # both REDUCE the population a correct walk finds, the direction this floor
 # must never mistake for the walk having broken. 85 measured 2026-09-14.
-_MIN_ANSIBLE_DECLARATIONS = 80  # 107 before #15684, 85 after
+# 69: measured 71 on the tree after #18060 moved 14 more floors out of ansible (roles/
+# dependency_patching's mirrored security map, roles/tts-worker's server dependencies) into
+# constraints/shared.txt, using this test's own `ansible_declarations()[0]`. A reduction, the
+# direction this shrink-guard must not mistake for a broken walk; the floor stays 2 under it.
+_MIN_ANSIBLE_DECLARATIONS = 69  # 107 before #15684, 85 after, 71 after #18060
 _MIN_REQUIREMENT_FILES = 30  # 34
 _MIN_REQUIREMENT_PACKAGES = 140  # 162
 # The resolver's own reach (#15629). `_MIN_DERIVED_BINDINGS` counts the venvs the
@@ -330,8 +336,8 @@ def constrained_packages() -> set[str]:
 
 
 def baseline_keys() -> list[str]:
-    lines = _BASELINE.read_text(encoding="utf-8").splitlines()
-    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    text = _BASELINE.read_text(encoding="utf-8")
+    return [cl.text.strip() for cl in code_lines(text) if cl.text.strip()]
 
 
 def _contradicts(specifier: str, stated: set[str] | None) -> bool:

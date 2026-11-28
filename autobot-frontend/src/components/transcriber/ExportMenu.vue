@@ -1,15 +1,14 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <script setup lang="ts">
+import { saveBlob } from '@autobot/ui'
 import { ref } from 'vue'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
-import { useFileDownload } from '@/composables/useFileDownload'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ExportMenu')
 const props = defineProps<{ recordingId: number; filename: string }>()
 const api = useTranscriberApi()
-const { downloadBlob } = useFileDownload()
 const open = ref(false)
 const exporting = ref(false)
 
@@ -26,7 +25,7 @@ async function doExport(format: 'docx' | 'pdf' | 'srt' | 'vtt') {
   try {
     const resp = await api.exportRecording(props.recordingId, format)
     const blob = await resp.blob()
-    downloadBlob(blob, `${props.filename}.${format}`)
+    saveBlob(blob, `${props.filename}.${format}`)
   } catch (err) {
     logger.error('Export failed', err)
   } finally {

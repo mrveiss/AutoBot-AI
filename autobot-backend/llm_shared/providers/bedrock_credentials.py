@@ -26,7 +26,8 @@ import json
 import re
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import redact_cloud_identifiers, redact_text
+from autobot_shared.secret_redaction import LOG_MASK, redact_text
+from autobot_shared.security.redaction import redact_cloud_identifiers
 from services.secrets_audit_store import (
     REASON_LOOKUP_ERROR,
     REASON_MALFORMED_VALUE,
@@ -72,7 +73,7 @@ _AWS_SECRET_KEY_PATTERN = re.compile(r"^[A-Za-z0-9+/]{40}$")
 
 
 #: Replacement for any credential value removed from text on its way to a log.
-_CREDENTIAL_MASK = "***"
+_CREDENTIAL_MASK = LOG_MASK  # the one in-text mask (#19337)
 
 
 def scrub_credentials(text: str, credentials: tuple[str | None, str | None, str | None]) -> str:

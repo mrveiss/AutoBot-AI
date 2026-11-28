@@ -49,6 +49,7 @@ class TestSshTerminalWebsocketAuthentication:
         with (
             patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=None)),
             patch("auth_middleware.verify_internal_api_key", return_value=False),
+            patch("auth_middleware.resolve_human_user", new=AsyncMock(return_value=None)),
             patch("auth_middleware.get_auth_middleware") as mock_get_auth_middleware,
             patch("api.terminal._setup_ssh_terminal", new=AsyncMock()) as mock_setup,
         ):

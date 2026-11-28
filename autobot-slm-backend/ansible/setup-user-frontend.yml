@@ -22,7 +22,7 @@
   gather_facts: true
 
   vars:
-    frontend_install_dir: /opt/autobot
+    frontend_install_dir: "{{ autobot.base_dir }}"
     frontend_code_dir: "{{ frontend_install_dir }}/autobot-frontend"
     # #15603: frontend_dist_dir is NOT set here on purpose. This play-level
     # override used to hardcode ".../dist", which — once the `frontend` role's
@@ -33,12 +33,12 @@
     # automatically instead of needing its own matching update forever.
     frontend_user: autobot
     frontend_group: autobot
-    frontend_port: 443
+    frontend_tls_port: 443
     nginx_http_port: 80
     backend_host: "{{ infrastructure.hosts.backend }}"
     backend_port: 8443
     backend_protocol: "http"  # uvicorn serves HTTP, nginx on frontend handles SSL
-    frontend_tls_cert_dir: /etc/autobot/certs
+    frontend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
     frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
     frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
 
@@ -51,7 +51,7 @@
           ═══════════════════════════════════════════════════════════════
           Target: {{ inventory_hostname }} ({{ ansible_host }})
           Code: {{ frontend_code_dir }}
-          HTTPS Port: {{ frontend_port }}
+          HTTPS Port: {{ frontend_tls_port }}
           Backend: {{ backend_host }}:{{ backend_port }}
           ═══════════════════════════════════════════════════════════════
 

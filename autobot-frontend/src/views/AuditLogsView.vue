@@ -14,37 +14,23 @@
             <Icon :name="isPolling ? 'pause' : 'play'" />
             {{ isPolling ? $t('views.auditLogs.pauseUpdates') : $t('views.auditLogs.autoRefresh') }}
           </button>
-          <button class="btn-action-danger" @click="showCleanupModal = true">
+          <BaseButton variant="error" size="sm" @click="showCleanupModal = true">
             <Icon name="trash" />
             {{ $t('views.auditLogs.cleanup') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
-      <!-- Tab Navigation -->
-      <div class="tab-nav">
-        <button
-          :class="['tab-btn', { active: activeTab === 'dashboard' }]"
-          @click="activeTab = 'dashboard'"
-        >
-          <Icon name="chart-pie" />
-          {{ $t('views.auditLogs.dashboard') }}
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'logs' }]"
-          @click="activeTab = 'logs'"
-        >
-          <Icon name="list-alt" />
-          {{ $t('views.auditLogs.auditLogs') }}
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'failures' }]"
-          @click="loadFailuresTab"
-        >
-          <Icon name="exclamation-triangle" />
-          {{ $t('views.auditLogs.failedOperations') }}
-        </button>
-      </div>
+      <!-- Tab Navigation: roles, aria-selected and aria-controls come from the kit tabs; the panels below are routed content the view owns -->
+      <BaseTabs
+        :model-value="activeTab"
+        :items="tabItems"
+        :label="$t('views.auditLogs.tabsLabel')"
+        list-only
+        @update:model-value="selectTab"
+      >
+        <template #icon="{ item }"><Icon :name="TAB_ICONS[item.value as AuditTab]" /></template>
+      </BaseTabs>
 
       <!-- Error Banner -->
       <div v-if="initError" class="error-banner">
@@ -55,10 +41,15 @@
         </button>
       </div>
 
+      <div v-if="statisticsFailed" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ $t('views.auditLogs.statisticsError') }}</span>
+      </div>
+
       <!-- Dashboard Tab -->
-      <div v-if="activeTab === 'dashboard'" class="tab-content">
+      <div v-if="activeTab === 'dashboard'" :id="`audit-panel-dashboard`" role="tabpanel" :aria-labelledby="`audit-tab-dashboard`" class="tab-content">
         <AuditStatistics
-          :statistics="statistics"
+          :statistics="resolvedStatistics"
           :vm-info="vmInfo"
           :loading="loadingStats"
           @user-click="openUserTrail"
@@ -66,7 +57,7 @@
       </div>
 
       <!-- Logs Tab -->
-      <div v-if="activeTab === 'logs'" class="tab-content">
+      <div v-if="activeTab === 'logs'" :id="`audit-panel-logs`" role="tabpanel" :aria-labelledby="`audit-tab-logs`" class="tab-content">
         <AuditFilters
           :filter="filter"
           :operation-categories="operationCategories"
@@ -91,7 +82,7 @@
       </div>
 
       <!-- Failures Tab -->
-      <div v-if="activeTab === 'failures'" class="tab-content">
+      <div v-if="activeTab === 'failures'" :id="`audit-panel-failures`" role="tabpanel" :aria-labelledby="`audit-tab-failures`" class="tab-content">
         <div class="failures-header">
           <div class="failure-filter">
             <label for="failure-hours">{{ $t('views.auditLogs.timeRange') }}</label>
@@ -110,7 +101,7 @@
         </div>
 
         <AuditLogTable
-          :entries="entries"
+          :entries="failureEntries"
           :loading="loading"
           :has-more="false"
           :current-page="1"
@@ -120,6 +111,14 @@
           @user-click="openUserTrail"
           @session-click="openSessionTrail"
         />
+      </div>
+
+      <div v-if="userStore.isAdmin && activeTab === 'eventLogs'" :id="`audit-panel-eventLogs`" role="tabpanel" :aria-labelledby="`audit-tab-eventLogs`" class="tab-content">
+        <AuditEventLogsPanel :refresh-tick="refreshTick" />
+      </div>
+
+      <div v-if="userStore.isAdmin && activeTab === 'commandHistory'" :id="`audit-panel-commandHistory`" role="tabpanel" :aria-labelledby="`audit-tab-commandHistory`" class="tab-content">
+        <AuditCommandHistoryPanel :refresh-tick="refreshTick" />
       </div>
 
       <!-- Session/User Timeline Drawer -->
@@ -175,14 +174,13 @@
           <button class="btn-action-secondary" @click="showCleanupModal = false">
             {{ $t('views.auditLogs.cancel') }}
           </button>
-          <button
-            class="btn-action-danger"
+          <BaseButton variant="error" size="sm"
             :disabled="!cleanupConfirmed"
             @click="performCleanup"
           >
             <Icon name="trash" />
             {{ $t('views.auditLogs.deleteOldLogs') }}
-          </button>
+          </BaseButton>
         </template>
       </BaseModal>
   </div>
@@ -190,25 +188,31 @@
 
 <script setup lang="ts">
 // Issue #1359: i18n string extraction
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuditState } from '@/composables/useAuditApi'
 import AuditStatistics from '@/components/audit/AuditStatistics.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton, BaseTabs } from '@autobot/ui'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
-import Icon from '@/components/ui/Icon.vue'
+import AuditEventLogsPanel from '@/components/audit/AuditEventLogsPanel.vue'
+import AuditCommandHistoryPanel from '@/components/audit/AuditCommandHistoryPanel.vue'
+import { useUserStore } from '@/stores/useUserStore'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import type { AuditFilter, AuditEntry } from '@/types/audit'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('AuditLogsView')
+const userStore = useUserStore()
 
 // Use the audit state composable
 const {
   entries,
-  statistics,
+  failureEntries,
+  statisticsFailed,
+  resolvedStatistics,
   vmInfo,
   operationCategories,
   loading,
@@ -217,6 +221,7 @@ const {
   filter,
   currentPage,
   isPolling,
+  refreshTick,
   sessionTrail,
   userTrail,
   loadingTrail,
@@ -237,7 +242,29 @@ const {
 } = useAuditState()
 
 // Local UI state
-const activeTab = ref<'dashboard' | 'logs' | 'failures'>('dashboard')
+const activeTab = ref<AuditTab>('dashboard')
+type AuditTab = 'dashboard' | 'logs' | 'failures' | 'eventLogs' | 'commandHistory'
+const TAB_ICONS: Record<AuditTab, IconName> = {
+  dashboard: 'chart-pie', logs: 'list-alt', failures: 'exclamation-triangle', eventLogs: 'clipboard-list', commandHistory: 'terminal',
+}
+// Admin-only routes: shown to admins, the backend stays the gate (#22214). `id` / `controls` pair each tab with its panel.
+const tabItems = computed(() => {
+  const tabs: Array<[AuditTab, string, boolean]> = [
+    ['dashboard', t('views.auditLogs.dashboard'), true],
+    ['logs', t('views.auditLogs.auditLogs'), true],
+    ['failures', t('views.auditLogs.failedOperations'), true],
+    ['eventLogs', t('views.auditLogs.eventLogs'), userStore.isAdmin],
+    ['commandHistory', t('views.auditLogs.commandHistory'), userStore.isAdmin],
+  ]
+  return tabs.filter(([, , shown]) => shown).map(([value, label]) => ({
+    value, label, id: `audit-tab-${value}`, controls: `audit-panel-${value}`,
+  }))
+})
+function selectTab(value: string) {
+  if (value === 'failures') loadFailuresTab()
+  else activeTab.value = value as AuditTab
+}
+
 const showTimeline = ref(false)
 const timelineType = ref<'session' | 'user'>('session')
 const timelineEntityId = ref('')
@@ -362,31 +389,6 @@ async function performCleanup() {
   border-color: var(--color-primary);
 }
 
-/* Danger button */
-.btn-action-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-on-error);
-  background: var(--color-error);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background var(--duration-150) var(--ease-in-out);
-}
-
-.btn-action-danger:hover:not(:disabled) {
-  background: var(--color-error-hover);
-}
-
-.btn-action-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Error banner */
 .error-banner {
   display: flex;
@@ -474,6 +476,10 @@ async function performCleanup() {
   right: 0;
   top: 0;
   bottom: 0;
+  /* #14771: the fixed full-height drawer touches the top/right/bottom edges */
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
   width: 480px;
   max-width: 100%;
   background: var(--bg-primary);

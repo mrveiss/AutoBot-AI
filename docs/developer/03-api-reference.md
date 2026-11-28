@@ -506,13 +506,12 @@ Authentication is currently disabled by default. The system includes a security 
 ```
 
 ### GET `/api/llm/current`
-**Description**: Get current LLM model and configuration
+**Description**: Get the active LLM model and provider (only these two fields; the config tree is admin-only on `GET /api/llm/config`)
 **Response**:
 ```json
 {
   "model": "llama3.1",
-  "provider": "ollama",
-  "config": {/* full config object */}
+  "provider": "ollama"
 }
 ```
 

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 # GH#9995/GH#10140: the scheduler circular-import that once required pre-stubbing
-# llc.services here is resolved — HeartbeatScheduler / LivenessMonitor / the
+# llc.services here is resolved — LLCHeartbeatScheduler / LivenessMonitor / the
 # health probe all import cleanly in the test environment. The old module-level
 # ``sys.modules.setdefault("llc.services", MagicMock())`` block leaked MagicMock
 # stubs into every test module collected after this one, masking regressions.
@@ -159,26 +159,26 @@ def test_app_state_scheduler_state_works_for_session_checkpointer_attr():
 
 
 # ---------------------------------------------------------------------------
-# HeartbeatScheduler.is_running property (CR-4)
+# LLCHeartbeatScheduler.is_running property (CR-4)
 # ---------------------------------------------------------------------------
 
 
 def test_heartbeat_scheduler_is_running_when_task_alive():
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
-    s = HeartbeatScheduler()
+    s = LLCHeartbeatScheduler()
     s._running = True
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.done.return_value = False
-    # HeartbeatScheduler.is_running checks _poll_task (not the base _task).
+    # LLCHeartbeatScheduler.is_running checks _poll_task (not the base _task).
     s._poll_task = mock_task
     assert s.is_running is True
 
 
 def test_heartbeat_scheduler_not_running_when_flag_false():
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
-    s = HeartbeatScheduler()
+    s = LLCHeartbeatScheduler()
     s._running = False
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.done.return_value = False
@@ -187,18 +187,18 @@ def test_heartbeat_scheduler_not_running_when_flag_false():
 
 
 def test_heartbeat_scheduler_not_running_when_task_none():
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
-    s = HeartbeatScheduler()
+    s = LLCHeartbeatScheduler()
     s._running = True
     s._task = None
     assert s.is_running is False
 
 
 def test_heartbeat_scheduler_not_running_when_task_done():
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
-    s = HeartbeatScheduler()
+    s = LLCHeartbeatScheduler()
     s._running = True
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.done.return_value = True
@@ -431,7 +431,7 @@ async def test_probe_returns_unwired_degraded_with_no_request_context():
 
     with (
         # Isolate the wired/unwired behaviour under test from the unrelated
-        # HeartbeatScheduler-not-started case, which would independently
+        # LLCHeartbeatScheduler-not-started case, which would independently
         # force "down" via the very first _compute_status check.
         patch("llc.health.probe._is_scheduler_running", return_value=True),
         patch("llc.health.probe._count_overdue_agents", new=async_pair),

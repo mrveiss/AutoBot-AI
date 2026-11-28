@@ -11,9 +11,11 @@
  * multi-select, upgrade selected/all, job tracking.
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, usePollingJob } from '@autobot/ui'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useSystemUpdates,
   type UpdatePackage,
@@ -26,8 +28,10 @@ const selectedNodeFilter = ref<string>('')
 const selectedPackages = ref<Set<string>>(new Set())
 const cancellingJobId = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
-let discoverPollTimer: ReturnType<typeof setInterval> | null = null
-let jobPollTimer: ReturnType<typeof setInterval> | null = null
+const { t } = useI18n()
+
+const DISCOVER_POLL_INTERVAL_MS = 3000
+const JOB_POLL_INTERVAL_MS = 10_000
 
 // Computed
 const filteredPackages = computed(() => {
@@ -79,36 +83,45 @@ async function handleCheckForUpdates(): Promise<void> {
   }
 }
 
-function startDiscoverPolling(jobId: string): void {
-  stopDiscoverPolling()
-  discoverPollTimer = setInterval(async () => {
-    const status = await systemUpdates.pollDiscoverStatus(jobId)
-    if (
-      status &&
-      (status.status === 'completed' || status.status === 'failed')
-    ) {
-      stopDiscoverPolling()
-      // Refresh data after discovery completes
-      await Promise.all([
-        systemUpdates.fetchPackages(),
-        systemUpdates.fetchSummary(),
-        systemUpdates.fetchJobs(),
-      ])
-      if (status.status === 'completed') {
-        successMessage.value = status.message || 'Discovery completed'
-        setTimeout(() => {
-          successMessage.value = null
-        }, 5000)
-      }
-    }
-  }, 3000)
+type DiscoverStatus = Awaited<ReturnType<typeof systemUpdates.pollDiscoverStatus>>
+
+/** Refresh the tab once discovery finishes, and say so when it succeeded. */
+async function onDiscoverDone(status: DiscoverStatus): Promise<void> {
+  await Promise.all([
+    systemUpdates.fetchPackages(),
+    systemUpdates.fetchSummary(),
+    systemUpdates.fetchJobs(),
+  ]).catch(() => undefined) // each fetch reports its own failure; never unhandled out of onDone
+  if (status?.status === 'completed') {
+    successMessage.value = status.message || t('systemUpdatesTab.discoveryCompleted')
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+  }
 }
 
-function stopDiscoverPolling(): void {
-  if (discoverPollTimer) {
-    clearInterval(discoverPollTimer)
-    discoverPollTimer = null
-  }
+// Both pollers stop with the component's scope (#19482). pollDiscoverStatus returns
+// null on a failed read rather than throwing, so discovery keeps polling through
+// transient failures, as it did before.
+const discoverPoller = usePollingJob((jobId) => systemUpdates.pollDiscoverStatus(jobId), {
+  intervalMs: DISCOVER_POLL_INTERVAL_MS,
+  maxAttempts: Infinity,
+  isComplete: (status) => status?.status === 'completed' || status?.status === 'failed',
+  onDone: (status) => void onDiscoverDone(status),
+})
+
+const jobPoller = usePollingJob(() => systemUpdates.fetchJobs(), {
+  intervalMs: JOB_POLL_INTERVAL_MS,
+  maxAttempts: Infinity,
+})
+
+function startDiscoverPolling(jobId: string): void {
+  discoverPoller.start(jobId)
+}
+
+/** One job poller, whoever asks first: the watch and onMounted can both see running jobs. */
+function ensureJobPolling(): void {
+  if (!jobPoller.isPolling.value) jobPoller.start('')
 }
 
 function toggleSelectAll(): void {
@@ -143,17 +156,17 @@ async function handleUpgradeSelected(): Promise<void> {
     await systemUpdates.applyUpdates(nodeId, updateIds)
   }
   selectedPackages.value.clear()
-  successMessage.value = 'Upgrade jobs started'
+  successMessage.value = t('systemUpdatesTab.upgradeJobsStarted')
   setTimeout(() => {
     successMessage.value = null
   }, 3000)
 }
 
 async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
-  if (!confirm(`Upgrade ALL packages on ${nodeId}?`)) return
+  if (!confirm(t('systemUpdatesTab.confirmUpgradeAllOnNode', { nodeId }))) return
   const ok = await systemUpdates.upgradeAll(nodeId)
   if (ok) {
-    successMessage.value = `Upgrade all started for ${nodeId}`
+    successMessage.value = t('systemUpdatesTab.upgradeAllStartedOnNode', { nodeId })
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -161,11 +174,11 @@ async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
 }
 
 async function handleCancelJob(jobId: string): Promise<void> {
-  if (!confirm('Cancel this update job?')) return
+  if (!confirm(t('systemUpdatesTab.confirmCancelJob'))) return
   cancellingJobId.value = jobId
   const ok = await systemUpdates.cancelJob(jobId)
   if (ok) {
-    successMessage.value = 'Job cancelled'
+    successMessage.value = t('systemUpdatesTab.jobCancelled')
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -175,40 +188,32 @@ async function handleCancelJob(jobId: string): Promise<void> {
 
 function getStatusBadge(status: string): string {
   const map: Record<string, string> = {
-    pending: 'bg-gray-100 text-gray-700',
-    running: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-    cancelled: 'bg-yellow-100 text-yellow-700',
+    pending: 'bg-autobot-bg-tertiary text-autobot-text-secondary',
+    running: 'bg-autobot-pill-info-bg text-autobot-text-primary',
+    completed: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg',
+    failed: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
+    cancelled: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
   }
-  return map[status] || 'bg-gray-100 text-gray-700'
+  return map[status] || 'bg-autobot-bg-tertiary text-autobot-text-secondary'
 }
 
 function getSeverityBadge(severity: string): string {
   const map: Record<string, string> = {
-    security: 'bg-orange-100 text-orange-700',
-    critical: 'bg-red-100 text-red-700',
-    standard: 'bg-gray-100 text-gray-600',
+    security: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
+    critical: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
+    standard: 'bg-autobot-bg-tertiary text-autobot-text-secondary',
   }
-  return map[severity] || 'bg-gray-100 text-gray-600'
-}
-
-function formatDate(d: string | null): string {
-  if (!d) return '-'
-  return formatDateTime(d)
+  return map[severity] || 'bg-autobot-bg-tertiary text-autobot-text-secondary'
 }
 
 // Watch for running jobs to start polling
 watch(
   () => systemUpdates.hasRunningJobs.value,
   (hasRunning) => {
-    if (hasRunning && !jobPollTimer) {
-      jobPollTimer = setInterval(() => {
-        systemUpdates.fetchJobs()
-      }, 10000)
-    } else if (!hasRunning && jobPollTimer) {
-      clearInterval(jobPollTimer)
-      jobPollTimer = null
+    if (hasRunning) {
+      ensureJobPolling()
+    } else if (jobPoller.isPolling.value) {
+      jobPoller.stop()
       // Refresh packages when jobs finish
       systemUpdates.fetchPackages()
       systemUpdates.fetchSummary()
@@ -224,20 +229,8 @@ onMounted(async () => {
     systemUpdates.fetchSummary(),
     fleetStore.fetchNodes(),
   ])
-  // Start job polling if there are running jobs
-  if (systemUpdates.hasRunningJobs.value) {
-    jobPollTimer = setInterval(() => {
-      systemUpdates.fetchJobs()
-    }, 10000)
-  }
-})
-
-onUnmounted(() => {
-  stopDiscoverPolling()
-  if (jobPollTimer) {
-    clearInterval(jobPollTimer)
-    jobPollTimer = null
-  }
+  // Start job polling if there are running jobs (a no-op when the watch already did)
+  if (systemUpdates.hasRunningJobs.value) ensureJobPolling()
 })
 </script>
 
@@ -246,10 +239,10 @@ onUnmounted(() => {
     <!-- Action Bar -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">
           {{ $t('systemUpdatesTab.systemUpdates') }}
         </h2>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('systemUpdatesTab.discoverAndApplySystem') }}
         </p>
       </div>
@@ -257,8 +250,8 @@ onUnmounted(() => {
         <!-- Node filter -->
         <select
           v-model="selectedNodeFilter"
-          class="px-3 py-2 border border-gray-300 rounded-lg text-sm
-                 bg-white focus:ring-2 focus:ring-primary-500"
+          class="px-3 py-2 border border-autobot-border-strong rounded-lg text-sm
+                 bg-white focus:ring-2 focus:ring-autobot-primary"
         >
           <option value="">{{ $t('systemUpdatesTab.allNodes') }}</option>
           <option
@@ -273,8 +266,8 @@ onUnmounted(() => {
         <button
           @click="handleCheckForUpdates"
           :disabled="systemUpdates.isDiscovering.value"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg
-                 hover:bg-blue-700 disabled:opacity-50
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg
+                 hover:bg-autobot-primary-hover disabled:opacity-50
                  flex items-center gap-2"
         >
           <svg
@@ -309,26 +302,16 @@ onUnmounted(() => {
     </div>
 
     <!-- Alerts -->
-    <div
+    <BaseAlert
       v-if="systemUpdates.error.value"
-      class="mb-4 p-3 bg-red-50 border border-red-200
-             rounded-lg text-red-700 text-sm"
-    >
-      {{ systemUpdates.error.value }}
-      <button
-        @click="systemUpdates.clearError()"
-        class="ml-2 underline"
-      >
-        {{ $t('systemUpdatesTab.dismiss') }}
-      </button>
-    </div>
-    <div
-      v-if="successMessage"
-      class="mb-4 p-3 bg-green-50 border border-green-200
-             rounded-lg text-green-700 text-sm"
-    >
-      {{ successMessage }}
-    </div>
+      variant="error"
+      class="mb-4"
+      :message="systemUpdates.error.value"
+      dismissible
+      :dismiss-label="$t('systemUpdatesTab.dismiss')"
+      @dismiss="systemUpdates.clearError()"
+    />
+    <BaseAlert v-if="successMessage" variant="success" size="compact" class="mb-4" :message="successMessage" />
 
     <!-- Discovery Progress -->
     <div
@@ -336,21 +319,21 @@ onUnmounted(() => {
       class="mb-6 bg-white rounded-lg border p-4"
     >
       <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium text-gray-700">
+        <span class="text-sm font-medium text-autobot-text-secondary">
           {{ $t('systemUpdatesTab.discoveringPackages') }}
         </span>
-        <span class="text-sm text-gray-500">{{ $t('systemUpdatesTab.value0Value1Nodes', { value0: systemUpdates.discoverStatus.value.nodes_checked, value1: systemUpdates.discoverStatus.value.total_nodes }) }}</span>
+        <span class="text-sm text-autobot-text-tertiary">{{ $t('systemUpdatesTab.value0Value1Nodes', { value0: systemUpdates.discoverStatus.value.nodes_checked, value1: systemUpdates.discoverStatus.value.total_nodes }) }}</span>
       </div>
-      <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div class="w-full h-2 bg-autobot-bg-active rounded-full overflow-hidden">
         <div
-          class="h-full bg-blue-600 rounded-full transition-all
+          class="h-full bg-autobot-primary rounded-full transition-all
                  duration-500"
           :style="{
             width: `${systemUpdates.discoverStatus.value.progress}%`,
           }"
         ></div>
       </div>
-      <p class="mt-1 text-xs text-gray-500">
+      <p class="mt-1 text-xs text-autobot-text-tertiary">
         {{ systemUpdates.discoverStatus.value.message }}
       </p>
     </div>
@@ -358,27 +341,27 @@ onUnmounted(() => {
     <!-- Summary Stats -->
     <div class="grid grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.totalUpgradable') }}</p>
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('systemUpdatesTab.totalUpgradable') }}</p>
         <p class="text-2xl font-bold">
           {{ systemUpdates.updateCount.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.securityUpdates') }}</p>
-        <p class="text-2xl font-bold text-orange-600">
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('systemUpdatesTab.securityUpdates') }}</p>
+        <p class="text-2xl font-bold text-autobot-warning">
           {{ systemUpdates.securityCount.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.nodesWithUpdates') }}</p>
-        <p class="text-2xl font-bold text-blue-600">
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('systemUpdatesTab.nodesWithUpdates') }}</p>
+        <p class="text-2xl font-bold text-autobot-text-link">
           {{ systemUpdates.nodesWithUpdates.value }}
         </p>
       </div>
       <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.lastChecked') }}</p>
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('systemUpdatesTab.lastChecked') }}</p>
         <p class="text-sm font-medium mt-1">
-          {{ formatDate(systemUpdates.lastChecked.value) }}
+          {{ formatFleetDateTime(systemUpdates.lastChecked.value, '-') }}
         </p>
       </div>
     </div>
@@ -389,17 +372,17 @@ onUnmounted(() => {
       class="bg-white rounded-lg border mb-6"
     >
       <div
-        class="px-4 py-3 bg-gray-50 border-b
+        class="px-4 py-3 bg-autobot-bg-secondary border-b
                flex items-center justify-between"
       >
-        <h2 class="font-medium text-gray-900">{{ $t('systemUpdatesTab.availablePackagesCount', { count: filteredPackages.length }) }}</h2>
+        <h2 class="font-medium text-autobot-text-primary">{{ $t('systemUpdatesTab.availablePackagesCount', { count: filteredPackages.length }) }}</h2>
         <div class="flex items-center gap-2">
           <button
             v-if="someSelected"
             @click="handleUpgradeSelected"
             :disabled="systemUpdates.loading.value"
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white
-                   rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            class="px-3 py-1.5 text-sm bg-autobot-primary text-autobot-text-on-primary
+                   rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
           >{{ $t('systemUpdatesTab.upgradeSelectedValue0', { value0: selectedPackages.size }) }}</button>
         </div>
       </div>
@@ -412,18 +395,18 @@ onUnmounted(() => {
       >
         <!-- Node header -->
         <div
-          class="px-4 py-2 bg-gray-50 flex items-center
+          class="px-4 py-2 bg-autobot-bg-secondary flex items-center
                  justify-between"
         >
-          <span class="text-sm font-medium text-gray-700">
+          <span class="text-sm font-medium text-autobot-text-secondary">
             {{ group.node_id }}
-            <span class="text-gray-400 font-normal">{{ $t('systemUpdatesTab.countPackages', { count: group.packages.length }) }}</span>
+            <span class="text-autobot-text-tertiary font-normal">{{ $t('systemUpdatesTab.countPackages', { count: group.packages.length }) }}</span>
           </span>
           <button
             @click="handleUpgradeAllForNode(group.node_id)"
             :disabled="systemUpdates.loading.value"
-            class="px-2 py-1 text-xs bg-orange-100 text-orange-700
-                   rounded hover:bg-orange-200 disabled:opacity-50"
+            class="px-2 py-1 text-xs bg-autobot-pill-warn-bg text-autobot-pill-warn-fg
+                   rounded hover:bg-(--warn-bg-hover) disabled:opacity-50"
           >
             {{ $t('systemUpdatesTab.upgradeAll') }}
           </button>
@@ -438,28 +421,28 @@ onUnmounted(() => {
               <th>{{ $t('systemUpdatesTab.severity') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr
               v-for="pkg in group.packages"
               :key="pkg.update_id"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
               <td class="px-4 py-2 w-10">
                 <input
                   type="checkbox"
                   :checked="selectedPackages.has(pkg.update_id)"
                   @change="togglePackage(pkg.update_id)"
-                  class="rounded border-gray-300 text-blue-600
-                         focus:ring-blue-500"
+                  class="rounded border-autobot-border-strong text-autobot-text-link
+                         focus:ring-autobot-focus"
                 />
               </td>
               <td class="px-4 py-2">
-                <p class="text-sm font-medium text-gray-900">
+                <p class="text-sm font-medium text-autobot-text-primary">
                   {{ pkg.package_name }}
                 </p>
               </td>
               <td class="px-4 py-2">
-                <p class="text-xs text-gray-500">
+                <p class="text-xs text-autobot-text-tertiary">
                   {{ pkg.current_version || '?' }}
                   &rarr;
                   {{ pkg.available_version }}
@@ -488,7 +471,7 @@ onUnmounted(() => {
         !systemUpdates.isDiscovering.value
       "
       class="bg-white rounded-lg border mb-6 p-8 text-center
-             text-gray-500"
+             text-autobot-text-tertiary"
     >
       <p>
         {{ $t('systemUpdatesTab.noUpgradablePackagesFound') }}
@@ -500,81 +483,81 @@ onUnmounted(() => {
       v-if="filteredPackages.length > 0"
       class="flex items-center gap-3 mb-4 px-1"
     >
-      <label class="flex items-center gap-2 text-sm text-gray-600">
+      <label class="flex items-center gap-2 text-sm text-autobot-text-secondary">
         <input
           type="checkbox"
           :checked="allSelected"
           @change="toggleSelectAll"
-          class="rounded border-gray-300 text-blue-600
-                 focus:ring-blue-500"
+          class="rounded border-autobot-border-strong text-autobot-text-link
+                 focus:ring-autobot-focus"
         />{{ $t('systemUpdatesTab.selectAllCountPackages', { count: filteredPackages.length }) }}</label>
     </div>
 
     <!-- Update Jobs -->
     <div class="bg-white rounded-lg border">
       <div
-        class="px-4 py-3 bg-gray-50 border-b
+        class="px-4 py-3 bg-autobot-bg-secondary border-b
                flex items-center justify-between"
       >
-        <h2 class="font-medium text-gray-900">{{ $t('systemUpdatesTab.updateJobs') }}</h2>
+        <h2 class="font-medium text-autobot-text-primary">{{ $t('systemUpdatesTab.updateJobs') }}</h2>
         <button
           @click="systemUpdates.fetchJobs()"
-          class="text-sm text-blue-600 hover:underline"
+          class="text-sm text-autobot-text-link hover:underline"
         >
           {{ $t('systemUpdatesTab.refresh') }}
         </button>
       </div>
       <table v-if="systemUpdates.jobs.value.length" class="w-full">
-        <thead class="bg-gray-50">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
             <th
               class="px-4 py-3 text-left text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.jobID') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.node') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.status') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.progress') }}
             </th>
             <th
               class="px-4 py-3 text-left text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.started') }}
             </th>
             <th
               class="px-4 py-3 text-right text-xs
-                     font-medium text-gray-500 uppercase"
+                     font-medium text-autobot-text-tertiary uppercase"
             >
               {{ $t('systemUpdatesTab.actions') }}
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
+        <tbody class="divide-y divide-autobot-border">
           <tr
             v-for="job in systemUpdates.jobs.value"
             :key="job.job_id"
-            class="hover:bg-gray-50"
+            class="hover:bg-autobot-bg-hover"
           >
-            <td class="px-4 py-3 text-sm font-mono text-gray-600">
+            <td class="px-4 py-3 text-sm font-mono text-autobot-text-secondary">
               {{ job.job_id.slice(0, 8) }}...
             </td>
-            <td class="px-4 py-3 text-sm text-gray-900">
+            <td class="px-4 py-3 text-sm text-autobot-text-primary">
               {{ job.node_id }}
             </td>
             <td class="px-4 py-3">
@@ -590,22 +573,22 @@ onUnmounted(() => {
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <div
-                  class="w-24 h-2 bg-gray-200 rounded-full
+                  class="w-24 h-2 bg-autobot-bg-active rounded-full
                          overflow-hidden"
                 >
                   <div
-                    class="h-full bg-blue-600 rounded-full
+                    class="h-full bg-autobot-primary rounded-full
                            transition-all"
                     :style="{ width: `${job.progress}%` }"
                   ></div>
                 </div>
-                <span class="text-xs text-gray-500">
+                <span class="text-xs text-autobot-text-tertiary">
                   {{ job.progress }}%
                 </span>
               </div>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">
-              {{ formatDate(job.started_at) }}
+            <td class="px-4 py-3 text-sm text-autobot-text-tertiary">
+              {{ formatFleetDateTime(job.started_at, '-') }}
             </td>
             <td class="px-4 py-3 text-right">
               <button
@@ -614,8 +597,8 @@ onUnmounted(() => {
                 "
                 @click="handleCancelJob(job.job_id)"
                 :disabled="cancellingJobId === job.job_id"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700
-                       rounded hover:bg-red-200 disabled:opacity-50"
+                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg
+                       rounded hover:bg-(--bad-bg-hover) disabled:opacity-50"
               >
                 {{
                   cancellingJobId === job.job_id
@@ -629,7 +612,7 @@ onUnmounted(() => {
       </table>
       <div
         v-if="!systemUpdates.jobs.value.length"
-        class="p-8 text-center text-gray-500"
+        class="p-8 text-center text-autobot-text-tertiary"
       >
         {{ $t('systemUpdatesTab.noUpdateJobsFound') }}
       </div>

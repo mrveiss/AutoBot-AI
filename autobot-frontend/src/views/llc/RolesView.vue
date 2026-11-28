@@ -17,10 +17,10 @@
   or name through this surface, and this view must not invent a place to put
   one.
 
-  Every mutation here is admin-only server-side (llc/services/authz.py). The UI
-  does not hide the controls based on a locally-guessed role: a client-side
-  guess that disagrees with the server produces a worse experience than a clear
-  403, and duplicating the rule invites the two copies to drift.
+  Every mutation here is admin-only server-side (llc/services/authz.py). The
+  workflow controls show only when the server's members response says the
+  viewer may manage the company (`viewer_can_manage`, #21241), never from a
+  locally-guessed role; the other panels still answer a refusal with its 403.
 -->
 <template>
   <div class="roles-view">
@@ -37,7 +37,7 @@
     <p v-if="!companyId" class="roles-state">{{ t('llcRoles.noCompany') }}</p>
 
     <template v-else>
-      <ErrorBanner v-if="errorMessage" :message="errorMessage" class="roles-error" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="roles-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <p v-if="isLoading" class="roles-state">{{ t('llcRoles.loading') }}</p>
 
@@ -56,7 +56,7 @@
                 @click="selectRole(role.id)"
               >
                 <span class="roles-list-name">{{ role.name }}</span>
-                <BaseBadge v-if="role.is_system" variant="neutral">
+                <BaseBadge size="sm" v-if="role.is_system" variant="neutral">
                   {{ t('llcRoles.systemRole') }}
                 </BaseBadge>
               </button>
@@ -83,7 +83,7 @@
 
           <p v-if="isDetailLoading" class="roles-state">{{ t('llcRoles.loading') }}</p>
 
-          <template v-else>
+          <template v-if="!isDetailLoading">
             <section class="roles-section">
               <h4 class="roles-section-title">{{ t('llcRoles.holders') }}</h4>
               <p v-if="holders.length === 0" class="roles-section-empty">
@@ -91,7 +91,7 @@
               </p>
               <ul v-else class="roles-chip-list">
                 <li v-for="holder in holders" :key="holder.id" class="roles-chip">
-                  <BaseBadge :variant="holder.ended_at ? 'neutral' : 'success'">
+                  <BaseBadge size="sm" :variant="holder.ended_at ? 'neutral' : 'success'">
                     {{ t(`llcRoles.holderType.${holder.holder_type}`) }}
                   </BaseBadge>
                   <span class="roles-chip-id">{{ holder.holder_id }}</span>
@@ -153,20 +153,20 @@
               @add="grantPermission"
               @remove="revokePermission"
             />
+          </template>
 
-            <RoleAttachmentPanel
-              panel-key="workflows"
-              :title="t('llcRoles.workflows')"
-              :items="workflows"
-              :add-label="t('llcRoles.attach')"
-              :remove-label="t('llcRoles.detach')"
-              :empty-label="t('llcRoles.noWorkflows')"
-              :placeholder="t('llcRoles.workflowPlaceholder')"
-              :busy="isMutating"
-              @add="attachWorkflow"
-              @remove="detachWorkflow"
-            />
+          <!-- Outside the loading branch so a detail reload does not remount it; it reports writes as `busy`. -->
+          <RoleWorkflowsPanel
+            v-show="!isDetailLoading"
+            :company-id="companyId"
+            :role-id="selectedRole.id"
+            :attached="workflows"
+            :busy="isMutating"
+            @busy="(b: boolean) => { workflowBusy = b; if (b) errorMessage = '' }"
+            @changed="loadDetail"
+          />
 
+          <template v-if="!isDetailLoading">
             <!-- #14607: the rate the role's steps are costed against. It sits
                  with the role's other attachments because it belongs to the
                  role, not to whoever currently holds it. -->
@@ -337,12 +337,9 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
-import { BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import RoleWorkflowsPanel from '@/components/llc/RoleWorkflowsPanel.vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {
@@ -467,8 +464,10 @@ const HOLDER_TYPES = ['user', 'agent', 'contact'] as const
 const newHolderType = ref<(typeof HOLDER_TYPES)[number]>('user')
 const newHolderId = ref('')
 // One flag for every mutation: the panels disable together, so a second call
-// cannot start against a list the first is about to replace.
-const isMutating = ref(false)
+// cannot start against a list the first is about to replace. The workflows panel's own writes count.
+const mutating = ref(false)
+const workflowBusy = ref(false)
+const isMutating = computed(() => mutating.value || workflowBusy.value)
 // Monotonic ticket for detail loads. Two loads can be in flight when a user
 // switches role while a post-mutation reload is still running; without this the
 // slower one wins and writes the previous role's holders and permissions into
@@ -740,7 +739,7 @@ async function createRole(): Promise<void> {
  */
 async function mutate(call: () => Promise<unknown>, fallbackKey: string): Promise<void> {
   if (isMutating.value) return
-  isMutating.value = true
+  mutating.value = true
   errorMessage.value = ''
   try {
     await call()
@@ -749,7 +748,7 @@ async function mutate(call: () => Promise<unknown>, fallbackKey: string): Promis
     logger.error('Role mutation failed', error)
     errorMessage.value = describeError(error, fallbackKey)
   } finally {
-    isMutating.value = false
+    mutating.value = false
   }
 }
 
@@ -789,20 +788,6 @@ async function revokePermission(permission: string): Promise<void> {
   await mutate(
     () => api.delete(`${detailBase()}/permissions/${encodeURIComponent(permission)}`),
     'llcRoles.errorRevoke',
-  )
-}
-
-async function attachWorkflow(workflowId: string): Promise<void> {
-  await mutate(
-    () => api.post(`${detailBase()}/workflows`, { workflow_id: workflowId }),
-    'llcRoles.errorAttach',
-  )
-}
-
-async function detachWorkflow(workflowId: string): Promise<void> {
-  await mutate(
-    () => api.delete(`${detailBase()}/workflows/${encodeURIComponent(workflowId)}`),
-    'llcRoles.errorDetach',
   )
 }
 
@@ -870,7 +855,7 @@ onMounted(loadRoles)
 
 .roles-title {
   margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -930,7 +915,7 @@ onMounted(loadRoles)
 
 .roles-detail-name {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
@@ -967,7 +952,7 @@ onMounted(loadRoles)
   background: var(--color-surface-hover);
   color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .roles-chip-note {

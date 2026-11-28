@@ -163,6 +163,19 @@ def test_a_registered_variable_passes(checker, tmp_path):
     assert checker.main([str(target)]) == 0
 
 
+def test_failure_and_success_text_name_the_population(checker, tmp_path, capsys):
+    """A green run means "no unregistered getenv call site", not "every AUTOBOT_* variable is
+    registered" (#17419): both outcomes say which population was checked."""
+    bad = tmp_path / "offender.py"
+    bad.write_text('import os\n\nx = os.getenv("AUTOBOT_DEFINITELY_NOT_REGISTERED", "")\n', encoding="utf-8")
+    assert checker.main([str(bad)]) == 1
+    assert checker.POPULATION in capsys.readouterr().err
+    good = tmp_path / "clean.py"
+    good.write_text(f'import os\n\nx = os.getenv("{sorted(checker.REGISTRY)[0]}", "")\n', encoding="utf-8")
+    assert checker.main([str(good)]) == 0
+    assert checker.POPULATION in capsys.readouterr().out
+
+
 def test_a_non_python_argv_checks_nothing_and_does_not_touch_the_docs(checker, tmp_path):
     """pre-commit passes whatever was staged. A markdown-only commit must not
     fail on a docs table it did not change."""
@@ -219,7 +232,9 @@ def test_the_generated_table_carries_no_count_line(checker):
     table = checker.build_table(checker.REGISTRY)
 
     assert "variables registered" not in table
-    assert table.rstrip("\n").splitlines()[-1].startswith("| `AUTOBOT_")
+    assert (
+        table.rstrip("\n").splitlines()[-1].startswith("| `")
+    )  # a registry row, not a count line; names may be unprefixed (#18094)
 
 
 def test_the_rules_doc_points_at_the_table_instead_of_carrying_it(checker):

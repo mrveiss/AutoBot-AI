@@ -14,8 +14,16 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+#: Wait for the chat workflow; the timeout log reports this same value (#18056).
+_CHAT_TIMEOUT_S = 10.0
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -23,11 +31,13 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_chat():
     """Test the chat workflow with a simple message"""
-    from chat_workflow import process_chat_message
+    from async_chat_workflow import process_chat_message_with_timeout
 
     try:
         logger.info("Testing chat workflow...")
-        result = await asyncio.wait_for(process_chat_message("hello", "test-chat"), timeout=10.0)
+        result = await asyncio.wait_for(
+            process_chat_message_with_timeout("hello", "test-chat"), timeout=_CHAT_TIMEOUT_S
+        )
 
         logger.info("✅ Success! Response: %s...", result.response[:100])
         logger.info("   Knowledge Status: %s", result.knowledge_status.value)
@@ -35,7 +45,7 @@ async def test_chat():
         logger.info("   Processing Time: %.2fs", result.processing_time)
 
     except asyncio.TimeoutError:
-        logger.error("❌ Test timed out after 10 seconds")
+        logger.error("❌ Test timed out after %g seconds", _CHAT_TIMEOUT_S)
     except Exception as e:
         logger.error("❌ Test failed: %s", e)
         import traceback

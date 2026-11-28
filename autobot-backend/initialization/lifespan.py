@@ -20,21 +20,21 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from autobot_shared.env_drift_detector import raise_if_refused
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
-from autobot_shared.tracing import (
-    instrument_aiohttp,
-    instrument_redis,
-    shutdown_tracing,
-)
+from autobot_shared.tracing import instrument_aiohttp, instrument_redis, shutdown_tracing
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
 from initialization import agent_presence_sync
 from initialization import lifespan_shutdown as shutdown_steps
+from initialization.background_workers import start_background_workers
+from initialization.mesh_reembed_startup import start_mesh_reembed_consumer
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
+from initialization.system_knowledge_import import start_system_knowledge_import
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.pricing.sync_cache_scheduler import start_pricing_cache_scheduler
 from security_layer import SecurityLayer
@@ -255,24 +255,17 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
 async def _check_env_drift() -> None:
     """Run .env drift check against SSOT config definitions (Issue #2650).
 
-    Non-critical: a failed or drifted check is logged as a warning and never
-    prevents startup.  This runs before other init steps so operators see drift
-    warnings at the very top of the startup log.
+    Non-critical: a failed or drifted check only warns, except unknown keys once
+    the refuse date has passed (#17419), raised after the try so the broad
+    ``except`` cannot swallow it.  Runs first so drift shows at the top of the log.
     """
+    report = None
     try:
         from autobot_shared.env_drift_detector import check_env_drift
 
-        # #12782: pass this backend's OWN .env rather than letting the detector
-        # guess. Its generic resolver walks up from autobot_shared/ looking for
-        # a sibling .env, which works in the repo but not in the deployed
-        # layout: autobot_shared lives at <root>/autobot_shared while the env
-        # lives at <root>/autobot-backend/.env. The walk found nothing, fell
-        # back to <root>/.env (absent), and reported every SSOT key as drifted —
-        # "194 drifted, (194 SSOT keys, 0 .env keys)" against a file that in
-        # fact held 93 keys. The `0 .env keys` was the tell.
-        #
-        # parents[1] is the backend root in BOTH layouts, since this module is
-        # always <backend-root>/initialization/lifespan.py.
+        # #12782: pass this backend's OWN .env; the detector's walk-up guess misses it in the
+        # deployed layout (<root>/autobot-backend/.env) and reports every SSOT key drifted.
+        # parents[1] is the backend root in BOTH layouts (<backend-root>/initialization/lifespan.py).
         backend_env = Path(__file__).resolve().parents[1] / ".env"
         report = check_env_drift(str(backend_env))
         if report.error:
@@ -289,6 +282,8 @@ async def _check_env_drift() -> None:
             )
     except Exception as exc:
         logger.warning("env drift check failed (non-critical): %s", exc)
+    if report is not None:
+        raise_if_refused(report)
 
 
 async def _init_config(app: FastAPI) -> None:
@@ -416,27 +411,19 @@ async def _init_database() -> None:
 
 
 async def _hydrate_llm_provider_keys() -> None:
-    """Hydrate LLM provider keys from the System vault (#10088 Task 7).
+    """Hydrate provider keys from the System vault (#10088 Task 7) in Phase 1, before any key resolves.
 
-    Runs once, synchronously, in Phase 1 (after the DB is initialised) so
-    ``llm_shared.provider_registry``'s lazy first population -- which can be
-    triggered by the very first request -- always sees a key captured only
-    via the setup wizard (never set as an env var). Env vars always win
-    (skipped entirely when set), so an Ansible-provisioned deployment is
-    unaffected. Best-effort: no root key configured (dev/test) or a DB error
-    must never block startup.
+    The vault wins (#18094). ``hydrate_at_startup`` classifies the vault and never raises: no root
+    key means no vault (keys from env, WARNING); a configured vault that cannot be reached leaves
+    every key refused, never silently from env (ERROR). Only "reachable, key absent" allows env.
     """
     logger.info("[ 17%] Provider Keys: hydrating from System vault...")
-    try:
-        from services.provider_key_vault import hydrate_provider_keys_from_vault
-        from user_management.database import get_async_session_factory
+    from services.provider_key_vault import hydrate_at_startup
+    from user_management.database import get_async_session_factory
 
-        async with get_async_session_factory()() as session:
-            hydrated = await hydrate_provider_keys_from_vault(session)
-        if hydrated:
-            logger.info("[ 17%] Provider Keys: hydrated %d key(s) from vault: %s", len(hydrated), hydrated)
-    except Exception as exc:
-        logger.debug("Provider-key vault hydration skipped (non-critical): %s", exc)
+    hydrated = await hydrate_at_startup(get_async_session_factory)
+    if hydrated:
+        logger.info("[ 17%] Provider Keys: hydrated %d key(s) from vault: %s", len(hydrated), hydrated)
 
 
 async def _init_telemetry_and_redis() -> None:
@@ -559,10 +546,9 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     Skipped entirely when TRANSCRIBER_ENABLED != true.
     Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
     and ``app.state.transcriber_export_dir`` for use by the dependency
-    injection layer (``transcriber.deps.get_db``).
+    injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
-    from pathlib import Path as _Path
 
     enabled = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
     if not enabled:
@@ -570,19 +556,17 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         return
     try:
         from transcriber.database import Database
+        from transcriber.upload_security import get_upload_base_dir, transcriber_data_dir
 
-        # Resolve to an absolute path: ``create_recording`` rejects relative
-        # filepaths, and relying on cwd is fragile across launch contexts
-        # (GH#12310 — every upload 500'd because the default was relative).
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
+        data_dir = transcriber_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
-        (data_dir / "uploads").mkdir(exist_ok=True)
+        upload_dir = get_upload_base_dir()  # the one the path guard allows (#19823)
         (data_dir / "processed").mkdir(exist_ok=True)
         (data_dir / "exports").mkdir(exist_ok=True)
         db = Database(str(data_dir / "transcriber.db"))
         await db.connect()
         app.state.transcriber_db = db
-        app.state.transcriber_upload_dir = str(data_dir / "uploads")
+        app.state.transcriber_upload_dir = str(upload_dir)
         app.state.transcriber_export_dir = str(data_dir / "exports")
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
@@ -715,10 +699,11 @@ async def _init_knowledge_base(app: FastAPI):
     """
     logger.info("✅ [ 70%] Knowledge Base: Initializing knowledge base...")
     try:
+        # #18122: the factory publishes both stores; a None write here clobbered a live one.
         knowledge_base = await get_or_create_knowledge_base(app)
-        app.state.knowledge_base = knowledge_base
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
+        start_system_knowledge_import(app)  # #19347: once per startup, after the KB is ready
 
         # Issue #2309: Wire KB into the already-initialized chat workflow manager.
         # Phase 1 initializes the manager before the KB is ready, leaving
@@ -744,8 +729,8 @@ async def _init_knowledge_base(app: FastAPI):
         except Exception as _tm_err:
             logger.warning("CollectionTierManager startup failed: %s", _tm_err)
     except Exception as kb_error:
-        logger.warning("Knowledge base initialization failed: %s", kb_error)
-        app.state.knowledge_base = None
+        # #18122: keep the last good instance; the warning is the signal, not a null store.
+        logger.warning("Knowledge base init failed, keeping any published instance: %s", kb_error)
 
 
 async def _init_npu_worker_websocket():
@@ -798,24 +783,6 @@ async def _warmup_npu_connection(app: FastAPI) -> None:
         logger.warning("NPU warmup failed: %s", warmup_error)
     finally:
         app.state.npu_worker_ready = npu_ready
-
-
-async def _start_doc_sync_queue_worker(app: FastAPI) -> None:
-    """Start the persistent document sync queue worker (#4453).
-
-    The worker drains :class:`DocumentSyncQueue` so re-indexing survives
-    crashes, retries up to MAX_ATTEMPTS, and respects priority ordering.
-    """
-    try:
-        from services.knowledge.sync_queue import SyncQueueWorker
-
-        worker = SyncQueueWorker()
-        task = asyncio.create_task(worker.run())
-        app.state.doc_sync_queue_worker = worker
-        app.state.doc_sync_queue_worker_task = task
-        logger.info("✅ Doc Sync Queue: worker started")
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Doc sync queue worker failed to start: %s", e)
 
 
 async def _init_documentation_watcher():
@@ -886,11 +853,11 @@ async def _run_background_doc_indexing():
         )
 
         # Fix HNSW pickle format after indexing (#1390)
-        from constants.path_constants import PATH
-        from utils.chromadb_client import _fix_hnsw_pickle_format
+        from autobot_shared.paths import chromadb_data_dir
+        from utils.chromadb_store_repairs import repair_hnsw_pickles_locked
 
-        chroma_path = PATH.PROJECT_ROOT / "data" / "chromadb"
-        _fix_hnsw_pickle_format(chroma_path)
+        chroma_path = chromadb_data_dir()
+        await asyncio.to_thread(repair_hnsw_pickles_locked, chroma_path)  # flock wait + fsync: off the loop
     except Exception as e:
         logger.warning("Background doc indexing failed (non-critical): %s", e)
 
@@ -1142,22 +1109,14 @@ async def _init_trigger_service(app: FastAPI) -> None:
         app.state.trigger_service = None
 
 
-async def _init_slm_reconciler(app: FastAPI):
-    """
-    Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
+async def _init_self_model_producer(app: FastAPI):
+    """Start the periodic push of route, tool, agent and service-health records to the SLM self-model (#22277).
 
-    DEPRECATED: Issue #729 - SLM services moved to SLM server.
-    This function is disabled as backend/services/slm/ has been removed.
-    SLM server runs its own reconciler independently.
-
-    Issue #726: Starts the Service Lifecycle Manager reconciler that monitors
-    node health and triggers remediation actions. Wires up WebSocket callbacks
-    for real-time event broadcasting.
+    Replaces the disabled SLM reconciler stub (#729): the SLM runs its own reconciler, so nothing was left to start.
     """
-    logger.info("✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server)")
-    # REMOVED as part of Issue #729 layer separation
-    # SLM server now runs its own reconciler - no longer initialized from backend
-    return
+    from services.self_model_producer import start_self_model_producer
+
+    app.state.self_model_producer_task = start_self_model_producer(app)
 
 
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
@@ -1173,12 +1132,11 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
         from services.graph_rag_service import GraphRAGService
-        from services.rag_config import RAGConfig
         from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
-            rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
-            rag_service = RAGService(knowledge_base=app.state.knowledge_base, config=rag_config)
+            # #18141: both services read the shared RAGConfig; graph-RAG's deadline is RAGConfig.graph_timeout_seconds.
+            rag_service = RAGService(knowledge_base=app.state.knowledge_base)
             await rag_service.initialize()
 
             # Build mesh brain components and register them so every RAGService.initialize()
@@ -1189,7 +1147,6 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
                 memory_graph=memory_graph,
-                graph_weight=0.3,
                 enable_entity_extraction=True,
             )
             app.state.graph_rag_service = graph_rag_service
@@ -1275,6 +1232,7 @@ async def _init_slm_client():
     # the decorator only fires on import, and a node whose SLM init raises is
     # precisely the node whose link state must be reported. Registering inside
     # the try would omit the component on exactly the broken nodes.
+    from services import first_admin_link_probe  # noqa: F401
     from services import slm_link_probe  # noqa: F401
 
     try:
@@ -1408,7 +1366,7 @@ async def _init_llm_adapters() -> None:
             OpenAIAdapter,
         )
         from llm_shared.adapters.registry import get_adapter_registry
-        from services.provider_key_vault import resolve_provider_key
+        from services.provider_key_vault import registration_refusal, resolve_provider_key
 
         registry = get_adapter_registry()
 
@@ -1422,17 +1380,16 @@ async def _init_llm_adapters() -> None:
         except Exception as exc:
             logger.debug("Ollama adapter registration skipped: %s", exc)
 
-        # OpenAI — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("OPENAI_API_KEY", getattr(_cfg, "openai_api_key", "") or ""):
-            registry.register(OpenAIAdapter())
-
-        # Anthropic — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("ANTHROPIC_API_KEY", getattr(_cfg, "anthropic_api_key", "") or ""):
-            registry.register(AnthropicAdapter())
-
-        # Groq — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("GROQ_API_KEY", getattr(_cfg, "groq_api_key", "") or ""):
-            registry.register(GroqAdapter())
+        # OpenAI, Anthropic, Groq — registered when the key resolves (vault first; env fallback, #15276);
+        # a vault refusal skips that adapter with the reason logged, never the others (#18094).
+        for name, field, adapter_cls in (
+            ("OPENAI_API_KEY", "openai_api_key", OpenAIAdapter),
+            ("ANTHROPIC_API_KEY", "anthropic_api_key", AnthropicAdapter),
+            ("GROQ_API_KEY", "groq_api_key", GroqAdapter),
+        ):
+            with registration_refusal(f"{name} adapter"):
+                if resolve_provider_key(name, getattr(_cfg, field, "") or ""):
+                    registry.register(adapter_cls())
 
         count = len(registry.list_adapters())
         logger.info("[ 97%%] LLM Adapters: %d adapter(s) registered", count)
@@ -1455,17 +1412,14 @@ async def _seed_agent_registry() -> None:
 
 
 async def _seed_default_admin() -> None:
-    """Seed the default platform-admin into autobot_users (#10199).
-
-    Idempotent — skips if any admin user already exists or if
-    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
-    logged and swallowed so a seed failure never blocks startup.
-    """
+    """Seed the default platform-admin (#10199) after linking the SLM's first admin (#10200). Non-fatal."""
     logger.info("[ 97%%] Admin Seed: seeding default admin user...")
     try:
         from user_management.database import get_async_session_factory
+        from user_management.services import person_link_service
         from user_management.services.seed import seed_default_admin
 
+        await person_link_service.link_first_slm_admin_at_startup()
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
             # seed_default_admin (via UserService) only flushes; without an
@@ -1587,9 +1541,9 @@ async def _init_orchestrator(app: FastAPI) -> None:
 
 
 async def _wire_npu_task_queue() -> None:
-    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+    """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
-    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
     behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
     never set to an actual instance — making all tracking code dead (#2944).  This helper
     runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
@@ -1843,20 +1797,19 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
 async def _init_mesh_brain_scheduler(app: FastAPI) -> None:
     """Start MeshBrainScheduler when explicitly enabled (#12816).
 
-    The scheduler was registered, fully described, and never started — its own
-    registry entry admitted "currently inert". This wires it, but DEFAULT-OFF.
+    Registered, described and never started; this wires it, but DEFAULT-OFF.
 
     Off by default is deliberate, not timidity: of its five jobs, `mesh_pruner`
     DELETES data on a 7-day cadence, and `node_promoter`/`edge_discoverer`
     mutate node and edge state. Establishing what mesh_pruner removes and under
-    which retention rule is a data-retention decision, not a wiring change, so
-    it must not be switched on as a side effect of fixing the wiring.
+    which retention rule is a data-retention decision, not a wiring change.
 
     start() returns as soon as it has spawned its own per-job tasks, and only
     spawns jobs whose component is present, so it is safe to await directly.
     """
     from autobot_shared.ssot_config import config as _cfg
 
+    await start_mesh_reembed_consumer(app)  # #20535: independent of the flag below
     if not _cfg.misc.mesh_brain_scheduler_enabled:
         logger.info("MeshBrainScheduler: disabled (AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED not set)")
         app.state.mesh_brain_scheduler = None
@@ -1932,11 +1885,9 @@ async def _init_web_researcher(app: FastAPI) -> None:
     try:
         from agents.web_researcher import _load_web_research_config, get_web_researcher
 
-        # Load stored config then enable — passing only {"enabled": True} would
-        # discard all other settings (rate limits, timeouts, circuit breaker).
-        config = _load_web_research_config()
-        config["enabled"] = True
-        researcher = get_web_researcher(config=config)
+        # The saved settings, enabled included: an admin's "off" survives a restart (#19226).
+        # Unsaved, web research defaults to on (services/web_research_config.py).
+        researcher = get_web_researcher(config=_load_web_research_config())
         await researcher.initialize()
         app.state.web_researcher = researcher
         logger.info("[ 99%%] WebResearcher: Browser automation ready")
@@ -1956,28 +1907,17 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from pathlib import Path
+        from plugin_enable_gate import build_plugin_manager, start_plugin_manager
 
-        from autobot_shared.plugin_sdk import PluginManager
-        from autobot_shared.ssot_config import config as ssot_config
-
-        plugins_root = ssot_config.path.plugins_path
-        plugin_dirs = [
-            plugins_root / "core-plugins",
-            plugins_root / "community-plugins",
-            # Development fallback
-            Path("plugins/core-plugins"),
-            Path("plugins/community-plugins"),
-        ]
-
-        plugin_manager = PluginManager(plugin_dirs)
+        # #18094 origin-bound resolvers and #17421 the enable gate are wired in by the builder.
+        plugin_manager = build_plugin_manager()
         # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
         # one thing — a crashed discovery from an empty tree — and on a crash the
         # manager was discarded before it ever reached app.state, so the only
         # state that key exists to report was unobservable in production. A
         # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
-        await plugin_manager.startup()
+        await start_plugin_manager(plugin_manager)  # #17421: a gate failure retries in the background
         # #13677: the load tally, not just per-plugin statuses. A status map
         # nobody totals is why 0-of-7 read the same as "no plugins installed".
         logger.info(
@@ -2022,6 +1962,9 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
+        await _recover_agent_sessions(app)
+        await _init_heartbeat_scheduler(app)
+        await _init_llc_routine_scheduler(app)
         # Issue #876: Root cause fixed — metrics collector no longer calls backend
         # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
         await _init_knowledge_base(app)
@@ -2032,12 +1975,9 @@ async def initialize_background_services(app: FastAPI):
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
         await _init_kb_folder_watcher()
-        await _start_doc_sync_queue_worker(app)
+        await start_background_workers(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
-        await _recover_agent_sessions(app)
-        await _init_heartbeat_scheduler(app)
-        await _init_llc_routine_scheduler(app)
         await _init_skill_health_scheduler(app)
         await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
@@ -2047,7 +1987,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
-        await _init_slm_reconciler(app)
+        await _init_self_model_producer(app)
         await _init_metrics_collection(app)
         await agent_presence_sync.start(app)
         await _recover_index_queue()
@@ -2325,10 +2265,10 @@ def create_lifespan_manager():
         loop.set_default_executor(_executor)
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
-        # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from middleware.audit_middleware import set_main_event_loop
+        # Register the running event loop for sync-endpoint audit scheduling (#1568), run_or_schedule (#20887)
+        from initialization.main_loop import register_main_loops
 
-        set_main_event_loop(asyncio.get_running_loop())
+        register_main_loops(asyncio.get_running_loop())
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)

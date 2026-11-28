@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { describeFailedResponse, extractErrorMessage } from '@/utils/errorExtract'
-import { getApiBase } from '@/config/ssot-config'
+import { describeFailedResponse, extractErrorMessage, isRequestTimeout } from '@/utils/errorExtract'
+import { getApiBase, getBackendUrl } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
 
@@ -53,21 +53,10 @@ export class ApiRepository {
   }
 
   private getDefaultBaseUrl(): string {
-    // CRITICAL FIX: When VITE_BACKEND_HOST is empty, use empty string for proxy mode
-    // This prevents fallback to host.docker.internal which doesn't work in this environment
-    const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
-
-    if (apiBaseUrl) {
-      return apiBaseUrl;
-    }
-
-    if (!backendHost) {
-      // Empty backend host = proxy mode (use relative URLs)
-      return '';
-    }
-
-    return `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${backendHost}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
+    // #19821: the one backend-origin rule (ssot-config getBackendUrl): an explicit
+    // VITE_API_BASE_URL wins, otherwise same-origin proxy mode. A baked host/port
+    // no longer builds an absolute origin here -- that is the CSP-blocked origin #12339 removed.
+    return getBackendUrl();
   }
 
   // Cache management
@@ -102,10 +91,10 @@ export class ApiRepository {
     this.cache.set(cacheKey, { data, expires, endpoint })
   }
 
-  private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error): void {
+  private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error, timedOut = false): void {
     // Fix TypeScript error with proper window.rum type checking
     if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).rum && typeof ((window as unknown as Record<string, unknown>).rum as Record<string, unknown>)?.trackApiCall === 'function') {
-      ((window as unknown as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error)
+      ((window as unknown as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error, timedOut)
     }
   }
 
@@ -218,7 +207,8 @@ export class ApiRepository {
 
       if (error instanceof Error && error.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout: ${method} ${endpoint} took longer than ${this.timeout}ms`)
-        this.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError)
+        // The only abort source is this request's own timer, so an abort here is a timeout (#21583).
+        this.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError, true)
         throw timeoutError
       }
 
@@ -230,7 +220,7 @@ export class ApiRepository {
       }
 
       const errorObj = error instanceof Error ? error : new Error(errMsg)
-      this.trackApiCall(method, endpoint, startTime, endTime, 'error', errorObj)
+      this.trackApiCall(method, endpoint, startTime, endTime, 'error', errorObj, isRequestTimeout(error))
       throw error
     }
   }

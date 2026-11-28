@@ -244,13 +244,13 @@ validate_file_size(file_bytes, "Document", max_size=50*1024*1024)
 ### Format Validators
 
 ```python
-from src.utils.validators import validate_email, validate_url, validate_uuid
+from src.utils.validators import validate_email, validate_url_format, validate_uuid
 
 # Email format
 email = validate_email(value, "Email")
 
 # URL format
-url = validate_url(value, "URL", require_https=True)
+url = validate_url_format(value, "URL", require_https=True)
 
 # UUID format
 uuid = validate_uuid(value, "ID")

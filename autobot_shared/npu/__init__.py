@@ -13,7 +13,7 @@ from autobot_shared.npu.integration import (
     WorkerState,
     get_service_url,
     load_worker_config,
-    process_with_npu_fallback,
+    process_with_npu_queue_fallback,
 )
 
 __all__ = [
@@ -25,5 +25,5 @@ __all__ = [
     "WorkerState",
     "get_service_url",
     "load_worker_config",
-    "process_with_npu_fallback",
+    "process_with_npu_queue_fallback",
 ]

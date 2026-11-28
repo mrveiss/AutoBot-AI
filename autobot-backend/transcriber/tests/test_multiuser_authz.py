@@ -7,7 +7,7 @@
 
 Pins the #9968 IDOR fix: a second authenticated user must NOT be able to
 read, modify, or delete the first user's projects/recordings. All access
-goes through transcriber.deps.can_access (#9863 single ownership policy);
+goes through transcriber.deps.can_access_transcriber_row (#9863 single ownership policy);
 if that policy is weakened or a route stops calling it, these tests go red.
 """
 
@@ -22,7 +22,14 @@ from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, authenticate, caller_id_of, can_access, get_db, resolve_user_id
+from transcriber.deps import (
+    DEFAULT_USER,
+    authenticate,
+    caller_id_of,
+    can_access_transcriber_row,
+    get_transcriber_db_from_request,
+    resolve_user_id,
+)
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
 
@@ -63,7 +70,7 @@ async def client(tmp_path, db):
             request.state.user = SimpleNamespace(id=uid)
         return await call_next(request)
 
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_upload_dir = str(upload_dir)
     app.include_router(projects_router, prefix="/api/transcriber")
@@ -94,7 +101,7 @@ async def _upload_recording(client, user: str, pid: int) -> int:
 
 
 def test_can_access_policy_unit():
-    """can_access: strict ownership — owner yes, everyone else no.
+    """can_access_transcriber_row: strict ownership — owner yes, everyone else no.
 
     Cases required by #9968:
     (a) owner == caller → allow
@@ -104,17 +111,17 @@ def test_can_access_policy_unit():
     (e) unowned / empty user_id → deny
     """
     # (a) owner == caller → allow
-    assert can_access({"user_id": "alice"}, "alice") is True
+    assert can_access_transcriber_row({"user_id": "alice"}, "alice") is True
     # (b) different real users → deny
-    assert can_access({"user_id": "alice"}, "bob") is False
+    assert can_access_transcriber_row({"user_id": "alice"}, "bob") is False
     # (c) DEFAULT_USER caller accesses DEFAULT_USER row → allow
-    assert can_access({"user_id": DEFAULT_USER}, DEFAULT_USER) is True
+    assert can_access_transcriber_row({"user_id": DEFAULT_USER}, DEFAULT_USER) is True
     # (d) IDOR fix: real user must NOT access DEFAULT_USER-owned row
-    assert can_access({"user_id": DEFAULT_USER}, "bob") is False
+    assert can_access_transcriber_row({"user_id": DEFAULT_USER}, "bob") is False
     # (e) unowned (no user_id key) → deny
-    assert can_access({}, "bob") is False
+    assert can_access_transcriber_row({}, "bob") is False
     # (e) explicit empty string user_id → deny
-    assert can_access({"user_id": ""}, "bob") is False
+    assert can_access_transcriber_row({"user_id": ""}, "bob") is False
 
 
 def testresolve_user_id_returns_real_identity():
@@ -343,10 +350,10 @@ class TestTheFixtureDoesNotLeakConnections:
 
 def test_can_access_admin_reaches_only_default_rows():
     """#15758: an admin may reach DEFAULT_USER rows, and no other row it does not own."""
-    assert can_access({"user_id": DEFAULT_USER}, "admin-1", is_admin=True) is True
-    assert can_access({"user_id": "alice"}, "admin-1", is_admin=True) is False
-    assert can_access({"user_id": DEFAULT_USER}, "bob", is_admin=False) is False
-    assert can_access({"user_id": "admin-1"}, "admin-1", is_admin=True) is True
+    assert can_access_transcriber_row({"user_id": DEFAULT_USER}, "admin-1", is_admin=True) is True
+    assert can_access_transcriber_row({"user_id": "alice"}, "admin-1", is_admin=True) is False
+    assert can_access_transcriber_row({"user_id": DEFAULT_USER}, "bob", is_admin=False) is False
+    assert can_access_transcriber_row({"user_id": "admin-1"}, "admin-1", is_admin=True) is True
 
 
 def test_caller_id_of_fails_closed_without_identity():

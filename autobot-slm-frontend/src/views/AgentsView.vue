@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -14,6 +15,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import config from '@/config/ssot-config'
 import { slmApiClient } from '@/utils/ApiClient'
+import { useFleetStore } from '@/stores/fleet'
+import type { SLMNode } from '@/types/slm'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -32,17 +35,14 @@ interface Agent {
   is_default: boolean
 }
 
-interface FleetNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  roles: string[]
-}
+// The node fields this view reads, from the one node type the fleet store holds.
+type FleetNode = Pick<SLMNode, 'node_id' | 'hostname' | 'ip_address' | 'status' | 'roles'>
 
 const OLLAMA_PORT = config.port.ollama
 const CUSTOM_VALUE = '__custom__'
 
+const fleetStore = useFleetStore()
+const logger = createLogger('AgentsView')
 const route = useRoute()
 const router = useRouter()
 
@@ -121,13 +121,11 @@ async function fetchNodes() {
   try {
     // A non-OK response used to `return` silently; `get()` rejects, so it now
     // lands in the catch below — the same outcome (fall back to Custom mode)
-    // reached by one code path instead of two.
-    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
-    nodes.value = (data.nodes || []).filter(
-      (n: FleetNode) => n.status === 'online',
-    )
-  } catch {
-    // Non-critical — fall back to Custom mode
+    // reached by one code path instead of two. Every page of the fleet (#21584).
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell, not here
+    nodes.value = fleetStore.nodeList.filter((n: FleetNode) => n.status === 'online')
+  } catch (err) {
+    logger.warn('Could not load the node list; falling back to Custom mode (non-critical):', err)
   }
 }
 
@@ -208,15 +206,15 @@ onMounted(() => {
     </header>
 
     <!-- Tab navigation -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-autobot-border mb-6">
       <nav class="flex gap-4">
         <button
           @click="navigateToTab('local-agents')"
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'local-agents'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.localAgents') }}</button>
         <button
@@ -224,8 +222,8 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'external-agents'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.externalAgents') }}</button>
         <button
@@ -233,8 +231,8 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'org-chart'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.orgChart') }}</button>
         <button
@@ -242,8 +240,8 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'config-history'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.configHistory') }}</button>
         <button
@@ -251,8 +249,8 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'processes'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.processes') }}</button>
       </nav>
@@ -308,10 +306,10 @@ onMounted(() => {
         <div class="detail-header">
           <h2>{{ selectedAgent.name }}</h2>
           <div class="actions">
-            <button v-if="!isEditing" class="btn-edit" @click="startEditing">{{ $t('agentsView.edit') }}</button>
+            <BaseButton size="sm" v-if="!isEditing" @click="startEditing">{{ $t('agentsView.edit') }}</BaseButton>
             <template v-else>
-              <button class="btn-save" @click="saveAgent">{{ $t('agentsView.save') }}</button>
-              <button class="btn-cancel" @click="cancelEditing">{{ $t('agentsView.cancel') }}</button>
+              <BaseButton variant="success" size="sm" @click="saveAgent">{{ $t('agentsView.save') }}</BaseButton>
+              <BaseButton variant="secondary" size="sm" @click="cancelEditing">{{ $t('agentsView.cancel') }}</BaseButton>
             </template>
           </div>
         </div>
@@ -471,9 +469,9 @@ onMounted(() => {
 }
 
 .error-banner {
-  background: var(--slm-red-100);
-  border: 1px solid var(--color-danger-500);
-  color: var(--slm-red-700);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error-dark);
   padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-4);
@@ -527,7 +525,7 @@ onMounted(() => {
   font-weight: 600;
   margin: 0 0 var(--spacing-4) 0;
   padding-bottom: var(--spacing-3);
-  border-bottom: 1px solid var(--slm-gray-200);
+  border-bottom: 1px solid var(--border);
 }
 
 .agents-list ul {
@@ -549,11 +547,11 @@ onMounted(() => {
 }
 
 .agents-list li:hover {
-  background: var(--slm-gray-100);
+  background: var(--bg-tertiary);
 }
 
 .agents-list li.selected {
-  background: var(--slm-indigo-100);
+  background: var(--color-primary-bg);
 }
 
 .agents-list li.inactive {
@@ -572,8 +570,8 @@ onMounted(() => {
 
 .default-badge {
   font-size: 10px;
-  background: var(--slm-indigo-500);
-  color: var(--color-white);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   padding: 2px var(--spacing-2);
   border-radius: var(--radius-default);
   align-self: flex-start;
@@ -638,21 +636,21 @@ onMounted(() => {
 .form-group input,
 .form-group select {
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-300);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
 }
 
 .form-group input:disabled,
 .form-group select:disabled {
-  background: var(--slm-gray-50);
+  background: var(--surface2);
   color: var(--text-secondary);
 }
 
 .node-select {
   width: 100%;
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-300);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   background: var(--color-white);
@@ -663,7 +661,7 @@ onMounted(() => {
   margin-top: var(--spacing-2);
   width: 100%;
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-indigo-500);
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-family: monospace;
@@ -680,10 +678,10 @@ onMounted(() => {
 
 .endpoint-readonly {
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
-  background: var(--slm-gray-50);
+  background: var(--surface2);
   color: var(--text-secondary);
   font-family: monospace;
 }
@@ -701,32 +699,6 @@ onMounted(() => {
 .actions {
   display: flex;
   gap: var(--spacing-2);
-}
-
-.btn-edit,
-.btn-save,
-.btn-cancel {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-edit {
-  background: var(--slm-indigo-500);
-  color: var(--color-white);
-}
-
-.btn-save {
-  background: var(--slm-emerald-500);
-  color: var(--color-white);
-}
-
-.btn-cancel {
-  background: var(--slm-gray-200);
-  color: var(--slm-gray-700);
 }
 
 .loading {

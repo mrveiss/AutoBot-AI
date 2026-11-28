@@ -27,6 +27,8 @@ import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Endpoint-level isolation
@@ -37,7 +39,8 @@ class TestCrossLanguageCacheScoping:
     def test_cache_key_is_per_source(self):
         from api.codebase_analytics.endpoints.cross_language_patterns import _cache_key
 
-        assert _cache_key(None) == "default"
+        with pytest.raises(ValueError):
+            _cache_key(None)
         assert _cache_key("A") == "A"
         assert _cache_key("A") != _cache_key("B")
 
@@ -48,7 +51,7 @@ class TestCrossLanguageCacheScoping:
         root_a = tmp_path / "proj_a"
         root_a.mkdir()
 
-        async def fake_scan_root(source_id, use_default=True):
+        async def fake_scan_root(source_id, strict=False):
             return {"A": root_a}.get(source_id, clp.Path("/tmp"))
 
         captured: dict = {}
@@ -190,3 +193,16 @@ class TestDetectorSourceScoping:
         assert det_a._embedding_cache_model != det_b._embedding_cache_model
         assert det_a._embedding_cache_model.startswith("nomic-embed-text")
         assert det_a._embedding_cache_model.endswith("A")
+
+
+class TestDetectorIndexSpace18143:
+    """The detector's vectors are stored, so its model is the index's, not the active model (#18143)."""
+
+    def test_a_changed_active_model_does_not_move_the_detector(self):
+        from unittest.mock import patch
+
+        detector_cls = _load_real_detector_class()
+        with patch("autobot_shared.embedding_model.active_embedding_model", return_value="some-other-model"):
+            det = detector_cls(source_id="s")
+        assert det.embedding_model == "nomic-embed-text"
+        assert det._embedding_cache_model == "nomic-embed-text/768::src::s"

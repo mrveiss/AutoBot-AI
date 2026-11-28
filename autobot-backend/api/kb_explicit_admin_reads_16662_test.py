@@ -61,7 +61,7 @@ async def test_access_info_lets_an_admin_read_another_users_private_fact():
 async def test_access_info_refuses_a_non_admin_the_same_fact():
     with pytest.raises(HTTPException) as err:
         await _access_info("user")
-    assert err.value.status_code == 403
+    assert err.value.status_code == 404  # #18220: was 403
 
 
 @pytest.mark.asyncio

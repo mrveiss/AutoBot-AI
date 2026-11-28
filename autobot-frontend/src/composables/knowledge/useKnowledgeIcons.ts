@@ -11,6 +11,7 @@
 import { getFileIconName } from '@/utils/iconMappings'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { getCategoryIcon } from './useKnowledgeCategories'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 export function useKnowledgeIcons() {
   /**
@@ -63,10 +64,7 @@ export function useKnowledgeIcons() {
     return icons[type] || icons.info
   }
 
-  const formatTime = (timestamp: string | Date): string => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString()
-  }
+  const formatTime = createDateFormatter({ kind: 'time' })
 
   return {
     getCategoryIcon,

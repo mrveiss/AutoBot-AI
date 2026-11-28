@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from services.knowledge.code_indexer import (
     _CACHE_VERSION_KEY,
     _EXTRACTORS,
@@ -31,6 +31,8 @@ from services.knowledge.code_indexer import (
     CodeIndexer,
     CodeIndexResult,
     GraphProvenance,
+    cache_version,
+    grammar_versions_json,
     graph_commits_behind,
     load_graph_provenance,
 )
@@ -102,6 +104,7 @@ def _provenance(**overrides) -> dict:
         "indexed_at_commit": "a" * 40,
         "indexed_at": "2026-08-09T00:00:00+00:00",
         "extractor_version": EXTRACTOR_VERSION,
+        "grammar_versions": grammar_versions_json(),
         "root_dir": "/repo",
         "files_with_extractor": 90,
         "files_total": 100,
@@ -347,36 +350,24 @@ def test_index_directory_writes_a_record_reflecting_the_tree_it_walked(tmp_path)
 # ------------------------------------------------- "how stale is this graph?"
 
 
-def _test_git_env() -> dict[str, str]:
-    """#15246: env for every git subprocess this fixture spawns.
-
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
-    GIT_DIR pointing at the worktree it is pushing (every checkout here is
-    one), and an unscrubbed `git init`/`git add`/`git commit` here would
-    then operate on THAT repository instead of tmp_path's. See
-    autobot_shared/paths_test.py and #15246 for the reproduced incident.
-    """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
-
-
 @pytest.fixture
 def git_repo(tmp_path):
     """A real two-commit repo — the distance question is about git, so use git."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=_test_git_env())
-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "a@b.c"], check=True, env=_test_git_env())
-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True, env=_test_git_env())
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=isolated_git_env())
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "a@b.c"], check=True, env=isolated_git_env())
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True, env=isolated_git_env())
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True, env=_test_git_env())
-    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "one"], check=True, env=_test_git_env())
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True, env=isolated_git_env())
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "one"], check=True, env=isolated_git_env())
     first = subprocess.run(
         ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
         check=True,
-        env=_test_git_env(),
+        env=isolated_git_env(),
     ).stdout.strip()
     (tmp_path / "f.txt").write_text("2\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qam", "two"], check=True, env=_test_git_env())
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qam", "two"], check=True, env=isolated_git_env())
     return tmp_path, first
 
 
@@ -394,7 +385,11 @@ def test_a_consumer_learns_the_distance_without_rewalking_the_repo(git_repo):
 def test_a_current_graph_reports_zero_not_unknown(git_repo):
     repo, _ = git_repo
     head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True, env=_test_git_env()
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=isolated_git_env(),
     ).stdout.strip()
 
     assert _behind({_PROVENANCE_ID: _provenance(indexed_at_commit=head, root_dir=str(repo))}, repo) == 0
@@ -419,7 +414,11 @@ def test_a_graph_built_by_another_extractor_version_is_unanswerable(git_repo):
     """
     repo, _ = git_repo
     head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True, env=_test_git_env()
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=isolated_git_env(),
     ).stdout.strip()
     record = _provenance(indexed_at_commit=head, root_dir=str(repo), extractor_version=EXTRACTOR_VERSION + 1)
 
@@ -469,7 +468,7 @@ def _cache_file(tmp_path: Path, payload: dict) -> Path:
 
 
 def test_a_cache_written_by_this_version_is_reused(tmp_path):
-    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: EXTRACTOR_VERSION})
+    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: cache_version()})
 
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {"a.py": "hash-a"}
 
@@ -481,7 +480,9 @@ def test_a_version_bump_discards_the_whole_cache(tmp_path):
     that reads this file change" — so without this gate a bumped extractor would
     skip every unchanged file and the graph would stay built by the old one.
     """
-    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: EXTRACTOR_VERSION - 1})
+    cache = _cache_file(
+        tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: cache_version(extractor_version=EXTRACTOR_VERSION - 1)}
+    )
 
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {}
 
@@ -501,7 +502,7 @@ def test_the_version_marker_round_trips_and_is_not_a_file_entry(tmp_path):
     indexer._save_cache()
     written = json.loads(cache.read_text(encoding="utf-8"))
 
-    assert written[_CACHE_VERSION_KEY] == EXTRACTOR_VERSION
+    assert written[_CACHE_VERSION_KEY] == cache_version()
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {"a.py": "hash-a"}
 
 

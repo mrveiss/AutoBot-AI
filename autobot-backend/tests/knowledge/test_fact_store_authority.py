@@ -172,7 +172,7 @@ async def test_a_concurrent_delete_is_not_counted_twice():
     one fact, which is how a counter drifts away from the data it describes.
     """
     kb = FactsFakeKB()
-    kb.redis_client.delete = MagicMock(return_value=0)
+    kb.redis_client.eval = MagicMock(return_value=[0, None])  # the hash-take script: nothing removed
     kb._decrement_stat = AsyncMock()
 
     with (

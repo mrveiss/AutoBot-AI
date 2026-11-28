@@ -562,3 +562,18 @@ async def test_imported_fact_metadata_is_honoured_by_ownership_check_access():
     assert owner_can_read is True
     assert other_authenticated_user_denied is False
     assert unauthenticated_denied is False
+
+
+def test_ssh_target_regex_is_linear_and_keeps_its_matches():
+    """#21987: `py/redos` — no exponential backtracking on a long option run, same matches."""
+    import time
+
+    from knowledge.claude_memory_importer import _SSH_TARGET_RE
+
+    assert _SSH_TARGET_RE.search("ssh -A -v user@host.example")
+    assert _SSH_TARGET_RE.search("ssh user@host")
+    assert not _SSH_TARGET_RE.search("ssh -p 22 host")
+    for text in ("ssh " + "-a " * 50_000 + "z", "ssh -" + "\x7f" * 50_000, "ssh " + "-!\x7f" * 50_000):
+        start = time.perf_counter()
+        _SSH_TARGET_RE.search(text)
+        assert time.perf_counter() - start < 2.0

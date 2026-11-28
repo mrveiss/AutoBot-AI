@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 
     _FAKEREDIS_AVAILABLE = True
@@ -62,7 +63,7 @@ def _inject_globals(func, **replacements):
 
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine(_SQLITE_MEMORY_URL)
+    eng = create_async_engine(_SQLITE_MEMORY_URL)  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
     tables = [Workflow.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
@@ -75,8 +76,10 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    # canonical: ignore py-adhoc-db-engine (test-local session factory)
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    # The waiver must sit on the call's OWN line; this one above it never applied.
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 async def _seed_redis_workflow(server, workflow_id: str, *, goal: str, done: bool = False, errors=None) -> None:
@@ -100,7 +103,7 @@ async def test_backfill_copies_redis_workflow_with_null_company(session_factory)
     _require_fakeredis()
     import services.workflow_redis_backfill as mod
 
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     await _seed_redis_workflow(server, "wf-1", goal="deploy the app")
 
     async def _fake_client(*_args, **_kwargs):
@@ -129,7 +132,7 @@ async def test_backfill_is_idempotent(session_factory):  # noqa: ANN001
     _require_fakeredis()
     import services.workflow_redis_backfill as mod
 
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     await _seed_redis_workflow(server, "wf-1", goal="deploy the app")
 
     async def _fake_client(*_args, **_kwargs):
@@ -158,7 +161,7 @@ async def test_dry_run_writes_nothing(session_factory):  # noqa: ANN001
     _require_fakeredis()
     import services.workflow_redis_backfill as mod
 
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     await _seed_redis_workflow(server, "wf-1", goal="deploy the app")
 
     async def _fake_client(*_args, **_kwargs):

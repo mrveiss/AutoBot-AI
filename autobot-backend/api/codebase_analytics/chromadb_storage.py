@@ -10,11 +10,12 @@ Issue #2013: Decomposed from scanner.py god module.
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Dict, List
 
+from api.source_scope import require_source_id
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import chromadb_data_dir
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_config import config
@@ -34,13 +35,8 @@ logger = get_logger(__name__)
 
 # Batch size for ChromaDB storage operations
 # Higher values = fewer batches but more memory usage
-# Default: 5000 (current behavior), Range: 100-50000
-try:
-    _batch_size = int(config.codebase_index_batch_size)
-    CHROMADB_BATCH_SIZE = max(100, min(_batch_size, 50000))
-except ValueError:
-    logger.warning("Invalid CODEBASE_INDEX_BATCH_SIZE, using default 5000")
-    CHROMADB_BATCH_SIZE = 5000
+# Default: DEFAULT_CODEBASE_INDEX_BATCH_SIZE (ssot_codebase_index), Range: 100-50000
+CHROMADB_BATCH_SIZE = max(100, min(config.codebase_index_batch_size, 50000))
 
 # Number of parallel batches to process concurrently
 # Higher values = faster indexing but more CPU/memory usage
@@ -62,13 +58,8 @@ if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
 
 # Batch size for embedding pre-computation (Issue #660)
 # Larger batches = more efficient GPU/NPU utilization, more memory
-# Default: 100, Range: 10-500
-try:
-    _embed_batch = int(config.codebase_index_embed_batch_size)
-    EMBEDDING_BATCH_SIZE = max(10, min(_embed_batch, 500))
-except ValueError:
-    logger.warning("Invalid CODEBASE_INDEX_EMBED_BATCH_SIZE, using default 100")
-    EMBEDDING_BATCH_SIZE = 100
+# Default: DEFAULT_CODEBASE_INDEX_EMBED_BATCH_SIZE (ssot_codebase_index), Range: 10-500
+EMBEDDING_BATCH_SIZE = max(10, min(config.codebase_index_embed_batch_size, 500))
 
 # Enable incremental indexing (only re-index changed files)
 # Default: False (full re-index - current behavior)
@@ -175,7 +166,7 @@ async def _process_embedding_batch(
     Issue #620: Extracted from _generate_batch_embeddings_fallback. Issue #620.
     """
     try:
-        batch_embeddings = await chunker._compute_sentence_embeddings_async(batch_docs)
+        batch_embeddings = await chunker.embed_sentences(batch_docs)
         result = _convert_embeddings_to_lists(batch_embeddings)
 
         if total_docs > 100 and (batch_index + batch_size) % (batch_size * 5) == 0:
@@ -217,7 +208,7 @@ async def _generate_batch_embeddings_fallback(
 
     try:
         chunker = get_semantic_chunker()
-        await chunker._initialize_model()
+        await chunker.load_embedding_model()
     except Exception as e:
         logger.warning("Semantic chunker unavailable: %s", e)
         return []
@@ -253,7 +244,7 @@ def make_problem_dict(
 ) -> Dict:
     """Canonical factory for the problem-dict schema (#6759).
 
-    Single source of truth for the keys read by ``_prepare_problem_document``
+    Single source of truth for the keys read by ``problem_storage._prepare_problem_document``
     and written by cross-file analysis converters.  If the schema gains a new
     field, add it here and update the reader below.
     """
@@ -268,84 +259,10 @@ def make_problem_dict(
     }
 
 
-def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: str | None = None) -> tuple:
-    """
-    Prepare a problem document for ChromaDB storage.
-
-    Issue #398: Extracted from _store_problems_batch_to_chromadb.
-    Issue #1710: source_id for per-project scoping.
-    Returns tuple of (id, document, metadata).
-    """
-    file_category = problem.get("file_category", FILE_CATEGORY_CODE)
-    problem_doc = f"""
-Problem: {problem.get('type', 'unknown')}
-Severity: {problem.get('severity', 'medium')}
-File: {problem.get('file_path', '')}
-Category: {file_category}
-Line: {problem.get('line', 0)}
-Description: {problem.get('description', '')}
-Suggestion: {problem.get('suggestion', '')}
-    """.strip()
-
-    metadata = {
-        "type": "problem",
-        "problem_type": problem.get("type", "unknown"),
-        "severity": problem.get("severity", "medium"),
-        "file_path": problem.get("file_path", ""),
-        "file_category": file_category,
-        "line_number": str(problem.get("line", 0)),
-        "description": problem.get("description", ""),
-        "suggestion": problem.get("suggestion", ""),
-    }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
-    doc_id = f"{prefix}problem_{problem_idx}_{problem.get('type', 'unknown')}"
-    return doc_id, problem_doc, metadata
-
-
-async def _store_problems_batch_to_chromadb(
-    collection,
-    problems: list,
-    start_idx: int,
-    source_id: str | None = None,
-) -> None:
-    """Store multiple problems to ChromaDB in batch (#398, #1710: source_id)."""
-    if not collection or not problems:
-        return
-
-    try:
-        ids, documents, metadatas = [], [], []
-        for i, problem in enumerate(problems):
-            doc_id, problem_doc, metadata = _prepare_problem_document(problem, start_idx + i, source_id=source_id)
-            ids.append(doc_id)
-            documents.append(problem_doc)
-            metadatas.append(metadata)
-
-        await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
-        logger.debug("Batch stored %s problems to ChromaDB", len(problems))
-    except Exception as e:
-        # Issue #1712: Retry once on stale collection (mirrors #1249 pattern).
-        err_msg = str(e).lower()
-        if "does not exist" in err_msg or "not found" in err_msg:
-            logger.warning("Problems collection stale, recreating (#1712): %s", e)
-            fresh = await get_code_collection_async()
-            if fresh is not None:
-                try:
-                    await fresh.upsert(
-                        ids=ids,
-                        documents=documents,
-                        metadatas=metadatas,
-                    )
-                    logger.info("Retry stored %d problems after stale collection", len(problems))
-                    return
-                except Exception as retry_err:
-                    logger.error("Retry also failed for problems batch: %s", retry_err)
-            else:
-                logger.error("Cannot retry — collection unavailable (#1712)")
-        else:
-            logger.error("Failed to batch store problems to ChromaDB (#1712): %s", e)
+# #18055: problem storage moved to problem_storage.py.  This module is a
+# grandfathered large file that may not grow, and problem storage is a
+# coherent unit of its own.  It is NOT re-exported here -- an alias would be
+# a second name for one implementation; callers import it from its own home.
 
 
 async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None) -> None:
@@ -358,11 +275,9 @@ async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None
     try:
         redis_client = await get_async_redis_client(database="analytics")
         if redis_client:
-            # Scope key pattern to source_id when provided (#1710)
-            if source_id:
-                pattern = f"codebase:{source_id}:*"
-            else:
-                pattern = "codebase:*"
+            # #1710 scoped this "when provided"; the else-branch deleted EVERY
+            # source's keys whenever a caller omitted the parameter.
+            pattern = f"codebase:{require_source_id(source_id, 'delete pattern')}:*"
             keys_to_delete = []
             cursor = 0
             while True:
@@ -467,7 +382,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: str | None = No
     """
     from knowledge.backends import get_async_default_client
 
-    chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
+    chroma_path = str(chromadb_data_dir())
     collection_name = "autobot_code"
     collection_meta = {"description": "Codebase analytics: functions, classes, problems, duplicates"}
 
@@ -568,10 +483,8 @@ Docstring: {func.get('docstring', 'No documentation')}
         "parameters": ",".join(func.get("args", [])),
         "language": ("python" if func.get("file_path", "").endswith(".py") else "javascript"),
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}function_{idx}_{func['name']}", doc_text, metadata
 
 
@@ -593,10 +506,8 @@ Docstring: {cls.get('docstring', 'No documentation')}
         "methods": ",".join(cls.get("methods", [])),
         "language": "python",
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
@@ -615,10 +526,8 @@ def _prepare_import_document(file_path: str, imports: List[str], idx: int, sourc
         "file_path": file_path,
         "imports": json.dumps(imports),
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}import_{idx}_{file_path}", doc_text, metadata
 
 
@@ -1406,7 +1315,7 @@ async def _store_hardcodes_to_redis(
 
     # Store each type group to Redis (#1710: source-scoped keys)
     stored_count = 0
-    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+    key_prefix = f"codebase:{require_source_id(source_id, 'storage key')}"
     for htype, items in grouped.items():
         key = f"{key_prefix}:hardcodes:{htype}"
         try:

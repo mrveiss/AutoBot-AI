@@ -21,8 +21,21 @@
  * Electric Blue - Technical Precision
  * ============================================ */
 
-[data-accent="blue"],
-:root {
+/* Text on the accent fill (#21566). Each label colour is the one with the higher
+   WCAG contrast on that accent's --color-primary: white (#FFFFFF) on purple and
+   indigo, the dark ink of the dark theme (#0E1420) on the rest. Ratios, white vs
+   ink: blue 3.68/5.01, green 2.54/7.26, purple 5.38/3.42, orange 2.80/6.57,
+   pink 3.53/5.22, teal 2.49/7.40, indigo 4.52/4.10, red 3.76/4.90. The indigo fill
+   was #6366f1 (white 4.47, under AA) and is #6265f1, the least change that reaches 4.5;
+   the OKLCH block overrides the fill in current browsers and gives the same ratios. The contrast
+   and mono themes own their primary and keep --on-primary (their files). */
+
+/* #18066: `:root` removed from this selector. design-tokens.css already
+   declares every token in this block with byte-identical values, and is
+   a superset (it also has -alpha-, -muted, -subtle). Two `:root` blocks
+   for one default is a second declaration that can drift; this file owns
+   the per-accent overrides, design-tokens.css owns the default. */
+[data-accent="blue"] {
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
   --color-primary-active: #1d4ed8;
@@ -30,6 +43,7 @@
   --color-primary-dark: #1d4ed8;
   --color-primary-bg: rgba(59, 130, 246, 0.1);
   --color-primary-bg-hover: rgba(59, 130, 246, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -45,11 +59,12 @@
   --color-primary-dark: #047857;
   --color-primary-bg: rgba(16, 185, 129, 0.1);
   --color-primary-bg-hover: rgba(16, 185, 129, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
  * PURPLE ACCENT
- * Violet - Creative & Premium
+ * Violet - Creative & Elegant
  * ============================================ */
 
 [data-accent="purple"] {
@@ -60,6 +75,7 @@
   --color-primary-dark: #6b21a8;
   --color-primary-bg: rgba(147, 51, 234, 0.1);
   --color-primary-bg-hover: rgba(147, 51, 234, 0.15);
+  --text-on-primary: #FFFFFF;
 }
 
 /* ============================================
@@ -75,6 +91,7 @@
   --color-primary-dark: #c2410c;
   --color-primary-bg: rgba(249, 115, 22, 0.1);
   --color-primary-bg-hover: rgba(249, 115, 22, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -90,6 +107,7 @@
   --color-primary-dark: #be185d;
   --color-primary-bg: rgba(236, 72, 153, 0.1);
   --color-primary-bg-hover: rgba(236, 72, 153, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -105,6 +123,7 @@
   --color-primary-dark: #0f766e;
   --color-primary-bg: rgba(20, 184, 166, 0.1);
   --color-primary-bg-hover: rgba(20, 184, 166, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -113,13 +132,14 @@
  * ============================================ */
 
 [data-accent="indigo"] {
-  --color-primary: #6366f1;
+  --color-primary: #6265f1;
   --color-primary-hover: #4f46e5;
   --color-primary-active: #4338ca;
   --color-primary-light: #818cf8;
   --color-primary-dark: #4338ca;
-  --color-primary-bg: rgba(99, 102, 241, 0.1);
-  --color-primary-bg-hover: rgba(99, 102, 241, 0.15);
+  --color-primary-bg: rgba(98, 101, 241, 0.1);
+  --color-primary-bg-hover: rgba(98, 101, 241, 0.15);
+  --text-on-primary: #FFFFFF;
 }
 
 /* ============================================
@@ -135,6 +155,7 @@
   --color-primary-dark: #b91c1c;
   --color-primary-bg: rgba(239, 68, 68, 0.1);
   --color-primary-bg-hover: rgba(239, 68, 68, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -144,8 +165,7 @@
 
 @supports (color: oklch(0 0 0)) {
   /* Blue (default) */
-  [data-accent="blue"],
-  :root {
+  [data-accent="blue"] {
     --color-primary: oklch(62.3% 0.188 259.8);
     --color-primary-hover: oklch(54.6% 0.215 262.9);
     --color-primary-active: oklch(48.8% 0.217 264.4);
@@ -212,13 +232,13 @@
 
   /* Indigo */
   [data-accent="indigo"] {
-    --color-primary: oklch(58.5% 0.204 277.1);
+    --color-primary: oklch(58.3% 0.205 277.0);
     --color-primary-hover: oklch(50.8% 0.220 278.6);
     --color-primary-active: oklch(45.7% 0.215 277.0);
     --color-primary-light: oklch(68.0% 0.158 276.9);
     --color-primary-dark: oklch(45.7% 0.215 277.0);
-    --color-primary-bg: oklch(58.5% 0.204 277.1 / 0.1);
-    --color-primary-bg-hover: oklch(58.5% 0.204 277.1 / 0.15);
+    --color-primary-bg: oklch(58.3% 0.205 277.0 / 0.1);
+    --color-primary-bg-hover: oklch(58.3% 0.205 277.0 / 0.15);
   }
 
   /* Red */
@@ -231,50 +251,4 @@
     --color-primary-bg: oklch(63.7% 0.208 25.3 / 0.1);
     --color-primary-bg-hover: oklch(63.7% 0.208 25.3 / 0.15);
   }
-}
-
-/* ============================================
- * HIGH CONTRAST MODE
- * Issue #8988: Enhanced readability for accessibility
- * ============================================ */
-
-[data-high-contrast="true"] {
-  /* Increase contrast ratios to meet WCAG AAA (7:1) */
-  --text-primary: var(--text-on-primary-bg);
-  --border-default: var(--border-strong);
-
-  /* Stronger borders for better visual separation */
-  --border-subtle: rgba(0, 0, 0, 0.2);
-  --border-default: rgba(0, 0, 0, 0.3);
-  --border-strong: rgba(0, 0, 0, 0.5);
-
-  /* Enhanced focus indicators */
-  --shadow-focus: 0 0 0 3px var(--color-primary-bg);
-  --outline-width: 3px;
-}
-
-[data-theme="dark"][data-high-contrast="true"] {
-  /* Dark mode high contrast adjustments */
-  --text-primary: #ffffff;
-  --text-secondary: #e5e5e5;
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-tertiary: #141414;
-
-  --border-subtle: rgba(255, 255, 255, 0.2);
-  --border-default: rgba(255, 255, 255, 0.3);
-  --border-strong: rgba(255, 255, 255, 0.5);
-}
-
-[data-theme="light"][data-high-contrast="true"] {
-  /* Light mode high contrast adjustments */
-  --text-primary: #000000;
-  --text-secondary: #1a1a1a;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e5e5e5;
-
-  --border-subtle: rgba(0, 0, 0, 0.2);
-  --border-default: rgba(0, 0, 0, 0.3);
-  --border-strong: rgba(0, 0, 0, 0.5);
 }

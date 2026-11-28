@@ -13,6 +13,7 @@ mutates that guarantee (forces a write even in dry-run) and asserts the test
 goes red, so the guard itself is proven to catch the regression it names.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -102,7 +103,7 @@ def test_atomic_write_leaves_no_partial_file_on_failure(project_dir: Path, monke
     def _boom(*_args, **_kwargs):
         raise OSError("simulated crash mid-write")
 
-    monkeypatch.setattr(npu_worker_design.os, "replace", _boom)
+    monkeypatch.setattr(os, "replace", _boom)
 
     with pytest.raises(OSError):
         npu_worker_design.write_atomically(target, "corrupted content")

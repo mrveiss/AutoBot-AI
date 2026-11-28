@@ -6,9 +6,7 @@ Tests how security components work together with the rest of the AutoBot system
 """
 
 import asyncio
-import os
-import tempfile
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,28 +16,27 @@ from app_factory import create_app
 from autobot_shared.status_enums import CommandRisk
 from secure_command_executor import SecureCommandExecutor
 from security_layer import SecurityLayer
+from tests.fixtures.audit_trail import InMemoryAuditTrail
+from tests.fixtures.fake_process import finished_process
 
 
 @pytest.fixture
-def temp_audit_file():
-    """Create temporary audit log file"""
-    temp_file = tempfile.NamedTemporaryFile(delete=False)
-    temp_file.close()
-    yield temp_file.name
-    try:
-        os.unlink(temp_file.name)
-    except OSError:
-        pass
+def audit_trail():
+    """The canonical audit trail, in memory (#17225 D6: the layer no longer owns a file)."""
+    trail = InMemoryAuditTrail()
+    patchers = trail.patched()
+    patchers.start()
+    yield trail
+    patchers.stop()
 
 
 @pytest.fixture
-def security_layer(temp_audit_file):
+def security_layer(audit_trail):
     """Create enhanced security layer for testing"""
     with patch("security_layer.get_config_manager") as mock_get_config_manager:
         mock_get_config_manager.return_value.get.return_value = {
             "enable_auth": False,
             "enable_command_security": True,
-            "audit_log_file": temp_audit_file,
             "command_approval_required": False,  # Simplify for integration tests
             "use_docker_sandbox": False,
             "roles": {
@@ -77,10 +74,7 @@ class TestSecuritySystemIntegration:
     async def test_end_to_end_safe_command_execution(self, security_layer):
         """Test complete safe command execution workflow"""
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"test output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"test output\n")
 
             result = await security_layer.execute_command("echo 'integration test'", "test_user", "admin")
 
@@ -90,7 +84,7 @@ class TestSecuritySystemIntegration:
             assert result["security"]["risk"] == "safe"
 
             # Verify audit logging
-            history = security_layer.get_command_history(limit=10)
+            history = await security_layer.get_command_history(limit=10)
             assert len(history) >= 2  # Should have attempt + complete entries
 
             # Check that command was logged
@@ -111,7 +105,7 @@ class TestSecuritySystemIntegration:
         assert result["security"]["risk"] == "forbidden"
 
         # Verify audit logging
-        history = security_layer.get_command_history(limit=10)
+        history = await security_layer.get_command_history(limit=10)
         blocked_logged = any(
             entry.get("action") == "command_execution_attempt"
             and "rm -rf /" in entry.get("details", {}).get("command", "")
@@ -126,10 +120,7 @@ class TestSecuritySystemIntegration:
 
         # Admin should be able to execute commands
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"admin output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"admin output\n")
 
             result = await security_layer.execute_command("ls -la", "admin_user", "admin")
             assert result["status"] == "success"
@@ -156,9 +147,9 @@ class TestSecuritySystemIntegration:
             assert risk == expected_risk or risk.value == expected_risk.value
             assert len(reasons) > 0
 
-    def test_audit_log_integration(self, security_layer):
-        """Test audit log integration across components"""
-        # Test audit logging
+    @pytest.mark.asyncio
+    async def test_audit_log_integration(self, security_layer, audit_trail):
+        """An action the layer records is what its audit view reads back."""
         security_layer.audit_log(
             action="integration_test",
             user="test_user",
@@ -166,18 +157,11 @@ class TestSecuritySystemIntegration:
             details={"test": "data"},
         )
 
-        # Verify log entry was written
-        with open(security_layer.audit_log_file, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "integration_test" in content
-            assert "test_user" in content
-
-        # Test command history retrieval
-        history = security_layer.get_command_history(limit=1)
-        if history:
-            assert isinstance(history[0], dict)
-            assert "timestamp" in history[0]
-            assert "user" in history[0]
+        entries = await security_layer.get_audit_entries(limit=1)
+        assert [(e["action"], e["user"], e["details"]) for e in entries] == [
+            ("integration_test", "test_user", {"test": "data"})
+        ]
+        assert "timestamp" in entries[0]
 
 
 class TestSecurityAPIIntegration:
@@ -201,8 +185,8 @@ class TestSecurityAPIIntegration:
         assert "docker_sandbox_enabled" in data
         assert "pending_approvals" in data
 
-    def test_security_endpoints_workflow(self):
-        """Test complete security management workflow via API"""
+    def test_security_endpoints_workflow(self, audit_trail):
+        """Test complete security management workflow via API (audit reads from the in-memory trail)"""
         app = create_app()
         client = TestClient(app)
 
@@ -296,10 +280,7 @@ class TestDockerSandboxIntegration:
         executor.require_approval_callback = auto_approve_callback
 
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"sandboxed output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"sandboxed output\n")
 
             # Execute moderate risk command (should use sandbox)
             result = await executor.run_shell_command("rm test.txt")
@@ -318,18 +299,13 @@ class TestSecuritySystemResilience:
     @pytest.mark.asyncio
     async def test_security_layer_error_resilience(self, security_layer):
         """Test security layer handles errors gracefully"""
-        # Test with broken audit log file
-        security_layer.audit_log_file = "/invalid/path/audit.log"
-
-        # Should not raise exception
-        security_layer.audit_log(action="test_action", user="test_user", outcome="test", details={})
+        # A record that cannot be scheduled must not raise (#14843)
+        with patch("security_layer.emit_security", return_value=False):
+            security_layer.audit_log(action="test_action", user="test_user", outcome="test", details={})
 
         # Command execution should still work
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"output\n")
 
             result = await security_layer.execute_command("echo test", "user", "admin")
             assert result["status"] == "success"
@@ -376,8 +352,15 @@ class TestSecuritySystemResilience:
 
 
 class TestSecurityPerformance:
-    """Test security system performance characteristics"""
+    """Test security system performance characteristics.
 
+    #15055: the wall-clock budgets below fail on runner load, not on a regression -- one red
+    train 78. They are `performance`-marked, so the per-PR suite deselects them and
+    marker-tests.yml runs them; the behaviour they also exercised is asserted unmarked in
+    TestSecurityWorkDone, by counting the work done instead of timing it.
+    """
+
+    @pytest.mark.performance
     def test_risk_assessment_performance(self):
         """Test risk assessment performance"""
         executor = SecureCommandExecutor()
@@ -410,6 +393,7 @@ class TestSecurityPerformance:
         avg_time = duration / len(commands) * 1000
         assert avg_time < 16, f"Average assessment time: {avg_time:.2f}ms"
 
+    @pytest.mark.performance
     @pytest.mark.asyncio
     async def test_audit_logging_performance(self, security_layer):
         """Test audit logging performance"""
@@ -431,6 +415,29 @@ class TestSecurityPerformance:
 
         # Should be fast (< 0.5 seconds for 100 entries)
         assert duration < 0.5, f"Audit logging took {duration:.2f}s for 100 entries"
+
+
+class TestSecurityWorkDone:
+    """What the timed tests above also covered, asserted as work done, not seconds (#15055)."""
+
+    def test_every_batched_command_gets_a_risk_and_a_reason(self):
+        executor = SecureCommandExecutor()
+        commands = ["echo hello", "ls -la", "cat file.txt", "mkdir test", "rm file.txt", "sudo apt update"] * 10
+
+        results = [executor.assess_command_risk(cmd) for cmd in commands]
+
+        assert len(results) == 60
+        assert all(isinstance(risk, CommandRisk) and reasons for risk, reasons in results)
+
+    @pytest.mark.asyncio
+    async def test_a_hundred_audit_writes_are_a_hundred_entries_in_order(self, security_layer, audit_trail):
+        for i in range(100):
+            security_layer.audit_log(action=f"work_{i}", user="perf_user", outcome="success", details={"i": i})
+
+        entries = await security_layer.get_audit_entries(limit=200)
+
+        assert sorted(e["details"]["i"] for e in entries) == list(range(100))
+        assert {e["action"] for e in entries} == {f"work_{i}" for i in range(100)}
 
 
 if __name__ == "__main__":

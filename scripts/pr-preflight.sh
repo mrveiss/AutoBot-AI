@@ -47,8 +47,9 @@ done
 # would read as "no match" and so deselect every required check without a word.
 [[ "" =~ $ONLY ]]; [ $? -ne 2 ] || { echo "--only: not a valid ERE: $ONLY" >&2; exit 2; }
 
+PREFLIGHT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || exit 2
 # shellcheck source=scripts/lib/git-root.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
+source "${PREFLIGHT_DIR}/lib/git-root.sh" || exit 2
 REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
@@ -82,15 +83,11 @@ FAILED=0
 
 # The fleet range is deliberately NOT written here -- putting it in a script is
 # the very thing being checked for. It is read from the existing lint rule,
-# which is the single source of truth for what "fleet IP" means.
-FLEET_RULE="tools/lint/check_no_hardcoded_ip_fallbacks.py"
-FLEET_IP_RE=$(grep -oE '\^[0-9]{1,3}\\\.[0-9]{1,3}\\\.[0-9]{1,3}\\\.' "$FLEET_RULE" 2>/dev/null \
-              | head -1 | sed 's/^\^//' | sed 's/\\\././g')
-if [ -n "$FLEET_IP_RE" ]; then
-  FLEET_IP_RE="$(printf '%s' "$FLEET_IP_RE" | sed 's/\./\\./g')[0-9]{1,3}"
-else
-  FLEET_IP_RE='(?!)'  # rule file unreadable -- match nothing rather than guess
-fi
+# which is the single source of truth for what "fleet IP" means. #19233: the rule
+# path is beside this script, and an unreadable rule exits 2 (scripts/lib/fleet-ip-rule.sh).
+# shellcheck source=scripts/lib/fleet-ip-rule.sh
+source "${PREFLIGHT_DIR}/lib/fleet-ip-rule.sh" || exit 2
+FLEET_IP_RE=$(fleet_ip_regex "${PREFLIGHT_FLEET_RULE:-${PREFLIGHT_DIR}/../tools/lint/check_no_hardcoded_ip_fallbacks.py}") || exit 2
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 note() { printf '  --    %s\n' "$1"; }
@@ -149,17 +146,14 @@ if [ "$PY_SOURCE" = "CI-parity venv" ]; then
   # script -- in --check mode, so preflight never installs anything -- and let
   # the answer decide which of the two lines this is.
   #
-  # Reported, not gated -- the same call #15091 made. A stale venv is still a
-  # far better interpreter than the system one, and failing preflight for a
-  # condition unrelated to the diff teaches people to ignore preflight. The
-  # detail is left to the floor report immediately below; this line only has
-  # to stop claiming parity it does not have.
-  if scripts/setup-ci-parity-env.sh --check >/dev/null 2>&1; then
+  # GATED (#22135). This was "reported, not gated" (#15091), and the venv sat at
+  # fastapi 0.141.1 against a >=0.162.2 floor for months while every local gate
+  # passed. A failing check beats a note nobody acts on: the cost is one rebuild.
+  if STALE_REPORT=$(scripts/setup-ci-parity-env.sh --check 2>&1); then
     pass "python $PY_VERSION from the CI-parity venv"
   else
-    note "python $PY_VERSION from the CI-parity venv -- but the venv is STALE (#15130)"
-    note "it no longer matches requirements-ci.txt / requirements-ci-test.txt"
-    note "reconcile it: scripts/setup-ci-parity-env.sh"
+    fail "the CI-parity venv is STALE -- local runs are not CI runs (#15130, #22135): scripts/setup-ci-parity-env.sh"
+    printf '%s\n' "$STALE_REPORT" | head -12 | sed 's/^/        /'
   fi
 else
   note "python $PY_VERSION from the system python3 -- CI runs 3.14 (#13573)"
@@ -174,7 +168,7 @@ fi
 # Reported, never fatal (#15091) -- exit 2 means the check itself broke.
 if ! FLOOR_REPORT=$("$PY" pipeline-scripts/check_dependency_floors.py 2>&1); then
   fail "dependency floor check did not run: $FLOOR_REPORT"
-elif printf '%s' "$FLOOR_REPORT" | grep -q 'all satisfied'; then
+elif grep -q 'all satisfied' <<<"$FLOOR_REPORT"; then
   pass "$(printf '%s' "$FLOOR_REPORT" | head -1)"
 else
   while IFS= read -r line; do note "$line"; done <<EOF_FLOORS
@@ -212,7 +206,7 @@ if [ -n "$MSG_FILE" ]; then
     fi
 
     SUBJECT=$(head -1 "$MSG_FILE")
-    if printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+ \(#[0-9]+\)$'; then
+    if grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+ \(#[0-9]+\)$' <<<"$SUBJECT"; then
       pass "subject matches <type>(scope): <description> (#issue)"
     else
       fail "subject does not match <type>(scope): <description> (#issue)"
@@ -237,7 +231,7 @@ fi
 # Trailers already committed on this branch would fail the same gate.
 if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   section "commits on this branch"
-  if git log --format='%B' "$BASE..HEAD" | grep -qiE '^(co-authored-by|signed-off-by|assisted-by):'; then
+  if grep -qiE '^(co-authored-by|signed-off-by|assisted-by):' < <(git log --format='%B' "$BASE..HEAD"); then
     fail "a commit already on this branch carries an authorship trailer"
   else
     pass "no authorship trailers in $(git rev-list --count "$BASE..HEAD") commit(s)"
@@ -247,7 +241,7 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   # NO when the truth is yes, so the session builds work that already exists --
   # and nothing pushes back on that answer, because doing more work never looks
   # like a mistake. Freshness was previously a side effect of having a PR:
-  # auto-update-pr-branches.yml keeps PR branches current, and before the first
+  # sync-branches-with-main.yml (#19548) keeps PR branches current, and before the first
   # push there was no mechanism at all. This is that mechanism.
   #
   # Measured AFTER a best-effort fetch. Against a stale remote-tracking ref the
@@ -298,8 +292,7 @@ if [ -n "$BODY_FILE" ]; then
     # this ## header and the next ## header, comments stripped, must be
     # non-empty. A heading present but empty fails there and must fail here.
     for heading in "Thinking Path" "What Changed" "Verification" "Model Used"; do
-      content=$(printf '%s' "$BODY" \
-        | awk "/^## ${heading}/{found=1; next} found && /^## /{exit} found{print}" \
+      content=$(awk "/^## ${heading}/{found=1; next} found && /^## /{exit} found{print}" <<<"$BODY" \
         | sed 's/<!--[^>]*-->//g' \
         | sed '/^[[:space:]]*$/d')
       if [ -z "$content" ]; then
@@ -315,22 +308,21 @@ if [ -n "$BODY_FILE" ]; then
     # it has no branch to derive from and no fork/same-repo distinction to make.
     # A fork contributor relying on that relaxation therefore sees a FAIL here for
     # a check CI will pass -- a false negative, not a false accept.
-    if printf '%s' "$BODY" \
-      | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
+    if grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)" <<<"$BODY"; then
       pass "carries a close/refs keyword"
     else
       fail "no Closes/Fixes/Refs keyword -- the issue-link gate requires one even for partial work"
     fi
 
     if [ -n "$ISSUE" ]; then
-      if printf '%s' "$BODY" | grep -qE "#${ISSUE}([^0-9]|$)"; then
+      if grep -qE "#${ISSUE}([^0-9]|$)" <<<"$BODY"; then
         pass "names issue #${ISSUE}"
       else
         fail "does not name issue #${ISSUE}"
       fi
       # Partial delivery must not silently close the issue.
-      if printf '%s' "$BODY" | grep -iqE "(closes|fixes|resolves)[[:space:]]+#${ISSUE}([^0-9]|$)" \
-         && printf '%s' "$BODY" | grep -iq "partial"; then
+      if grep -iqE "(closes|fixes|resolves)[[:space:]]+#${ISSUE}([^0-9]|$)" <<<"$BODY" \
+         && grep -iq "partial" <<<"$BODY"; then
         note "closes #${ISSUE} AND says 'partial' -- confirm the body states the issue stays open"
       fi
     fi
@@ -338,13 +330,13 @@ if [ -n "$BODY_FILE" ]; then
     # Only the fleet deployment range. tools/lint/check_no_hardcoded_ip_fallbacks.py
     # is explicit that loopback and RFC-1918 example space are legitimate by
     # project convention -- flagging those would make this script cry wolf.
-    if printf '%s' "$BODY" | grep -qE "$FLEET_IP_RE"; then
+    if grep -qE "$FLEET_IP_RE" <<<"$BODY"; then
       fail "contains a fleet IP -- outward artifacts must not carry one"
     else
       pass "no fleet IP literals"
     fi
 
-    if printf '%s' "$BODY" | grep -qE '(/home/|/opt/autobot|/var/log/autobot)'; then
+    if grep -qE '(/home/|/opt/autobot|/var/log/autobot)' <<<"$BODY"; then
       fail "contains an internal filesystem path"
     else
       pass "no internal filesystem paths"
@@ -548,7 +540,7 @@ require_check() {
   selected "$ctx" || return 0
 
   if [ "$FULL" != "1" ] && [ -n "$filter" ] && [ "${#CHANGED[@]}" -gt 0 ]; then
-    if ! printf '%s\n' "${CHANGED[@]}" | grep -qE "$filter"; then
+    if ! grep -qE "$filter" < <(printf '%s\n' "${CHANGED[@]}"); then
       note "$ctx -- no matching paths changed (CI path-filters it too)"
       return 0
     fi
@@ -716,10 +708,7 @@ CQEOF
   # A stale tree is a `skip_check`, not a `note`: the gate COULD NOT RUN, and
   # the distinction those two draw is the whole reason SKIPPED is counted.
   frontend_deps_current() {
-    local ws="$REPO_ROOT/autobot-frontend"
-    [ -d "$ws/node_modules" ] || return 1
-    [ -f "$ws/node_modules/.package-lock.json" ] || return 1
-    [ ! "$ws/package-lock.json" -nt "$ws/node_modules/.package-lock.json" ]
+    FRONTEND_STALE=$(scripts/check-frontend-deps-current.sh autobot-frontend 2>&1)
   }
 
   # verify-generated-types needs NO node_modules, which is worth stating because
@@ -744,8 +733,12 @@ CQEOF
       '^autobot-frontend/' \
       bash -c 'cd "$0/autobot-frontend" && npm run test:integration && npm run test:coverage' "$REPO_ROOT"
   else
-    skip_check "Unit & Integration Tests" \
-      "autobot-frontend/node_modules is absent or older than package-lock.json -- npm --prefix autobot-frontend ci"
+    # #22135: a stale install is a FAIL, not a skip -- a green local run on missing packages (reka-ui) said nothing.
+    # Same path filter as the gate it replaces, so a docs-only diff is not failed for a stale install.
+    if selected "Unit & Integration Tests" && { [ "$FULL" = "1" ] || [ "${#CHANGED[@]}" -eq 0 ] || grep -qE '^autobot-frontend/' < <(printf '%s\n' "${CHANGED[@]}"); }; then
+      fail "Unit & Integration Tests -- node_modules is stale or could not be checked: npm --prefix autobot-frontend ci"
+      printf '%s\n' "$FRONTEND_STALE" | head -12 | sed 's/^/        /'
+    fi
   fi
 
   # ---- gates this box cannot reproduce -----------------------------------

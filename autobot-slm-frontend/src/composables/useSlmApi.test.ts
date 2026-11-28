@@ -72,7 +72,9 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
       const result = await useSlmApi().getNodes()
 
       const [url, opts] = mockRaw.mock.calls[0] as RawCall
-      expect(url).toBe('/nodes')
+      // #21584: the list is read page by page, 100 at most; a fleet of one is one request.
+      expect(mockRaw).toHaveBeenCalledTimes(1)
+      expect(url).toBe('/nodes?page=1&per_page=100')
       expect(opts.method).toBe('GET')
       expect(result).toHaveLength(1)
       expect(result[0]!.node_id).toBe('n1')
@@ -295,5 +297,19 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
 
       expect(result.unreachable_roles).toEqual([])
     })
+  })
+})
+
+describe('getRoleOwners (#19706)', () => {
+  beforeEach(() => mockRaw.mockReset())
+
+  it('returns the one owner of a single-node role and leaves out multi-node roles', async () => {
+    mockRaw.mockResolvedValueOnce(
+      jsonResponse({
+        owners: { redis: ['node-1'], 'slm-agent': ['node-1', 'node-2'] },
+        multi_node_roles: ['autobot_shared', 'slm-agent'],
+      }),
+    )
+    await expect(useSlmApi().getRoleOwners()).resolves.toEqual({ redis: 'node-1' })
   })
 })

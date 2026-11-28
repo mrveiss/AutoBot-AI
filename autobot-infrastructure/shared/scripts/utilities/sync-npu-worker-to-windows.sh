@@ -30,6 +30,11 @@ NC='\033[0m' # No Color
 # Default paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# #19325: the Windows worker's port comes from the shell SSOT, not a literal here.
+source "$SCRIPT_DIR/../lib/ssot-config.sh" || {
+    echo "FATAL: ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    exit 1
+}
 # #15127: was "${PROJECT_ROOT}/resources/windows-npu-worker" -- that directory has
 # never existed at the repo root. The real source tree is autobot-npu-worker/resources/
 # windows-npu-worker (the install.ps1/check-health.ps1 this script tells the operator
@@ -236,13 +241,13 @@ echo -e "${CYAN}  Network Configuration${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 print_info "Windows NPU Worker will listen on:"
-echo "  - Port: 8082"
+echo "  - Port: ${AUTOBOT_NPU_WORKER_WINDOWS_PORT}"
 echo "  - Bind: 0.0.0.0 (all interfaces)"
 echo ""
 print_info "From WSL2, connect to Windows host at:"
 HOST_IP=$(ip route show | grep -i default | head -1 | awk '{print $3}')
-echo "  - http://${HOST_IP}:8082/health"
+echo "  - http://${HOST_IP}:${AUTOBOT_NPU_WORKER_WINDOWS_PORT}/health"
 echo ""
 print_info "Backend configuration update required:"
-echo "  - Update NPU_WORKER_URL in config to: http://${HOST_IP}:8082"
+echo "  - Update NPU_WORKER_URL in config to: http://${HOST_IP}:${AUTOBOT_NPU_WORKER_WINDOWS_PORT}"
 echo ""

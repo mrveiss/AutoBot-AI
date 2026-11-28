@@ -1,5 +1,5 @@
 <template>
-  <BasePanel variant="bordered" size="md">
+  <BaseCard scrollable variant="bordered" size="md">
     <h4>{{ $t('knowledge.stats.popularTags') }}</h4>
     <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.popularTagsAriaLabel')">
       <span
@@ -14,10 +14,11 @@
         {{ tag.name }}
       </span>
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -31,7 +32,6 @@
  * Issue #11562: Wire in orphaned stats subpanels
  */
 
-import BasePanel from '@/components/base/BasePanel.vue'
 
 interface Tag {
   name: string

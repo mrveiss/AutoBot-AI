@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import List
 
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
@@ -47,7 +48,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     # ProviderType lacked OPENROUTER (it only existed in the disagreeing
     # llm_cost_tracker.LLMProvider fork).
     provider_name = ProviderType.OPENROUTER.value
-    default_model = "gpt-3.5-turbo"
+    default_model = hosted_default_model("openrouter")  # #15501, #18210: was the stale gpt-3.5-turbo
     forward_penalty_params = True
     missing_key_error = "OpenRouter API key not found. Set OPENROUTER_API_KEY or provide api_key in settings."
 

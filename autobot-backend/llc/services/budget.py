@@ -15,7 +15,7 @@ import json
 import logging
 import uuid
 from decimal import Decimal
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -24,14 +24,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted, UnpricedModel
-from llc.models.budget import LLCAgentBudget
-from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
+from llc.exceptions import BudgetExhausted, CostEventAlreadyRecorded, UnpricedModel, WorkItemNotInCompany
+from llc.models.budget import LLCAgentBudget, token_limit_blocks
+from llc.models.company_os_cost import COST_EVENT_IDEMPOTENCY_INDEX, CompanyOsCostEvent
+from llc.models.work_item import LLCWorkItem
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
+from .budget_idempotency import charge_once
 
 logger = logging.getLogger(__name__)
+
+#: The constraint a cost event breaks when its work item no longer exists (``CompanyOsCostEvent.work_item_id``).
+WORK_ITEM_FK = "fk_company_os_cost_events_work_item"
+
+#: Postgres sqlstate of a unique-constraint violation.
+UNIQUE_VIOLATION_SQLSTATE = "23505"
 
 _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
@@ -50,6 +58,143 @@ def _for_agent(agent_id: str, company_id: str):
         LLCAgentBudget.agent_id == agent_id,
         LLCAgentBudget.company_id == company_id,
     )
+
+
+async def _record_event(
+    session: AsyncSession,
+    agent_id: str,
+    company_id: str,
+    work_item_id: Optional[str],
+    usage: tuple,
+    idempotency_key: Optional[str] = None,
+) -> None:
+    """Add the per-event cost row (#16016); a work item must be in ``company_id``.
+
+    Refuses rather than recording unattributed: a caller that names an item and gets
+    a ``200`` believes the cost landed on it. Unknown and foreign ids are
+    indistinguishable on purpose, so the refusal does not confirm another company's id.
+    """
+    item_id = None
+    if work_item_id is not None:
+        try:
+            item_id = uuid.UUID(str(work_item_id))
+        except ValueError:
+            raise WorkItemNotInCompany(work_item_id) from None
+        owner = (
+            await session.execute(select(LLCWorkItem.company_id).where(LLCWorkItem.id == item_id))
+        ).scalar_one_or_none()
+        if owner is None or str(owner) != str(company_id):
+            raise WorkItemNotInCompany(work_item_id)
+    model, tokens_in, tokens_out, cost = usage
+    event = CompanyOsCostEvent(
+        company_id=uuid.UUID(str(company_id)),
+        agent_id=agent_id,
+        work_item_id=item_id,
+        model=model,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        cost=cost,
+        idempotency_key=idempotency_key,
+    )
+    if item_id is None and idempotency_key is None:
+        session.add(event)
+    else:
+        await _add_event(session, event, work_item_id)
+
+
+async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item_id: Optional[str]) -> None:
+    """Insert the event now, so an item deleted since the ownership check is a refusal, not a 500 later (#20168).
+
+    The foreign key would otherwise fail on the caller's next statement. The add and flush sit in one savepoint,
+    so a refusal leaves the caller's transaction usable. Only that foreign key is mapped; any other integrity
+    error is a real fault and propagates.
+    """
+    try:
+        async with session.begin_nested():
+            session.add(event)
+            await session.flush()
+    except IntegrityError as exc:
+        if event.idempotency_key is not None and _is_key_violation(exc):
+            raise CostEventAlreadyRecorded(event.idempotency_key) from None
+        if WORK_ITEM_FK not in str(exc.orig):
+            raise
+        logger.info("cost event refused: work item %s was deleted after the ownership check", work_item_id)
+        raise WorkItemNotInCompany(work_item_id) from None
+
+
+def _is_key_violation(exc: IntegrityError) -> bool:
+    """The unique (company, agent, key) row was already written.
+
+    Postgres reports sqlstate 23505 and names the index; only a driver that gives no sqlstate (SQLite) is matched
+    by the message, where the column name stands in for the index name.
+    """
+    sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(getattr(exc.orig, "__cause__", None), "sqlstate", None)
+    message = str(exc.orig)
+    if sqlstate:
+        return sqlstate == UNIQUE_VIOLATION_SQLSTATE and COST_EVENT_IDEMPOTENCY_INDEX in message
+    return COST_EVENT_IDEMPOTENCY_INDEX in message or "idempotency_key" in message
+
+
+async def _stored_cost(session: AsyncSession, agent_id: str, company_id: str, key: str) -> Optional[Decimal]:
+    """The cost already recorded for (company, agent, key) -- what a repeat is told -- or None."""
+    row = await session.execute(
+        select(CompanyOsCostEvent.cost).where(
+            CompanyOsCostEvent.company_id == uuid.UUID(str(company_id)),
+            CompanyOsCostEvent.agent_id == agent_id,
+            CompanyOsCostEvent.idempotency_key == key,
+        )
+    )
+    cost = row.scalar_one_or_none()
+    return None if cost is None else Decimal(str(cost))
+
+
+def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
+    """Dollar cost of one call; ``UnpricedModel`` if it cannot be priced (moved out of ``ingest_cost_event``)."""
+    if is_local_model(model):
+        # #16316: free by construction -- a local model was never going to
+        # appear in a hosted-API price catalogue, and that absence is not
+        # the same fact as "nobody has priced this yet". Checked before the
+        # cache is consulted at all, so a cold or unpopulated snapshot can
+        # never affect a local model's cost.
+        return Decimal("0")
+    # Deferred (#21596): llm_shared's package init probes PyTorch/CUDA, and this
+    # module is reached at llc.scheduler package import (Celery registration).
+    from llm_shared.pricing.sync_cache import (  # noqa: PLC0415 -- keeps llm_shared out of scheduler import
+        PricingCacheCold,
+        get_cached_price,
+    )
+
+    try:
+        pricing = get_cached_price(model)
+    except PricingCacheCold:
+        # #16316: the local mirror has not completed its first read from
+        # Redis yet. "Cannot compute right now" and "genuinely unpriced"
+        # both mean the same thing to a caller -- refuse, do not guess --
+        # so both raise the same exception; only the log line differs,
+        # because this one is transient and the other is not.
+        logger.warning(
+            "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
+            model,
+            agent_id,
+        )
+        raise UnpricedModel(model=model, agent_id=agent_id) from None
+    if pricing is None:
+        # #15860: this used to log and charge zero. A cost of 0 and a cost
+        # that could not be computed are the same number, and only one of
+        # them is a fact -- so an unpriced model made dollar budgets
+        # silently inapplicable rather than visibly broken.
+        raise UnpricedModel(model=model, agent_id=agent_id)
+    return Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
+
+
+async def _persist_then_stop(session: AsyncSession, stop: BudgetExhausted) -> None:
+    """Commit the spend just recorded, then raise the hard stop (#20202).
+
+    The overrun already happened; every caller rolls back on an exception, which
+    would erase the cost event and counter update for it.
+    """
+    await session.commit()
+    raise stop
 
 
 class BudgetService(LLCServiceBase):
@@ -109,8 +254,62 @@ class BudgetService(LLCServiceBase):
         tokens_in: int,
         tokens_out: int,
         model: str,
+        work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
+        idempotency_key: Optional[str] = None,
+    ) -> Decimal:
+        """Record token cost and enforce limits; see ``_charge_cost_event`` for the charge itself (GH#8215).
+
+        ``idempotency_key`` (#21332): a repeat with the same key for the same agent charges once and
+        returns the first result (``budget_idempotency`` has the policies). With a key the charge is
+        committed here before the result is recorded; ``IngestInFlight`` is raised for a concurrent repeat.
+        """
+        args = (session, agent_id, company_id, tokens_in, tokens_out, model, work_item_id, bill_dollars)
+        if not idempotency_key:
+            return await self._charge_cost_event(*args)
+        return await charge_once(
+            session, agent_id, company_id, idempotency_key, lambda: self._charge_once_in_db(*args, idempotency_key)
+        )
+
+    async def _charge_once_in_db(self, *args: Any) -> Decimal:
+        """Charge, or -- when the unique (company, agent, key) row already exists -- return the first cost (#21972).
+
+        A replay is answered from the stored row BEFORE pricing or work-item checks run, so a repeat of a charge
+        that already happened never fails on a cold price cache; the unique row still decides a concurrent first.
+        """
+        *charge_args, key = args
+        session, agent_id, company_id = charge_args[:3]
+        stored = await _stored_cost(session, agent_id, company_id, key)
+        if stored is not None:
+            return stored
+        try:
+            return await self._charge_cost_event(*charge_args, idempotency_key=key)
+        except CostEventAlreadyRecorded:
+            winner = await _stored_cost(session, agent_id, company_id, key)  # the conflict means it committed
+            if winner is None:
+                raise
+            return winner
+
+    async def _charge_cost_event(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        company_id: str,
+        tokens_in: int,
+        tokens_out: int,
+        model: str,
+        work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
+        idempotency_key: Optional[str] = None,
     ) -> Decimal:
         """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
+
+        ``bill_dollars=False`` is a run on a subscription login (#20266): it spent tokens, not
+        dollars. Its event row and ``tokens_spent`` are recorded, but the event's cost is 0, so
+        ``budget_spent`` is untouched and no dollar limit can be crossed; a token limit still holds.
+
+        Also writes one ``company_os_cost_events`` row (#16016), tied to ``work_item_id``
+        when given. Raises ``WorkItemNotInCompany`` if that item is not in ``company_id``.
 
         Supports two budget modes:
         - DOLLARS: tracks cost in USD, enforces budget_limit
@@ -121,40 +320,17 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit,
-        and UnpricedModel if the model is neither local nor in the live catalogue.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit;
+        the recorded event and counter update are committed first, so a caller
+        that rolls back on the exception does not lose spend that really happened
+        (#20202). Raises UnpricedModel if the model is neither local nor in the live catalogue.
         """
-        if is_local_model(model):
-            # #16316: free by construction -- a local model was never going to
-            # appear in a hosted-API price catalogue, and that absence is not
-            # the same fact as "nobody has priced this yet". Checked before the
-            # cache is consulted at all, so a cold or unpopulated snapshot can
-            # never affect a local model's cost.
-            cost = Decimal("0")
-        else:
-            try:
-                pricing = get_cached_price(model)
-            except PricingCacheCold:
-                # #16316: the local mirror has not completed its first read from
-                # Redis yet. "Cannot compute right now" and "genuinely unpriced"
-                # both mean the same thing to a caller -- refuse, do not guess --
-                # so both raise the same exception; only the log line differs,
-                # because this one is transient and the other is not.
-                logger.warning(
-                    "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
-                    model,
-                    agent_id,
-                )
-                raise UnpricedModel(model=model, agent_id=agent_id) from None
-            if pricing is None:
-                # #15860: this used to log and charge zero. A cost of 0 and a cost
-                # that could not be computed are the same number, and only one of
-                # them is a fact -- so an unpriced model made dollar budgets
-                # silently inapplicable rather than visibly broken.
-                raise UnpricedModel(model=model, agent_id=agent_id)
-            cost = Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
+        cost = _cost_of(model, agent_id, tokens_in, tokens_out) if bill_dollars else Decimal("0")
 
         total_tokens = tokens_in + tokens_out
+        await _record_event(
+            session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost), idempotency_key
+        )
 
         # Atomic increment — prevents lost-update across concurrent workers
         # Always update both dollar and token counters for analytics (GH#8997)
@@ -227,14 +403,18 @@ class BudgetService(LLCServiceBase):
 
         # Enforce budget based on mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
-            if tokens_spent > token_limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+            if token_limit_blocks(tokens_spent, token_limit):
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+                )
             if token_limit > 0 and tokens_spent / token_limit >= threshold:
                 await self._emit_alert(agent_id, tokens_spent, token_limit)
-        else:
+        elif bill_dollars:
             # Default DOLLARS mode
             if spent > limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                )
             if limit > Decimal("0") and spent / limit >= threshold:
                 await self._emit_alert(agent_id, float(spent), float(limit))
 
@@ -271,7 +451,7 @@ class BudgetService(LLCServiceBase):
         # Calculate based on budget mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
             remaining = Decimal(str(token_limit - tokens_spent))
-            is_over_limit = tokens_spent > token_limit
+            is_over_limit = token_limit_blocks(tokens_spent, token_limit)
             alert_triggered = token_limit > 0 and tokens_spent / token_limit >= threshold
         else:
             remaining = limit - spent

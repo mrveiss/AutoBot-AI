@@ -22,8 +22,15 @@ import pytest_asyncio
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
+from testkit.canonical_gate import no_user_middleware, real_admin_gate
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, authenticate, get_current_user, get_db, resolve_user_id
+from transcriber.deps import (
+    DEFAULT_USER,
+    authenticate,
+    get_current_user,
+    get_transcriber_db_from_request,
+    resolve_user_id,
+)
 from transcriber.routes.ai import router as ai_router
 from transcriber.routes.export import router as export_router
 from transcriber.routes.kb import router as kb_router
@@ -72,7 +79,7 @@ async def seeded(tmp_path):
         return await call_next(request)
 
     await db.connect()
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     for router in (ai_router, kb_router, recordings_router):
         app.include_router(router, prefix=PREFIX)
@@ -128,7 +135,7 @@ def _unauthenticated_app(current_user=None) -> FastAPI:
     app = FastAPI()
     for router in _ALL_ROUTERS:
         app.include_router(router, prefix=PREFIX)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_transcriber_db_from_request] = lambda: MagicMock()
     app.dependency_overrides[get_current_user] = current_user or _refuse_login
     return app
 
@@ -166,7 +173,7 @@ async def test_a_signed_in_caller_passes_the_same_gate():
     app = _unauthenticated_app(lambda: {"user_id": OWNER, "role": "user"})
     with (
         patch("transcriber.routes.providers.list_available_providers", return_value=[]),
-        patch("transcriber.routes.providers.get_active_provider_id", return_value=None),
+        patch("transcriber.routes.providers.get_active_asr_provider_id", return_value=None),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get(f"{PREFIX}/providers")
@@ -179,12 +186,18 @@ async def test_a_signed_in_caller_passes_the_same_gate():
 
 
 async def _patch_providers_as(role: str):
-    app = _unauthenticated_app(lambda: {"user_id": "someone", "role": role})
+    """PATCH /providers through the REAL one admin gate (#16333), the caller holding *role*."""
+    caller = {"username": "someone", "user_id": "someone", "role": role, "auth_method": "session"}
+    middleware = no_user_middleware()
+    middleware.get_user_from_request.return_value = caller
+    app = _unauthenticated_app(lambda: caller)
     with (
-        patch("transcriber.routes.providers.set_active_provider") as set_provider,
+        real_admin_gate(middleware) as wire,
+        patch("transcriber.routes.providers.set_active_asr_provider") as set_provider,
         patch("transcriber.routes.providers.list_available_providers", return_value=[]),
-        patch("transcriber.routes.providers.get_active_provider_id", return_value=None),
+        patch("transcriber.routes.providers.get_active_asr_provider_id", return_value=None),
     ):
+        wire(SimpleNamespace(app=app))
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.patch(f"{PREFIX}/providers", json={"provider": None})
     return r, set_provider
@@ -203,6 +216,15 @@ async def test_an_admin_can_switch_the_provider():
     r, set_provider = await _patch_providers_as("admin")
     assert r.status_code == 200, r.text
     set_provider.assert_called_once_with(None)
+
+
+@pytest.mark.asyncio
+async def test_a_superadmin_and_a_capitalised_admin_can_switch_the_provider():
+    """The one predicate decides (#16333): superadmin and "Admin" are admins."""
+    for role in ("superadmin", "Admin"):
+        r, set_provider = await _patch_providers_as(role)
+        assert r.status_code == 200, (role, r.text)
+        set_provider.assert_called_once_with(None)
 
 
 # ---------------------------------------------------------------------------

@@ -45,7 +45,13 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
 
     @property
     def is_configured(self) -> bool:
-        return bool(self._api_key())
+        from services.provider_key_vault import VaultKeyUnavailableError
+
+        try:
+            return bool(self._api_key())
+        except VaultKeyUnavailableError as exc:  # #18094: reported unconfigured here; negotiate() raises the reason
+            logger.error("OpenAI Realtime unavailable: %s", exc)
+            return False
 
     @property
     def capabilities(self) -> RealtimeCapabilities:

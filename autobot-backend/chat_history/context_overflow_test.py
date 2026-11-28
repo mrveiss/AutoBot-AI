@@ -8,12 +8,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from chat_history import context_overflow as context_overflow_module
 from chat_history.context_overflow import (
     ContextOverflowProtection,
     ConversationSummarizer,
     SessionTokenTracker,
     SummarizationFailed,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_compaction_lease_contention(monkeypatch):
+    """A unit test must not reach Redis for the compaction lease; the race tests below script it."""
+    monkeypatch.setattr(context_overflow_module, "_lease_held_elsewhere", AsyncMock(return_value=False))
 
 
 class TestSessionTokenTracker:
@@ -233,6 +240,7 @@ class TestContextOverflowProtection:
             mock_tracker = AsyncMock()
             mock_tracker.get_session_usage.return_value = {
                 "total_tokens": 810,
+                "active_tokens": 810,
                 "prompt_tokens": 540,
                 "completion_tokens": 270,
                 "message_count": 10,
@@ -266,6 +274,7 @@ class TestContextOverflowProtection:
             mock_tracker = AsyncMock()
             mock_tracker.get_session_usage.return_value = {
                 "total_tokens": 920,
+                "active_tokens": 920,
                 "prompt_tokens": 614,
                 "completion_tokens": 306,
                 "message_count": 12,
@@ -322,6 +331,7 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
         mock_tracker = AsyncMock()
         mock_tracker.get_session_usage.return_value = {
             "total_tokens": 920,
+            "active_tokens": 920,
             "prompt_tokens": 614,
             "completion_tokens": 306,
             "message_count": 12,
@@ -463,6 +473,7 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
             mock_tracker = AsyncMock()
             mock_tracker.get_session_usage.return_value = {
                 "total_tokens": 950,
+                "active_tokens": 950,
                 "prompt_tokens": 633,
                 "completion_tokens": 317,
                 "message_count": 15,
@@ -488,6 +499,7 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
             mock_tracker = AsyncMock()
             mock_tracker.get_session_usage.return_value = {
                 "total_tokens": 920,
+                "active_tokens": 920,
                 "prompt_tokens": 614,
                 "completion_tokens": 306,
                 "message_count": 12,
@@ -517,6 +529,7 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
         with patch.object(protection, "_get_context_limit", return_value=1000):
             mock_tracker.get_session_usage.return_value = {
                 "total_tokens": 150,
+                "active_tokens": 150,
                 "prompt_tokens": 100,
                 "completion_tokens": 50,
                 "message_count": 1,
@@ -581,4 +594,4 @@ class TestTheTrackerIsNeverResetWithoutADeliveredSummary:
         # and every retained message re-counted despite three malformed entries.
         assert "Summary." in summary
         mock_tracker.reset_session.assert_awaited_once_with("session-1")
-        assert mock_tracker.add_message_tokens.await_count == 5
+        assert len(mock_tracker.seed_session.await_args.args[1]) == 5

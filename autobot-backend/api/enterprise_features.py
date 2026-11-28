@@ -22,20 +22,14 @@ from api.schemas_agent import (
     EnterpriseStatusResponse,
 )
 from api.schemas_common import DataResponse
-from api.schemas_workflows import (
-    BulkFeatureRequest,
-    FeatureEnableRequest,
-    PerformanceOptimizationRequest,
-)
+from api.schemas_workflows import BulkFeatureRequest, FeatureEnableRequest, PerformanceOptimizationRequest
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
+from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
-from enterprise_feature_manager import (
-    FeatureCategory,
-    FeatureStatus,
-    get_enterprise_manager,
-)
+from enterprise_feature_manager import FeatureCategory, FeatureStatus, get_enterprise_manager
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
@@ -263,6 +257,7 @@ def _build_service_distribution(vm_topology: dict) -> dict:
     operation="get_enterprise_status",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
+@service_opt_in("enable-phase4-enterprise")
 async def get_enterprise_status():
     """
     Get comprehensive enterprise feature status.
@@ -297,6 +292,7 @@ async def get_enterprise_status():
     operation="enable_enterprise_feature",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
+@service_opt_in("enable-phase4-enterprise")
 async def enable_enterprise_feature(request: FeatureEnableRequest):
     """
     Enable a specific enterprise feature.
@@ -336,7 +332,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
             )
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception as e:
         logger.error("Error enabling enterprise feature %s: %s", request.feature_name, e)
         raise HTTPException(status_code=500, detail="Failed to enable feature")
@@ -348,6 +344,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
     operation="enable_all_enterprise_features",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
+@service_opt_in("enable-phase4-enterprise")
 async def enable_all_enterprise_features():
     """
     Enable all enterprise features in dependency order.
@@ -538,10 +535,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         manager = get_enterprise_manager()
 
         if not manager._check_resource_capabilities():
-            raise HTTPException(
-                status_code=400,
-                detail="Resource optimization features must be enabled first",
-            )
+            raise HTTPException(status_code=400, detail="Resource optimization features must be enabled first")
 
         optimization_results = _build_optimization_results(request)
 
@@ -565,6 +559,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
     operation="get_infrastructure_status",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
+@service_opt_in("enable-phase4-enterprise")
 async def get_infrastructure_status():
     """
     Get role-based distributed infrastructure status and topology.
@@ -655,6 +650,7 @@ async def deploy_zero_downtime():
     operation="validate_phase4_completion",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
+@service_opt_in("enable-phase4-enterprise")
 async def validate_phase4_completion():
     """
     Validate that Phase 4 enterprise features are properly implemented.

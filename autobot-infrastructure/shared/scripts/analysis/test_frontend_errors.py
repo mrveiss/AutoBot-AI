@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from playwright.async_api import async_playwright
 
-from constants import ServiceURLs
+from autobot_shared.network_constants import ServiceURLs
 
 
 async def capture_console_errors():

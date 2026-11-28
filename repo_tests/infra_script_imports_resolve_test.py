@@ -42,6 +42,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 # ``.claude`` for the same reason as ``.worktrees`` (#14985): agent worktrees are
@@ -158,7 +160,7 @@ def _unresolvable_in_source(source: str, own_dir: Path) -> list[tuple[str, int]]
     defect to prove the matcher still works, and a matcher that quietly stops
     matching reports the whole tree clean.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     guarded = _optional_import_nodes(tree)
     found: list[tuple[str, int]] = []
     for node in ast.walk(tree):
@@ -221,11 +223,7 @@ def test_every_import_under_shared_scripts_resolves() -> None:
     """The #14518 defect: an F821-clean script that dies on its own import block."""
     found, scanned = _unresolvable()
     assert scanned > 200, f"only walked {scanned} python files — this would pass vacuously"
-    offenders = [
-        f"{rel}:{line}  {module}"
-        for rel, module, line in found
-        if (rel, module) not in _KNOWN_BROKEN
-    ]
+    offenders = [f"{rel}:{line}  {module}" for rel, module, line in found if (rel, module) not in _KNOWN_BROKEN]
     assert not offenders, (
         "these imports name a module that does not resolve against any "
         "first-party root, the stdlib, the declared requirements, or the "

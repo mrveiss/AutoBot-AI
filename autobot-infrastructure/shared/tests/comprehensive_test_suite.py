@@ -37,6 +37,7 @@ import requests
 import websockets
 
 from autobot_shared.paths import project_root
+from autobot_shared.ssot_config import config as ssot_config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -75,7 +76,7 @@ class TestSuiteConfig:
     npu_worker_host: str = "10.0.0.3"
     npu_worker_port: int = 8081
     browser_host: str = "10.0.0.6"
-    browser_port: int = 3000
+    browser_port: int = ssot_config.port.browser  # #19324: was Grafana's 3000
     vnc_host: str = "localhost"
     vnc_port: int = 6080
     ollama_host: str = "127.0.0.1"

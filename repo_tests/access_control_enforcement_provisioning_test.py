@@ -349,7 +349,7 @@ class TestTheRoleIsReachableFromAPlaybookTheProductInvokes:
 #: `{{ project_root }}/autobot-infrastructure/`, so a path resolved against it
 #: is satisfiable only on a host where the directory happens to survive from
 #: install time (#15726).
-_MAINTAINED_INFRA_ROOTS = ("code_source_dir", "playbook_dir")
+_MAINTAINED_INFRA_ROOTS = ("code_source_dir", "playbook_dir", "role_path")  # role_path: the running checkout (#20509)
 
 #: Floor on the sweep's REACH -- variables examined, never findings. A floor on
 #: findings passes when the walk reads nothing, and then fixing a real one

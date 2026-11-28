@@ -22,6 +22,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.supported_languages import SUPPORTED_LANGUAGES
 from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
@@ -34,25 +35,6 @@ _DEV_PERSONALITIES_DIR = Path(__file__).parent.parent / "resources" / "personali
 _SYSTEM_PROFILES = {"default", "professional", "rude"}
 
 _TONE_VALUES = ("direct", "professional", "casual", "technical")
-
-SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "pt": "Portuguese",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "ar": "Arabic",
-    "ru": "Russian",
-    "it": "Italian",
-    "nl": "Dutch",
-    "hi": "Hindi",
-    "he": "Hebrew",
-    "fa": "Persian",
-    "ur": "Urdu",
-}
 
 
 def _personalities_dir() -> Path:

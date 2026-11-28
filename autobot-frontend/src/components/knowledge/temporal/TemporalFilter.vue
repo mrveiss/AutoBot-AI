@@ -147,7 +147,7 @@ h5 {
   margin: var(--spacing-0);
 }
 
-h5 i {
+h5 .icon {
   color: var(--color-primary);
 }
 
@@ -240,7 +240,7 @@ h5 i {
 .filter-btn.primary {
   background: var(--color-primary);
   border: none;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .filter-btn.primary:hover {

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from agents.base_agent_types import AgentRequest, AgentResponse
+from agents.base_agent_types import AgentRequest, StandardizedAgentResponse
 from autobot_shared.coordination import Scope, ScopeError
 from autobot_shared.logging_manager import get_logger
 
@@ -27,14 +27,16 @@ logger = get_logger(__name__)
 INVALID_DECLARED_SCOPE = "invalid_declared_scope"
 
 
-def malformed_scope_response(request: AgentRequest, scopes: Sequence[str], *, agent_type: str) -> AgentResponse | None:
+def malformed_scope_response(
+    request: AgentRequest, scopes: Sequence[str], *, agent_type: str
+) -> StandardizedAgentResponse | None:
     """An error response naming the first scope the grammar rejects; None when every scope parses."""
     for raw in scopes:
         try:
             Scope.parse(raw)
         except ScopeError as exc:
             logger.info("Agent %s refused a malformed declared scope %r: %s", agent_type, raw, exc)
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=agent_type,
                 status="error",

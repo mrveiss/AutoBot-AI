@@ -141,9 +141,28 @@ def test_the_control_the_same_key_is_allowed_its_in_scope_route(call):
 
 
 def test_a_key_never_exceeds_its_owner(call):
-    """A plain user's key carrying ``admin:*`` still cannot do what its owner cannot."""
+    """A plain user's key carrying ``admin:*`` still cannot do what its owner cannot: nothing, since #20631."""
     assert call("PUT", "/settings", scopes=("admin:*",), owner_admin=False).status_code == 403
-    assert call("GET", "/knowledge", scopes=("admin:*",), owner_admin=False).status_code == 200
+    assert call("GET", "/knowledge", scopes=("admin:*",), owner_admin=False).status_code == 403
+
+
+def test_a_non_admins_key_is_refused_and_audited_even_in_scope_20631(call):
+    """#20631: the scope would allow it; the owner is what is refused. An admin's same key is the control."""
+    assert call("GET", "/knowledge", owner_admin=True).status_code == 200
+
+    response = call("GET", "/knowledge", owner_admin=False)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == _auth.NON_ADMIN_KEY_DETAIL
+    row = _audited(call)
+    assert (row["action"], row["allowed"], row["status"]) == ("api_key_refused_owner", False, 403)
+    assert row["username"] == "owner" and row["api_key_id"] and row["presented_key"] == _KEY
+
+
+def test_a_non_admins_key_is_refused_503_when_the_refusal_cannot_be_audited_20631(call):
+    call.audit.side_effect = AuditUnavailable("down")
+
+    assert call("GET", "/knowledge", owner_admin=False).status_code == 503
 
 
 @pytest.mark.parametrize(("key", "known"), [(None, True), (_KEY, False)], ids=["no key", "unknown key"])

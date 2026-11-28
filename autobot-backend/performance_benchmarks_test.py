@@ -244,7 +244,7 @@ class TestKnowledgeBasePerformance:
         # #13162: KnowledgeBase no longer carries a LlamaIndex `index`
         # attribute, so `patch.object(self.kb, "index")` raised AttributeError.
         # The retrieval backend is now reached through
-        # `knowledge.search.get_vector_search_engine()`; mocking that is the
+        # `basic_vector_search.get_vector_search_engine()`; mocking that is the
         # direct successor of the old index mock and keeps the benchmark
         # measuring the KB's own dispatch (validation, prompt-injection
         # sanitizing, result conversion) rather than a live vector store.
@@ -256,7 +256,7 @@ class TestKnowledgeBasePerformance:
         # so the benchmark declares the KB up rather than dialing Redis/Chroma.
         with (
             patch(
-                "knowledge.search.get_vector_search_engine",
+                "knowledge.search_components.basic_vector_search.get_vector_search_engine",
                 new_callable=AsyncMock,
                 return_value=mock_engine,
             ),

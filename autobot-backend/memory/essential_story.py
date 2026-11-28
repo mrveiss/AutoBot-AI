@@ -12,16 +12,17 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 import asyncio
 import hashlib
 import math
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 
+from autobot_shared.env_utils import env_flag, env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.token_count import estimate_fast
 from constants.threshold_constants import CategoryDefaults
+from knowledge.search_filters import KbPrincipal, filter_for_principal, require_kb_principal
 
 logger = get_logger(__name__)
 
@@ -41,27 +42,10 @@ _CACHE_KEY = "autobot:essential_story:{model_name}:{fingerprint}"
 # tiebreaker so equal-quality facts no longer flip on Redis SCAN order).
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    return os.environ.get(name, "1" if default else "0").strip().lower() not in ("0", "false", "no")
-
-
-def _env_float(name: str, default: float) -> float:
-    """Parse a float env var, never raising at import — bad values fall back."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        val = float(raw)
-    except (TypeError, ValueError):
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-    return val if val == val else default  # reject NaN (NaN != NaN)
-
-
-_REINFORCE_ENABLED: bool = _env_bool("AUTOBOT_ESSENTIAL_STORY_REINFORCE", True)
-_REINFORCE_WEIGHT: float = _env_float("AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT", 0.3)
-_REINFORCE_RECENCY_HALFLIFE_SECONDS: float = _env_float(
-    "AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS", float(30 * 24 * 3600)
+_REINFORCE_ENABLED: bool = env_flag("AUTOBOT_ESSENTIAL_STORY_REINFORCE", True)
+_REINFORCE_WEIGHT: float = env_float("AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT", 0.3, reject_nan=True)
+_REINFORCE_RECENCY_HALFLIFE_SECONDS: float = env_float(
+    "AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS", float(30 * 24 * 3600), reject_nan=True
 )
 
 
@@ -147,15 +131,18 @@ def _compute_facts_fingerprint(facts: list) -> str:
 class EssentialStoryGenerator:
     """Generate a compact always-loaded memory summary for LLM system prompts."""
 
-    async def generate(self, model_name: str | None = None) -> str:
+    async def generate(self, model_name: str | None = None, principal: KbPrincipal | None = None) -> str:
         """Generate compact memory summary fitting the model's token budget.
+
+        ``principal`` (#16665) is who the story is for: only facts that principal may read are
+        used. A missing principal yields an empty story, never an unscoped one.
 
         Never raises; returns empty string on any error so callers are
         unaffected when the knowledge base is unavailable.
         """
         try:
             budget = await self._get_token_budget(model_name or "default")
-            facts = await self._fetch_top_facts(budget)
+            facts = await self._fetch_top_facts(budget, principal)
             fingerprint = _compute_facts_fingerprint(facts)
             cached = await self._get_cached(model_name or "default", fingerprint)
             if cached is not None:
@@ -209,15 +196,18 @@ class EssentialStoryGenerator:
         """
         return estimate_fast(text)
 
-    async def _fetch_top_facts(self, max_tokens: int) -> List[Dict[str, Any]]:
-        """Query KB, sort by quality_score desc, return top facts within budget."""
+    async def _fetch_top_facts(self, max_tokens: int, principal: KbPrincipal | None = None) -> List[Dict[str, Any]]:
+        """Query KB, sort by quality_score desc, return top facts within budget (as *principal*, #16665)."""
         from knowledge._composed import get_knowledge_base
+
+        principal = require_kb_principal(principal)  # before any read: None raises, caught by generate()
 
         kb = await get_knowledge_base()
         # Issue #3808: limit the Redis scan to 200 facts so we never do a full
         # O(n) scan.  200 provides enough headroom to find the top-quality facts
         # for any model's token budget (max 800 tokens) after sorting.
         all_facts = await kb.get_all_facts(limit=200)
+        all_facts = await filter_for_principal(all_facts, principal, getattr(kb, "ownership_manager", None))
 
         # A2 (#12553): rank by the usage-aware effective score so frequently- and
         # recently-recalled facts rise. Collapses to raw quality_score when

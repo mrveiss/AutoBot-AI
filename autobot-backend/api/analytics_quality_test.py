@@ -231,7 +231,7 @@ class TestPerSourceStatsLookup:
             "api.codebase_analytics.storage.get_code_collection_async",
             new=fake_get_collection,
         ):
-            problems, stats = await aq._get_problems_from_chromadb(source_id="abc123")
+            problems, stats = await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id="abc123")
 
         # Per-source key must be queried; global key must NOT be queried (returned data first)
         id_queries = [c.get("ids") for c in calls if "ids" in c]
@@ -240,8 +240,8 @@ class TestPerSourceStatsLookup:
         assert stats["total_files"] == 42
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_global_stats_when_per_source_missing(self):
-        """If codebase_stats_{id} is absent, fall back to the global codebase_stats key."""
+    async def test_a_source_without_stats_never_reads_the_global_document(self):
+        """If codebase_stats_{id} is absent, the global document is another tree's: no stats (#20513)."""
         from api import analytics_quality as aq
 
         collection, calls = self._fake_collection(
@@ -256,36 +256,23 @@ class TestPerSourceStatsLookup:
             "api.codebase_analytics.storage.get_code_collection_async",
             new=fake_get_collection,
         ):
-            problems, stats = await aq._get_problems_from_chromadb(source_id="missing-id")
+            problems, stats = await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id="missing-id")
 
         id_queries = [c.get("ids") for c in calls if "ids" in c]
         assert ["codebase_stats_missing-id"] in id_queries
-        assert ["codebase_stats"] in id_queries
-        assert stats["total_files"] == 7
+        assert ["codebase_stats"] not in id_queries
+        assert "total_files" not in stats
 
     @pytest.mark.asyncio
-    async def test_global_path_when_no_source_id(self):
-        """When source_id is None, only the global codebase_stats doc is queried."""
+    async def test_no_global_path_a_missing_source_id_is_refused(self):
+        """There is no global stats or problem query: an empty id raises before ChromaDB is touched (#20513)."""
         from api import analytics_quality as aq
 
-        collection, calls = self._fake_collection(
-            problems_metadatas=[],
-            stats_by_id={"codebase_stats": {"total_files": 99}},
-        )
-
-        async def fake_get_collection():
-            return collection
-
-        with patch(
-            "api.codebase_analytics.storage.get_code_collection_async",
-            new=fake_get_collection,
-        ):
-            problems, stats = await aq._get_problems_from_chromadb()
-
-        id_queries = [c.get("ids") for c in calls if "ids" in c]
-        assert ["codebase_stats"] in id_queries
-        assert all(q != ["codebase_stats_None"] for q in id_queries)
-        assert stats["total_files"] == 99
+        with patch("api.codebase_analytics.storage.get_code_collection_async", new=AsyncMock()) as storage:
+            for empty in ("", None):
+                with pytest.raises(ValueError):
+                    await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id=empty)
+        storage.assert_not_called()
 
 
 # ============================================================================
@@ -364,18 +351,24 @@ class TestCalculateRuntimeRiskScore:
         assert abs(_calculate_runtime_risk_score(risk_map) - expected) < 1e-9
 
 
+def _touch_files(root, names) -> None:
+    for name in names:
+        (root / name).write_text("x = 1\n", encoding="utf-8")
+
+
 class TestDrillDownRuntimeRisk:
     """Tests for the runtime_risk drill-down path (#11184)."""
 
     @pytest.mark.asyncio
-    async def test_returns_top_files_sorted_desc(self):
+    async def test_returns_top_files_sorted_desc(self, tmp_path):
         """drill-down returns files sorted by runtime_risk descending."""
         risk_map = {"low.py": 0.1, "high.py": 0.9, "mid.py": 0.5}
+        _touch_files(tmp_path, risk_map)
 
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk(limit=10)
+            result = await aq._drill_down_runtime_risk(tmp_path, limit=10)
 
         assert result["status"] == "success"
         files = result["files"]
@@ -385,23 +378,24 @@ class TestDrillDownRuntimeRisk:
         assert files[0]["file"] == "high.py"
 
     @pytest.mark.asyncio
-    async def test_empty_map_returns_no_data(self):
+    async def test_empty_map_returns_no_data(self, tmp_path):
         """Empty risk map yields no_data response, not a crash."""
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value={})):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk()
+            result = await aq._drill_down_runtime_risk(tmp_path)
 
         assert result["status"] == "no_data"
 
     @pytest.mark.asyncio
-    async def test_limit_is_respected(self):
+    async def test_limit_is_respected(self, tmp_path):
         """Only `limit` top files are returned."""
         risk_map = {f"file{i}.py": i / 100.0 for i in range(20)}
+        _touch_files(tmp_path, risk_map)
 
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk(limit=5)
+            result = await aq._drill_down_runtime_risk(tmp_path, limit=5)
 
         assert len(result["files"]) == 5

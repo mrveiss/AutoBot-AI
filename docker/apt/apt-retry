@@ -1,0 +1,213 @@
+#!/bin/sh
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# apt-retry COMMAND [ARG...] -- run COMMAND, retrying with capped exponential backoff (#21325).
+#
+# The one retry wrapper for every network-bound apt step in the image builds and the
+# Clean install workflow. apt's own `Acquire::Retries` (docker/apt/80-autobot-resilience)
+# retries a fetch three times back to back; a resolver outage ("Temporary failure
+# resolving", "Could not resolve") can last a whole CI job, so the whole command is
+# retried here over minutes.
+#
+# - Only a TRANSIENT network failure is retried: the command's output must match TRANSIENT
+#   below (apt's own message texts: resolver failure, connection refused/reset/timed out, a
+#   slow or dropped read, a hash-sum mismatch from a mirror mid-sync, a 5xx from a mirror). Any
+#   other failure (unknown package, dpkg error, unmet dependencies, a 404) fails at once with
+#   the command's exit status and output. Output streams to the log as the command writes it.
+# - Window: APT_RETRY_ATTEMPTS (default 8) tries, APT_RETRY_DELAY_S (default 10) doubling
+#   after each failure up to APT_RETRY_MAX_DELAY_S (default 120): 10+20+40+80+120+120+120
+#   = 510 s of sleeping at most, plus up to 7 `apt-get update` refreshes, per command. Declared
+#   here and nowhere else; a caller that wants a shorter window sets the variables in its
+#   environment. ATTEMPTS must be a positive integer, the delays non-negative integers; anything
+#   else is an error before the command runs.
+# - Before retrying an `apt-get install`/`upgrade`/`dist-upgrade` (the subcommand is found past
+#   any options, e.g. `apt-get -y -o X=Y install`), `apt-get update` is re-run: a failed
+#   update leaves stale or missing lists, which is why the install then fails.
+# - On final failure of a transient error the command's own exit status is returned, its last
+#   apt error is in the log, and resolver diagnostics follow: the host(s) apt named,
+#   `getent hosts` for each, `resolvectl status` when present and APT_RETRY_MIRRORS_FILE
+#   (default /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
+# - The watchdog that enforces the grace is always stopped with KILL (see the loop below), so a prompt capture
+#   never costs any of it.
+# - A daemon left running by the command can hold the output pipe open; once the command has
+#   exited, the capture is given APT_RETRY_TEE_GRACE_S (default 5) seconds to flush and is then
+#   stopped (a daemon still writing then gets SIGPIPE), so the wrapper never hangs on it. INT/TERM/HUP
+#   clean up and exit 130/143/129; dash defers a trap until the foreground command returns, so a TERM
+#   sent to the wrapper alone takes effect after the command finishes.
+# - A HUNG command is bounded too: every attempt (and the `apt-get update` between attempts) runs under
+#   coreutils `timeout --kill-after`, so no attempt outlives APT_RETRY_ATTEMPT_TIMEOUT_S (default 600)
+#   seconds: TERM at the bound, KILL APT_RETRY_KILL_AFTER_S (default 15) seconds later if TERM was
+#   ignored. `timeout` is run WITHOUT --foreground on purpose: it then puts the command in its own
+#   process group and signals the whole group, so apt's http/gpg/curl children die with it instead of
+#   being orphaned holding the output pipe; --foreground would signal only the direct child. Exit 124
+#   (timed out) or 137 (killed) is TRANSIENT: logged naming the attempt, the bound and the command,
+#   then retried with the backoff above, up to APT_RETRY_ATTEMPTS. When the last attempt also hung the
+#   wrapper fails with "apt command hung; N attempts timed out". The bound is per attempt, so a caller
+#   needs its own outer limit (a workflow step's timeout-minutes) sized for more than one attempt.
+#   After a hung install/upgrade, `dpkg --configure -a` is run (same bound) before the refresh, since
+#   a kill during unpack leaves dpkg interrupted and every retry would fail at once.
+# - NON-INTERACTIVE use only: each attempt runs under `timeout` without `--foreground`, i.e. in a background
+#   process group, so a command that reads the controlling TTY would be stopped and then killed at the bound.
+# - A caller's own step timeout can be the effective bound: 8 attempts of 600 s outlast a 15-minute step.
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: apt-retry COMMAND [ARG...]" >&2
+    exit 2
+fi
+
+attempts="${APT_RETRY_ATTEMPTS:-8}"
+delay="${APT_RETRY_DELAY_S:-10}"
+max_delay="${APT_RETRY_MAX_DELAY_S:-120}"
+mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
+tee_grace_s="${APT_RETRY_TEE_GRACE_S:-5}"
+attempt_timeout_s="${APT_RETRY_ATTEMPT_TIMEOUT_S:-600}"
+kill_after_s="${APT_RETRY_KILL_AFTER_S:-15}"
+
+# The one list of transient signatures (extended regex, case-insensitive).
+TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Unable to find the server|Hash Sum mismatch|File has unexpected size|Writing more data than expected|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
+
+for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0" "APT_RETRY_TEE_GRACE_S=$tee_grace_s=0" "APT_RETRY_ATTEMPT_TIMEOUT_S=$attempt_timeout_s=1" "APT_RETRY_KILL_AFTER_S=$kill_after_s=1"; do
+    min="${spec##*=}"
+    rest="${spec%=*}"
+    value="${rest#*=}"
+    case "$value" in
+        '' | *[!0-9]*) echo "apt-retry: ${rest%%=*} must be an integer >= ${min}, got '${value}'" >&2; exit 2 ;;
+    esac
+    [ "$value" -ge "$min" ] || { echo "apt-retry: ${rest%%=*} must be an integer >= ${min}, got '${value}'" >&2; exit 2; }
+done
+
+# Strip leading zeros so shell arithmetic never reads `08` as octal, then cap the first delay too.
+norm() {
+    stripped="${1#"${1%%[!0]*}"}"
+    echo "${stripped:-0}"
+}
+attempts="$(norm "$attempts")"
+delay="$(norm "$delay")"
+max_delay="$(norm "$max_delay")"
+tee_grace_s="$(norm "$tee_grace_s")"
+attempt_timeout_s="$(norm "$attempt_timeout_s")"
+kill_after_s="$(norm "$kill_after_s")"
+[ "$delay" -le "$max_delay" ] || delay="$max_delay"
+
+command -v timeout >/dev/null 2>&1 || { echo "apt-retry: coreutils 'timeout' is required to bound a hung command" >&2; exit 2; }
+
+# bounded COMMAND...: run COMMAND under the per-attempt wall-clock bound (see the header).
+bounded() {
+    timeout --kill-after="${kill_after_s}" "${attempt_timeout_s}" "$@"
+}
+
+tmp="$(mktemp -d)" || exit 1
+tee_pid=""
+watchdog_pid=""
+cleanup() {
+    [ -z "$tee_pid" ] || kill "$tee_pid" 2>/dev/null
+    [ -z "$watchdog_pid" ] || { kill -s KILL "$watchdog_pid" 2>/dev/null; wait "$watchdog_pid" 2>/dev/null; }
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+out="$tmp/out"
+fifo="$tmp/fifo"
+mkfifo "$fifo" || exit 1
+
+subcommand=""
+seen=0
+skip=0
+for arg in "$@"; do
+    if [ "$seen" -eq 0 ]; then
+        case "$arg" in apt-get | */apt-get) seen=1 ;; esac
+        continue
+    fi
+    if [ "$skip" -eq 1 ]; then
+        skip=0
+        continue
+    fi
+    case "$arg" in
+        -o | -c | -t) skip=1 ;;
+        -*) ;;
+        *) subcommand="$arg"; break ;;
+    esac
+done
+refresh=0
+case "$subcommand" in install | upgrade | dist-upgrade) refresh=1 ;; esac
+
+diagnostics() {
+    echo "apt-retry: resolver diagnostics" >&2
+    # Host names only: a traceback quotes source such as "Unable to find the server at %s", which is no host.
+    hosts="$(sed -n -e "s/.*\(resolving\|resolve\) '\([A-Za-z0-9][A-Za-z0-9.-]*\)'.*/\2/p" -e 's/.*Unable to find the server at \([A-Za-z0-9][A-Za-z0-9.-]*\)\([^A-Za-z0-9.-]\|$\).*/\1/p' "$out" | sort -u | head -n 5)"
+    for host in $hosts; do
+        echo "--- getent hosts ${host}" >&2
+        getent hosts "$host" >&2 || echo "(no answer, exit $?)" >&2
+    done
+    [ -n "$hosts" ] || echo "(apt named no host to resolve)" >&2
+    if command -v resolvectl >/dev/null 2>&1; then
+        echo "--- resolvectl status" >&2
+        resolvectl status 2>&1 | head -n 40 >&2
+    fi
+    if [ -f "$mirrors" ]; then
+        echo "--- ${mirrors}" >&2
+        head -n 20 "$mirrors" >&2
+    fi
+}
+
+n=1
+hung_n=0
+while :; do
+    tee "$out" <"$fifo" &
+    tee_pid=$!
+    bounded "$@" >"$fifo" 2>&1
+    rc=$?
+    # A daemon the command left running can hold the fifo open, so tee never sees EOF. A watchdog
+    # (all its fds on /dev/null, so it holds nothing) stops tee after the grace; the plain `wait`
+    # returns the moment tee exits on its own, so a prompt tee costs nothing. The output captured
+    # so far is already in $out. A daemon still writing to the fifo afterwards gets SIGPIPE.
+    (
+        exec >/dev/null 2>&1 </dev/null
+        sleep "$tee_grace_s"
+        kill "$tee_pid"
+    ) &
+    watchdog_pid=$!
+    wait "$tee_pid" 2>/dev/null
+    # KILL, never TERM: a TERM sent to a subshell just forked is lost while it still carries this shell's
+    # TERM handler (dash and busybox ash), and a TERM ignored on entry cannot be reset; either leaves the
+    # watchdog asleep and the `wait` below blocking for the whole grace. KILL is uncatchable and undeferrable.
+    kill -s KILL "$watchdog_pid" 2>/dev/null
+    wait "$watchdog_pid" 2>/dev/null
+    tee_pid=""
+    watchdog_pid=""
+    [ "$rc" -eq 0 ] && exit 0
+    hung=0
+    case "$rc" in 124 | 137) hung=1 ;; esac
+    if [ "$hung" -eq 0 ] && ! grep -E -i -q "$TRANSIENT" "$out"; then
+        echo "apt-retry: not retrying (exit ${rc}, no transient network failure in the output): $*" >&2
+        exit "$rc"
+    fi
+    if [ "$hung" -eq 1 ]; then
+        hung_n=$((hung_n + 1))
+        echo "apt-retry: attempt ${n}/${attempts} timed out (exit ${rc}): no result within the ${attempt_timeout_s}s bound (killed ${kill_after_s}s after TERM if ignored): $*" >&2
+    fi
+    if [ "$n" -ge "$attempts" ]; then
+        if [ "$hung" -eq 1 ]; then
+            echo "apt-retry: apt command hung; ${hung_n} attempts timed out (${attempt_timeout_s}s bound each, ${n} attempts, last exit ${rc}): $*" >&2
+        else
+            echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
+        fi
+        diagnostics
+        exit "$rc"
+    fi
+    [ "$hung" -eq 1 ] || echo "apt-retry: attempt ${n}/${attempts} failed transiently (exit ${rc}): $*; retrying in ${delay}s" >&2
+    [ "$hung" -eq 0 ] || echo "apt-retry: retrying the timed-out command in ${delay}s" >&2
+    sleep "$delay"
+    if [ "$refresh" -eq 1 ]; then
+        [ "$hung" -eq 0 ] || bounded dpkg --configure -a || echo "apt-retry: dpkg --configure -a exited $?; the retry reports why" >&2
+        bounded apt-get update || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
+    fi
+    delay=$((delay * 2))
+    [ "$delay" -le "$max_delay" ] || delay="$max_delay"
+    n=$((n + 1))
+done

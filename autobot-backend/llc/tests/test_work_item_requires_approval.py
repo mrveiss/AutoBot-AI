@@ -39,6 +39,7 @@ class TestCreate:
                 mock_session,
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
+                project_id=str(uuid.uuid4()),  # a task requires a project (#18978)
                 title="Deploy task",
                 requires_approval_before=["pushing commits", "destructive operations"],
             )
@@ -50,6 +51,7 @@ class TestCreate:
                 mock_session,
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
+                project_id=str(uuid.uuid4()),  # a task requires a project (#18978)
                 title="Plain task",
             )
         assert item.requires_approval_before == []
@@ -94,6 +96,7 @@ class TestApprovalCategoryValidation:
                 mock_session,
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
+                project_id=str(uuid.uuid4()),  # a task requires a project (#18978)
                 title="Valid",
                 requires_approval_before=["pushing commits", "destructive operations"],
             )
@@ -106,6 +109,7 @@ class TestApprovalCategoryValidation:
                     mock_session,
                     company_id=str(uuid.uuid4()),
                     type=WorkItemType.TASK,
+                    project_id=str(uuid.uuid4()),  # a task requires a project (#18978)
                     title="Typo",
                     requires_approval_before=["pushing commit"],  # typo → not a real category
                 )

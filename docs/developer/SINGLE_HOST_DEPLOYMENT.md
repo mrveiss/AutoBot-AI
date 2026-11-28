@@ -24,7 +24,7 @@ add and configure fleet nodes (which may all be the same machine).
 | 1 — Pre-flight | Checks root, systemd, Debian/Ubuntu, disk space (5 GB), memory (2 GB), internet |
 | 2 — System Setup | Installs Python 3.14, Node 20, Ansible, nginx, git, openssl, rsync; creates `autobot` user with passwordless sudo; generates ED25519 SSH key at `/home/autobot/.ssh/autobot_key`; copies to `/etc/autobot/ssh/` |
 | 3 — Code Deployment | Clones `main` to `/opt/autobot/code_source`; rsyncs `autobot-slm-backend`, `autobot-slm-frontend`, `autobot_shared`, `autobot-infrastructure` to `/opt/autobot/` |
-| 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed,provision` |
+| 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed` |
 | 5 — Service Verification | Waits up to 7 minutes for `autobot-slm-backend` to pass `GET /api/health`; verifies PostgreSQL and nginx |
 | 6 — Register Local Node | Authenticates with SLM API; registers the machine as node `00-SLM-Manager` with roles `slm-backend`, `slm-frontend`, `slm-database`, `slm-monitoring`; assigns code source |
 | 7 — Finalize | Writes install marker at `/opt/autobot/.autobot-installed`; saves credentials to `/root/autobot-credentials.txt` |
@@ -94,7 +94,7 @@ sudo ./install.sh
 sudo ./install.sh --unattended
 
 # Custom admin password + specific branch
-sudo ./install.sh --admin-pass=MySecurePass --branch=main
+sudo ./install.sh --admin-pass-file=/path/to/password-file --branch=main
 
 # Multi-interface host: specify which IP to bind
 sudo ./install.sh --ip=192.168.1.100
@@ -201,8 +201,8 @@ single-host defaults and are rendered to `/etc/autobot/backend.env` by Ansible.
 
 | Variable | Values | Description |
 |----------|--------|-------------|
-| `AUTOBOT_DEPLOYMENT_MODE` | `local`, `hybrid`, `distributed`, `production` | Infrastructure topology |
-| `AUTOBOT_USER_MODE` | `single_user`, `single_company`, `multi_company`, `provider` | User management model |
+| `AUTOBOT_DEPLOYMENT_MODE` | `local`, `docker_local`, `distributed`, `kubernetes`, `cloud` | Infrastructure topology (`DeploymentMode`) |
+| `AUTOBOT_USER_MODE` | `single_company` (default), `multi_company`, `provider` | User management model |
 
 See [Deployment Modes](#deployment-modes) below for full details.
 
@@ -228,7 +228,7 @@ See [Deployment Modes](#deployment-modes) below for full details.
 | `AUTOBOT_INTERNAL_API_KEY` | Shared secret for SLM→backend proxy auth |
 | `CORS_ORIGINS` | Allowed CORS origins (`*` for dev) |
 
-**PostgreSQL (non-single_user modes only)**
+**PostgreSQL (required in every `AUTOBOT_USER_MODE`, #10636)**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -279,15 +279,12 @@ Controls authentication and database requirements.
 
 | Mode | Auth Required | PostgreSQL | When to Use |
 |------|--------------|------------|-------------|
-| `single_user` | No | No | Personal/dev installs, single developer |
 | `single_company` | Yes (JWT) | Yes | Small team, one organization |
 | `multi_company` | Yes (JWT + org) | Yes | Service provider, multiple organizations |
 | `provider` | Yes (JWT + full RBAC) | Yes | Hosting AutoBot for external clients |
 
-**Important for single_user mode:** Auth is disabled, so the login page in the frontend is
-cosmetic — the backend accepts all requests without credentials. This is intentional. If you see a
-login page appearing despite `single_user` mode, this is a frontend display issue only; API calls
-will succeed without authentication.
+There is no single-user mode: #10636 retired it. Every mode authenticates and is backed by
+PostgreSQL, and an unset or unrecognised `AUTOBOT_USER_MODE` falls back to `single_company`.
 
 ---
 
@@ -325,7 +322,7 @@ redis-cli -h 127.0.0.7 ping       # loopback alias
 redis-cli -h 127.0.0.1 ping       # localhost default
 
 # ChromaDB (port 8100, NOT 8000)
-curl http://127.0.0.7:8100/api/v1/heartbeat
+curl http://127.0.0.7:8100/api/v2/heartbeat
 
 # Ollama
 curl http://127.0.0.1:11434/api/version
@@ -494,7 +491,7 @@ AutoBot Backend (port 8001, nginx 8443)
   ├── Redis (port 6379)         [REQUIRED — cache, sessions, task queue]
   ├── ChromaDB (port 8100)      [REQUIRED for KB — vector search]
   ├── Ollama (port 11434)       [REQUIRED for AI — LLM inference]
-  ├── PostgreSQL (port 5432)    [only in non-single_user modes]
+  ├── PostgreSQL (port 5432)    [REQUIRED — user management, #10636]
   ├── Browser Worker (3000)     [optional — web automation]
   └── NPU Worker (8081)         [optional — hardware acceleration]
 ```

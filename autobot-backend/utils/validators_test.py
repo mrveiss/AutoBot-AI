@@ -23,7 +23,7 @@ from utils.validators import (
     validate_password,
     validate_string_length,
     validate_string_pattern,
-    validate_url,
+    validate_url_format,
     validate_username,
     validate_uuid,
 )
@@ -296,18 +296,18 @@ class TestFormatValidators:
 
     def test_validate_url_valid(self):
         """Test valid URL"""
-        result = validate_url("https://example.com", "URL")
+        result = validate_url_format("https://example.com", "URL")
         assert result == "https://example.com"
 
     def test_validate_url_http_valid(self):
         """Test HTTP URL valid when HTTPS not required"""
-        result = validate_url("http://example.com", "URL", require_https=False)
+        result = validate_url_format("http://example.com", "URL", require_https=False)
         assert result == "http://example.com"
 
     def test_validate_url_http_https_required_raises(self):
         """Test HTTP fails when HTTPS required"""
         with pytest.raises(ValueError) as exc_info:
-            validate_url("http://example.com", "URL", require_https=True)
+            validate_url_format("http://example.com", "URL", require_https=True)
         assert "must use HTTPS" in str(exc_info.value)
 
     def test_validate_url_invalid_raises(self):
@@ -320,7 +320,7 @@ class TestFormatValidators:
         ]
         for url in invalid_urls:
             with pytest.raises(ValueError) as exc_info:
-                validate_url(url, "URL")
+                validate_url_format(url, "URL")
             assert "Invalid URL format" in str(exc_info.value)
 
     def test_validate_uuid_valid(self):

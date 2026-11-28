@@ -10,9 +10,19 @@ Test script to reproduce the Ollama timeout issue
 import asyncio
 import json
 import logging
+import sys
 import time
+from pathlib import Path
 
 import aiohttp
+
+# Runs from any directory with no PYTHONPATH: the repository root goes on the path for `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.ollama_urls import ollama_chat_url  # noqa: E402
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -117,7 +127,7 @@ async def _process_streaming_response(response, stream_timeout: float = 10.0, ma
 
 async def test_ollama_streaming():
     """Test the exact same request that hangs in the backend (Issue #315: refactored)."""
-    url = "http://127.0.0.1:11434/api/chat"
+    url = ollama_chat_url(ServiceURLs.OLLAMA_LOCAL)
     headers = {"Content-Type": "application/json"}
     data = _build_test_request_data()
 

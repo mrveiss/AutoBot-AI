@@ -50,7 +50,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 _CONFIG = ".pre-commit-config.yaml"
@@ -95,8 +95,17 @@ def _conflict_sites(root: pathlib.Path | None = None) -> List[Tuple[str, int, st
 SCANNED_FILES = declare(
     "conflict-marker-scanned-files",
     discover=lambda root: _tracked_text_files(root),
-    floor=10000,
-    growth=1000,
+    # #17142: a FRACTION of the tracked-file count, not an absolute floor. This guard scans
+    # every tracked file, so its live share is exactly 1.0000 (10999 of 10999 on 24a9a1d46f) and
+    # the old `floor=10000, growth=1000` was a constant the tree walked into: ceiling 11000
+    # against a population of 10999 left ONE file of headroom, which the next PR adding a file
+    # would have consumed.
+    #
+    # 0.99 is TIGHTER than what it replaces, not looser: the old floor of 10000 is a fraction of
+    # 0.9092, where this requires 10889 of today's 10999 and rises with the tree. The 110-file
+    # margin is for files a scanner may legitimately be unable to read; it is not growth
+    # headroom, because growth no longer consumes anything here.
+    min_fraction=0.99,
     what="tracked files scanned for conflict markers (#17297)",
 )
 
@@ -133,7 +142,7 @@ def test_the_hook_is_still_armed() -> None:
 def _git(cwd: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
     """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 @pytest.mark.parametrize("marker", [_OUTER_PREFIXES[0], _SEPARATOR, _OUTER_PREFIXES[1]])

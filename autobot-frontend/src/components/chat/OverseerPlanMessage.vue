@@ -6,9 +6,12 @@
         <Icon name="sitemap" aria-hidden="true" />
         <span>{{ $t('chat.overseer.executionPlan') }}</span>
       </div>
-      <div class="plan-progress">
-        <div class="progress-bar" :style="{ width: `${progressPercentage}%` }"></div>
-      </div>
+      <BaseProgress
+        class="plan-progress"
+        :value="progressPercentage"
+        :label="$t('chat.overseer.stepsProgress', { completed: completedSteps, total: totalSteps })"
+        size="sm"
+      />
       <span class="progress-text">{{ $t('chat.overseer.stepsProgress', { completed: completedSteps, total: totalSteps }) }}</span>
     </div>
 
@@ -32,7 +35,7 @@
           <code v-if="step.command" class="step-command">{{ step.command }}</code>
         </div>
         <div class="step-status-icon">
-          <i :class="getStepIcon(step)" aria-hidden="true"></i>
+          <Icon :name="getStepIcon(step)" aria-hidden="true" />
         </div>
       </div>
     </div>
@@ -52,7 +55,8 @@
 
 import { computed } from 'vue'
 import type { OverseerPlan, OverseerStep } from '@/composables/useOverseerAgent'
-import Icon from '@/components/ui/Icon.vue'
+import { BaseProgress } from '@autobot/ui'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 
 const props = defineProps<{
@@ -90,105 +94,73 @@ const getStepClass = (step: { step_number: number }): Record<string, boolean> =>
   }
 }
 
-const getStepIcon = (step: { step_number: number }): string => {
-  const status = getStepStatus(step)
-  const icons: Record<string, string> = {
-    pending: 'fas fa-circle text-autobot-text-muted',
-    running: 'fas fa-spinner fa-spin text-blue-400',
-    streaming: 'fas fa-stream text-cyan-400',
-    explaining: 'fas fa-brain text-purple-400',
-    completed: 'fas fa-check-circle text-green-400',
-    failed: 'fas fa-times-circle text-red-400'
-  }
-  return icons[status] || icons.pending
+const STEP_ICONS: Record<string, IconName> = {
+  pending: 'circle',
+  running: 'spinner',
+  streaming: 'stream',
+  explaining: 'brain',
+  completed: 'check-circle',
+  failed: 'times-circle'
 }
+
+const getStepIcon = (step: { step_number: number }): IconName => STEP_ICONS[getStepStatus(step)] || STEP_ICONS.pending
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
+/* Mockup: the plan is a card; each step row carries its status as a tinted icon. */
 .overseer-plan {
-  @apply bg-autobot-bg-secondary border border-indigo-600/50 rounded-lg p-4 mb-4;
+  margin-block-end: var(--aui-space-4);
+  padding: var(--aui-space-4);
+  border: 1px solid var(--aui-color-border);
+  border-radius: var(--aui-radius-lg);
+  background: var(--aui-color-surface-raised);
 }
-
-.plan-header {
-  @apply flex items-center gap-4 mb-3 pb-3 border-b border-autobot-border;
-}
-
-.plan-title {
-  @apply flex items-center gap-2 text-indigo-300 font-semibold;
-}
-
-.plan-progress {
-  @apply flex-1 h-2 bg-autobot-bg-secondary rounded-full overflow-hidden;
-}
-
-.progress-bar {
-  @apply h-full bg-linear-to-r from-indigo-500 to-purple-500 transition-all duration-300;
-}
-
-.progress-text {
-  @apply text-autobot-text-muted text-sm;
-}
-
+.plan-header { display: flex; align-items: center; gap: var(--aui-space-4); margin-block-end: var(--aui-space-3); padding-block-end: var(--aui-space-3); border-block-end: 1px solid var(--aui-color-border); }
+.plan-title { display: flex; align-items: center; gap: var(--aui-space-2); color: var(--aui-color-primary); font-weight: var(--aui-font-weight-semibold); }
+.plan-progress { flex: 1; }
+.progress-text { color: var(--aui-color-text-muted); font-size: var(--aui-text-sm); }
 .plan-analysis {
-  @apply flex items-start gap-2 text-autobot-text-secondary text-sm mb-4 bg-indigo-900/30 px-3 py-2 rounded;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--aui-space-2);
+  margin-block-end: var(--aui-space-4);
+  padding: var(--aui-space-2) var(--aui-space-3);
+  border-radius: var(--aui-radius-md);
+  background: color-mix(in srgb, var(--aui-color-info) 10%, var(--aui-color-surface-raised));
+  color: var(--aui-color-text-muted);
+  font-size: var(--aui-text-sm);
 }
-
-.plan-analysis i {
-  @apply text-yellow-400 mt-0.5;
-}
-
-.steps-preview {
-  @apply space-y-2;
-}
-
+.plan-analysis :deep(svg) { color: var(--aui-color-warning); }
+.steps-preview { display: flex; flex-direction: column; gap: var(--aui-space-2); }
 .step-preview {
-  @apply flex items-center gap-3 px-3 py-2 rounded bg-autobot-bg-primary border border-autobot-border;
-  transition: all var(--duration-200) var(--ease-out);
+  display: flex;
+  align-items: center;
+  gap: var(--aui-space-3);
+  padding: var(--aui-space-2) var(--aui-space-3);
+  border: 1px solid var(--aui-color-border);
+  border-radius: var(--aui-radius-md);
+  background: var(--aui-color-surface);
 }
-
-.step-preview.running {
-  border-color: var(--color-primary);
-  background: var(--color-info-bg);
-}
-
-.step-preview.completed {
-  border-color: var(--color-success);
-  background: var(--color-success-bg);
-}
-
-.step-preview.failed {
-  border-color: var(--color-error);
-  background: var(--color-error-bg);
-}
-
 .step-number {
-  @apply w-6 h-6 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-secondary rounded-full text-xs font-semibold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--aui-space-6);
+  block-size: var(--aui-space-6);
+  border-radius: var(--aui-radius-full);
+  background: var(--aui-color-surface-sunken);
+  color: var(--aui-color-text-muted);
+  font-size: var(--aui-text-xs);
+  font-weight: var(--aui-font-weight-semibold);
 }
-
-.step-preview.completed .step-number {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.step-preview.running .step-number {
-  background: var(--color-primary);
-  color: var(--text-inverse);
-}
-
-.step-info {
-  @apply flex-1 min-w-0;
-}
-
-.step-desc {
-  @apply block text-autobot-text-secondary text-sm truncate;
-}
-
-.step-command {
-  @apply block text-autobot-text-muted text-xs font-mono mt-0.5 truncate;
-}
-
-.step-status-icon {
-  @apply text-lg;
-}
+.step-info { flex: 1; min-inline-size: 0; }
+.step-desc { display: block; overflow: hidden; color: var(--aui-color-text-muted); font-size: var(--aui-text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.step-command { display: block; overflow: hidden; color: var(--aui-color-text-muted); font-family: var(--aui-font-mono); font-size: var(--aui-text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.step-preview.running { border-color: var(--aui-color-info); }
+.step-preview.running .step-desc { color: var(--aui-color-text); font-weight: var(--aui-font-weight-semibold); }
+.step-preview.completed .step-status-icon { color: var(--aui-color-success); }
+.step-preview.failed .step-status-icon { color: var(--aui-color-error); }
+.step-preview.running .step-status-icon { color: var(--aui-color-info); }
+.step-preview.pending .step-status-icon { color: var(--aui-color-text-muted); }
+.step-status-icon { font-size: var(--aui-text-lg); }
 </style>

@@ -16,7 +16,7 @@ from api.knowledge_category_counts import (
     _get_or_compute_category_counts,
     _visible_to_every_authenticated_user,
 )
-from knowledge_categories import KnowledgeCategory, get_category_for_source
+from autobot_shared.knowledge_categories import KnowledgeCategory, get_category_for_source
 
 
 def test_private_fact_is_not_visible_to_every_authenticated_user():

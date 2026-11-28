@@ -23,4 +23,14 @@ xrdp_register_credentials: true
 # backend on co-located hosts, so SLM auth there returns 401.
 slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}/slm"
 slm_admin_user: "admin"
-slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"
+# slm_admin_password has no default: tasks/register-credentials.yml resolves it through
+# _shared/tasks/read_slm_admin_password.yml, the one reader (#19318).
+
+# #22211: the desktop server is VNC only. tasks/remove.yml refuses while an RDP session is
+# logged in; the operator sets this (-e xrdp_remove_with_live_session=true) to remove anyway.
+xrdp_remove_with_live_session: false
+xrdp_backup_dir: "{{ autobot.base_dir }}/backups"
+xrdp_port_close_wait_seconds: "{{ lookup('env', 'XRDP_PORT_CLOSE_WAIT_SECONDS') | default('30', true) }}"
+
+# #22211: named so removal and install name the same directory once.
+xrdp_config_dir: /etc/xrdp

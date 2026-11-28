@@ -18,6 +18,7 @@ import logging
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from services.gateway import ingest_governor as governor_module
 from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH, IngestGovernor
 
@@ -57,6 +58,7 @@ def _fake_redis_factory(fake: "_FakeAsyncRedis | None" = None):
 
 @pytest.fixture
 def governor() -> IngestGovernor:
+    reset_log_once(governor_module.logger)
     return IngestGovernor()
 
 

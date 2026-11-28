@@ -27,10 +27,14 @@ logger = logging.getLogger(__name__)
 
 import aiohttp
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from constants.threshold_constants import TimingConstants
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
 
 
 class SeqLogForwarder:

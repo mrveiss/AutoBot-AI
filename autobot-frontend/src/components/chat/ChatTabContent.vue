@@ -1,5 +1,10 @@
 <template>
-  <div class="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+  <div
+    :id="`tabpanel-${activeTab}`"
+    role="tabpanel"
+    :aria-labelledby="`tab-${activeTab}`"
+    class="flex-1 flex flex-col min-h-0 relative overflow-hidden"
+  >
     <!-- Chat Tab Content - Content scrolls, input stays sticky -->
     <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col min-h-0">
       <div class="flex-1 min-h-0 overflow-y-auto">
@@ -55,9 +60,9 @@
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
-      <div class="flex-1 flex flex-col bg-black">
+      <div class="flex flex-1 flex-col bg-[var(--aui-color-surface-sunken)]">
         <!-- Host selector header for VNC -->
-        <div class="vnc-header flex justify-between items-center bg-autobot-bg-secondary text-autobot-text-primary px-4 py-2 text-sm">
+        <div class="flex items-center justify-between gap-3 bg-[var(--surface2)] px-4 py-2 text-sm text-[var(--aui-color-text)]">
           <div class="flex items-center gap-3">
             <Icon name="desktop" />
             <HostSelector
@@ -65,6 +70,7 @@
               v-model="selectedVncHost"
               :chat-id="currentSessionId ?? undefined"
               required-capability="vnc"
+              include-desktop-vm
               @host-selected="onVncHostSelected"
               @open-secrets-manager="emit('open-secrets-manager')"
             />
@@ -78,15 +84,14 @@
           class="flex-1"
         />
         <!-- Empty state when no host selected -->
-        <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
-          <div class="text-center">
-            <Icon name="desktop" class="text-5xl mb-4 opacity-50" />
-            <p class="text-lg mb-2">{{ $t('chat.tabContent.selectVncHost') }}</p>
-            <p class="text-sm text-autobot-text-muted">
-              {{ $t('chat.tabContent.selectVncHostDesc') }}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          v-else
+          class="flex-1 justify-center bg-[var(--surface2)]"
+          :title="$t('chat.tabContent.selectVncHost')"
+          :description="$t('chat.tabContent.selectVncHostDesc')"
+        >
+          <template #icon><Icon name="desktop" size="xl" /></template>
+        </EmptyState>
       </div>
     </div>
 
@@ -97,7 +102,7 @@
       class="absolute inset-0 flex flex-col min-h-0"
     >
       <!-- SSH Host selector header for terminal -->
-      <div class="terminal-host-header flex items-center gap-3 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border">
+      <div class="flex items-center gap-3 border-b border-[var(--aui-color-border)] bg-[var(--surface2)] px-4 py-2 text-sm text-[var(--aui-color-text)]">
         <HostSelector
           ref="sshHostSelectorRef"
           v-model="selectedSshHost"
@@ -106,7 +111,7 @@
           @host-selected="onSshHostSelected"
           @open-secrets-manager="emit('open-secrets-manager')"
         />
-        <span v-if="selectedSshHost" class="text-xs text-autobot-text-muted">
+        <span v-if="selectedSshHost" class="text-xs text-[var(--aui-color-text-muted)]">
           {{ $t('chat.tabContent.connectedTo', { name: selectedSshHost.name }) }}
         </span>
       </div>
@@ -119,21 +124,21 @@
         class="flex-1"
       />
       <!-- Empty state when no host selected -->
-      <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-muted">
-        <div class="text-center">
-          <Icon name="terminal" class="text-5xl mb-4 opacity-50" />
-          <p class="text-lg mb-2">{{ $t('chat.tabContent.selectSshHost') }}</p>
-          <p class="text-sm text-autobot-text-muted">
-            {{ $t('chat.tabContent.selectSshHostDesc') }}
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        v-else
+        class="flex-1 justify-center bg-[var(--surface2)]"
+        :title="$t('chat.tabContent.selectSshHost')"
+        :description="$t('chat.tabContent.selectSshHostDesc')"
+      >
+        <template #icon><Icon name="terminal" size="xl" /></template>
+      </EmptyState>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { EmptyState } from '@autobot/ui'
 import DesktopAccessDenied from '@/components/desktop/DesktopAccessDenied.vue'
 import { usePermissions } from '@/composables/usePermissions'
 import { ref, watch, computed, defineAsyncComponent } from 'vue'

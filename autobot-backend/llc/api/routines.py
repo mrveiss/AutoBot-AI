@@ -24,7 +24,7 @@ routine by UUID.
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 try:
@@ -36,14 +36,19 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from llc.deps import assert_company_access, get_session, service_dep
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP, assert_company_access, service_dep
 from user_management.services import TenantContext
 
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..scheduler.routine_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
+from ._named_agent import require_member_targets
 
+logger = get_logger(__name__)
 router = APIRouter(tags=["llc-routines"])
 _service = service_dep(RoutineService)
 
@@ -108,7 +113,7 @@ class RoutineRunRead(BaseModel):
     created_at: datetime
 
 
-class TriggerResponse(BaseModel):
+class RoutineTriggerResponse(BaseModel):
     routine_id: uuid.UUID
     message: str = "Routine scheduled for immediate execution"
 
@@ -138,7 +143,7 @@ async def list_routines(
     status: Optional[RoutineStatus] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[RoutineRead]:
@@ -161,11 +166,12 @@ async def list_routines(
 async def create_routine(
     company_id: uuid.UUID,
     body: RoutineCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
     assert_company_access(ctx, company_id)
+    await require_member_targets(session, company_id, None, body.assignee_agent_id)
     if croniter is None:
         raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
     if not croniter.is_valid(body.cron_schedule):
@@ -184,15 +190,7 @@ async def create_routine(
     )
     await session.commit()
     await session.refresh(routine)
-    try:
-        redis = await get_async_redis_client()
-        if redis is not None:
-            from datetime import timezone
-
-            next_ts: float = croniter(body.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
-            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine.id}": next_ts}, nx=True)
-    except Exception:
-        pass
+    await _sync_schedule(routine.id, body.cron_schedule, nx=True)
     return RoutineRead.model_validate(routine)
 
 
@@ -204,7 +202,7 @@ async def create_routine(
 @router.get("/routines/{routine_id}", response_model=RoutineRead)
 async def get_routine(
     routine_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
@@ -216,12 +214,13 @@ async def get_routine(
 async def update_routine(
     routine_id: uuid.UUID,
     body: RoutineUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
-    await _load_owned_routine(session, routine_id, ctx)
+    owned = await _load_owned_routine(session, routine_id, ctx)
     updates = body.model_dump(exclude_unset=True)
+    await require_member_targets(session, owned.company_id, None, updates.get("assignee_agent_id"))
     new_cron = updates.get("cron_schedule")
     if croniter is None and new_cron is not None:
         raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
@@ -234,28 +233,38 @@ async def update_routine(
     await session.commit()
     await session.refresh(routine)
     new_status = updates.get("status")
+    if new_status is not None and new_status != RoutineStatus.ACTIVE:
+        await _sync_schedule(routine_id, None, nx=False)  # deactivated: off the schedule
+    elif new_status == RoutineStatus.ACTIVE or new_cron is not None:
+        await _sync_schedule(routine_id, new_cron or routine.cron_schedule, nx=False)  # re-activated or new cron
+    return RoutineRead.model_validate(routine)
+
+
+async def _sync_schedule(routine_id: uuid.UUID, cron_expr: Optional[str], *, nx: bool) -> None:
+    """Put the routine on the schedule at its next fire time, or take it off when *cron_expr* is None.
+
+    Runs after the routine is committed, so it is post-commit work: a failure is logged as a WARNING and the
+    route still answers success, because the change is saved (owner decision 2026-11-22, #21332).
+    """
+    member = f"routine:{routine_id}"
     try:
         redis = await get_async_redis_client()
-        if redis is not None:
-            if new_status is not None and new_status != RoutineStatus.ACTIVE:
-                # Deactivated — remove from schedule
-                await redis.zrem(_SCHEDULE_KEY, f"routine:{routine_id}")
-            elif new_status == RoutineStatus.ACTIVE or new_cron is not None:
-                # Re-activated or cron changed — re-insert with updated next fire time
-                cron_expr = new_cron or routine.cron_schedule
-                from datetime import timezone
-
-                next_ts: float = croniter(cron_expr, datetime.now(tz=timezone.utc)).get_next(float)
-                await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts}, nx=False)
-    except Exception:
-        pass
-    return RoutineRead.model_validate(routine)
+        if redis is None:
+            logger.warning("Routine %s saved but its schedule was not updated: no Redis client", routine_id)
+            return
+        if cron_expr is None:
+            await redis.zrem(_SCHEDULE_KEY, member)
+            return
+        next_ts: float = croniter(cron_expr, datetime.now(tz=timezone.utc)).get_next(float)
+        await redis.zadd(_SCHEDULE_KEY, {member: next_ts}, nx=nx)
+    except Exception as exc:  # noqa: BLE001 - the routine is committed; the schedule write is follow-up work
+        logger.warning("Routine %s saved but its schedule write failed: %s", routine_id, safe_log_text(repr(exc)))
 
 
 @router.delete("/routines/{routine_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_routine(
     routine_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -269,7 +278,7 @@ async def list_routine_runs(
     routine_id: uuid.UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[RoutineRunRead]:
@@ -280,24 +289,32 @@ async def list_routine_runs(
 
 @router.post(
     "/routines/{routine_id}/trigger",
-    response_model=TriggerResponse,
+    response_model=RoutineTriggerResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def trigger_routine(
     routine_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> TriggerResponse:
+) -> RoutineTriggerResponse:
     routine = await _load_owned_routine(session, routine_id, ctx)
     if routine.status != RoutineStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Routine is not active")
     # Schedule for immediate dispatch — the scheduler creates the run record when it fires,
     # preventing the double-run that would occur if we called record_run here too.
+    await _schedule_now(routine_id)
+    return RoutineTriggerResponse(routine_id=routine_id)
+
+
+async def _schedule_now(routine_id: uuid.UUID) -> None:
+    """Put the routine on the schedule for immediate dispatch; 503 when nothing was scheduled (#22003)."""
+    redis = await get_async_redis_client()
+    if redis is None:
+        logger.error("Routine %s trigger refused: no Redis client, nothing was scheduled", routine_id)
+        raise fixed_refusal(status.HTTP_503_SERVICE_UNAVAILABLE)
     try:
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": time.time()}, nx=False)
-    except Exception:
-        pass
-    return TriggerResponse(routine_id=routine_id)
+        await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": time.time()}, nx=False)
+    except Exception as exc:  # noqa: BLE001 - any Redis failure means the trigger was not scheduled
+        logger.error("Routine %s trigger refused: schedule write failed: %s", routine_id, safe_log_text(repr(exc)))
+        raise http_refusal(status.HTTP_503_SERVICE_UNAVAILABLE, exc, scope="routines.trigger") from None

@@ -127,7 +127,7 @@ HOOK_METADATA = {
     },
     HookPoint.AFTER_TOOL_EXECUTE: {
         "description": "Called after tool execution completes",
-        "can_modify": ["result"],
+        "can_modify": ["tool_result"],
         "return_type": "Modified result or None",
     },
     HookPoint.TOOL_ERROR: {
@@ -201,7 +201,10 @@ HOOK_METADATA = {
         "return_type": "None (logging only)",
     },
     HookPoint.SYSTEM_PROMPT_READY: {
-        "description": "Called after the system prompt is built; return a str to replace it",
+        "description": (
+            "Called with the STABLE system text only (per-turn memory is appended after it); a returned str "
+            "replaces it and becomes part of the hashed, cache-reused prefix"
+        ),
         "can_modify": ["system_prompt"],
         "return_type": "Modified system prompt str or None",
     },

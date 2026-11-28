@@ -173,6 +173,7 @@ const PYTHON_ONLY_PORTS = [
   // stated plainly instead of re-attaching an unrelated issue number.
   'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes
   'tts', // TTS worker — backend-to-worker only, no frontend consumer
+  'frontend_http', // nginx's plain-HTTP port, read only by the backend's config.frontend_url (#19326) — the browser frontend is served from it and addresses itself by its runtime origin
   'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only
   // raw VNC protocol port (x11vnc), consumed by the node's own systemd
   // service + the Ansible vnc role. The frontend's desktop viewer only ever
@@ -185,8 +186,16 @@ const PYTHON_ONLY_PORTS = [
   // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
   // dynamic runtime value with no static SSOT default on either side (#14173)
   'vnc_server',
+  // VNC display-to-port base (RFB 5900 + display, #22146): read only by the backend's
+  // desktop_streaming_manager to allocate per-session x11vnc ports; the frontend gets
+  // the session's port from the API response and addresses only the noVNC web port ('vnc')
+  'vnc_base',
+  // The Windows NPU worker (#19325): the backend pairs and dials it; the frontend never
+  // addresses it, and reads only the Linux worker's port ('npu' above).
+  'npu_windows',
 ] as const
-const TS_ONLY_PORTS = ['slmAdmin'] as const
+// frontendServed: the port the browser reaches on a nginx host; it has no Python reader (#20058)
+const TS_ONLY_PORTS = ['slmAdmin', 'frontendServed'] as const
 
 describe('Python source parser (self-check)', () => {
   it('reads the canonical Python config off disk', () => {
@@ -211,7 +220,8 @@ describe('Python source parser (self-check)', () => {
   })
 })
 
-const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'ssot_constants.py')
+// CategoryDefaults lives in its own module since #19335 (ssot_constants re-exports it).
+const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'category_defaults.py')
 
 function findPythonSharedSsotPath(): string {
   let dir = resolve(process.cwd())

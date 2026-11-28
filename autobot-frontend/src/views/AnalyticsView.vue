@@ -61,7 +61,7 @@
 
       <!-- Router View for Child Components -->
       <div class="analytics-router-view">
-        <router-view />
+        <router-view :key="sourceViewKey" />
       </div>
     </div>
   </div>
@@ -74,6 +74,15 @@ import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { useNavOverflow } from '@/composables/useNavOverflow'
 
 const route = useRoute()
+
+// #21474: a codebase project page is keyed by its source. A source switch re-targets the same route
+// with another `:sourceId`, which Vue would otherwise reuse with the previous source's results and
+// in-flight requests; a changed key remounts the routed page (and its sub-tab view) as on page open.
+// Routes without a source keep `undefined` and are never remounted by this.
+const sourceViewKey = computed(() => {
+  const sourceId = route.params.sourceId
+  return typeof sourceId === 'string' ? sourceId : undefined
+})
 
 interface AnalyticsTab {
   to: string
@@ -178,7 +187,7 @@ const showMore = ref(false)
   background-color: var(--bg-primary);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .nav-tabs {
@@ -210,14 +219,14 @@ const showMore = ref(false)
 .more-tabs-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--z-20);
 }
 
 .more-tabs-menu {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 30;
+  z-index: var(--z-30);
   min-width: 12rem;
   padding: var(--spacing-1) 0;
   background: var(--bg-secondary);

@@ -49,7 +49,7 @@ class TestForksConverged:
     @pytest.mark.parametrize(
         "rel_path",
         [
-            "autobot-backend/circuit_breaker.py",
+            "autobot_shared/circuit_breaker.py",
             "autobot-backend/agents/agent_orchestration/types.py",
         ],
     )
@@ -59,7 +59,7 @@ class TestForksConverged:
     @pytest.mark.parametrize(
         "rel_path",
         [
-            "autobot-backend/circuit_breaker.py",
+            "autobot_shared/circuit_breaker.py",
             "autobot-backend/agents/agent_orchestration/types.py",
             "autobot-npu-worker/core/npu_integration.py",
         ],

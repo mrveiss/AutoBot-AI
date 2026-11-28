@@ -18,6 +18,9 @@ import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
+// #20682: the attach/detach controls show only to an owner/admin, whom the members list reports.
+const ADMIN_MEMBERS = { members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true }
+
 const get = vi.fn()
 const post = vi.fn()
 const del = vi.fn()
@@ -30,6 +33,9 @@ vi.mock('@/plugins/api', () => ({
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
+
+// The role and workflow selects are the kit's select menu, whose popper does not run in jsdom.
+vi.mock('reka-ui', async () => (await import('@/test/rekaSelectStub')).rekaSelectStub())
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
@@ -67,16 +73,21 @@ const PEOPLE = [
 
 const PROCESSES = [{ role_id: 'r1', role_name: 'Head of Sales', workflow_id: 'wf-quarterly' }]
 const ROLES = [{ id: 'r1', name: 'Head of Sales' }, { id: 'r2', name: 'SRE' }]
+// #21242: the company's workflows, which the attach form's select lists.
+const workflowRow = (id: string) => ({ workflow_id: id, name: id, kind: 'workflow' })
+let companyWorkflows: ReturnType<typeof workflowRow>[] = []
 
 /** GET responses. `processes` is swapped for the SECOND process-nodes call, so
  * a test can tell the pre-mutation list apart from the post-mutation one. */
 function respond(processes: unknown = PROCESSES, afterProcesses: unknown = processes): void {
   let processCalls = 0
   get.mockImplementation((url: string) => {
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve(companyWorkflows)
     if (url.includes('/process-nodes')) {
       processCalls += 1
       return Promise.resolve({ nodes: processCalls === 1 ? processes : afterProcesses })
     }
+    if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
     if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
     return Promise.resolve({ nodes: [] })
@@ -92,12 +103,17 @@ function processFetchCount(): number {
 // mutates the instance, so building it once is enough.
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-async function mountChart() {
+async function mountChart(extraStubs: Record<string, boolean> = {}) {
   const wrapper = mount(OrgChart, {
-    global: { plugins: [i18n], stubs: { CanvasNodeSidebar: true, OrgPeopleList: true } },
+    global: { plugins: [i18n], stubs: { CanvasNodeSidebar: true, OrgPeopleList: true, ...extraStubs } },
   })
   await flushPromises()
   return wrapper
+}
+
+/** Choose an option of one of the attach form's selects. */
+async function pick(wrapper: Awaited<ReturnType<typeof mountChart>>, testId: string, value: string) {
+  await wrapper.get(`[data-testid="${testId}"] [data-option="${value}"]`).trigger('click')
 }
 
 async function openCanvas(wrapper: Awaited<ReturnType<typeof mountChart>>) {
@@ -111,6 +127,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
     post.mockReset()
     del.mockReset()
     push.mockReset()
+    companyWorkflows = ['wf-quarterly', 'wf-new'].map(workflowRow)
   })
 
   // An empty picker and a picker that could not load are different claims, and
@@ -121,6 +138,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
     respond()
     get.mockImplementation((url: string) => {
       if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.reject(new Error('HTTP 503: upstream'))
       return Promise.resolve({ nodes: [] })
@@ -137,6 +155,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
   it('stays silent when the roles request answers with none', async () => {
     get.mockImplementation((url: string) => {
       if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve([])
       return Promise.resolve({ nodes: [] })
@@ -162,8 +181,8 @@ describe('OrgChart process attach/detach (#14549)', () => {
     const wrapper = await mountChart()
     await openCanvas(wrapper)
 
-    await wrapper.find('[data-testid="process-attach-role-select"]').setValue('r1')
-    await wrapper.find('[data-testid="process-attach-workflow-input"]').setValue('wf-quarterly')
+    await pick(wrapper, 'process-attach-role-select', 'r1')
+    await pick(wrapper, 'process-attach-workflow-select', 'wf-quarterly')
     const submit = wrapper.find('[data-testid="process-attach-submit"]')
     await submit.trigger('click')
     // Second click while the first is still in flight.
@@ -225,8 +244,8 @@ describe('OrgChart process attach/detach (#14549)', () => {
     await openCanvas(wrapper)
     expect(processFetchCount()).toBe(1)
 
-    await wrapper.find('[data-testid="process-attach-role-select"]').setValue('r1')
-    await wrapper.find('[data-testid="process-attach-workflow-input"]').setValue('wf-quarterly')
+    await pick(wrapper, 'process-attach-role-select', 'r1')
+    await pick(wrapper, 'process-attach-workflow-select', 'wf-quarterly')
     await wrapper.find('[data-testid="process-attach-submit"]').trigger('click')
     await flushPromises()
 
@@ -258,14 +277,77 @@ describe('OrgChart process attach/detach (#14549)', () => {
     expect(nodes.filter((n) => n.type === 'org-process')).toHaveLength(1)
   })
 
+  // #21242: the workflow is chosen from the company's workflows, not typed.
+  it('lists the company workflows in the select, those already on the chosen role disabled', async () => {
+    respond(PROCESSES)
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+    await pick(wrapper, 'process-attach-role-select', 'r1')
+
+    const options = wrapper.findAll('[data-testid="process-attach-workflow-select"] [data-option]')
+    expect(options.map((o) => o.attributes('data-option'))).toEqual(['wf-quarterly', 'wf-new'])
+    expect(options[0].attributes('disabled')).toBeDefined()
+    expect(options[1].attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="process-attach-workflow-input"]').exists()).toBe(false)
+  })
+
+  it('opens the create modal from New workflow; the new workflow is chosen and attachable without a reload', async () => {
+    respond([], [])
+    companyWorkflows = [workflowRow('wf-quarterly')]
+    post.mockImplementation((url: string, body: { workflow_id: string }) => {
+      if (url === '/api/llc/workflows/c1') {
+        companyWorkflows = [...companyWorkflows, workflowRow(body.workflow_id)]
+        return Promise.resolve(workflowRow(body.workflow_id))
+      }
+      return Promise.resolve(undefined)
+    })
+    const wrapper = await mountChart({ teleport: true })
+    await openCanvas(wrapper)
+    expect(wrapper.find('[data-testid="workflow-create-form"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="process-attach-new-workflow"]').trigger('click')
+    await wrapper.get('[data-testid="workflow-create-id"] input').setValue('wf-fresh')
+    await wrapper.get('[data-testid="workflow-create-form"]').trigger('submit')
+    await flushPromises()
+
+    // Created only: the org chart form has no role to attach to until one is chosen.
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledWith('/api/llc/workflows/c1', expect.objectContaining({ workflow_id: 'wf-fresh' }))
+    expect(wrapper.find('[data-testid="workflow-create-form"]').exists()).toBe(false)
+    const select = wrapper.get('[data-testid="process-attach-workflow-select"]')
+    expect(select.findAll('[data-option]').map((o) => o.attributes('data-option'))).toContain('wf-fresh')
+    expect(select.get('[data-select-value]').attributes('data-select-value')).toBe('wf-fresh')
+
+    await pick(wrapper, 'process-attach-role-select', 'r1')
+    await wrapper.get('[data-testid="process-attach-submit"]').trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenLastCalledWith('/api/llc/roles/c1/r1/workflows', { workflow_id: 'wf-fresh' })
+  })
+
+  it('says the workflows list is unavailable in the form when it failed to load', async () => {
+    respond()
+    get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.reject(new Error('HTTP 500: boom'))
+      if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(wrapper.find('[data-testid="process-attach-workflows-unavailable"]').exists()).toBe(true)
+  })
+
   it('a failed attach surfaces an error and does not add a node', async () => {
     respond(PROCESSES)
     post.mockRejectedValue(new Error('HTTP 400: unknown workflow id'))
     const wrapper = await mountChart()
     await openCanvas(wrapper)
 
-    await wrapper.find('[data-testid="process-attach-role-select"]').setValue('r2')
-    await wrapper.find('[data-testid="process-attach-workflow-input"]').setValue('wf-new')
+    await pick(wrapper, 'process-attach-role-select', 'r2')
+    await pick(wrapper, 'process-attach-workflow-select', 'wf-new')
     await wrapper.find('[data-testid="process-attach-submit"]').trigger('click')
     await flushPromises()
 

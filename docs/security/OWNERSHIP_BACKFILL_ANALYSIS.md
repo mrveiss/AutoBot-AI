@@ -44,6 +44,16 @@ AutoBot uses **TWO SEPARATE** conversation storage systems:
 - **Session ID Format**: `chat-{timestamp}-{uuid}` or UUID
 
 #### System B: Conversation Transcripts (ChatWorkflowManager)
+
+> **Status (#18293):** `data/conversation_transcripts/` is a legacy, read-only store and
+> nothing writes to it. Chat sessions (`chat_history`, the `chat_sessions` concept in
+> `autobot_shared/store_authority.py`) are the system of record for every conversation turn.
+> The transcripts are declared there as `legacy_conversation_transcripts`, with no write
+> sites, and are located only by `legacy_conversation_transcripts_dir()`, which reads the SSOT
+> setting `AUTOBOT_LEGACY_TRANSCRIPTS_DIR` (default `data/conversation_transcripts` under
+> `AUTOBOT_BASE_DIR`, the backend's code directory on an install). Moving or
+> disposing of the existing files goes through the #17038 review queue.
+
 - **Location**: `data/conversation_transcripts/{session_id}.json`
 - **Manager**: `src/chat_workflow_manager.py`
 - **Schema**:

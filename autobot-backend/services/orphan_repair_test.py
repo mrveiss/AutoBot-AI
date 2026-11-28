@@ -29,20 +29,21 @@ from services.orphan_repair import (
     user_state,
 )
 from services.orphan_repair_types import EnvelopeSecretRepairer, KnowledgeFactRepairer
+from testkit.fake_async_session import FakeAsyncSession
 
 LIVE, NEW_OWNER = str(uuid.uuid4()), str(uuid.uuid4())
 DELETED, HARD_DELETED = str(uuid.uuid4()), str(uuid.uuid4())
 
 
-class _Users:
+class _Users(FakeAsyncSession):
     """A session that knows four users: two live, one soft-deleted, one hard-deleted (no row)."""
 
     def __init__(self, secret=None, grantees=()) -> None:
+        super().__init__(on_get=self._user_or_secret, default_result=self._answer)
         self.secret, self.grantees, self.secret_locks = secret, list(grantees), []
 
-    async def get(self, model, key, with_for_update=None):
+    def _user_or_secret(self, model, key):
         if model.__name__ == "Secret":
-            self.secret_locks.append(with_for_update)
             return self.secret
         key = str(key)
         if key in (LIVE, NEW_OWNER):
@@ -51,9 +52,13 @@ class _Users:
             return SimpleNamespace(deleted_at=datetime.now(tz=timezone.utc))
         return None
 
-    async def execute(self, statement):
-        rows = self.grantees if "grantee" in str(statement) else [self.secret.id]  # a grant query, or the listing
-        return SimpleNamespace(scalars=lambda: iter(rows))
+    def _answer(self, statement):
+        return self.grantees if "grantee" in str(statement) else [self.secret.id]  # a grant query, or the listing
+
+    async def get(self, entity, ident, **kwargs):
+        if entity.__name__ == "Secret":
+            self.secret_locks.append(kwargs.get("with_for_update"))
+        return await super().get(entity, ident, **kwargs)
 
 
 class _KB:

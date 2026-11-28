@@ -279,16 +279,6 @@
       @close="showAnalysisModal = false"
     >
         <div class="modal-body">
-          <div class="field-group">
-            <label>{{ $t('analytics.evolution.modal.repoPath') }}</label>
-            <input
-              v-model="analysisForm.repo_path"
-              type="text"
-              class="field-input"
-              placeholder="/opt/autobot"
-            />
-          </div>
-
           <div class="form-row">
             <div class="field-group">
               <label>{{ $t('analytics.evolution.modal.startDateOptional') }}</label>
@@ -334,7 +324,7 @@
         <button
           @click="runAnalysis"
           class="btn-action-primary"
-          :disabled="!analysisForm.repo_path || evolution.loading.value"
+          :disabled="!sourceId || evolution.loading.value"
         >
           <Icon name="sync-alt" :spin="true" v-if="evolution.loading.value" />
           <Icon name="play-circle" v-else />
@@ -355,13 +345,14 @@ import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
 const evolution = useEvolution(sourceId)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const showAnalysisModal = ref(false)
 
 // Filter state (Issue #247)
@@ -384,7 +375,6 @@ const availableMetrics = computed(() => [
 ])
 
 const analysisForm = ref({
-  repo_path: '/opt/autobot',
   start_date: '',
   end_date: '',
   commit_limit: 100,
@@ -410,7 +400,6 @@ async function applyFilters() {
 
 async function runAnalysis() {
   const request: EvolutionAnalysisRequest = {
-    repo_path: analysisForm.value.repo_path,
     commit_limit: analysisForm.value.commit_limit,
   }
 
@@ -443,18 +432,7 @@ function formatMetricName(metric: string): string {
     .join(' ')
 }
 
-function formatDate(dateString: string): string {
-  if (!dateString) return 'N/A'
-  try {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return dateString
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: { year: 'numeric', month: 'short', day: 'numeric' }, emptyText: 'N/A' })
 
 // Load all data on mount
 onMounted(async () => {
@@ -524,7 +502,7 @@ onMounted(async () => {
 
 .summary-icon.refactor {
   background: var(--color-purple-bg, rgba(139, 92, 246, 0.1));
-  color: var(--color-purple, #8b5cf6);
+  color: var(--color-purple);
 }
 
 .summary-value {

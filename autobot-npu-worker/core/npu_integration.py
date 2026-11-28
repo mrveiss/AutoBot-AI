@@ -19,18 +19,18 @@ singletons below stay worker-side, since they are this process's instances.
 import asyncio
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import CircuitState  # noqa: F401  (#12656: re-exported for callers)
+from autobot_shared.npu import USE_AUTHENTICATED_CLIENT  # noqa: F401
+from autobot_shared.npu import NPUInferenceRequest  # noqa: F401
+from autobot_shared.npu import WorkerState  # noqa: F401
 from autobot_shared.npu import (  # noqa: F401
-    USE_AUTHENTICATED_CLIENT,
-    NPUInferenceRequest,
     NPUTaskQueue,
     NPUWorkerClient,
     NPUWorkerPool,
-    WorkerState,
     get_service_url,
     load_worker_config,
-    process_with_npu_fallback as _shared_process_with_npu_fallback,
 )
+from autobot_shared.npu import process_with_npu_queue_fallback as _shared_process_with_npu_fallback  # noqa: F401
+from autobot_shared.ssot_constants import CircuitState  # noqa: F401  (#12656: re-exported for callers)
 
 logger = get_logger(__name__)
 

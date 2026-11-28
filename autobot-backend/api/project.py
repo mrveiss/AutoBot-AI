@@ -16,13 +16,14 @@ URLs. This module exposes the correct /api/project/* paths.
 
 from typing import Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     PhaseStatusItem,
     ProjectReportResponse,
     ProjectStatusResponse,
 )
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
@@ -30,7 +31,10 @@ from project_state_manager import get_project_state_manager
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+# #16375: every route here was reachable anonymously. Gated at the ROUTER so a
+# route added later inherits it. Authentication only:
+# read-only project status any signed-in user may see.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

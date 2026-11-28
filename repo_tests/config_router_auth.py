@@ -20,6 +20,8 @@ from pathlib import Path
 
 from repo_tests.router_auth_enumerator import BACKEND, Verdict, auth_vocabulary, classify
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Every registry that lists routers as config tuples. ``mcp_routers.py`` is
 #: absent because it lists none of its own: its routers are in ``core_routers.py``.
 CONFIG_REGISTRIES: tuple[str, ...] = tuple(
@@ -55,7 +57,7 @@ def config_registered_routers(root: Path) -> list[tuple[str, str]]:
     found = []
     for relative in CONFIG_REGISTRIES:
         try:
-            tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / relative).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         for config in _config_lists(tree):

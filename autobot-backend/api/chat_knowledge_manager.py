@@ -34,16 +34,18 @@ from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
-from api.chat_knowledge_prompt import build_summary_prompt
+from api.chat_knowledge_prompt import summarise_transcript
 from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from chat_history.context_overflow import ConversationSummarizer
 from constants.threshold_constants import CategoryDefaults
 from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge_base import KnowledgeBase
+from knowledge.search_filters import filter_for_user_id
+from knowledge_factory import get_knowledge_base_async
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
@@ -69,7 +71,7 @@ def peek_chat_knowledge_manager(request: Request | None):
     """Return the cached manager without ever constructing one.
 
     Side-effect free by design: the health probe must observe the real state,
-    not create it (``ChatKnowledgeManager.__init__`` builds a KnowledgeBase and
+    not create it (``ChatKnowledgeManager.__init__`` builds a history manager and
     an LLM service, far beyond the aggregator's per-probe budget).
     """
     if request is None:
@@ -149,7 +151,8 @@ class ChatKnowledgeManager:
 
     def __init__(self):
         """Initialize manager with knowledge base and storage paths."""
-        self.knowledge_base = KnowledgeBase()
+        # #18122: resolved lazily from the canonical instance (see _resolve_kb)
+        self.knowledge_base = None
         self.chat_history_manager = ChatHistoryManager()
         self.llm_interface = get_llm_service()
 
@@ -166,6 +169,13 @@ class ChatKnowledgeManager:
         os.makedirs(self.storage_dir, exist_ok=True)
 
         logger.info("ChatKnowledgeManager initialized")
+
+    async def _resolve_kb(self):
+        """Return the canonical KnowledgeBase (an injected one wins); raise while it is unavailable."""
+        kb = self.knowledge_base or await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+        return kb
 
     async def create_or_update_context(
         self,
@@ -341,7 +351,7 @@ class ChatKnowledgeManager:
                     metadata["owner_id"] = context.user_id
                     metadata["visibility"] = "private"  # Default visibility
 
-                kb_id = await self.knowledge_base.add_content(
+                kb_id = await (await self._resolve_kb()).add_content(
                     content=item["content"],
                     metadata=metadata,
                 )
@@ -422,27 +432,23 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        # #15700: framed as data. A refused transcript raises TranscriptRefused (a 422),
-        # so no entry is written.
-        summary_prompt = build_summary_prompt(messages)
-
-        summary_response = await self.llm_interface.chat(
-            messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]
-        )
-        summary = summary_response.content
+        # #15700: vetted, then framed as data by the one summariser (#20852). A refused
+        # transcript raises TranscriptRefused (a 422), so no entry is written.
+        summarizer = ConversationSummarizer(gateway=self.llm_interface)
+        summary = await summarise_transcript(summarizer, messages)
 
         context = self.chat_contexts.get(chat_id)
         compiled_knowledge = self._build_compiled_knowledge_dict(chat_id, title, context, messages, summary)
         kb_metadata = self._build_chat_kb_metadata(compiled_knowledge["metadata"], chat_id, context)
 
-        kb_id = await self.knowledge_base.add_content(content=summary, metadata=kb_metadata)
+        kb_id = await (await self._resolve_kb()).add_content(content=summary, metadata=kb_metadata)
         compiled_knowledge["kb_id"] = kb_id
 
         logger.info("Chat %s compiled to knowledge base as %s", chat_id, kb_id)
         return compiled_knowledge
 
     async def search_chat_knowledge(
-        self, query: str, chat_id: str | None = None, include_temporary: bool = True
+        self, query: str, chat_id: str | None = None, include_temporary: bool = True, user_id: str | None = None
     ) -> List[Metadata]:
         """Search knowledge across chats or within specific chat"""
         results = []
@@ -450,7 +456,9 @@ class ChatKnowledgeManager:
         # Search in permanent knowledge base
         # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
         # Issue #13009: exclude quarantined research facts (#12622).
-        kb_results = await self.knowledge_base.search(query, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
+        kb = await self._resolve_kb()
+        kb_results = await kb.search(query, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
+        kb_results = await filter_for_user_id(kb_results, kb, user_id)  # #16665
 
         for result in kb_results:
             # Filter by chat if specified

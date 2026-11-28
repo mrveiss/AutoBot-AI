@@ -13,6 +13,8 @@ frameworks, and file types.
 from pathlib import Path
 from typing import Dict, Set
 
+from autobot_shared.testfile_names import is_test_filename
+
 # =============================================================================
 # File Categories
 # =============================================================================
@@ -374,6 +376,7 @@ SKIP_DIRS: Set[str] = {
     ".vscode",
     ".vs",
     "vendor",
+    "external",  # #22157: vendored third-party test trees, not AutoBot code
     "bower_components",
     "target",  # Rust/Java build output
     "bin",
@@ -382,9 +385,8 @@ SKIP_DIRS: Set[str] = {
     ".m2",  # Java build caches
     # #13602: git worktrees are near-complete copies of the repo. Measured on a
     # working checkout, 160,105 of 167,072 code files (96%) lived under these two
-    # directories — every analytics walk was scanning the repo ~26 times over.
-    # `duplicate_detector._get_files_to_scan` already documented `.worktrees/` as
-    # pruned; it never was, because the name was missing from this set.
+    # directories — every analytics walk was scanning the repo ~26 times over;
+    # `.worktrees/` was documented as pruned but missing from this set.
     ".worktrees",
     "worktrees",  # .claude/worktrees — same content, different parent
 }
@@ -597,8 +599,7 @@ def _get_category_by_extension(extension: str, filename: str) -> str:
         return FILE_CATEGORY_DATA
     if extension in ASSET_EXTENSIONS:
         return FILE_CATEGORY_ASSETS
-    if extension in ALL_CODE_EXTENSIONS:
-        return FILE_CATEGORY_CODE
+    # Code extensions and unknown ones alike are code.
     return FILE_CATEGORY_CODE
 
 
@@ -618,13 +619,12 @@ def get_file_category(file_path: Path) -> str:
     extension = file_path.suffix.lower()
     filename = file_path.name.lower()
 
-    # Directory-based categories take precedence
-    dir_category = _get_category_by_directory(path_parts)
-    if dir_category:
-        return dir_category
-
-    # Fall back to extension-based categorization
-    return _get_category_by_extension(extension, filename)
+    # Directory first, then test-file names (#20493), then the extension
+    return (
+        _get_category_by_directory(path_parts)
+        or (FILE_CATEGORY_TEST if is_test_filename(filename) else None)
+        or _get_category_by_extension(extension, filename)
+    )
 
 
 def get_language(file_path: Path) -> str:

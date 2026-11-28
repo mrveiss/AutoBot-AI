@@ -156,7 +156,7 @@ services:
 
 ### Check Current Configuration
 ```bash
-python -c "from src.config import *; print(f'Backend: {API_BASE_URL}'); print(f'Ollama: {OLLAMA_URL}')"
+python -c "from autobot_shared.ssot_config import config; print(f'Backend: {config.backend_url}'); print(f'Ollama: {config.ollama_url}')"
 ```
 
 ### Verify Environment Variables

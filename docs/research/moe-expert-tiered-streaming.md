@@ -321,3 +321,11 @@ graceful per-file fallback.**
 | Report a sampled fidelity score beside every lossy optimization's savings (adopt now) | #16569 |
 | Persist layer and tensor access frequency across restarts to seed the warm set | #16570, blocked by #13035 |
 | Umbrella for this code area | #13030 |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13030 — umbrella(optimization): large-model inference on lean hardware is scaffolded but non-functional — 7 defects
+- #16569 — feat(optimization): every lossy optimization reports a sampled fidelity score, not just its savings
+- #16570 — feat(optimization): persist layer access frequency across restarts to seed the warm set (blocked by #13035)

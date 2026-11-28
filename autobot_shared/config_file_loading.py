@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import IO, Any, Callable, Dict
 
 import yaml
 
@@ -60,10 +60,31 @@ class LoadedConfig:
         return self.source == SOURCE_FILE
 
 
+def parse_key_value(handle: IO[str]) -> Dict[str, str]:
+    """Parse ``key=value`` lines (``#`` comments and lines without ``=`` skipped), for ``parser=``.
+
+    The one definition of this format; :func:`format_key_value` is its writer.
+    """
+    parsed: Dict[str, str] = {}
+    for line in handle:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        parsed[key.strip()] = value.strip()
+    return parsed
+
+
+def format_key_value(values: Dict[str, Any]) -> str:
+    """Render *values* as ``key=value`` lines, the inverse of :func:`parse_key_value`."""
+    return "".join(f"{key}={value}\n" for key, value in values.items())
+
+
 def load_config_file(
     config_path: str | Path,
     defaults_factory: Callable[[], Dict[str, Any]],
     description: str,
+    parser: Callable[[IO[str]], Any] = yaml.safe_load,
 ) -> LoadedConfig:
     """Read *config_path*, falling back to built-in defaults loudly and without writing.
 
@@ -71,6 +92,9 @@ def load_config_file(
         config_path: the YAML file to read.
         defaults_factory: builds the built-in defaults, called only on a miss.
         description: what the config governs, for the log line.
+        parser: reads an open text handle into the parsed document. Defaults to
+            YAML; pass ``json.load`` for a strict-JSON file so it is not read with
+            YAML's laxer grammar (#17855).
 
     Returns:
         The values plus the ``source`` they came from and the path searched.
@@ -79,7 +103,7 @@ def load_config_file(
     try:
         if path.is_file():
             with open(path, "r", encoding="utf-8") as handle:
-                values = yaml.safe_load(handle)
+                values = parser(handle)
             # An empty or all-comments YAML file parses to None. Treating that
             # as a loaded config hands every consumer an empty policy — and
             # every consumer that then calls ``.get()`` on it raises instead.
@@ -99,6 +123,6 @@ def load_config_file(
                 description,
                 path,
             )
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:  # ValueError covers json.JSONDecodeError
         logger.error("Failed to read %s config at %s: %s; using built-in defaults.", description, path, exc)
     return LoadedConfig(values=defaults_factory(), source=SOURCE_BUILTIN_DEFAULTS, searched_path=path)

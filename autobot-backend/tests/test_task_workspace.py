@@ -20,6 +20,7 @@ Coverage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from unittest.mock import MagicMock
@@ -550,35 +551,35 @@ def test_authenticate_ws_admin_denies_unauthenticated():
     patch targets are the source module, not this one.
     """
     from types import SimpleNamespace
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     import api.task_workspace_ws as mod
 
     ws = SimpleNamespace(headers={})
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
-        gam.return_value.get_user_from_request.return_value = None
-        assert mod._authenticate_ws_admin(ws) is False
+        rhu.return_value = None
+        assert asyncio.run(mod._authenticate_ws_admin(ws)) is False
 
 
 def test_authenticate_ws_admin_denies_non_admin():
     """A valid but non-admin user is denied the interactive shell."""
     from types import SimpleNamespace
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     import api.task_workspace_ws as mod
 
     ws = SimpleNamespace(headers={})
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
-        gam.return_value.get_user_from_request.return_value = {"role": "user"}
-        assert mod._authenticate_ws_admin(ws) is False
+        rhu.return_value = {"role": "user"}
+        assert asyncio.run(mod._authenticate_ws_admin(ws)) is False
 
 
 def test_authenticate_ws_admin_allows_admin_and_internal_key():
@@ -586,20 +587,19 @@ def test_authenticate_ws_admin_allows_admin_and_internal_key():
     is the internal-service key — the paths the removed auth-header precondition
     used to lock out."""
     from types import SimpleNamespace
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     import api.task_workspace_ws as mod
 
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", side_effect=lambda key: key == "k"),
     ):
-        gam.return_value.get_user_from_request.return_value = {"role": "admin"}
-        # cookie/JWT-resolved admin, NO Authorization header
-        assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
-        # internal-service key path (no Authorization header either)
-        assert mod._authenticate_ws_admin(SimpleNamespace(headers={"X-Internal-API-Key": "k"})) is True
+        rhu.return_value = {"role": "admin"}
+        # cookie/JWT-resolved admin (no Authorization header), then the internal-service key path
+        assert asyncio.run(mod._authenticate_ws_admin(SimpleNamespace(headers={}))) is True
+        assert asyncio.run(mod._authenticate_ws_admin(SimpleNamespace(headers={"X-Internal-API-Key": "k"}))) is True
 
 
 def test_authenticate_ws_admin_dev_bypass_when_disabled():
@@ -610,7 +610,7 @@ def test_authenticate_ws_admin_dev_bypass_when_disabled():
     import api.task_workspace_ws as mod
 
     with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "0"}):
-        assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
+        assert asyncio.run(mod._authenticate_ws_admin(SimpleNamespace(headers={}))) is True
 
 
 @pytest.mark.asyncio

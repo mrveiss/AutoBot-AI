@@ -17,6 +17,7 @@ import json
 import re
 from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.text_tokens import word_tokens
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 from skills.registry import get_skill_registry
 
@@ -28,7 +29,7 @@ except ImportError:
 
 def _tokenize(text: str) -> Set[str]:
     """Lowercase and split text on non-word characters."""
-    return {t for t in re.split(r"[\W_]+", text.lower()) if t}
+    return set(word_tokens(text))
 
 
 def _enrich_capability(task: str, research: Dict[str, Any]) -> str:

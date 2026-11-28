@@ -15,11 +15,16 @@ Issue #6970 - Hook registry with signatures and validation.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import threading
 import warnings
 from enum import Enum
 from typing import Any, Callable, Dict, List
+
+from autobot_shared.plugin_attribution import resolve_owner, scope_for
+
+from .base import PluginRegistry, PluginStatus
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,28 @@ class HookSignature:
         return f"HookSignature({self.description!r}, params={list(self.params)})"
 
 
+def _require_declared_params(hook_name: str, callback: Callable, plugin_name: str | None) -> None:
+    """Refuse a subscriber that requires a parameter the hook's declared signature does not carry (#20888).
+
+    Such a callback raises ``TypeError`` on every call and the registry only logs it; failing here names the
+    plugin and hook at registration instead. Hooks with no declaration (custom ones) are not checked.
+    """
+    declared = HOOK_REGISTRY.get(hook_name)
+    if declared is None:
+        return
+    try:
+        parameters = inspect.signature(callback).parameters.values()
+    except (TypeError, ValueError):  # a builtin or C callable has no inspectable signature
+        return
+    kinds = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    missing = [p.name for p in parameters if p.kind in kinds and p.default is p.empty and p.name not in declared.params]
+    if missing:
+        raise TypeError(
+            f"Plugin '{plugin_name or 'unknown'}' hook '{hook_name}': callback requires {missing}, "
+            f"which the declared signature does not pass ({list(declared.params)})"
+        )
+
+
 # Registry mapping canonical hook names to their expected signatures.
 # Plugins declare hooks by name in PluginManifest.hooks; the loader
 # validates each name against this registry and emits a DeprecationWarning
@@ -91,19 +118,19 @@ HOOK_REGISTRY: Dict[str, HookSignature] = {
     ),
     Hook.ON_AGENT_EXECUTE.value: HookSignature(
         "Called before an agent task is executed.",
-        {"agent_id": "str", "task": "dict"},
+        {"agent_name": "str", "session_id": "str", "iteration": "int"},
     ),
     Hook.ON_AGENT_COMPLETE.value: HookSignature(
         "Called after an agent task completes.",
-        {"agent_id": "str", "task": "dict", "result": "Any"},
+        {"session_id": "str", "iteration": "int", "response": "str"},
     ),
     Hook.ON_AGENT_ERROR.value: HookSignature(
         "Called when an agent task raises an error.",
-        {"agent_id": "str", "task": "dict", "error": "Exception"},
+        {"session_id": "str", "iteration": "int", "error": "str"},
     ),
     Hook.ON_TOOL_CALL.value: HookSignature(
-        "Called before a tool is invoked.",
-        {"tool_name": "str", "args": "dict"},
+        "Called before each tool is invoked (once per call).",
+        {"tool_name": "str", "args": "dict", "session_id": "str"},
     ),
     Hook.ON_TOOL_COMPLETE.value: HookSignature(
         "Called after a tool returns.",
@@ -176,6 +203,17 @@ def validate_hook_names(hook_names: List[str], plugin_name: str = "unknown") -> 
             )
 
 
+def is_plugin_active(plugin_name: str | None) -> bool:
+    """False when the owning plugin is known and not ENABLED (#19302).
+
+    Only an enabled plugin's callbacks and tools run. A name the registry does not know
+    is a host callback and is not gated. The loader registers a plugin (not ENABLED) before it
+    initialises, so a plugin still initialising is gated until the host records ENABLED.
+    """
+    plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
+    return plugin is None or plugin.status == PluginStatus.ENABLED
+
+
 class HookRegistry:
     """
     Singleton registry for managing hooks and callbacks.
@@ -209,8 +247,14 @@ class HookRegistry:
             callback: Async or sync callable
             plugin_name: Plugin name for tracking (optional)
         """
+        _require_declared_params(hook_name, callback, plugin_name)
+        plugin_name = resolve_owner(plugin_name)  # inside plugin context: the plugin itself, never another (#19302)
         if hook_name not in self._hooks:
             self._hooks[hook_name] = []
+
+        # #19302: a repeat registration of the same callback fires once, not twice
+        if any(cb["callback"] == callback and cb["plugin_name"] == plugin_name for cb in self._hooks[hook_name]):
+            return
 
         # Store callback with metadata
         callback_info = {
@@ -245,6 +289,24 @@ class HookRegistry:
             del self._hooks[hook_name]
             logger.info("Unregistered all callbacks for hook '%s'", hook_name)
 
+    def unregister_plugin(self, plugin_name: str) -> int:
+        """Remove every callback *plugin_name* registered, on any hook (#19302).
+
+        The host calls this on unload so cleanup never depends on the plugin's
+        own ``shutdown()``. Returns the number of callbacks removed.
+        """
+        removed = 0
+        for hook_name in list(self._hooks):
+            kept = [cb for cb in self._hooks[hook_name] if cb["plugin_name"] != plugin_name]
+            removed += len(self._hooks[hook_name]) - len(kept)
+            if kept:
+                self._hooks[hook_name] = kept
+            else:
+                del self._hooks[hook_name]
+        if removed:
+            logger.info("Unregistered %d hook callback(s) for plugin '%s'", removed, plugin_name)
+        return removed
+
     async def call_hook(
         self,
         hook_name: str,
@@ -269,13 +331,16 @@ class HookRegistry:
         for callback_info in self._hooks[hook_name]:
             callback = callback_info["callback"]
             plugin_name = callback_info["plugin_name"]
+            if not is_plugin_active(plugin_name):
+                continue
 
             try:
-                # Handle both async and sync callbacks
-                if asyncio.iscoroutinefunction(callback):
-                    result = await callback(*args, **kwargs)
-                else:
-                    result = callback(*args, **kwargs)
+                # Handle both async and sync callbacks; a tool it registers is attributed to its plugin (#19302)
+                with scope_for(plugin_name):
+                    if asyncio.iscoroutinefunction(callback):
+                        result = await callback(*args, **kwargs)
+                    else:
+                        result = callback(*args, **kwargs)
 
                 results.append(result)
 

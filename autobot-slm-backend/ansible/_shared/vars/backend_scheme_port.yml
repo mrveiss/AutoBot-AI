@@ -1,0 +1,17 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# #21400: the backend port that matches the scheme a consumer talks to the backend with.
+#
+# A consumer reaches the backend with `backend_protocol` (default: the TLS scheme), so the port must be the one
+# that scheme listens on: the plain listener's port for http, the TLS listener's port for the default scheme.
+# Reading the plain port alone sent TLS to it as soon as an inventory defined it. With neither port defined the
+# result is 8443, and with only the plain port defined it is that port, as before the ports were defined.
+#
+# ONE definition, loaded explicitly by each consumer (an inventory's group_vars are not there on a bare-host
+# run): `vars_files` in a playbook, _shared/tasks/load_backend_scheme_port.yml in a role task file. Consumers:
+# roles/frontend (nginx upstream) and playbooks/rotate-service-keys.yml (backend health URL).
+backend_scheme_port: >-
+  {{ (backend_port | default(8443))
+  if (backend_protocol | default('https')) == 'http'
+  else (backend_nginx_port | default(backend_port | default(8443))) }}

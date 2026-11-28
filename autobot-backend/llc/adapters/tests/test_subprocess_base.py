@@ -428,7 +428,7 @@ class TestSharedGracefulTimeout:
                 patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
                 patch(_PSUTIL_PROCESS) as mock_psutil_cls,
             ):
-                mock_psutil_cls.return_value.create_time.return_value = 100.0
+                mock_psutil_cls.return_value._ident = (0, 100.0)
                 await adapter.cancel({"adapter_config": {"output_dir": td}}, _CANCEL_RUN_ID)
 
         assert kill_signals[0] == (_CANCEL_TARGET_PID, signal.SIGTERM)
@@ -506,7 +506,7 @@ class TestDeadRunNeverReportsStalled:
                 json.dump(state, fh)
 
             with patch(_PSUTIL_PROCESS) as mock_cls:
-                mock_cls.return_value.create_time.return_value = 200.0  # different process
+                mock_cls.return_value._ident = (0, 200.0)  # different process
                 result = await _DummyAdapter().status({"adapter_config": {"output_dir": td}}, run_id)
 
         assert result.status == LLCRunStatus.COMPLETED

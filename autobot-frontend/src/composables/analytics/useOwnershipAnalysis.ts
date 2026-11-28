@@ -61,6 +61,7 @@ export function useOwnershipAnalysis(deps: UseCodeIntelAnalysisDeps) {
     {
       path: '/api/analytics/codebase/ownership/analysis',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) =>
         r.status === 'success'
           ? {

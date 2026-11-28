@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_config import config as ssot_config
@@ -108,16 +109,18 @@ async def _execute_vnc_step(step_type: str, config: dict[str, Any], backend_url:
     if not endpoint:
         raise ValueError(f"Unknown vision step type: {step_type}")
 
+    url = f"{backend_url}{endpoint}"
+    await assert_egress_policy(url)
     async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
         if step_type == "vision-wait":
             payload = _build_vnc_payload(step_type, config)
             return await _poll_vnc_element(client, backend_url, endpoint, payload, config)
 
         if step_type in _VNC_GET_STEPS:
-            response = await client.get(f"{backend_url}{endpoint}")
+            response = await client.get(url)
         else:
             payload = _build_vnc_payload(step_type, config)
-            response = await client.post(f"{backend_url}{endpoint}", json=payload)
+            response = await client.post(url, json=payload)
 
         response.raise_for_status()
         return response.json()
@@ -149,9 +152,11 @@ async def _poll_vnc_element(
     interval = float(config.get("poll_interval", 1.0))
     search_text = config.get("search_text", "")
     elapsed = 0.0
+    url = f"{backend_url}{endpoint}"
+    await assert_egress_policy(url)
 
     while elapsed < timeout:
-        response = await client.post(f"{backend_url}{endpoint}", json=payload)
+        response = await client.post(url, json=payload)
         if response.status_code == 200:
             data = response.json()
             elements = data.get("elements", [])
@@ -203,11 +208,10 @@ async def _execute_web_step(step_type: str, config: dict[str, Any], backend_url:
 
     action_payload = _build_web_action_payload(step_type, action_base, config)
 
+    url = f"{backend_url}/api/research-browser/session/action"
+    await assert_egress_policy(url)
     async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
-        response = await client.post(
-            f"{backend_url}/api/research-browser/session/action",
-            json={"session_id": session_id, **action_payload},
-        )
+        response = await client.post(url, json={"session_id": session_id, **action_payload})
         response.raise_for_status()
         return response.json()
 
@@ -243,10 +247,9 @@ async def _web_ocr_step(session_id: str, config: dict[str, Any], backend_url: st
 
 async def _capture_browser_screenshot(client: httpx.AsyncClient, session_id: str, backend_url: str) -> dict:
     """POST screenshot action to the browser session API and return response JSON."""
-    resp = await client.post(
-        f"{backend_url}/api/research-browser/session/action",
-        json={"session_id": session_id, "action": "screenshot"},
-    )
+    url = f"{backend_url}/api/research-browser/session/action"
+    await assert_egress_policy(url)
+    resp = await client.post(url, json={"session_id": session_id, "action": "screenshot"})
     resp.raise_for_status()
     data = resp.json()
     logger.info("vision-ocr web step captured screenshot for session %s", session_id)
@@ -264,6 +267,8 @@ async def _run_ocr_on_screenshot(
         "image_data": screenshot_data.get("screenshot", ""),
         "region": config.get("region"),
     }
-    ocr_resp = await client.post(f"{backend_url}/api/vision/ocr", json=ocr_payload)
+    url = f"{backend_url}/api/vision/ocr"
+    await assert_egress_policy(url)
+    ocr_resp = await client.post(url, json=ocr_payload)
     ocr_resp.raise_for_status()
     return ocr_resp.json()

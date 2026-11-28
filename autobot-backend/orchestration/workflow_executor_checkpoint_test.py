@@ -13,16 +13,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from orchestration.workflow_executor import WorkflowExecutor
+from orchestration.workflow_executor import LegacyWorkflowExecutor
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_executor() -> WorkflowExecutor:
-    """Return a minimally configured WorkflowExecutor."""
-    return WorkflowExecutor(
+def _make_executor() -> LegacyWorkflowExecutor:
+    """Return a minimally configured LegacyWorkflowExecutor."""
+    return LegacyWorkflowExecutor(
         agent_registry={},
         agent_interactions=[],
         reserve_agent_callback=lambda _: None,

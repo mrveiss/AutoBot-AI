@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from knowledge.connectors.base import instance_host_egress
@@ -38,6 +39,16 @@ from services.mcp_server_credentials import resolve_extra_headers_for_server
 from type_defs.mcp import MCPToolDefinition
 
 logger = get_logger(__name__)
+
+
+def _role_allowed(role: str, allowed_roles: list[str]) -> bool:
+    """True when *role* is on *allowed_roles*; an ``"admin"`` entry admits the whole admin family.
+
+    Superadmin is the highest form of admin (#19125), so an ``"admin"`` entry --
+    the default for every external server -- admits it too, via the canonical
+    ``is_admin_role`` predicate rather than a literal comparison.
+    """
+    return role in allowed_roles or (is_admin_role(role) and "admin" in allowed_roles)
 
 
 @dataclass
@@ -83,6 +94,42 @@ async def _audit_log(*args, **kwargs):
     from services.audit_logger import audit_log  # noqa: PLC0415
 
     return await audit_log(*args, **kwargs)
+
+
+async def _audit_tool_call(
+    result: str,
+    user_id: str | None,
+    resource: str,
+    details: dict[str, Any],
+    session_id: str | None = None,
+) -> bool:
+    """Audit one external tool call, naming the actor explicitly (#20709); True when it was committed.
+
+    A call with no user (background job, scheduler) is recorded as ``SYSTEM_ACTOR`` with
+    ``details["actor_type"] == "system"``, so it cannot be mistaken for a lost identity.
+    Written ``durable=True``: an action on a third-party system is security-relevant, like the
+    other awaited audits (backup, approval gates), so the row is committed before we return.
+    ``AuditLogger.log`` reports a failed write by returning False, so a raise is treated the same way.
+    """
+    from services.audit_logger import SYSTEM_ACTOR  # noqa: PLC0415
+
+    try:
+        recorded = await _audit_log(
+            "mcp.external_server.tool_call",
+            result=result,
+            user_id=user_id or SYSTEM_ACTOR,
+            resource=resource,
+            session_id=session_id,
+            details={**details, "actor_type": "user" if user_id else "system", "session_id": session_id},
+            durable=True,
+        )
+    except Exception as exc:  # noqa: BLE001 -- reported as a failed write, never raised into the chat path
+        logger.error("mcp_external_bridge: audit write raised %s", type(exc).__name__)
+        return False
+    return recorded is not False
+
+
+_AUDIT_UNAVAILABLE = "audit trail unavailable; the tool was not called"
 
 
 class MCPExternalBridge:
@@ -175,6 +222,7 @@ class MCPExternalBridge:
         *,
         role: str = "user",
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> ExternalToolCallResult:
         """Route a chat tool call to its owning external server. Always audit-logged.
 
@@ -189,17 +237,33 @@ class MCPExternalBridge:
         if entry is None:
             return ExternalToolCallResult(success=False, error=f"Unknown external MCP tool '{name}'")
 
-        if role not in entry.allowed_roles:
+        if not _role_allowed(role, entry.allowed_roles):
             logger.warning("mcp_external_bridge.call_tool role=%s denied for tool=%s", role, name)
-            await _audit_log(
-                "mcp.external_server.tool_call",
-                result="denied",
-                user_id=user_id,
-                resource=name,
-                details={"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
+            await _audit_tool_call(
+                "denied",
+                user_id,
+                name,
+                {"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
+                session_id,
             )
             return ExternalToolCallResult(success=False, error=f"role '{role}' is not permitted to call '{name}'")
 
+        # Write-before-action (#20557): the call has side effects on a third-party system, so the durable
+        # record comes first and a failed write refuses the call instead of leaving it unrecorded.
+        if not await _audit_tool_call("attempted", user_id, name, {"server_uri": entry.server_uri}, session_id):
+            logger.error("mcp_external_bridge.call_tool audit unavailable; tool=%s not called", name)
+            return ExternalToolCallResult(success=False, error=_AUDIT_UNAVAILABLE)
+        return await self._call_and_audit(entry, name, arguments, user_id, session_id)
+
+    async def _call_and_audit(
+        self,
+        entry: _ExternalToolEntry,
+        name: str,
+        arguments: dict[str, Any],
+        user_id: str | None,
+        session_id: str | None,
+    ) -> ExternalToolCallResult:
+        """Call the external tool, then record its outcome (a follow-up to the required pre-call record)."""
         MCPClient = _get_mcp_client_class()
         try:
             async with MCPClient(
@@ -211,22 +275,12 @@ class MCPExternalBridge:
                 result = await client.call_tool(entry.original_name, arguments)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mcp_external_bridge.call_tool error tool=%s: %s", name, exc)
-            await _audit_log(
-                "mcp.external_server.tool_call",
-                result="error",
-                user_id=user_id,
-                resource=name,
-                details={"server_uri": entry.server_uri, "error": str(exc)},
+            await _audit_tool_call(
+                "error", user_id, name, {"server_uri": entry.server_uri, "error": str(exc)}, session_id
             )
             return ExternalToolCallResult(success=False, error=str(exc))
 
-        await _audit_log(
-            "mcp.external_server.tool_call",
-            result="success",
-            user_id=user_id,
-            resource=name,
-            details={"server_uri": entry.server_uri},
-        )
+        await _audit_tool_call("success", user_id, name, {"server_uri": entry.server_uri}, session_id)
         return ExternalToolCallResult(success=True, result=result)
 
 

@@ -6,8 +6,8 @@
  * Vision API types — canonical frontend representations of backend Pydantic schemas.
  * Issue #9890: extracted from useVisionAutomation.ts composable.
  *
- * NOTE: VisionMultimodalApiClient.ts has a parallel set of types for the same
- * endpoints; its migration to import from here is tracked separately.
+ * NOTE: types/visionMultimodal.ts (moved there from the deleted VisionMultimodalApiClient.ts, #12363)
+ * holds a parallel set of types for the same endpoints; merging the two is tracked separately.
  */
 
 export interface VisionUIElement {

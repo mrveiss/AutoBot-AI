@@ -19,8 +19,8 @@ if str(backend_path) not in sys.path:
 
 # Import directly from providers submodule to avoid voice_processing/__init__.py
 from voice_processing.providers import (
-    ProviderRegistry,
     SpeechProvider,
+    SpeechProviderRegistry,
     TranscriptSegment,
     get_speech_provider,
     get_speech_provider_registry,
@@ -71,7 +71,7 @@ class TestProviderRegistry:
 
     def test_register_and_get_provider(self):
         """Test basic provider registration and retrieval."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
         provider = MockProvider("TestProvider", ["en"])
 
         registry.register("en", provider, priority=10)
@@ -82,7 +82,7 @@ class TestProviderRegistry:
 
     def test_priority_ordering(self):
         """Test that higher priority providers are returned first."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
 
         low_priority = MockProvider("LowPriority", ["en"])
         high_priority = MockProvider("HighPriority", ["en"])
@@ -95,7 +95,7 @@ class TestProviderRegistry:
 
     def test_get_all_providers(self):
         """Test getting all providers for a language."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
 
         provider1 = MockProvider("Provider1", ["en"])
         provider2 = MockProvider("Provider2", ["en"])
@@ -115,7 +115,7 @@ class TestProviderRegistry:
 
     def test_no_provider_for_language(self):
         """Test behavior when no provider exists for a language."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
 
         provider = MockProvider("TestProvider", ["en"])
         registry.register("en", provider)
@@ -126,7 +126,7 @@ class TestProviderRegistry:
 
     def test_multiple_languages_same_provider(self):
         """Test registering same provider for multiple languages."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
         provider = MockProvider("MultiLang", ["en", "de", "fr"])
 
         registry.register("en", provider)
@@ -143,7 +143,7 @@ class TestLatvianProviderRouting:
 
     def test_latvian_routing_priority(self):
         """Test that 'lv' routes to LATE first, then Tilde, then Generic."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
 
         # Register in reverse order to test priority sorting
         generic = MockProvider("Generic", ["lv"])
@@ -167,7 +167,7 @@ class TestLatvianProviderRouting:
 
     def test_lat_code_routing(self):
         """Test that 'lat' (ISO 639-2) also routes to Latvian providers."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
 
         late = MockProvider("LATE", ["lat"])
         registry.register("lat", late, priority=10)
@@ -181,7 +181,7 @@ class TestGenericProviderRouting:
 
     def test_english_routing(self):
         """Test that 'en' routes to Generic provider."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
         generic = MockProvider("Generic", ["en"])
         registry.register("en", generic, priority=0)
 
@@ -190,7 +190,7 @@ class TestGenericProviderRouting:
 
     def test_multiple_language_support(self):
         """Test generic provider supports multiple languages."""
-        registry = ProviderRegistry()
+        registry = SpeechProviderRegistry()
         generic = MockProvider("Generic", ["en", "de", "es", "fr"])
 
         for lang in ["en", "de", "es", "fr"]:

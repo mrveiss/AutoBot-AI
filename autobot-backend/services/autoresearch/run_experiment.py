@@ -24,7 +24,7 @@ import os
 import subprocess
 import sys
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = get_logger(__name__)
@@ -87,4 +87,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())

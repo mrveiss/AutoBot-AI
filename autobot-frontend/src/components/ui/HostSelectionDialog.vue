@@ -100,7 +100,7 @@
                 </div>
                 <div class="host-details">
                   <span class="host-connection">
-                    <Icon name="user" size="xs" /> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
+                    <Icon name="user" size="xs" /> <router-link v-if="!host.username" to="/secrets" class="host-username-missing">{{ t('ui.hostSelection.usernameMissing') }}</router-link><template v-else>{{ host.username }}@{{ host.host }}:{{ host.ssh_port || 22 }}</template>
                   </span>
                   <span v-if="host.capabilities?.includes('vnc')" class="host-capability">
                     <Icon name="desktop" size="xs" /> VNC
@@ -149,18 +149,16 @@
 
       <div class="dialog-footer">
         <div class="button-group">
-          <button
+          <BaseButton variant="secondary"
             type="button"
-            class="btn btn-secondary"
             @click="handleCancel"
             :disabled="isProcessing"
           >
             <Icon name="times" size="sm" />
             {{ t('ui.hostSelection.cancel') }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             type="button"
-            class="btn btn-primary"
             @click="handleConfirm"
             :disabled="!selectedHostId || isProcessing"
             :aria-busy="isProcessing"
@@ -168,7 +166,7 @@
             <LoadingSpinner v-if="isProcessing" size="sm" />
             <Icon v-else name="check" size="sm" />
             {{ isProcessing ? t('ui.hostSelection.connecting') : t('ui.hostSelection.connectAndExecute') }}
-          </button>
+          </BaseButton>
         </div>
 
         <div class="security-note">
@@ -189,7 +187,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui';
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, BaseButton } from '@autobot/ui';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -316,9 +314,9 @@ const loadHosts = async () => {
         name: s.name,
         host: s.metadata?.host || '',
         ssh_port: s.metadata?.ssh_port || 22,
-        username: s.metadata?.username || 'root',
+        username: s.metadata?.username || '',
         auth_type: s.metadata?.auth_type || 'password',
-        capabilities: s.metadata?.capabilities || ['ssh'],
+        capabilities: s.metadata?.capabilities || [],
         purpose: s.metadata?.purpose || s.description,
         os: s.metadata?.os,
         metadata: s.metadata,
@@ -331,9 +329,9 @@ const loadHosts = async () => {
       name: h.name,
       host: h.host,
       ssh_port: h.ssh_port || 22,
-      username: h.username || 'root',
+      username: h.username || '',
       auth_type: h.auth_type || 'password',
-      capabilities: h.capabilities || ['ssh'],
+      capabilities: h.capabilities || [],
       purpose: h.purpose || h.description,
       os: h.os,
       metadata: h,
@@ -528,7 +526,7 @@ onUnmounted(() => {
 }
 
 .dialog-icon {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   opacity: 0.9;
 }
 
@@ -538,13 +536,13 @@ onUnmounted(() => {
 
 .dialog-title h3 {
   margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
 }
 
 .dialog-subtitle {
   margin: var(--spacing-0);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 
@@ -552,7 +550,7 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: var(--text-on-primary);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   cursor: pointer;
   padding: var(--spacing-2);
   border-radius: var(--radius-sm);
@@ -583,7 +581,7 @@ onUnmounted(() => {
 
 .command-preview h4 {
   margin: 0 0 var(--spacing-2) 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -600,7 +598,7 @@ onUnmounted(() => {
 .command-box code {
   color: var(--text-inverse);
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -612,7 +610,7 @@ onUnmounted(() => {
 
 .host-selection-section h4 {
   margin: 0 0 var(--spacing-3) 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -631,9 +629,9 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: var(--font-size-2xl);
+.loading-state > .icon,
+.empty-state > .icon {
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .add-host-link {
@@ -643,7 +641,7 @@ onUnmounted(() => {
   padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -710,7 +708,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
 }
 
 .host-card.selected .host-icon {
@@ -726,7 +724,7 @@ onUnmounted(() => {
 .host-name {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -739,13 +737,13 @@ onUnmounted(() => {
   padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-sm);
 }
 
-.default-badge i {
-  font-size: var(--text-xs);
+.default-badge .icon {
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .host-details {
@@ -753,7 +751,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   margin-top: var(--spacing-1);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -770,7 +768,7 @@ onUnmounted(() => {
 
 .host-purpose {
   margin-top: var(--spacing-1);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
 }
@@ -822,7 +820,7 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -850,7 +848,7 @@ onUnmounted(() => {
   top: var(--spacing-neg-2px);
   left: 3px;
   color: var(--text-on-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
 }
 
@@ -864,7 +862,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   color: var(--color-error-dark);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 /* Footer */
@@ -880,47 +878,8 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-3);
 }
 
-.btn {
+.button-group :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-3) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-150);
-  border: none;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 .security-note {
@@ -929,7 +888,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: var(--spacing-2);
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 /* Responsive */

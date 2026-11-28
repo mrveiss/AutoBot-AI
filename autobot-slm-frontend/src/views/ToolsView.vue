@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -215,7 +216,7 @@ onMounted(async () => {
     <!-- Content (no header - parent ToolsLayout provides it) -->
     <div class="flex-1 overflow-auto p-6">
       <!-- Info Banner -->
-      <div class="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-200" role="status">
+      <div class="mb-6 flex items-center gap-2 text-sm text-autobot-text-secondary bg-white rounded-lg p-3 border border-autobot-border" role="status">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
         </svg>
@@ -231,58 +232,58 @@ onMounted(async () => {
           :aria-label="$t('toolsView.toolAria', { name: tool.name, description: tool.description })"
           :aria-pressed="activeTool === tool.id"
           :class="[
-            'bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-left transition-all',
+            'bg-white rounded-lg shadow-xs border border-autobot-border p-6 text-left transition-all',
             tool.available
-              ? 'hover:shadow-md hover:border-primary-300 cursor-pointer'
+              ? 'hover:shadow-md hover:border-autobot-primary-light cursor-pointer'
               : 'opacity-50 cursor-not-allowed',
-            activeTool === tool.id ? 'ring-2 ring-primary-500 border-primary-500' : ''
+            activeTool === tool.id ? 'ring-2 ring-autobot-primary border-autobot-primary' : ''
           ]"
         >
           <div class="flex items-start gap-4">
-            <div class="p-3 bg-primary-100 rounded-lg" aria-hidden="true">
+            <div class="p-3 bg-autobot-primary-bg rounded-lg" aria-hidden="true">
               <!-- Network icon -->
-              <svg v-if="tool.icon === 'network'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-if="tool.icon === 'network'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
               </svg>
               <!-- Database icon -->
-              <svg v-else-if="tool.icon === 'database'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-else-if="tool.icon === 'database'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
               <!-- Refresh icon -->
-              <svg v-else-if="tool.icon === 'refresh'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-else-if="tool.icon === 'refresh'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               <!-- Document icon -->
-              <svg v-else-if="tool.icon === 'document'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-else-if="tool.icon === 'document'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <!-- Heart icon -->
-              <svg v-else-if="tool.icon === 'heart'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-else-if="tool.icon === 'heart'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
               <!-- Terminal icon -->
-              <svg v-else-if="tool.icon === 'terminal'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-else-if="tool.icon === 'terminal'" class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div>
-              <h3 class="font-medium text-gray-900">{{ tool.name }}</h3>
-              <p class="text-sm text-gray-500 mt-1">{{ tool.description }}</p>
+              <h3 class="font-medium text-autobot-text-primary">{{ tool.name }}</h3>
+              <p class="text-sm text-autobot-text-tertiary mt-1">{{ tool.description }}</p>
             </div>
           </div>
         </button>
       </div>
 
       <!-- Tool Interface Panel -->
-      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200" role="region" :aria-label="tools.find(tool => tool.id === activeTool)?.name || $t('toolsView.toolPanelFallback')">
+      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-autobot-border" role="region" :aria-label="tools.find(tool => tool.id === activeTool)?.name || $t('toolsView.toolPanelFallback')">
         <!-- Panel Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
+          <h2 class="text-lg font-semibold text-autobot-text-primary">
             {{ tools.find(tool => tool.id === activeTool)?.name }}
           </h2>
           <button
             @click="closeTool"
-            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-hover rounded-lg transition-colors"
             :aria-label="$t('toolsView.closeToolPanelAria')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -296,11 +297,11 @@ onMounted(async () => {
           <!-- Network Test Tool -->
           <div v-if="activeTool === 'network-test'" class="space-y-4">
             <div>
-              <label for="net-test-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
+              <label for="net-test-node" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.selectNode') }}</label>
               <select
                 id="net-test-node"
                 v-model="selectedNode"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
               >
                 <option value="">{{ $t('toolsView.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -311,7 +312,7 @@ onMounted(async () => {
             <button
               @click="runNetworkTest"
               :disabled="loading || !selectedNode"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -324,11 +325,11 @@ onMounted(async () => {
           <!-- Health Check Tool -->
           <div v-else-if="activeTool === 'health-check'" class="space-y-4">
             <div>
-              <label for="health-check-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
+              <label for="health-check-node" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.selectNode') }}</label>
               <select
                 id="health-check-node"
                 v-model="selectedNode"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
               >
                 <option value="">{{ $t('toolsView.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -339,7 +340,7 @@ onMounted(async () => {
             <button
               @click="runHealthCheck"
               :disabled="loading || !selectedNode"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -353,11 +354,11 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'service-restart'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label for="svc-mgr-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
+                <label for="svc-mgr-node" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="svc-mgr-node"
                   v-model="selectedNode"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 >
                   <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -366,13 +367,13 @@ onMounted(async () => {
                 </select>
               </div>
               <div>
-                <label for="svc-mgr-service" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.serviceName') }}</label>
+                <label for="svc-mgr-service" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.serviceName') }}</label>
                 <input
                   type="text"
                   id="svc-mgr-service"
                   v-model="selectedService"
                   :placeholder="$t('toolsView.placeholderServiceName')"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 />
               </div>
             </div>
@@ -380,7 +381,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('start')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.startServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.start') }}
@@ -388,7 +389,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('stop')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                class="px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover) transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.stopServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.stop') }}
@@ -396,7 +397,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('restart')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-warning-600 text-white rounded-lg hover:bg-warning-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                class="px-4 py-2 bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.restartServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.restart') }}
@@ -408,11 +409,11 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'log-viewer'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label for="log-viewer-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
+                <label for="log-viewer-node" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="log-viewer-node"
                   v-model="selectedNode"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 >
                   <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -421,21 +422,21 @@ onMounted(async () => {
                 </select>
               </div>
               <div>
-                <label for="log-viewer-service" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.serviceName') }}</label>
+                <label for="log-viewer-service" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.serviceName') }}</label>
                 <input
                   type="text"
                   id="log-viewer-service"
                   v-model="selectedService"
                   :placeholder="$t('toolsView.placeholderServiceNameLogViewer')"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 />
               </div>
               <div>
-                <label for="log-viewer-lines" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.lines') }}</label>
+                <label for="log-viewer-lines" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.lines') }}</label>
                 <select
                   id="log-viewer-lines"
                   v-model="logLines"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 >
                   <option :value="50">{{ $t('toolsView.50Lines') }}</option>
                   <option :value="100">{{ $t('toolsView.100Lines') }}</option>
@@ -447,7 +448,7 @@ onMounted(async () => {
             <button
               @click="getServiceLogs"
               :disabled="loading || !selectedNode || !selectedService"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -460,22 +461,22 @@ onMounted(async () => {
           <!-- Redis CLI Tool -->
           <div v-else-if="activeTool === 'redis-cli'" class="space-y-4">
             <div>
-              <label for="redis-command" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.redisCommand') }}</label>
+              <label for="redis-command" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.redisCommand') }}</label>
               <input
                 type="text"
                 id="redis-command"
                 v-model="redisCommand"
                 :placeholder="$t('toolsView.placeholderRedisCommand')"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary font-mono"
               />
             </div>
-            <p class="text-xs text-gray-500">
+            <p class="text-xs text-autobot-text-tertiary">
               {{ $t('toolsView.commandWillBeExecuted') }}
             </p>
             <button
               @click="runRedisCommand"
               :disabled="loading || !redisCommand"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -489,11 +490,11 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'ansible-runner'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label for="ansible-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
+                <label for="ansible-node" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="ansible-node"
                   v-model="selectedNode"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
                 >
                   <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -502,23 +503,23 @@ onMounted(async () => {
                 </select>
               </div>
               <div>
-                <label for="ansible-command" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.command') }}</label>
+                <label for="ansible-command" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.command') }}</label>
                 <input
                   type="text"
                   id="ansible-command"
                   v-model="ansibleCommand"
                   :placeholder="$t('toolsView.placeholderAnsibleCommand')"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                  class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary font-mono"
                 />
               </div>
             </div>
-            <p class="text-xs text-gray-500">
+            <p class="text-xs text-autobot-text-tertiary">
               {{ $t('toolsView.runShellCommandsOn') }}
             </p>
             <button
               @click="runAnsibleCommand"
               :disabled="loading || !selectedNode || !ansibleCommand"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -529,14 +530,12 @@ onMounted(async () => {
           </div>
 
           <!-- Error Message -->
-          <div v-if="error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700" role="alert">
-            {{ error }}
-          </div>
+          <BaseAlert v-if="error" variant="error" class="mt-4" :message="error" />
 
           <!-- Result Output -->
           <div v-if="result" class="mt-4" role="region" :aria-label="$t('toolsView.commandOutputAria')">
-            <label for="tool-output" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.output') }}</label>
-            <pre id="tool-output" class="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap" role="log">{{ result }}</pre>
+            <label for="tool-output" class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('toolsView.output') }}</label>
+            <pre id="tool-output" class="p-4 bg-autobot-bg-tertiary text-autobot-text-primary rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap" role="log">{{ result }}</pre>
           </div>
         </div>
       </div>

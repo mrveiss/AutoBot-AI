@@ -13,14 +13,14 @@
         <div class="flex border border-autobot-border rounded-lg overflow-hidden">
           <button
             class="flex-1 py-2 text-sm font-medium transition-colors"
-            :class="mode === 'users' ? 'bg-autobot-primary text-white' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
+            :class="mode === 'users' ? 'bg-autobot-primary text-autobot-text-on-primary' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
             @click="mode = 'users'"
           >
             {{ $t('chat.share.shareWithUsers') }}
           </button>
           <button
             class="flex-1 py-2 text-sm font-medium transition-colors"
-            :class="mode === 'link' ? 'bg-autobot-primary text-white' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
+            :class="mode === 'link' ? 'bg-autobot-primary text-autobot-text-on-primary' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
             @click="mode = 'link'"
           >
             {{ $t('chat.share.publicLink') }}
@@ -29,6 +29,34 @@
 
         <!-- ===== User-share mode ===== -->
         <template v-if="mode === 'users'">
+          <div data-testid="share-participants">
+            <p class="text-sm font-medium text-autobot-text-primary mb-1">{{ $t('chat.share.sharedWithNow') }}</p>
+            <p v-if="participantsFailed" class="text-xs text-autobot-error" role="alert" data-testid="share-participants-error">
+              {{ $t('chat.share.participantsLoadFailed') }}
+              <button class="underline hover:opacity-80" data-testid="share-participants-retry" @click="loadParticipants">
+                {{ $t('chat.share.retryLoad') }}
+              </button>
+            </p>
+            <p v-else-if="participants.length === 0" class="text-xs text-autobot-text-secondary">
+              {{ $t('chat.share.noParticipants') }}
+            </p>
+            <ul v-else class="space-y-1">
+              <li
+                v-for="p in participants"
+                :key="p"
+                class="flex items-center justify-between text-sm text-autobot-text-primary"
+              >
+                <span>{{ p }}</span>
+                <button
+                  class="text-xs text-autobot-error hover:opacity-80"
+                  :disabled="unsharing === p"
+                  @click="unshareParticipant(p)"
+                >
+                  {{ unsharing === p ? $t('chat.share.unsharing') : $t('chat.share.unshare') }}
+                </button>
+              </li>
+            </ul>
+          </div>
           <div>
             <label class="block text-sm font-medium text-autobot-text-primary mb-1">
               {{ $t('chat.share.shareWith') }}
@@ -123,7 +151,7 @@
                   class="flex-1 text-sm bg-transparent border-none outline-none text-autobot-text-primary font-mono truncate"
                 />
                 <button
-                  class="shrink-0 text-xs px-2 py-1 rounded bg-autobot-primary text-white hover:opacity-90 transition-opacity"
+                  class="shrink-0 text-xs px-2 py-1 rounded bg-autobot-primary text-autobot-text-on-primary hover:opacity-90 transition-opacity"
                   @click="copyLink"
                 >
                   {{ copied ? $t('common.copied') : $t('common.copy') }}
@@ -246,15 +274,17 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton, useToast } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import { useLatestRequest } from '@/composables/useLatestRequest'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const logger = createLogger('ShareConversationDialog')
 
@@ -298,6 +328,10 @@ const facts = ref<ShareFact[]>([])
 const factsLoading = ref(false)
 const factSelection = useBatchSelection<ShareFact, string>(facts, (f) => f.id)
 const sharing = ref(false)
+const participants = ref<string[]>([])
+const participantsFailed = ref(false)
+const participantsRequest = useLatestRequest()
+const unsharing = ref<string | null>(null)
 
 // ---- link share ----
 const linkPassword = ref('')
@@ -344,6 +378,41 @@ const loadFacts = async () => {
   }
 }
 
+const loadParticipants = async () => {
+  if (!props.sessionId) return
+  const token = participantsRequest.begin()
+  participantsFailed.value = false
+  try {
+    const data = await ApiClient.call('get', '/api/chat/sessions/{session_id}/share', {
+      path: { session_id: props.sessionId },
+    })
+    if (!participantsRequest.isCurrent(token)) return
+    participants.value = data?.data?.participants || []
+  } catch (err) {
+    if (!participantsRequest.isCurrent(token)) return
+    logger.error('Failed to load share participants:', err)
+    participants.value = []
+    participantsFailed.value = true
+  }
+}
+
+const unshareParticipant = async (userId: string) => {
+  unsharing.value = userId
+  try {
+    await ApiClient.call('delete', '/api/chat/sessions/{session_id}/share/{user_id}', {
+      path: { session_id: props.sessionId, user_id: userId },
+    })
+    participantsRequest.invalidate()
+    participants.value = participants.value.filter(x => x !== userId)
+    loadParticipants() // the invalidation above dropped any load still in flight
+  } catch (err) {
+    logger.error('Failed to unshare session:', err)
+    showToast(t('chat.share.unshareFailed'), 'error')
+  } finally {
+    unsharing.value = null
+  }
+}
+
 const handleShare = async () => {
   if (recipients.value.length === 0) return
   sharing.value = true
@@ -357,6 +426,7 @@ const handleShare = async () => {
     }
     const result = await ApiClient.post<{ data?: Record<string, unknown> }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`, body)
     emit('shared', result?.data || {})
+    await loadParticipants()
     emit('update:visible', false)
   } catch (err) {
     logger.error('Failed to share session:', err)
@@ -420,10 +490,11 @@ const resetLinkForm = () => {
   requireLogin.value = false
 }
 
-const formatExpiry = (iso: string) => new Date(iso).toLocaleString()
+const formatExpiry = createDateFormatter()
 
 // ---- lifecycle ----
 watch(() => props.visible, (val) => {
+  participantsRequest.invalidate()
   if (!val) return
   recipients.value = []
   recipientInput.value = ''
@@ -436,6 +507,9 @@ watch(() => props.visible, (val) => {
   expirySeconds.value = null
   requireLogin.value = false
   copied.value = false
+  participants.value = []
+  participantsFailed.value = false
+  loadParticipants()
 })
 
 watch(includeKnowledge, (val) => {

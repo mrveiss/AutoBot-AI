@@ -26,6 +26,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _CONNECTORS_INIT = repo_root() / "autobot-backend" / "knowledge" / "connectors" / "__init__.py"
 _PLUGIN_LOADER = repo_root() / "autobot_shared" / "plugin_sdk" / "loader.py"
 
@@ -53,7 +55,7 @@ _CONCRETE_CONNECTOR_NAMES = frozenset(
 
 def _module_level_import_targets(path) -> set[str]:
     """Dotted module names named by top-level Import/ImportFrom nodes only."""
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     targets: set[str] = set()
     for node in tree.body:  # tree.body only -- module level, not nested in a def/if/try
         if isinstance(node, ast.Import):

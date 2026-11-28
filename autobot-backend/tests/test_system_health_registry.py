@@ -114,7 +114,7 @@ def test_probe_that_raises_is_recorded_as_down_not_propagated():
     assert component.latency_ms is not None
 
 
-def test_slow_probe_is_timed_out_as_down():
+def test_slow_probe_is_timed_out_as_degraded():
     @register_health_probe("slow")
     async def _probe_slow(_request=None):
         await asyncio.sleep(_PROBE_TIMEOUT_S + 1.0)
@@ -122,7 +122,7 @@ def test_slow_probe_is_timed_out_as_down():
 
     result = asyncio.run(collect_system_health())
     component = result.components[0]
-    assert component.status == "down"
+    assert component.status == "degraded"
     assert "timed out" in (component.detail or "")
 
 

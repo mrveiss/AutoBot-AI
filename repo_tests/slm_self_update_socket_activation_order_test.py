@@ -43,6 +43,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 _ROLE = repo_root() / "autobot-slm-backend/ansible/roles/slm_manager"
 _MAIN = _ROLE / "tasks/main.yml"
 _BIND = _ROLE / "tasks/bind_self_update_socket.yml"
@@ -86,7 +88,8 @@ def _directives(block: str) -> str:
     contract ratchet hit earlier: **a text scan cannot tell code from prose
     about code.**
     """
-    return "\n".join(line for line in block.splitlines() if not line.lstrip().startswith("#"))
+    # #17941: one shared stripper rather than this file's own copy.
+    return code_text(block, name="x.sh")
 
 
 def _offset_of(text: str, predicate) -> int | None:
@@ -128,7 +131,11 @@ def test_the_socket_binds_between_stopping_and_starting_the_backend() -> None:
     text = _BIND.read_text(encoding="utf-8")
 
     stop = _offset_of(text, lambda b: _BACKEND in b and "state: stopped" in b)
-    socket = _offset_of(text, lambda b: _SOCKET in b and re.search(r"state: (started|restarted)", b))
+    socket = _offset_of(
+        text,
+        lambda b: _SOCKET in b
+        and re.search(r"state: (started|restarted)|_shared/tasks/restart_unit\.yml", b),  # #21426: shared restart
+    )
     start = _offset_of(text, lambda b: _BACKEND in b and "state: started" in b)
 
     assert stop is not None, "main.yml must stop the backend to open a window for the socket bind"

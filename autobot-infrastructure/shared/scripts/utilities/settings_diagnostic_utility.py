@@ -12,13 +12,20 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
 
-from constants import ServiceURLs
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -250,7 +257,7 @@ class SettingsLoadingFixer:
             logger.info("🔄 Attempting to restart backend server...")
 
             # First, kill existing backend processes
-            subprocess.run(["pkill", "-", "uvicorn.*main:app"], check=False)
+            subprocess.run(["pkill", "-f", "uvicorn.*main:app"], check=False)
             time.sleep(2)
 
             # Start backend in background
@@ -302,7 +309,7 @@ class SettingsLoadingFixer:
         logger.info("\n" + "=" * 70)
         logger.info("🌐 BROWSER FIX INSTRUCTIONS:")
         logger.info("=" * 70)
-        logger.info("1. Open AutoBot in your browser: ServiceURLs.FRONTEND_LOCAL")
+        logger.info("1. Open AutoBot in your browser: %s", ServiceURLs.FRONTEND_LOCAL)
         logger.info("2. Press F12 to open Developer Tools")
         logger.info("3. Go to the Console tab")
         logger.info("4. Copy and paste the script from: scripts/utilities/browser_settings_utility.js")

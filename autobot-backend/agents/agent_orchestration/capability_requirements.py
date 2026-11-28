@@ -24,21 +24,21 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List
 
-from a2a.trust_score import Capability
+from a2a.trust_score import TrustCapability
 from security.authority import Authority
 
 #: Agents whose work reads a knowledge or memory store, from reading each handler.
-REQUIRED_CAPABILITY: Dict[str, Capability] = {
+REQUIRED_CAPABILITY: Dict[str, TrustCapability] = {
     # The RAG route asks the KB librarian for documents first (agent_execution._execute_rag_agent).
-    "rag": Capability.QUERY_MEMORY,
+    "rag": TrustCapability.QUERY_MEMORY,
     # The KB librarian searches the knowledge base.
-    "knowledge_retrieval": Capability.QUERY_MEMORY,
+    "knowledge_retrieval": TrustCapability.QUERY_MEMORY,
     # librarian_assistant holds a KnowledgeBase, and can also add documents to it.
-    "research": Capability.QUERY_MEMORY,
+    "research": TrustCapability.QUERY_MEMORY,
     # Reads and writes per-session working memory and the agent diary.
-    "sentiment_analysis": Capability.QUERY_MEMORY,
+    "sentiment_analysis": TrustCapability.QUERY_MEMORY,
     # Distributed: searches the indexed codebase, a knowledge store.
-    "npu_code_search": Capability.QUERY_MEMORY,
+    "npu_code_search": TrustCapability.QUERY_MEMORY,
 }
 
 #: Agents that read no knowledge or memory store, with the reason, so "needs nothing"
@@ -58,6 +58,13 @@ NEEDS_NO_CAPABILITY: Dict[str, str] = {
 }
 
 
+#: Agents whose work is generating or running commands. The routing model may not select
+#: them: the classification above records no privilege level (``system_commands`` "needs
+#: no capability"), so this is the one fact it cannot express. Every member must be
+#: classified (checked by ``capability_requirements_test``).
+COMMAND_RUNNING_AGENTS = frozenset({"system_commands"})
+
+
 def _may_reach(authority: Authority, agent: str) -> bool:
     """Whether *authority* may reach *agent*: only a classified agent, and only with what it requires."""
     if agent in NEEDS_NO_CAPABILITY:
@@ -71,6 +78,18 @@ def refused_agents(authority: Authority | None, agent_types: Iterable[str]) -> L
     if authority is None:
         return []
     return [agent for agent in agent_types if not _may_reach(authority, agent)]
+
+
+def llm_route_refused(agent_types: Iterable[str]) -> List[str]:
+    """The agents a model-chosen route may not name: command-running or unclassified.
+
+    The router has no originator authority in scope, so it cannot positively allow
+    anything on a caller's behalf. It refuses what no caller could be shown to be
+    allowed; store-reading agents are still checked against the real authority by
+    ``refused_agents`` once the decision reaches ``process_with_legacy_agents``.
+    """
+    classified = NEEDS_NO_CAPABILITY.keys() | REQUIRED_CAPABILITY.keys()
+    return [a for a in agent_types if a in COMMAND_RUNNING_AGENTS or a not in classified]
 
 
 def refusal(refused: List[str]) -> Dict[str, object]:

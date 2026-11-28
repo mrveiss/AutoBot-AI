@@ -11,7 +11,6 @@ regression-prevention hook shipped in PR #5264 (#5178 Part C).
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -343,12 +342,6 @@ def test_suggestion_uses_inline_for_slm_backend_agent_subpackage() -> None:
     assert "inline" in msg
 
 
-def test_suggestion_uses_inline_for_ansible_synced_copy() -> None:
-    # Ansible-synced mirror of the agent code — same constraints
-    msg = hook._suggestion_for("autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py")
-    assert "datetime.now(timezone.utc).isoformat()" in msg
-
-
 def test_suggestion_uses_inline_for_infra_shared_scripts() -> None:
     # Log forwarders run as standalone scripts on infra nodes
     msg = hook._suggestion_for("autobot-infrastructure/shared/scripts/seq_log_forwarder.py")
@@ -432,5 +425,7 @@ def test_the_tz_aware_stdlib_form_passes(tmp_path: Path) -> None:
     utcnow", and the stdlib form meets it — which is what those sites now use,
     with no packaging change.
     """
-    f = _write(tmp_path, "tz.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc).isoformat()\n")
+    f = _write(
+        tmp_path, "tz.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc).isoformat()\n"
+    )
     assert hook.main(["check_no_utcnow_isoformat", str(f)]) == 0

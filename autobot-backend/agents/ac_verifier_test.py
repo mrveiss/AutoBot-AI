@@ -246,7 +246,7 @@ class TestACitationMustHaveBeenShown:
 
     The citation check used to prove only that a `file:line` exists and is not
     blank, so a citation to any real, non-blank line in the tree survived --
-    whether or not it had anything to do with the criterion. A code-reviewer
+    whether or not it had anything to do with the criterion. A review
     pass on the merged code made the point with this file's own fixture: line 2
     of `_FILE` says "line two has content", which supports nothing.
     """
@@ -286,7 +286,7 @@ class TestTheEvidenceCheckIsAnchored:
     """A citation to line 1 must not ride in on the evidence quoting line 12.
 
     The check was `str(citation) not in evidence` over the whole blob, and
-    `Citation.__str__` has no terminator -- so `...:1` was a substring of
+    `CriterionCitation.__str__` has no terminator -- so `...:1` was a substring of
     `...:12` and the fabricated citation passed. The class of collision, not an
     edge of it: the lower the line number, the likelier it is, which made line 1
     the cheapest citation to invent inside the check that exists to reject

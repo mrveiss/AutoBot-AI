@@ -26,22 +26,24 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import (
+    TEST_FILE_PATTERN,
+    discover_files,
+    matches_exclusion,
+)
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
 
 # Issue #554: Import analytics infrastructure for semantic analysis. Guarded
 # once here (was duplicated verbatim in both security/analyzer.py and
 # performance_analysis/analyzer.py); both re-export these names for backward
 # compatibility with existing package __init__ imports.
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
     SemanticAnalysisMixin = object
-    SIMILARITY_MEDIUM = 0.7
 
 # Issue #607: Import shared caches for performance optimization
 try:
@@ -53,19 +55,17 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-# Issue #12660: Default exclusion patterns shared by every analyzer that
-# subclasses BaseCodeAnalyzer (verbatim match of the previous per-class
-# defaults in security/analyzer.py and performance_analysis/analyzer.py).
+# Issue #12660: Default file-exclusion patterns shared by every analyzer that
+# subclasses BaseCodeAnalyzer. Skipped directory names are not listed: discovery
+# prunes ``ANALYSIS_EXCLUDE_DIRS`` and ``_should_exclude`` checks it root-relative
+# (#21004). The grammar is ``python_files.matches_exclusion``: bytecode, test
+# files, migrations and CI/config dirs are not analysed.
+# The old bare ".git" substring also skipped the CI/config dirs; keep that.
+_FAMILY_SKIPPED_SEGMENTS = ("migrations", ".github", ".gitlab")
 DEFAULT_EXCLUDE_PATTERNS: List[str] = [
-    "venv",
-    "node_modules",
-    ".git",
-    "__pycache__",
     "*.pyc",
-    "test_*",
-    "*_test.py",
-    "archives",
-    "migrations",
+    TEST_FILE_PATTERN,
+    *(f"/{segment}/" for segment in _FAMILY_SKIPPED_SEGMENTS),
 ]
 
 
@@ -169,8 +169,8 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
         self.results = []
         self.total_files_scanned = 0
 
-        for py_file in target.rglob("*.py"):
-            if self._should_exclude(py_file):
+        for py_file in discover_files(target, ("*.py",)):
+            if self._should_exclude(py_file, target):
                 continue
 
             self.total_files_scanned += 1
@@ -179,16 +179,14 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
 
         return self.results
 
-    def _should_exclude(self, path: Path) -> bool:
-        """Check if path should be excluded."""
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if pattern.startswith("*"):
-                if path_str.endswith(pattern[1:]):
-                    return True
-            elif pattern in path_str:
-                return True
-        return False
+    def _should_exclude(self, path: Path, root: Path | None = None) -> bool:
+        """Check if path should be excluded.
+
+        Matched against the ``root``-relative path (``/``-prefixed) so the scan
+        does not depend on where the tree lives: a checkout inside a skipped
+        directory name (a worktree) would otherwise exclude every file.
+        """
+        return matches_exclusion(path, self.exclude_patterns, root)
 
     async def _find_semantic_duplicates(self, items: List[Any]) -> List[Dict[str, Any]]:
         """Hook: domain-specific semantic duplicate-finder (``metadata_keys`` differ)."""

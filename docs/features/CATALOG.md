@@ -41,7 +41,7 @@ Some capabilities are packaged as **installable modules** built on the
 
 | Module | Status | Design doc | Issue | What it adds |
 |--------|--------|------------|-------|--------------|
-| **AutoBot LLC** | Shipped | [llc/_index](../llc/_index.md), [PRD](../planning/PRD_AutoBot_LLC_Module.md) | [#9883][i-llc] | Autonomous agent-company: 27 LLC routers under `/api/llc`, heartbeat/adapters, full `views/llc/` UI (incremental follow-ups remain) |
+| **Company OS** | Shipped | [llc/_index](../llc/_index.md), [PRD](../planning/PRD_AutoBot_LLC_Module.md) | [#9883][i-llc] | Autonomous agent-company: 27 Company OS routers under `/api/llc`, heartbeat/adapters, full `views/llc/` UI (incremental follow-ups remain) |
 | **Codebase Analytics** | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9884][i-analytics] | Code structure analysis, risk detection, dependency insights — `/analytics/codebase` end-to-end |
 | **Transcriber** | Shipped | [transcriber-plan-1-foundation](../superpowers/plans/2026-05-30-transcriber-plan-1-foundation.md) | [#9885][i-trans] | Audio transcription module: projects, recordings, local pipeline (diarization), export (srt/vtt/docx/pdf), UI |
 
@@ -96,7 +96,7 @@ The themed tables below break down the capabilities inside the core and these mo
 |------------|--------|------------|-------|--------------|
 | Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, approval gate, risk triggers (`takeover_manager`, `/takeover/*`) |
 | Visual workflow builder | Shipped | [visual-workflow-parallel-execution](../guides/visual-workflow-parallel-execution.md) | [#585](https://github.com/mrveiss/AutoBot-AI/issues/585) | Drag-and-drop workflow canvas for composing multi-step agent workflows, with a code view (`WorkflowBuilderView.vue`, `WorkflowCanvas.vue`, route `/automation`) |
-| Chat approval-gate interrupt | Partial | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | LangGraph human-in-the-loop interrupt in the chat workflow: pauses on a proposed plan and resumes after confirmation. Opt-in per session via `AUTOBOT_CHAT_APPROVAL_GATE` (`chat_workflow/graph.py`, `session_role.CHAT_APPROVAL_GATE_ENABLED`); distinct from session takeover |
+| Chat approval-gate interrupt | Partial | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | LangGraph human-in-the-loop interrupt in the chat workflow: pauses on a proposed plan and resumes after confirmation. On by default (`AUTOBOT_CHAT_APPROVAL_GATE=0` turns it off) (`chat_workflow/graph.py`, `session_role.CHAT_APPROVAL_GATE_ENABLED`); distinct from session takeover |
 | Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment + dangerous-command confirmation gate (`command_patterns`, `security_risk_judge`) |
 | Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Skill discovery + 3-phase routing (`skill_router`, `/skills`) |
 
@@ -175,7 +175,7 @@ verification (with code evidence) is recorded in the issues linked above under [
 
 - [Features Index](_index.md)
 - [The AutoBot Platform Model](../architecture/PLATFORM_MODEL.md)
-- [AutoBot LLC](../llc/_index.md)
+- [Company OS](../llc/_index.md)
 - [Glossary](../GLOSSARY.md)
 
 [u]: https://github.com/mrveiss/AutoBot-AI/issues/9872

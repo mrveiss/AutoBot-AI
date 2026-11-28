@@ -160,9 +160,8 @@ describe('describeFailedResponse — the status line stays first and intact', ()
   })
 
   it('keeps every existing status-matching call site working', async () => {
-    // These predicates live in ErrorHandler.js, ApiClient.ts:425, useLlcCompanyStore.ts,
-    // useWebResearchStore.ts, useKnowledgeGraphRAG.ts and MemoryPrivacyPanel.vue. A fix
-    // that replaced the message instead of extending it would have broken all of them
+    // The status line is what users and logs read, and it matches the kit HttpError's format. A fix
+    // that replaced the message instead of extending it would break
     // with nothing failing to say so.
     const unavailable = await describeFailedResponse(
       failing(503, 'Service Unavailable', JSON.stringify({ detail: 'model warming up' }))
@@ -178,5 +177,17 @@ describe('describeFailedResponse — the status line stays first and intact', ()
 
     const conflict = await describeFailedResponse(failing(409, 'Conflict', '{"detail":"duplicate"}'))
     expect(conflict.includes('HTTP 409')).toBe(true)
+  })
+})
+
+describe('nested client-safe reason (#22015, #21999)', () => {
+  it('reads error.details.reason before the generic error.message', async () => {
+    const body = JSON.stringify({ error: { message: 'The operation failed.', details: { reason: 'File too large.' } } })
+    expect(await extractResponseErrorDetail(failing(413, 'Too Large', body))).toBe('File too large.')
+  })
+
+  it('still reads error.message when details carries no reason', async () => {
+    const body = JSON.stringify({ error: { message: 'Plain message', details: { operation: 'upload_file' } } })
+    expect(await extractResponseErrorDetail(failing(500, 'Server Error', body))).toBe('Plain message')
   })
 })

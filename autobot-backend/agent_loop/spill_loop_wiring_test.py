@@ -333,7 +333,7 @@ class TestConfigParsingCannotBreakTheImport:
         the feature switched off."""
         monkeypatch.setenv("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", "8k")
 
-        assert spill._int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000) == 8000
+        assert spill.env_int("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000) == 8000
 
 
 class TestArtifactsAreSwept:

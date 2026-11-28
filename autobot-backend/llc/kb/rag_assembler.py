@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
+from .collections import company_collection, kb_chroma_client, project_collection
+
 logger = get_logger(__name__)
 
 
@@ -47,6 +49,19 @@ class LLCContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+def _collections_for(company_id: str, project_id: Optional[str]) -> List[str]:
+    """Collection names one assemble() call queries: project, company.
+
+    No agent leg: nothing writes ``agent:<id>``, and agent knowledge arrives with
+    the #19512 buckets (#19579).
+    """
+    names = []
+    if project_id:
+        names.append(project_collection(project_id))
+    names.append(company_collection(company_id))
+    return names
+
+
 class LLCRAGAssembler:
     """Assembles multi-source RAG context for LLC operations.
 
@@ -65,14 +80,14 @@ class LLCRAGAssembler:
     ) -> LLCContext:
         """Run parallel ChromaDB queries and return merged context (GH#8236).
 
-        Queries ChromaDB collections scoped by company, project, and agent.
+        Queries ChromaDB collections scoped by company and project.
         Each query has a ≤800ms timeout target (4 parallel queries → P95 ≤ 2s).
 
         Args:
             company_id: Tenant company identifier.
             profile: Which query profile to use (HEARTBEAT, HANDOFF, SUGGESTION).
             project_id: Optional project scope filter.
-            agent_id: Optional agent scope filter.
+            agent_id: Optional agent; it sets the result count, not which collections are read.
             work_item_id: Optional work item context for relevance ranking.
             query_text: Query text for similarity search (e.g., work item title + description).
 
@@ -80,24 +95,13 @@ class LLCRAGAssembler:
             LLCContext with merged chunks from all relevant collections.
         """
         try:
-            try:
-                from utils.async_chromadb_client import get_async_chromadb_client
-            except ImportError as e:
-                logger.error("ChromaDB client not available: %s", e)
-                raise
-
-            client = await get_async_chromadb_client()
+            # #19519: the same client and name builder the collections are
+            # created through — a raw client or a hand-built name finds nothing.
+            client = await kb_chroma_client()
 
             # Determine query parameters based on profile
             query_params = self._get_query_params(profile, project_id, agent_id, query_text)
-
-            # Build ChromaDB collection names (scope: company, project, agent)
-            collections_to_query = []
-            if project_id:
-                collections_to_query.append(f"{company_id}:project:{project_id}")
-            if agent_id:
-                collections_to_query.append(f"{company_id}:agent:{agent_id}")
-            collections_to_query.append(f"{company_id}:company")
+            collections_to_query = _collections_for(company_id, project_id)
 
             # Query all collections in parallel (each ≤ 800ms target)
             tasks = [

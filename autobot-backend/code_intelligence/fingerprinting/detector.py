@@ -17,7 +17,6 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 import ast
 import hashlib
 from collections import defaultdict
-from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
@@ -34,6 +33,8 @@ from code_intelligence.fingerprinting.types import (
     Fingerprint,
     FingerprintType,
 )
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files
+from utils.cancel_tokens import raise_if_cancelled
 
 # Issue #607: Import shared caches for performance optimization
 try:
@@ -82,16 +83,7 @@ class CloneDetector:
             use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.min_fragment_lines = min_fragment_lines
-        self.exclude_dirs = exclude_dirs or [
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            "archive",
-            ".mypy_cache",
-        ]
+        self.exclude_dirs = exclude_dirs or sorted(ANALYSIS_EXCLUDE_DIRS)
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         self.ast_hasher = ASTHasher()
@@ -103,8 +95,8 @@ class CloneDetector:
         self._normalized_fingerprints: Dict[str, List[Fingerprint]] = defaultdict(list)
         self._semantic_fingerprints: Dict[str, List[Fingerprint]] = defaultdict(list)
 
-    def _collect_fragments(self, directory: str) -> tuple:
-        """Collect all code fragments from directory (Issue #398: extracted).
+    def _collect_fragments(self, directory: str, cancel_tokens: tuple = ()) -> tuple:
+        """Collect all code fragments from directory (Issue #398: extracted); stops at a set token (#22094).
 
         Returns:
             Tuple of (fragments list, total_files, total_lines)
@@ -114,6 +106,7 @@ class CloneDetector:
         total_lines = 0
 
         for py_file in self._get_python_files(directory):
+            raise_if_cancelled(*cancel_tokens, what="clone detection")
             try:
                 file_fragments = self._extract_fragments(py_file)
                 fragments.extend(file_fragments)
@@ -187,24 +180,19 @@ class CloneDetector:
             refactoring_priorities=self._prioritize_refactoring(clone_groups),
         )
 
-    def detect_clones(self, directory: str) -> CloneDetectionReport:
-        """Detect all clones in a directory (Issue #398: refactored to use helpers).
+    def detect_clones(self, directory: str, cancel_tokens: tuple = ()) -> CloneDetectionReport:
+        """A :class:`CloneDetectionReport` of every clone in *directory* (Issue #398: phases in helpers).
 
-        Args:
-            directory: Path to the directory to analyze
-
-        Returns:
-            CloneDetectionReport with all findings
+        #22094: runs in an executor thread; any set ``threading.Event`` in *cancel_tokens* stops it before its next
+        file with ``CancelTokenSet``, so an abandoned whole-tree scan does not walk on.
         """
         logger.info("Starting clone detection in: %s", directory)
 
-        # Reset fingerprint storage
         self._structural_fingerprints.clear()
         self._normalized_fingerprints.clear()
         self._semantic_fingerprints.clear()
 
-        # Issue #398: Use extracted helpers for phases
-        fragments, total_files, total_lines = self._collect_fragments(directory)
+        fragments, total_files, total_lines = self._collect_fragments(directory, cancel_tokens)
         logger.info("Extracted %d fragments from %d files", len(fragments), total_files)
 
         # Generate fingerprints for all fragments
@@ -214,7 +202,6 @@ class CloneDetector:
         # Detect all clone types
         clone_groups = self._detect_all_clone_types(fragments)
 
-        # Build and return report
         report = self._build_clone_report(directory, fragments, clone_groups, total_files, total_lines)
 
         logger.info(
@@ -226,30 +213,8 @@ class CloneDetector:
         return report
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """
-        Get all Python files in directory, excluding specified patterns.
-
-        Args:
-            directory: Root directory to search
-
-        Returns:
-            Sorted list of Python file paths
-        """
-        python_files = []
-        dir_path = Path(directory)
-
-        for py_file in dir_path.rglob("*.py"):
-            # Check if in excluded directory
-            should_exclude = False
-            for exclude_dir in self.exclude_dirs:
-                if exclude_dir in py_file.parts:
-                    should_exclude = True
-                    break
-
-            if not should_exclude:
-                python_files.append(str(py_file))
-
-        return sorted(python_files)
+        """All Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     def _create_fragment_from_node(
         self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str, parent_class: str | None = None

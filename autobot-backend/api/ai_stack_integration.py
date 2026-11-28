@@ -11,7 +11,7 @@ from the AI Stack role's host (uses NetworkConstants.AI_STACK_VM_IP) with the ma
 
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.ai_stack_multi_agent import multi_agent_query  # noqa: F401 - re-exported for existing importers
 from api.ai_stack_multi_agent import router as _multi_agent_router
@@ -35,22 +35,24 @@ from api.schemas_ai_stack import (
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     ChatRequest,
+    ComprehensiveResearchRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
     KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
-    ResearchRequest,
 )
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from dependencies import get_knowledge_base
+from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.remote_read import admit_remote_read, remote_read_is_admin
 from knowledge.search_filters import (
-    extract_user_context_from_request,
-    filter_search_results_by_permission,
+    filter_for_caller,
+    filter_for_user_id,
+    scoped_reader,
 )
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
@@ -119,7 +121,7 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 async def rag_query(
     request: RAGQueryRequest,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -144,14 +146,9 @@ async def rag_query(
                 query=request.query, top_k=request.max_results, filters=RESEARCH_QUARANTINE_FILTER
             )
             kb_results = kb_results if isinstance(kb_results, list) else []
-            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-            documents = await filter_search_results_by_permission(
-                kb_results,
-                user_id,
-                user_org_id,
-                user_group_ids,
-                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-            )
+            documents = await filter_for_user_id(kb_results, knowledge_base, scoped_reader(current_user))  # #19860
+        except HTTPException:  # 401 / 503 (audit unavailable) are answers, not a failed search (#19860)
+            raise
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
             documents = []
@@ -221,7 +218,7 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 async def chat(
     request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -245,17 +242,12 @@ async def chat(
             # Issue #13009: exclude quarantined research facts (#12622).
             kb_context = await knowledge_base.search(query=request.message, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             kb_context = kb_context if isinstance(kb_context, list) else []
-            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-            kb_context = await filter_search_results_by_permission(
-                kb_context,
-                user_id,
-                user_org_id,
-                user_group_ids,
-                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-            )
+            kb_context = await filter_for_user_id(kb_context, knowledge_base, scoped_reader(current_user))  # #19860
             if kb_context:
                 kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
                 enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
+        except HTTPException:  # 401 / 503 (audit unavailable) are answers, not a failed search (#19860)
+            raise
         except Exception as e:
             logger.warning("Knowledge base context enhancement failed: %s", e)
 
@@ -299,6 +291,50 @@ async def extract_knowledge(
     return create_success_response(result, "Knowledge extraction completed successfully")
 
 
+def _as_hit_list(raw) -> list:
+    """The hits of a ``KB.search`` answer: a basic-mode list, or the ``results`` of an enhanced-mode dict."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict) and isinstance(raw.get("results"), list):
+        return raw["results"]
+    logger.warning("Local KB search returned an unrecognised shape (%s); no hits used", type(raw).__name__)
+    return []
+
+
+async def _local_kb_hits(knowledge_base, query: str, max_results: int, current_user: dict) -> list:
+    """Local KB hits the caller may read (#16665); quarantined research facts are excluded (#13009, #12622)."""
+    try:
+        raw = await knowledge_base.search(query=query, top_k=max_results, filters=RESEARCH_QUARANTINE_FILTER)
+        return await filter_for_caller(_as_hit_list(raw), knowledge_base, current_user)
+    except HTTPException:
+        raise  # an unresolvable caller (401) or an unwritable audit entry (503) is the answer, not an empty list
+    except Exception as e:
+        logger.warning("Local KB search failed: %s", e)
+        return []
+
+
+async def _remote_kb_search(ai_client, query: str, search_type: str, max_results: int) -> dict:
+    """The AI Stack's own search. The route is admin-only; the call carries no caller identity.
+
+    Its backing store is not in this repo (``autobot-ai-stack`` holds only a README; the agent is reached
+    through ``services/ai_stack_client.py`` ``search_knowledge``), so it is not caller-scoped here: an admin
+    reads any fact on this explicit read API (#16665), and the caller admits it first, audited (#19646).
+    """
+    try:
+        return await ai_client.search_knowledge(query=query, search_type=search_type, max_results=max_results)
+    except AIStackError as e:
+        logger.warning("AI Stack search failed: %s", e)
+        return {}
+
+
+async def _remote_half(ai_client, query: str, search_type: str, max_results: int, current_user: dict) -> dict:
+    """The remote half: an admin's read, audited first (503 if it cannot be); empty for anyone else (#19646)."""
+    if not remote_read_is_admin(current_user):
+        return {}
+    await admit_remote_read(current_user, "knowledge_search")
+    return await _remote_kb_search(ai_client, query, search_type, max_results)
+
+
 @router.post("/knowledge/search", response_model=DataResponse[KnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -310,39 +346,21 @@ async def knowledge_search(
     search_type: str = "comprehensive",
     max_results: int = 10,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Knowledge search combining local KB and AI Stack capabilities.
 
     Issue #744: Requires admin authentication.
+    Issue #16665: an explicit read API, not prompt grounding -- local KB hits are
+    scoped to the caller (an admin reads any fact, audited).
     """
     ai_client = await get_ai_stack_client()
-
-    # Parallel search: local KB + AI Stack enhanced search
     results = {}
-
-    # Local knowledge base search
     if knowledge_base:
-        try:
-            # Issue #13009: exclude quarantined research facts (#12622).
-            local_results = await knowledge_base.search(
-                query=query, top_k=max_results, filters=RESEARCH_QUARANTINE_FILTER
-            )
-            results["local_kb"] = local_results
-        except Exception as e:
-            logger.warning("Local KB search failed: %s", e)
-            results["local_kb"] = []
-
-    # AI Stack search
-    try:
-        aistack_results = await ai_client.search_knowledge(
-            query=query, search_type=search_type, max_results=max_results
-        )
-        results["aistack"] = aistack_results
-    except AIStackError as e:
-        logger.warning("AI Stack search failed: %s", e)
-        results["aistack"] = {}
+        results["local_kb"] = await _local_kb_hits(knowledge_base, query, max_results, current_user)
+    results["rag_augmented"] = await _remote_half(ai_client, query, search_type, max_results, current_user)
 
     return create_success_response(results, "AI Stack knowledge search completed")
 
@@ -356,12 +374,15 @@ async def knowledge_search(
 async def get_system_knowledge(
     knowledge_category: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get system-wide knowledge insights.
 
     Issue #744: Requires admin authentication.
+    #16665: the remote read is audited before the call (``knowledge.remote_read``).
     """
+    await admit_remote_read(current_user, "knowledge_system")
     ai_client = await get_ai_stack_client()
     result = await ai_client.get_system_knowledge(knowledge_category)
 
@@ -379,7 +400,9 @@ async def get_system_knowledge(
     operation="comprehensive_research",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def comprehensive_research(request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)):
+async def comprehensive_research(
+    request: ComprehensiveResearchRequest, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Perform comprehensive research with multiple AI agents.
 

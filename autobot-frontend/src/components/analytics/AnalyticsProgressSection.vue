@@ -4,6 +4,8 @@
 
 <!-- Issue #1579: Extracted from CodebaseAnalytics.vue — Progress indicators -->
 <template>
+  <!-- #21003: findings from a run that did not finish are labelled partial -->
+  <RunStateNotice />
   <!-- Unified Operation Progress — Issues #1190, #1365, #1366 -->
   <!-- Single status bar covering indexing and code-smell operations; shows all available detail -->
   <div
@@ -147,6 +149,7 @@
 
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import RunStateNotice from './RunStateNotice.vue'
 import type { ScanRunnerReturn } from '@/composables/useAnalyticsScanRunner'
 
 interface JobPhase {

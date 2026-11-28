@@ -79,17 +79,15 @@ if [ ! -f "$INDEX_SCRIPT" ]; then
     exit 0
 fi
 
-PYTHON_CMD=""
-if [ -n "$VIRTUAL_ENV" ]; then
-    PYTHON_CMD="$VIRTUAL_ENV/bin/python"
-elif [ -f "$PROJECT_ROOT/venv/bin/python" ]; then
-    PYTHON_CMD="$PROJECT_ROOT/venv/bin/python"
-elif command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    echo -e "${YELLOW}⚠️ Python not found, skipping documentation sync${NC}"
+# #21163: the one resolver. post-merge cannot block, so an unresolvable interpreter is a
+# loud skip (the resolver names the required version on stderr), never a wrong-version run.
+# shellcheck source=../../../../scripts/lib/hook-python.sh
+source "$SCRIPT_DIR/../../../../scripts/lib/hook-python.sh" || {
+    echo "FATAL: cannot load scripts/lib/hook-python.sh — refusing to report clean" >&2
+    exit 1
+}
+if ! PYTHON_CMD="$(resolve_repo_python --root "$PROJECT_ROOT")"; then
+    echo -e "${YELLOW}⚠️ No supported Python found, skipping documentation sync${NC}" >&2
     exit 0
 fi
 

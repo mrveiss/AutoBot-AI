@@ -24,6 +24,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
@@ -146,7 +148,7 @@ def _uncaptured_invocations() -> list[tuple[str, int, str]]:
 
 def _parses(code: str) -> bool:
     try:
-        ast.parse(code)
+        parse_cache.parse(code)
     except SyntaxError:
         return False
     return True
@@ -162,7 +164,7 @@ def _imported_names(code: str) -> list[str]:
     program", and the import assertion below passes vacuously either way. Letting
     the SyntaxError out makes the second case fail, loudly, at the call site.
     """
-    tree = ast.parse(code)
+    tree = parse_cache.parse(code)
     names = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:

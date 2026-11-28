@@ -24,10 +24,10 @@
  * ships first; translation follows on its own cadence.
  *
  * Lagging is therefore allowed but NOT unmeasured. A key missing from a
- * locale counts as untranslated in `repo_tests/i18n_untranslated_ratchet_test.py`,
- * which owns the per-locale debt figure and fails when it grows. Do not
- * re-derive that count here — two definitions of the same debt would
- * eventually disagree about what "translated" means.
+ * locale counts as untranslated in `scripts/list_untranslated.py`, and
+ * `repo_tests/i18n_untranslated_ratchet_test.py` fails when a translation is
+ * lost against the base. Do not re-derive that here — two definitions of the
+ * same debt would eventually disagree about what "translated" means.
  */
 
 import { describe, it, expect } from 'vitest'

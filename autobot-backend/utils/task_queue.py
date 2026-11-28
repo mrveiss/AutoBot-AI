@@ -60,7 +60,7 @@ def log_performance_metric(*args, **kwargs):
 
 
 @dataclass
-class TaskResult:
+class QueuedTaskResult:
     """Task execution result."""
 
     task_id: str
@@ -84,7 +84,7 @@ class TaskResult:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TaskResult":
+    def from_dict(cls, data: Dict[str, Any]) -> "QueuedTaskResult":
         """Create from dictionary."""
         if "status" in data:
             data["status"] = TaskStatus(data["status"])
@@ -96,7 +96,7 @@ class TaskResult:
 
 
 @dataclass
-class Task:
+class QueuedTask:
     """Task definition for queue execution."""
 
     id: str
@@ -134,7 +134,7 @@ class Task:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+    def from_dict(cls, data: Dict[str, Any]) -> "QueuedTask":
         """Create from dictionary."""
         if "priority" in data:
             val = data["priority"]
@@ -149,7 +149,7 @@ class Task:
         return cls(**data)
 
 
-class TaskQueue:
+class RedisTaskQueue:
     """Redis-based task queue with priority and retry support."""
 
     def __init__(
@@ -314,7 +314,7 @@ class TaskQueue:
         task_id = str(uuid.uuid4())
         scheduled_at, expires_at = self._calculate_task_timing(delay, expires_in)
 
-        task = Task(
+        task = QueuedTask(
             id=task_id,
             function_name=function_name,
             args=args,
@@ -333,7 +333,7 @@ class TaskQueue:
         self.logger.info("Enqueued task %s: %s", task_id, function_name)
         return task_id
 
-    async def _store_task(self, task: Task) -> None:
+    async def _store_task(self, task: QueuedTask) -> None:
         """Store task data in Redis."""
         if not self.redis:
             return
@@ -344,14 +344,14 @@ class TaskQueue:
             self.logger.error("Failed to store task %s: %s", task.id, e)
             raise RuntimeError(f"Failed to store task: {e}")
 
-    async def _get_task(self, task_id: str) -> Task | None:
+    async def _get_task(self, task_id: str) -> QueuedTask | None:
         """Retrieve task data from Redis."""
         if not self.redis:
             return None
         try:
             task_data = await self.redis.hget(f"{self.queue_name}:tasks", task_id)
             if task_data:
-                return Task.from_dict(json.loads(task_data))
+                return QueuedTask.from_dict(json.loads(task_data))
             return None
         except RedisError as e:
             self.logger.error("Failed to get task %s: %s", task_id, e)
@@ -500,7 +500,7 @@ class TaskQueue:
             self.logger.error("Failed to get next task from queue: %s", e)
             return None  # Return None to allow worker to continue
 
-    async def _record_task_success(self, result: TaskResult, task_result: Any, start_time: float) -> None:
+    async def _record_task_success(self, result: QueuedTaskResult, task_result: Any, start_time: float) -> None:
         """
         Record successful task execution.
 
@@ -523,7 +523,7 @@ class TaskQueue:
 
     def _record_task_failure(
         self,
-        result: TaskResult,
+        result: QueuedTaskResult,
         error: str,
         start_time: float,
         error_traceback: str | None = None,
@@ -540,7 +540,7 @@ class TaskQueue:
         result.completed_at = datetime.now(tz=timezone.utc)
         result.execution_time = time.time() - start_time
 
-    def _check_task_expired(self, task: Task) -> bool:
+    def _check_task_expired(self, task: QueuedTask) -> bool:
         """
         Check if a task has expired based on its expiration time.
 
@@ -554,13 +554,13 @@ class TaskQueue:
         """
         return task.expires_at is not None and datetime.now(tz=timezone.utc) > task.expires_at
 
-    async def _execute_task_with_timeout(self, task: Task, result: TaskResult, start_time: float) -> None:
+    async def _execute_task_with_timeout(self, task: QueuedTask, result: QueuedTaskResult, start_time: float) -> None:
         """
         Execute a task with optional timeout handling.
 
         Args:
             task: The task to execute
-            result: The TaskResult object to update
+            result: The QueuedTaskResult object to update
             start_time: When task processing started
 
         Issue #620.
@@ -598,13 +598,13 @@ class TaskQueue:
         if self._check_task_expired(task):
             await self._handle_task_completion(
                 task,
-                TaskResult(task_id=task_id, status=TaskStatus.CANCELLED, error="Task expired"),
+                QueuedTaskResult(task_id=task_id, status=TaskStatus.CANCELLED, error="Task expired"),
             )
             return
 
         self.logger.info("Worker %s processing task %s: %s", worker_name, task_id, task.function_name)
 
-        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.now(tz=timezone.utc))
+        result = QueuedTaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.now(tz=timezone.utc))
 
         try:
             await self._execute_task_with_timeout(task, result, start_time)
@@ -627,7 +627,7 @@ class TaskQueue:
             # Run sync function in thread pool
             return await asyncio.get_running_loop().run_in_executor(None, lambda: func(*args, **kwargs))
 
-    async def _handle_task_completion(self, task: Task, result: TaskResult) -> None:
+    async def _handle_task_completion(self, task: QueuedTask, result: QueuedTaskResult) -> None:
         """Handle task completion (success or failure)."""
         if not self.redis:
             return
@@ -643,7 +643,7 @@ class TaskQueue:
         await self._store_task_result(task, result)
         self._log_task_performance(task, result)
 
-    async def _schedule_task_retry(self, task: Task, result: TaskResult) -> None:
+    async def _schedule_task_retry(self, task: QueuedTask, result: QueuedTaskResult) -> None:
         """Schedule a failed task for retry with exponential backoff. Issue #620."""
         result.retry_count += 1
         result.status = TaskStatus.RETRY
@@ -662,7 +662,7 @@ class TaskQueue:
             f"Scheduling retry {result.retry_count}/{task.max_retries} " f"for task {task.id} in {retry_delay}s"
         )
 
-    async def _finalize_task_completion(self, task: Task, result: TaskResult) -> None:
+    async def _finalize_task_completion(self, task: QueuedTask, result: QueuedTaskResult) -> None:
         """Move task to completed or failed queue. Issue #620."""
         if result.status == TaskStatus.COMPLETED:
             await self.redis.zadd(self.completed_key, {task.id: time.time()})
@@ -671,13 +671,13 @@ class TaskQueue:
             async with self._stats_lock:
                 self.stats["tasks_failed"] += 1
 
-    async def _store_task_result(self, task: Task, result: TaskResult) -> None:
+    async def _store_task_result(self, task: QueuedTask, result: QueuedTaskResult) -> None:
         """Store task result in Redis. Issue #620."""
         result_data = json.dumps(result.to_dict())
         # Issue #361 - avoid blocking
         await asyncio.to_thread(self.redis.hset, self.results_key, task.id, result_data)
 
-    def _log_task_performance(self, task: Task, result: TaskResult) -> None:
+    def _log_task_performance(self, task: QueuedTask, result: QueuedTaskResult) -> None:
         """Log task execution performance metrics. Issue #620."""
         if result.execution_time:
             log_performance_metric(
@@ -690,14 +690,14 @@ class TaskQueue:
                 retry_count=result.retry_count,
             )
 
-    async def get_task_result(self, task_id: str) -> TaskResult | None:
+    async def get_task_result(self, task_id: str) -> QueuedTaskResult | None:
         """Get task execution result."""
         if not self.redis:
             return None
         # Issue #361 - avoid blocking
         result_data = await asyncio.to_thread(self.redis.hget, self.results_key, task_id)
         if result_data:
-            return TaskResult.from_dict(json.loads(result_data))
+            return QueuedTaskResult.from_dict(json.loads(result_data))
         return None
 
     def _check_task_in_queue(self, task_id: str, queue_key: str) -> bool:
@@ -738,7 +738,7 @@ class TaskQueue:
 
         if removed_pending or removed_scheduled:
             # Create cancelled result
-            result = TaskResult(
+            result = QueuedTaskResult(
                 task_id=task_id,
                 status=TaskStatus.CANCELLED,
                 completed_at=datetime.now(tz=timezone.utc),
@@ -829,15 +829,15 @@ class TaskQueue:
         return cleaned_count
 
 
-get_task_queue = lazy_singleton(TaskQueue)
+get_task_queue = lazy_singleton(RedisTaskQueue)
 
 
-def initialize_task_queue(**kwargs) -> TaskQueue:
-    """Initialize and return a fresh TaskQueue instance.
+def initialize_task_queue(**kwargs) -> RedisTaskQueue:
+    """Initialize and return a fresh RedisTaskQueue instance.
 
     Escape hatch: bypasses lazy_singleton cache for tests/forced reinit.
     """
-    return TaskQueue(**kwargs)
+    return RedisTaskQueue(**kwargs)
 
 
 # Convenience decorators

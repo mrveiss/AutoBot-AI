@@ -25,7 +25,6 @@ Covers:
 import json
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -450,62 +449,30 @@ class TestTenantGate:
 # ---------------------------------------------------------------------------
 
 
-class TestAgentStatusGate:
-    def test_inactive_raises_409(self):
-        from fastapi import HTTPException
+class TestDispatchGate:
+    """H2c + H2d now answer through the one gate; pause flags come with it (#19240)."""
 
-        from llc.api.replay import _validate_agent_status
-
-        with pytest.raises(HTTPException) as exc_info:
-            _validate_agent_status({"status": "inactive"})
-        assert exc_info.value.status_code == 409
-
-    def test_terminated_raises_409(self):
-        from fastapi import HTTPException
-
-        from llc.api.replay import _validate_agent_status
-
-        with pytest.raises(HTTPException) as exc_info:
-            _validate_agent_status({"status": "terminated"})
-        assert exc_info.value.status_code == 409
-
-    def test_active_passes(self):
-        from llc.api.replay import _validate_agent_status
-
-        # Should not raise.
-        _validate_agent_status({"status": "available"})
-
-
-# ---------------------------------------------------------------------------
-# 13. H2 — budget gate
-# ---------------------------------------------------------------------------
-
-
-class TestBudgetGate:
     @pytest.mark.asyncio
-    async def test_over_budget_raises_402(self):
+    @pytest.mark.parametrize(
+        ("reason", "status_code"),
+        [("agent status is paused", 409), ("company is paused", 409), ("budget is exhausted", 402)],
+    )
+    async def test_a_refusal_maps_to_its_status(self, reason, status_code):
         from fastapi import HTTPException
 
-        from llc.api.replay import _validate_budget
+        from llc.api.replay import _validate_dispatchable
 
-        mock_svc = MagicMock()
-        mock_svc.check_budget = AsyncMock(return_value=(Decimal("-10"), True, True))
-
-        with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
+        with patch("llc.api.replay.dispatch_block_reason", AsyncMock(return_value=reason)):
             with pytest.raises(HTTPException) as exc_info:
-                await _validate_budget(AsyncMock(), "agent-abc", "company-1")
-        assert exc_info.value.status_code == 402
+                await _validate_dispatchable(AsyncMock(), {"agent_id": "a", "status": "available"}, "c")
+        assert exc_info.value.status_code == status_code
 
     @pytest.mark.asyncio
-    async def test_within_budget_passes(self):
-        from llc.api.replay import _validate_budget
+    async def test_a_dispatchable_agent_passes(self):
+        from llc.api.replay import _validate_dispatchable
 
-        mock_svc = MagicMock()
-        mock_svc.check_budget = AsyncMock(return_value=(Decimal("50"), False, False))
-
-        with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
-            # Should not raise.
-            await _validate_budget(AsyncMock(), "agent-abc", "company-1")
+        with patch("llc.api.replay.dispatch_block_reason", AsyncMock(return_value=None)):
+            await _validate_dispatchable(AsyncMock(), {"agent_id": "a", "status": "available"}, "c")
 
 
 # ---------------------------------------------------------------------------

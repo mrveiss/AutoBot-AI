@@ -17,8 +17,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { KnowledgeRepository } from '../KnowledgeRepository'
 
-vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+// Partial: KnowledgeRepository loads the typed ApiClient, which reads the real config at import (#21886).
+vi.mock('@/config/ssot-config', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/config/ssot-config')>()),
+  getApiBase: () => '/api',
+  getBackendUrl: () => ''
 }))
 
 const fetchWithAuth = vi.fn()

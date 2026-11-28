@@ -16,7 +16,7 @@ from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -38,7 +38,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
 
     def __init__(self):
         """Initialize network discovery agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("network_discovery", DeploymentMode.LOCAL)
+        super().__init__("network_discovery", AgentDeploymentMode.LOCAL)
         self.name = "network_discovery"
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS

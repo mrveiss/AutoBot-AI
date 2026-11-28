@@ -238,3 +238,28 @@ async def test_execute_elevated_no_client_production_explicit_allow():
 
     mock_exec.assert_called_once_with("sudo apt-get upgrade")
     assert result["success"] is True
+
+
+@pytest.mark.parametrize(
+    ("environment", "permitted"),
+    [
+        ("Production", False),
+        ("prod", False),
+        ("", False),
+        (" production ", False),
+        ("garbage", False),
+        ("staging", False),
+        ("development", True),
+        ("ci", True),
+        (" Test ", True),
+    ],
+)
+def test_sudo_fallback_is_an_allow_list_that_fails_closed(environment: str, permitted: bool):
+    """#19315 review: only allow-listed non-production names relax the fallback; everything else refuses."""
+    w = ElevationWrapper()
+
+    with patch("elevation_wrapper.config") as mock_cfg:
+        mock_cfg.environment = environment
+        mock_cfg.misc.ci = ""
+        mock_cfg.misc.allow_unapproved_sudo = False
+        assert w._sudo_fallback_permitted() is permitted

@@ -102,8 +102,9 @@ def test_exit_code_helper_returns_nonzero_on_any_failure_structurally():
 def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     """Regression for the reachability half of #14326.
 
-    ``seed_agents`` sits mid-list; ``add_node_capability_profiles_table``
-    (#15495) is last. ``run_all_migrations`` breaks on the first failure, so if
+    ``seed_agents`` sits mid-list; ``add_audit_logs_canonical_columns`` (#17225) is no longer
+    last (``add_self_model_tables``, #22277, is; ``assign_vnc_role_to_desktop_node``, #22211, and
+    ``add_auth_revocation_tables``, #18663, preceded it). ``run_all_migrations`` breaks on the first failure, so if
     ``seed_agents`` cannot import (the ``autobot_shared`` gap) nothing after
     it, including the newest migration, was ever exercised by the gate.
     """
@@ -115,8 +116,8 @@ def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     names = [elt.value for elt in migrations_assign.value.elts if isinstance(elt, ast.Constant)]
 
     assert "seed_agents" in names
-    assert names[-1] == "add_node_capability_profiles_table"
-    assert names.index("seed_agents") < names.index("add_node_capability_profiles_table")
+    assert names[-1] == "add_self_model_tables"
+    assert names.index("seed_agents") < names.index("add_auth_revocation_tables")
 
 
 # ---------------------------------------------------------------------------

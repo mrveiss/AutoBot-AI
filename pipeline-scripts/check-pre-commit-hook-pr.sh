@@ -16,7 +16,7 @@
 # set for the PR/push context and invokes the hook in argv mode.
 #
 # Usage:
-#   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] <hook-name>
+#   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] <hook-name> [--ext py,sh,...]
 #   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] --python <validator-path> [--ext py,ts,...]
 #
 # --changed-lines-only (#13950)
@@ -77,6 +77,39 @@ if [ "$#" -lt 1 ]; then
     exit 2
 fi
 
+# Optional --ext override, accepted in BOTH modes: comma-separated extensions without dots.
+# Replaces the default pathspec, so a hook whose matcher reads a type outside the default set
+# (`.sh` for pre-commit-no-direct-redis) is handed those files too.
+set_ext_pathspec() {
+    if [ "${1:-}" = "" ]; then
+        echo "--ext requires a comma-separated list of extensions" >&2
+        exit 2
+    fi
+    EXT_PATHSPEC=()
+    local _ext
+    # `|| [ -n "$_ext" ]` catches the final field: tr leaves no trailing
+    # newline, so a plain `read` drops the last (or only) extension.
+    while IFS= read -r _ext || [ -n "$_ext" ]; do
+        [ -n "$_ext" ] || continue
+        # Reject anything that is not a bare extension. `--ext .py` would
+        # build the pathspec `*..py` and `--ext " py"` builds `*. py`;
+        # both match nothing, so the run would report "no changed source
+        # files" and exit 0 — the exact silent pass this script exists to
+        # prevent, reached by a different route (#13880).
+        case "$_ext" in
+            *[!A-Za-z0-9]*|"")
+                echo "--ext: '$_ext' is not a bare extension (expected e.g. py,ts)" >&2
+                exit 2
+                ;;
+        esac
+        EXT_PATHSPEC+=("*.${_ext}")
+    done < <(printf '%s' "$1" | tr ',' '\n')
+    if [ "${#EXT_PATHSPEC[@]}" -eq 0 ]; then
+        echo "--ext produced no usable extensions" >&2
+        exit 2
+    fi
+}
+
 if [ "$1" = "--changed-lines-only" ]; then
     CHANGED_LINES_ONLY=true
     shift
@@ -94,34 +127,8 @@ if [ "$1" = "--python" ]; then
     fi
     VALIDATOR_PATH="$2"
     shift 2
-    # Optional --ext override: comma-separated extensions without dots
     if [ "${1:-}" = "--ext" ]; then
-        if [ "${2:-}" = "" ]; then
-            echo "--ext requires a comma-separated list of extensions" >&2
-            exit 2
-        fi
-        EXT_PATHSPEC=()
-        # `|| [ -n "$_ext" ]` catches the final field: tr leaves no trailing
-        # newline, so a plain `read` drops the last (or only) extension.
-        while IFS= read -r _ext || [ -n "$_ext" ]; do
-            [ -n "$_ext" ] || continue
-            # Reject anything that is not a bare extension. `--ext .py` would
-            # build the pathspec `*..py` and `--ext " py"` builds `*. py`;
-            # both match nothing, so the run would report "no changed source
-            # files" and exit 0 — the exact silent pass this script exists to
-            # prevent, reached by a different route (#13880).
-            case "$_ext" in
-                *[!A-Za-z0-9]*|"")
-                    echo "--ext: '$_ext' is not a bare extension (expected e.g. py,ts)" >&2
-                    exit 2
-                    ;;
-            esac
-            EXT_PATHSPEC+=("*.${_ext}")
-        done < <(printf '%s' "$2" | tr ',' '\n')
-        if [ "${#EXT_PATHSPEC[@]}" -eq 0 ]; then
-            echo "--ext produced no usable extensions" >&2
-            exit 2
-        fi
+        set_ext_pathspec "${2:-}"
         shift 2
     fi
     if [ ! -f "$VALIDATOR_PATH" ]; then
@@ -130,6 +137,11 @@ if [ "$1" = "--python" ]; then
     fi
 else
     HOOK_NAME="$1"
+    shift
+    if [ "${1:-}" = "--ext" ]; then
+        set_ext_pathspec "${2:-}"
+        shift 2
+    fi
     HOOK_PATH="$(dirname "$0")/../autobot-infrastructure/shared/scripts/hooks/${HOOK_NAME}"
     if [ ! -f "$HOOK_PATH" ]; then
         echo "Hook script not found: $HOOK_PATH" >&2

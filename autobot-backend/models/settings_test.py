@@ -178,10 +178,15 @@ def test_consolidated_map_covers_every_historical_setting():
     assert set(shim.CONSOLIDATED_INTO) == HISTORICAL_SETTINGS
 
 
-def test_redis_db_is_owned_only_by_the_db_main_env_var():
-    """#12748 divergence: the deployment env var wins, the generic one is gone."""
-    aliases = {name: field.alias for name, field in ssot_config.RedisConfig.model_fields.items()}
+def test_redis_db_is_owned_only_by_the_one_database_table():
+    """#12748 divergence, then #19232: the one name -> number table owns ``redis.db``.
 
-    assert shim.CONSOLIDATED_INTO["redis.db"].endswith("RedisConfig.db_main")
-    assert aliases["db_main"] == "AUTOBOT_REDIS_DB_MAIN"
-    assert "AUTOBOT_REDIS_DB" not in set(aliases.values())
+    ``AUTOBOT_REDIS_DB_MAIN`` feeds that table; no SSOT field reads a DB env var any more.
+    """
+    from autobot_shared.redis_management.database_overrides import env_var_name
+
+    aliases = {field.alias for field in ssot_config.RedisConfig.model_fields.values()}
+
+    assert shim.CONSOLIDATED_INTO["redis.db"].endswith("DATABASE_MAPPING['main']")
+    assert env_var_name("main") == "AUTOBOT_REDIS_DB_MAIN"
+    assert not [alias for alias in aliases if alias and alias.startswith("AUTOBOT_REDIS_DB")]

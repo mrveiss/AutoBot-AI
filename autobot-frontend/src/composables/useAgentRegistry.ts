@@ -45,6 +45,7 @@ export interface SpecializedAgent {
   color: string
   tools: string[]
   category: string
+  tier: string
   source_file: string
   excerpt: string
   system_prompt?: string
@@ -68,6 +69,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
 
   const backendAgents = ref<BackendAgent[]>([])
   const specializedAgents = ref<SpecializedAgent[]>([])
+  const specializedAvailable = ref(true)
   const summary = ref<AgentSummary | null>(null)
   const selectedAgent = ref<SpecializedAgent | null>(null)
   const { isLoading, wrap } = useLoadingState()
@@ -107,10 +109,12 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
         const data = await ApiClient.get<{
           agents?: BackendAgent[]
           specialized_agents?: SpecializedAgent[]
+          specialized_available?: boolean
           summary?: AgentSummary | null
         }>(`${getApiBase()}/agent_config/agents/all`)
         backendAgents.value = data.agents || []
         specializedAgents.value = data.specialized_agents || []
+        specializedAvailable.value = data.specialized_available !== false
         summary.value = data.summary || null
         logger.debug(
           'Fetched %d backend + %d specialized agents',
@@ -145,6 +149,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
   }
 
   return {
+    specializedAvailable,
     backendAgents,
     specializedAgents,
     summary,

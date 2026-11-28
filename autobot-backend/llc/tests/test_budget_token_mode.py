@@ -315,7 +315,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from fastapi import FastAPI
 
     from llc.api import budget as budget_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
 
     application = FastAPI()
     application.include_router(budget_api.router, prefix="/api/llc")
@@ -329,7 +329,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await s.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
     return application
 
 
@@ -403,6 +403,26 @@ async def test_update_limit_accepts_token_limit_in_tokens_mode(client: httpx.Asy
     data = resp.json()
     assert data["budget_mode"] == "tokens"
     assert data["token_limit"] == 2_000_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [0, -1])
+async def test_update_limit_refuses_a_token_limit_below_one(client: httpx.AsyncClient, session_factory, bad) -> None:
+    """PATCH /limit refuses 0 and -1 with 422 and leaves the row untouched (#20930)."""
+    agent_id = await _seed_budget(session_factory, mode="dollars")
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_mode": "tokens", "token_limit": bad})
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_limit_accepts_a_token_limit_of_one(client: httpx.AsyncClient, session_factory) -> None:
+    """The floor itself is accepted (#20930)."""
+    agent_id = await _seed_budget(session_factory, mode="dollars")
+    with patch("llc.services.budget._tracker.get_state", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = None
+        resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_mode": "tokens", "token_limit": 1})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["token_limit"] == 1
 
 
 @pytest.mark.asyncio

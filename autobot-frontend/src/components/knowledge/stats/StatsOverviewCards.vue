@@ -1,6 +1,6 @@
 <template>
   <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overviewAriaLabel')">
-    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="analytics-documents-title">
+    <BaseCard scrollable variant="elevated" size="sm" role="article" aria-labelledby="analytics-documents-title">
       <div class="stat-icon documents" aria-hidden="true">
         <Icon name="file-alt" />
       </div>
@@ -11,9 +11,9 @@
           {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
-    </BasePanel>
+    </BaseCard>
 
-    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="analytics-categories-title">
+    <BaseCard scrollable variant="elevated" size="sm" role="article" aria-labelledby="analytics-categories-title">
       <div class="stat-icon categories" aria-hidden="true">
         <Icon name="folder" />
       </div>
@@ -24,9 +24,9 @@
           {{ $t('knowledge.stats.overview.avgDocsPerCategory', { count: avgDocsPerCategory }) }}
         </p>
       </div>
-    </BasePanel>
+    </BaseCard>
 
-    <BasePanel variant="elevated" size="sm">
+    <BaseCard scrollable variant="elevated" size="sm">
       <div class="stat-icon tags">
         <Icon name="tags" />
       </div>
@@ -37,9 +37,9 @@
           {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
-    </BasePanel>
+    </BaseCard>
 
-    <BasePanel variant="elevated" size="sm">
+    <BaseCard scrollable variant="elevated" size="sm">
       <div class="stat-icon storage">
         <Icon name="database" />
       </div>
@@ -50,11 +50,12 @@
           {{ $t('knowledge.stats.overview.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
         </p>
       </div>
-    </BasePanel>
+    </BaseCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -69,7 +70,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Props {

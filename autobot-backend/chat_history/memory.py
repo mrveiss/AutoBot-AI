@@ -22,6 +22,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from chat_history.file_io import run_in_chat_io_executor
+from chat_history.session_lease import LeaseBudget, SessionLeaseTimeout, session_lease
 
 logger = get_logger(__name__)
 
@@ -83,6 +84,32 @@ class MemoryMixin:
         # Cleanup if needed
         self._cleanup_messages_if_needed()
 
+    async def _remove_old_session_files(self, files_to_remove) -> int:
+        """Remove *files_to_remove* ``(path, mtime, filename)`` under each session's lease; the count removed.
+
+        #20862: a removal never races a write to the same file. A session whose lease is busy is skipped
+        (and so are the rest once the pass's wait budget is spent); those files are still there, so the
+        next cleanup pass takes them.
+        """
+        budget = LeaseBudget()
+        removed = 0
+        for file_path, _, filename in files_to_remove:
+            if budget.spent:
+                logger.info("CLEANUP: lease wait budget spent; the remaining files wait for the next pass")
+                break
+            try:
+                async with session_lease(
+                    filename[len("chat_") : -len(".json")], "cleanup_old_session", budget.wait_s()
+                ):
+                    await run_in_chat_io_executor(os.remove, file_path)
+                removed += 1
+                logger.info("CLEANUP: Removed old session file: %s", filename)
+            except SessionLeaseTimeout:
+                logger.info("CLEANUP: %s is busy; left for the next pass", filename)
+            except Exception as e:
+                logger.error("Failed to remove session file %s: %s", filename, e)
+        return removed
+
     async def _cleanup_old_session_files(self):
         """Clean up old session files."""
         try:
@@ -107,15 +134,10 @@ class MemoryMixin:
             # Remove old files if exceeding limit
             if len(chat_files) > self.max_session_files:
                 files_to_remove = chat_files[self.max_session_files :]
-                for file_path, _, filename in files_to_remove:
-                    try:
-                        await run_in_chat_io_executor(os.remove, file_path)
-                        logger.info("CLEANUP: Removed old session file: %s", filename)
-                    except Exception as e:
-                        logger.error("Failed to remove session file %s: %s", filename, e)
-
+                removed = await self._remove_old_session_files(files_to_remove)
                 logger.info(
-                    "SESSION CLEANUP: Removed %d old session files, " "kept %d most recent",
+                    "SESSION CLEANUP: Removed %d of %d old session files, kept %d most recent",
+                    removed,
                     len(files_to_remove),
                     self.max_session_files,
                 )

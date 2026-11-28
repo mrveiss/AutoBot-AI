@@ -34,6 +34,7 @@ INIT_PATH_MODULES: list[Path] = [
     CONFIG_ROOT / "sync_ops.py",
     CONFIG_ROOT / "timeout_config.py",
     CONFIG_ROOT / "validation.py",
+    CONFIG_ROOT / "model_drift.py",
     CONFIG_ROOT / "defaults.py",
     CONFIG_ROOT / "registry.py",
     BACKEND_ROOT / "constants" / "path_constants.py",

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Tuple
 
 
@@ -80,6 +81,25 @@ class Concept:
 
 _FACTS = "autobot-backend/knowledge/facts.py"
 
+
+def legacy_conversation_transcripts_dir() -> Path:
+    """The ONE resolution of the legacy transcript directory, absolute (#18293).
+
+    Read from SSOT config: ``config.path.legacy_transcripts_dir``
+    (``AUTOBOT_LEGACY_TRANSCRIPTS_DIR``), relative to ``base_dir`` unless absolute.
+    The default, ``data/conversation_transcripts`` under ``base_dir``, is where the
+    retired writer put the files: it resolved that path against its working
+    directory, and on an Ansible install ``AUTOBOT_BASE_DIR`` IS the backend's code
+    and working directory. It is not ``data_dir``/``PATH.DATA_DIR``, where readers
+    used to look and nothing was ever written. No working-directory dependence: a
+    script run from anywhere resolves the same directory as the service.
+    ``repo_tests/conversation_turn_single_store_18293_test.py`` fails a write under it.
+    """
+    from autobot_shared.ssot_config import config
+
+    return config.path.resolve(config.path.legacy_transcripts_dir).resolve()
+
+
 #: Keyed by concept name. Ordered by store so a reader can see, in one pass,
 #: which concepts share an authority.
 STORE_AUTHORITY: dict[str, Concept] = {
@@ -102,15 +122,17 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "fact:* hashes and their indexes; the ChromaDB vectors are rebuilt by re-embedding "
         "the row content (background_vectorization reconciles what is missing).",
         note="Redis with RDB snapshots was the only durable home a fact had, and #12733 lost 43 of "
-        "them. The row is the fact; the hash is a read cache and the vector is an index.",
+        "them. The row is the fact; the hash is a read cache and the vector is an index. The "
+        "content_hash:<h> dedup index (and the content_hash column) is derived from "
+        "autobot_shared.content_digest.fact_dedup_key alone (#15722): a projection rebuilt from a "
+        "differently-computed key is not the same projection.",
     ),
     "identity_and_rbac": Concept(
         name="identity_and_rbac",
         system_of_record=Store.POSTGRES,
         projections=(Store.REDIS,),
         write_sites=(
-            "autobot-backend/user_management/middleware/rbac_middleware.py",
-            "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
+            "autobot_shared/user_management/middleware/rbac_middleware.py",
             "autobot-slm-backend/user_management/services/sso_service.py",
         ),
         rebuilt_by="Every Redis entry is written with setex and re-derived from the users/roles/"
@@ -131,6 +153,26 @@ STORE_AUTHORITY: dict[str, Concept] = {
         rebuilt_by="SessionCheckpointer re-adds due agents to the heartbeat sorted set from the "
         "run rows; the checkout keys are NX locks with a TTL and the H2A brief is a TTL cache. "
         "GoalService.upsert re-embeds a goal row, so the collection is rebuildable from Postgres.",
+    ),
+    "company_os_model": Concept(
+        name="company_os_model",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/llc/services/company_os/processes.py",
+            "autobot-backend/llc/services/company_os/workflows.py",
+            "autobot-backend/llc/services/company_os/graphs.py",
+            "autobot-backend/llc/services/company_os/role_skills.py",
+            "autobot-backend/llc/services/company_os/plans.py",
+            "autobot-backend/llc/services/company_os/plan_store.py",
+            "autobot-backend/llc/services/budget.py",
+        ),
+        rebuilt_by="Postgres is the only copy: roles -> workflows -> processes live in the workflows "
+        "table (the existing Automation store, extended with kind, owner role and trigger) and the "
+        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables; "
+        "a Workflow Planner plan is one JSONB document per revision in company_os_workflow_plans; "
+        "each LLM call an agent reports is one company_os_cost_events row tied to its work item. "
+        "There is no projection to rebuild (#18390, #19934, #16016).",
     ),
     "device_credentials": Concept(
         name="device_credentials",
@@ -179,6 +221,24 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "four tables stay, empty, for the cascade-delete-safety reason #16464 fixed, "
         "independent of whether anything writes to them.",
     ),
+    "audit_trail": Concept(
+        name="audit_trail",
+        system_of_record=Store.POSTGRES,
+        projections=(Store.REDIS,),
+        write_sites=(
+            "autobot-backend/services/audit/store.py",
+            "autobot-backend/services/audit/projection.py",
+            "autobot_shared/user_management/audit_rows.py",
+        ),
+        rebuilt_by="services.audit.audit.rebuild_projection() replays audit_logs rows into the "
+        "audit:unified and audit:category:* sorted sets; nothing reads those keys as an answer.",
+        note="#17225 D1: the owner chose to extend the existing audit_logs table rather than add "
+        "a second Postgres audit table. Every audit_logs row is built by audit_rows.audit_row, "
+        "whether the canonical service or a shared RBAC/org/team writer records it. #17219: every "
+        "new row is sealed into a hash chain with a keyed MAC by the before_insert listener in "
+        "autobot_shared/audit_chain_writer.py, so the ORM insert is the only write path; a core or raw "
+        "insert leaves an unchained row that services/audit/integrity.py reports.",
+    ),
     "verbatim_memory": Concept(
         name="verbatim_memory",
         system_of_record=Store.CHROMADB,
@@ -204,8 +264,15 @@ STORE_AUTHORITY: dict[str, Concept] = {
         name="codebase_analytics",
         system_of_record=Store.CHROMADB,
         projections=(),
-        write_sites=("autobot-backend/api/codebase_analytics/chromadb_storage.py",),
-        rebuilt_by="Every row is derived from the repository by re-running the analysis.",
+        write_sites=(
+            "autobot-backend/api/codebase_analytics/chromadb_storage.py",
+            # #21003: the per-source run record (type run_status), under `owner_source`
+            # so the per-source delete in chromadb_storage leaves it alone.
+            "autobot-backend/api/codebase_analytics/run_status.py",
+        ),
+        rebuilt_by="Every findings row is derived from the repository by re-running the analysis. "
+        "The run record is not: it is the only account of how a run ended and when the last "
+        "complete one finished, and a re-run writes a new account rather than rebuilding the old.",
     ),
     "multimodal_vectors": Concept(
         name="multimodal_vectors",
@@ -215,6 +282,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         rebuilt_by="The Redis entries are embeddings cached under a TTL and are regenerated by "
         "the NPU on the next miss.",
     ),
+    "session_shares": Concept(
+        name="session_shares",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=("autobot-backend/security/session_shares.py",),
+        rebuilt_by="No projections: access is decided from the chat_session_shares table. The legacy Redis keys "
+        "session:shared_with:* and user:shared_sessions:* are not a projection; adopt_redis_shares copies "
+        "pre-#18890 Redis-only shares into the table once ever, recorded in the durable "
+        "chat_session_share_adoption row (#18890).",
+        note="Who a chat is shared with. A share lasts until the owner unshares it; it was a 30-day Redis "
+        "set that lapsed silently, so a participant lost access with no owner action and no record.",
+    ),
     "chat_sessions": Concept(
         name="chat_sessions",
         system_of_record=Store.DISK,
@@ -223,9 +302,43 @@ STORE_AUTHORITY: dict[str, Concept] = {
             "autobot-backend/chat_history/file_io.py",
             "autobot-backend/chat_history/session.py",
             "autobot-backend/chat_history/cache.py",
+            # #18293: writes only the chat:conversation:* LLM-context cache, a
+            # projection of these messages -- never a durable copy of a turn.
+            "autobot-backend/chat_workflow/conversation.py",
+            # #20852: writes only chat:rolling_summary:*, a summary projection of these turns.
+            "autobot-backend/chat_history/rolling_summary.py",
         ),
         rebuilt_by="ChatHistoryCacheMixin repopulates a session's cache entry from its session "
-        "file on the next load; the file is written atomically and is the session.",
+        "file on the next load; the file is written atomically and is the session. The "
+        "chat:conversation:* LLM-context cache is re-projected from load_session() on a miss "
+        "(chat_history/turn_projection.project_turn_pairs). chat:rolling_summary:* is rebuilt "
+        "from the same messages by the next rolling-summary refresh "
+        "(chat_history/rolling_summary.refresh_summary), which folds the durable turns from the oldest.",
+        note="The one system of record for conversation turns (#18293). The per-turn transcript "
+        "files that once duplicated them are legacy_conversation_transcripts: read-only.",
+    ),
+    "chat_attachment_use": Concept(
+        name="chat_attachment_use",
+        system_of_record=Store.DISK,
+        projections=(),
+        write_sites=("autobot-backend/chat_attachment_marks.py",),
+        rebuilt_by="Nothing copies it: the chat_attachment_marks table in the conversation files SQLite store "
+        "is the only home (#20195). It cannot be rebuilt from file rows, which a delete removes.",
+        note="Whether a chat ever ran an attachment turn, so every later tool call keeps asking. Durable by "
+        "design: losing it silently lifts the approval floor, so there is no evictable copy.",
+    ),
+    "legacy_conversation_transcripts": Concept(
+        name="legacy_conversation_transcripts",
+        system_of_record=Store.DISK,
+        projections=(),
+        # Empty on purpose and pinned by the #18293 guard: nothing writes here any more.
+        write_sites=(),
+        rebuilt_by="Nothing rebuilds it and nothing writes it. Retired by #18293 in favour of "
+        "chat_sessions. No request path reads it -- ownership of a legacy file cannot be "
+        "proven -- only the human-run #13293 repair and an approved #17038 backfill.",
+        note="NOT an authority for any new turn -- a frozen legacy source. Its files predate "
+        "#18293 and are kept until a human approves their disposition through the #17038 "
+        "review queue (backfill into chat_sessions, then retire); no agent moves them.",
     ),
     "auth_signing_key": Concept(
         name="auth_signing_key",
@@ -254,6 +367,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="Deliberate exception. The challenge is single-use and TTL'd; the credential it "
         "issues is device_credentials, which is durable in Postgres.",
     ),
+    "vnc_desktop_pin": Concept(
+        name="vnc_desktop_pin",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/slm_vnc_registry.py",),
+        rebuilt_by="Losing the pin re-picks the desktop node deterministically from the SLM registry "
+        "(slm_vnc_registry._pick_desktop: hostname, then node id).",
+        note="Deliberate exception. The pin is a preference for the last chosen desktop node, shared by "
+        "every worker so a viewer and its controls agree; the nodes themselves are the SLM registry's.",
+    ),
     "agent_work_claims": Concept(
         name="agent_work_claims",
         system_of_record=Store.REDIS,
@@ -265,6 +388,46 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "one crashed agent into a permanently blocked project, which is worse than the collision "
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
+    ),
+    "workflow_inapp_notifications": Concept(
+        name="workflow_inapp_notifications",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/notification_service.py",),
+        rebuilt_by="Nothing to rebuild: a missed in-app notice is re-raised by the next workflow lifecycle event.",
+        note="Deliberate exception (#21045). The in-app store holds only workflow-lifecycle notices, in a "
+        "Redis list with a 7-day TTL and no durable copy, so it is not a projection of anything. It never "
+        "receives router notices; those are durably recorded in the company activity log.",
+    ),
+    "terminal_session_state": Concept(
+        name="terminal_session_state",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/agent_terminal/session_state.py",),
+        rebuilt_by="SessionManager.get_session refreshes a worker's copy from the Redis record before use (#20674).",
+        note="Deliberate exception (#20674). A terminal session and its pending approval are live, "
+        "TTL'd hot-path state that only has meaning while the session runs; the durable record of a "
+        "decision is the approvals mirror row. Each worker's in-memory copy is a cache: it is refreshed "
+        "from Redis before a decision, a save is refused when the stored version moved on, and one "
+        "decision per approval is claimed atomically.",
+    ),
+    "approval": Concept(
+        name="approval",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/services/approval_gate_service.py",
+            "autobot-backend/llc/services/approval.py",
+        ),
+        rebuilt_by="Nothing yet rebuilds a copy: no projection is declared (see note).",
+        note="One approval record for every surface (#13421): the `approvals` row is the decision; "
+        "any Redis state a surface keeps is a live projection of a PENDING row, never the record of "
+        "a decision. Owner decision 2026-10-12: terminal approvals stay live in Redis (hot path, TTL) "
+        "and write a mirror row resolved on decide. That Redis state exists today as "
+        "`command_approval_manager` and is NOT yet declared a projection here, because its rebuild "
+        "from the row does not exist -- slice S2a (#13421) must add it, or this entry is wrong. "
+        "`autoresearch_proposal` below is a separate Redis-authoritative concept until S2e/S4 "
+        "migrates it.",
     ),
     "autoresearch_proposal": Concept(
         name="autoresearch_proposal",
@@ -288,6 +451,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "here rather than a projection, which this registry requires justifying (#17450). "
         "It is single-store, so the dual-store guard was never going to surface it: it "
         "belongs by judgement, not because a detector found it.",
+    ),
+    "agent_live_state": Concept(
+        name="agent_live_state",
+        system_of_record=Store.PROCESS,
+        projections=(Store.REDIS,),
+        write_sites=("autobot_shared/coordination/ledger_projection.py",),
+        rebuilt_by="initialization.agent_presence_sync._sync_once republishes the whole snapshot "
+        "(ledger_projection.publish) every presence sweep; the Redis copy expires after "
+        "AUTOBOT_LEDGER_PROJECTION_TTL_S, so a restart or a stopped backend leaves nothing "
+        "stale behind. What a process exit loses is the live state itself: presence, "
+        "unread peer messages and idle waits are rebuilt only as agents report again.",
+        note="Agent presence (incl. AI-stack agents and live sessions), pending peer-message "
+        "metadata and idle subscriptions (#18632). Process-local by design (#16947 section 6); "
+        "the Redis projection exists only so the SLM admin ledger can read them, per the owner "
+        "ruling on #18632. Peer-message content is never projected.",
     ),
     "pre_auth_lockout": Concept(
         name="pre_auth_lockout",
@@ -314,6 +492,46 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "mode and no new attack, where fail-closed would let anyone who can degrade "
         "Redis cause a total auth outage. Every state change is logged, because an "
         "unlogged fallback becomes permanent.",
+    ),
+    "plugin_enable_state": Concept(
+        name="plugin_enable_state",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=("autobot-backend/plugin_enable_state.py",),
+        rebuilt_by="Nothing rebuilds it and no copy is kept: the in-memory BasePlugin.status is set from "
+        "the row at startup and by the admin enable/disable routes, never read back as a decision.",
+        note="Whether an operator has enabled a plugin to run in the backend process (#17421). A plugin is "
+        "imported only when its row says enabled, so the decision must survive a restart. Plugins "
+        "running before the gate existed are grandfathered as enabled on the first start, each with a "
+        "durable audit entry.",
+    ),
+    "self_model": Concept(
+        name="self_model",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-slm-backend/services/self_model_store.py",
+            "autobot-slm-backend/migrations/add_self_model_tables.py",
+        ),
+        rebuilt_by="autobot-slm-backend/services/self_model_reconcile.reconcile folds every producer's next batch "
+        "(heartbeat inventory, the backend's route/tool/agent/service-health pushes) back into the tables; the "
+        "backend holds no copy and reads the model through the SLM API (api/self_model.py).",
+        note="Owner decision on #22277 (2026-11-26): SLM Postgres, because the SLM already owns node identity and "
+        "the heartbeat. self_model_history is append-only and nothing is ever deleted: a removal is status "
+        "'absent' with removed_at.",
+    ),
+    "voice_realtime_session": Concept(
+        name="voice_realtime_session",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/voice_realtime_telemetry.py",),
+        rebuilt_by="Nothing rebuilds it: a finished record is read back only for the recent-sessions listing. "
+        "The per-process map is a fallback for when Redis is off or down, never read ahead of Redis.",
+        note="Per-session cost and duration accounting for a realtime voice session (#7421, #21678). "
+        "Ephemeral by design: the key carries a TTL of voice_realtime_session_ttl_days and only feeds cap "
+        "checks and the recent-sessions view. Redis is shared by every worker, so updates are made under "
+        "WATCH/MULTI; a local copy read first would go stale and let session end overwrite another "
+        "worker's usage.",
     ),
 }
 

@@ -27,8 +27,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.template import (
+    LLCTemplateSearchResponse,
     TemplateCategory,
     TemplateDetail,
     TemplateImportRequest,
@@ -36,9 +38,9 @@ from llc.models.template import (
     TemplateListParams,
     TemplatePublishRequest,
     TemplateRead,
-    TemplateSearchResponse,
     TemplateSearchResult,
 )
+from llc.services.portability import TemplateImportError
 from llc.services.template import (
     BuiltInTemplateNotFoundError,
     TemplateAccessError,
@@ -46,13 +48,12 @@ from llc.services.template import (
     TemplateSecretPlaceholderError,
     TemplateService,
 )
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["llc-templates"])
 
 
-def _get_service(session: AsyncSession = Depends(get_async_session)) -> TemplateService:
+def _get_service(session: AsyncSession = SESSION_DEP) -> TemplateService:
     """DI factory — injects TemplateService with session."""
     return TemplateService(session=session)
 
@@ -82,22 +83,22 @@ async def publish_template(
         await svc.session.commit()
         return result
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
-@router.get("/search", response_model=TemplateSearchResponse)
+@router.get("/search", response_model=LLCTemplateSearchResponse)
 async def search_templates(
     q: str = Query(..., min_length=1, description="Semantic search query"),
     svc: TemplateService = Depends(_get_service),
     _current_user: dict = Depends(get_current_user),
-) -> TemplateSearchResponse:
+) -> LLCTemplateSearchResponse:
     """RAG search over platform:template_kb ChromaDB collection (GH#8260).
 
     Returns platform-level template metadata only; requires authentication
     (GH#12148).
     """
     results: List[TemplateSearchResult] = await svc.search(q)
-    return TemplateSearchResponse(query=q, results=results, total=len(results))
+    return LLCTemplateSearchResponse(query=q, results=results, total=len(results))
 
 
 @router.get("/", response_model=List[TemplateRead])
@@ -212,6 +213,8 @@ async def import_template(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"message": "Unresolved secret placeholders", "unresolved": exc.unresolved},
         )
+    except TemplateImportError as exc:
+        raise http_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY, exc, scope="templates.import_template") from None
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

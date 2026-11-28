@@ -21,31 +21,36 @@ class ResourceFactory:
 
     @staticmethod
     async def get_knowledge_base(request: Request = None):
-        """Get or create KnowledgeBase instance with app.state caching"""
+        """Get the app-wide initialized KnowledgeBase, or the app-free singleton.
+
+        #18121: this used to construct ``KnowledgeBase()`` directly and write it to
+        ``request.app.state.knowledge_base``. ``initialize()`` must be awaited after
+        construction — it is what creates the vector store — so the instance handed back
+        had ``initialized is False`` and would raise out of ``ensure_initialized()`` on
+        first use. Worse, caching it replaced the store that every ``api/knowledge*.py``
+        route reads, so one call here could break knowledge search process-wide.
+
+        Both branches now go through ``knowledge_factory``, which initializes before
+        returning and honours the #3094/#3106 retry cooldown, so no caller can receive an
+        uninitialized instance and ``app.state`` is only ever written by the factory that
+        owns it.
+
+        Returns:
+            The initialized ``KnowledgeBase``, or ``None`` when it is unavailable.
+        """
         try:
-            # Try app.state first
             if request is not None:
-                kb = getattr(request.app.state, "knowledge_base", None)
-                if kb is not None:
-                    logger.debug("Using pre-initialized KnowledgeBase from app.state")
-                    return kb
+                from knowledge_factory import get_or_create_knowledge_base
 
-            # Fallback to module-level import and creation
-            from knowledge_base import KnowledgeBase
+                return await get_or_create_knowledge_base(request.app)
 
-            logger.info("Creating new KnowledgeBase instance (expensive operation)")
+            # No app context (background task, scheduler): the module-level singleton.
+            from knowledge_factory import get_knowledge_base_async
 
-            kb = KnowledgeBase()
-
-            # Cache in app state if available
-            if request is not None:
-                request.app.state.knowledge_base = kb
-                logger.info("Cached KnowledgeBase in app.state for future requests")
-
-            return kb
+            return await get_knowledge_base_async()
 
         except Exception as e:
-            logger.error("Failed to create KnowledgeBase: %s", e)
+            logger.error("Failed to resolve KnowledgeBase: %s", e)
             raise
 
     @staticmethod
@@ -131,13 +136,13 @@ class ResourceFactory:
             # `config.config` is the SSOT AutoBotConfig proxy — it has neither
             # get_redis_config() nor get_nested(). The config *manager* is the
             # canonical holder of both, as every other call site uses.
-            from config import unified_config_manager
+            from config import config_manager
 
             logger.info("Creating new ChatHistoryManager instance (expensive operation)")
 
-            redis_config = unified_config_manager.get_redis_config()
+            redis_config = config_manager.get_redis_config()
             chm = ChatHistoryManager(
-                history_file=unified_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
+                history_file=config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
                 use_redis=redis_config.get("enabled", False),
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),
@@ -222,7 +227,7 @@ async def get_llm(request: Request = None):
     return await ResourceFactory.get_llm_interface(request)
 
 
-async def get_orchestrator(request: Request = None):
+async def get_shared_orchestrator(request: Request = None):
     """Shorthand for getting the Orchestrator singleton."""
     return await ResourceFactory.get_orchestrator(request)
 

@@ -9,34 +9,21 @@ Validates consistency between environment files and complete.yaml
 """
 
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
+# Sibling helper module: the importing script may have been loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Runs from any directory with no PYTHONPATH: the repository root provides `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
+from env_files_config import load_config  # noqa: E402
 
-def load_config():
-    """Load the complete.yaml configuration"""
-    config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def parse_env_file(file_path: Path) -> Dict[str, str]:
-    """Parse environment file and return variables as dict"""
-    env_vars = {}
-
-    if not file_path.exists():
-        return env_vars
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                env_vars[key.strip()] = value.strip()
-
-    return env_vars
+# #19232: the one .env reader -- this file kept its own copy (no quote or inline-comment handling).
+from autobot_shared.env_file import parse_env_file  # noqa: E402
 
 
 def validate_required_variables(env_vars: Dict[str, str], env_type: str) -> List[str]:
@@ -76,46 +63,19 @@ def validate_required_variables(env_vars: Dict[str, str], env_type: str) -> List
 
 
 def validate_redis_databases(env_vars: Dict[str, str], env_type: str = "") -> List[str]:
-    """Validate Redis database assignments"""
-    errors = []
+    """Refuse AUTOBOT_REDIS_DB_* overrides the runtime would refuse (#19232).
 
-    # Skip Redis database validation for frontend files
+    The numbers live in redis-databases.yaml; an env file only overrides one when a
+    deployment differs. So this checks what the runtime checks -- a non-numeric value,
+    or two declared databases on one number -- against that one table, instead of a
+    hand-kept copy of it (which had drifted: TESTING=15 is celery_results' DB).
+    """
     if env_type == "frontend":
-        return errors
+        return []
+    from autobot_shared.redis_management.database_overrides import override_problems
+    from autobot_shared.redis_management.types import DECLARED_DATABASES
 
-    # Expected Redis database variables
-    expected_dbs = {
-        "AUTOBOT_REDIS_DB_MAIN": "0",
-        "AUTOBOT_REDIS_DB_KNOWLEDGE": "1",
-        "AUTOBOT_REDIS_DB_PROMPTS": "2",
-        "AUTOBOT_REDIS_DB_AGENTS": "3",
-        "AUTOBOT_REDIS_DB_METRICS": "4",
-        "AUTOBOT_REDIS_DB_CACHE": "5",
-        "AUTOBOT_REDIS_DB_SESSIONS": "6",
-        "AUTOBOT_REDIS_DB_TASKS": "7",
-        "AUTOBOT_REDIS_DB_LOGS": "8",
-        "AUTOBOT_REDIS_DB_TEMP": "9",
-        "AUTOBOT_REDIS_DB_BACKUP": "10",
-        "AUTOBOT_REDIS_DB_TESTING": "15",
-    }
-
-    # Check for missing database assignments
-    for db_var, expected_value in expected_dbs.items():
-        if db_var in env_vars:
-            if env_vars[db_var] != expected_value:
-                errors.append(f"Redis database mismatch: {db_var} = {env_vars[db_var]}, expected {expected_value}")
-        else:
-            errors.append(f"Missing Redis database assignment: {db_var}")
-
-    # Check for duplicate database numbers
-    db_values = []
-    for db_var, value in env_vars.items():
-        if db_var.startswith("AUTOBOT_REDIS_DB_") and db_var != "AUTOBOT_REDIS_DB_TESTING":
-            if value in db_values:
-                errors.append(f"Duplicate Redis database number: {value} used by {db_var}")
-            db_values.append(value)
-
-    return errors
+    return [f"Redis database override: {problem}" for problem in override_problems(DECLARED_DATABASES, env_vars)]
 
 
 def validate_ip_consistency(env_vars: Dict[str, str], env_type: str) -> List[str]:
@@ -144,6 +104,15 @@ def validate_ip_consistency(env_vars: Dict[str, str], env_type: str) -> List[str
     return errors
 
 
+def _expected_redis_url(host: str, port: str) -> str:
+    """The credential-free Redis URL for *host*/*port*, from the one URL builder (#19232)."""
+    from autobot_shared.redis_management.endpoint import RedisEndpoint
+
+    if not port.strip().isdigit():
+        return f"<AUTOBOT_REDIS_PORT {port!r} is not a port>"
+    return RedisEndpoint(host=host, port=int(port)).url(with_auth=False)
+
+
 def validate_url_consistency(env_vars: Dict[str, str]) -> List[str]:
     """Validate URL construction consistency"""
     errors = []
@@ -161,10 +130,12 @@ def validate_url_consistency(env_vars: Dict[str, str]) -> List[str]:
             actual_url = env_vars[url_var]
 
             if url_var == "AUTOBOT_REDIS_URL":
-                expected_url = f"redis://{env_vars[host_var]}:{env_vars[port_var]}"
+                expected_url = _expected_redis_url(env_vars[host_var], env_vars[port_var])
 
             if actual_url != expected_url:
-                errors.append(f"URL mismatch: {url_var} = {actual_url}, expected {expected_url}")
+                # Names only: a URL value can carry a password (redis://:pw@host), and this
+                # report goes to stdout and CI logs.
+                errors.append(f"URL mismatch: {url_var} does not match the URL built from {host_var} and {port_var}")
 
     return errors
 
@@ -220,6 +191,24 @@ def check_legacy_compatibility(env_vars: Dict[str, str]) -> List[str]:
     return warnings
 
 
+#: Native overlays on .env.base (#18555): each holds only what differs from the base.
+NATIVE_OVERLAYS = {".env.localhost", ".env.native-vm", ".env.network", ".env.network-template"}
+
+
+def effective_env_vars(file_path: Path) -> Dict[str, str]:
+    """What a loader actually sees: .env.base first, then the overlay on top (#18555).
+
+    A native overlay validated alone would report every shared key as missing.
+    """
+    env_vars: Dict[str, str] = {}
+    base = file_path.parent / ".env.base"
+    if file_path.name in NATIVE_OVERLAYS and base.exists():
+        env_vars.update(parse_env_file(base))
+    if file_path.exists():
+        env_vars.update(parse_env_file(file_path))
+    return env_vars
+
+
 def validate_environment_file(file_path: Path, env_type: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Validate a single environment file"""
     results = {"errors": [], "warnings": []}
@@ -228,7 +217,13 @@ def validate_environment_file(file_path: Path, env_type: str, config: Dict[str, 
         results["errors"].append(f"Environment file does not exist: {file_path}")
         return results
 
-    env_vars = parse_env_file(file_path)
+    try:
+        file_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        results["errors"].append(f"Environment file cannot be read: {file_path}: {exc}")
+        return results
+
+    env_vars = effective_env_vars(file_path)
 
     # Run all validations
     results["errors"].extend(validate_required_variables(env_vars, env_type))

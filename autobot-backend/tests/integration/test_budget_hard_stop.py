@@ -28,6 +28,7 @@ from models.heartbeat import AgentRuntimeState, AgentWakeupRequest
 # ---------------------------------------------------------------------------
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 
     _FAKEREDIS_AVAILABLE = True
@@ -41,7 +42,7 @@ async def fake_redis(monkeypatch):
     if not _FAKEREDIS_AVAILABLE:
         pytest.skip("fakeredis not installed — skipping Redis-backed tests")
 
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     client = fakeredis_async.FakeRedis(server=server, decode_responses=True)
 
     import services.budget_policy as bp_mod

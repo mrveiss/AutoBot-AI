@@ -34,7 +34,7 @@ should be separable" to "there are six of them and each gets its own VM": that w
 operator's install, at one point in time, written down as if it were the architecture itself.
 
 By 2026, that fiction had propagated: 54 documents under `docs/`, four code comments in
-SSOT-adjacent files (`autobot_shared/ssot_config.py`, `autobot-backend/utils/service_discovery.py`,
+SSOT-adjacent files (`autobot_shared/ssot_config.py`, `autobot-backend/utils/service_discovery.py` (retired in #18639),
 `autobot-frontend/src/constants/network.ts`, `autobot-backend/config/registry_defaults.py`), and
 four executable tests in `autobot-infrastructure/shared/tests/test_architecture_compliance.py`
 all asserted a six-VM topology as if it were guaranteed. Wiring those tests into CI for the

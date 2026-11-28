@@ -75,3 +75,21 @@ export const WithLongTitle: Story = {
     connectionStatus: 'Connected',
   },
 };
+
+export const WithContextWindow: Story = {
+  args: {
+    currentSessionTitle: 'Fleet health check',
+    currentSessionId: 'session-123',
+    sessionInfo: 'Overseer on / Knowledge on',
+    connectionStatus: 'Connected',
+    isConnected: true,
+    contextWindowProps: {
+      tokensUsed: 12300,
+      contextWindow: 128000,
+      usagePercent: 10,
+      isWarning: false,
+      isCritical: false,
+      hasData: true,
+    },
+  },
+};

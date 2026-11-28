@@ -17,7 +17,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,6 +25,7 @@ from pydantic import BaseModel, Field
 from api.schemas_media import ProvidersResponse, ProviderStatus
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.provider_key_vault import key_status, resolve_image_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,15 @@ class ImageGenerationResponse(BaseModel):
 # ------------------------------------------------------------------
 
 
+def _provider_status(name: str, env_var: str) -> ProviderStatus:
+    """Availability of one provider; the key resolves vault-first, env as fallback (#18094). Never exposes the value.
+
+    A vault refusal reports that provider unavailable with the refusal as its reason, not a failed listing.
+    """
+    available, reason = key_status(resolve_image_provider_key, env_var)
+    return ProviderStatus(name=name, available=available, reason=reason)
+
+
 @router.get("/providers", response_model=ProvidersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR, operation="list_image_providers", error_code_prefix="IMAGE_GEN"
@@ -73,21 +82,9 @@ class ImageGenerationResponse(BaseModel):
 async def list_providers(current_user=Depends(get_current_user)):
     """Return which image providers have API keys configured."""
     providers = [
-        ProviderStatus(
-            name="dalle",
-            available=bool(os.environ.get("OPENAI_API_KEY")),
-            reason=None if os.environ.get("OPENAI_API_KEY") else "OPENAI_API_KEY not set",
-        ),
-        ProviderStatus(
-            name="flux",
-            available=bool(os.environ.get("FLUX_API_KEY")),
-            reason=None if os.environ.get("FLUX_API_KEY") else "FLUX_API_KEY not set",
-        ),
-        ProviderStatus(
-            name="stable_diffusion",
-            available=bool(os.environ.get("STABILITY_API_KEY")),
-            reason=None if os.environ.get("STABILITY_API_KEY") else "STABILITY_API_KEY not set",
-        ),
+        _provider_status("dalle", "OPENAI_API_KEY"),
+        _provider_status("flux", "FLUX_API_KEY"),
+        _provider_status("stable_diffusion", "STABILITY_API_KEY"),
     ]
     return ProvidersResponse(providers=providers)
 

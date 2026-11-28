@@ -15,9 +15,9 @@ from orchestration.causal_models import (
     CausalEffectType,
     CausalMetadata,
     Dependency,
-    DependencyType,
     EffectTrace,
     StateFrame,
+    StepDependencyType,
 )
 
 
@@ -184,10 +184,10 @@ class TestCausalModels:
 
     def test_dependency_type_enum(self):
         """Should have standard dependency types."""
-        assert DependencyType.DATA.value == "data"
-        assert DependencyType.CONTROL.value == "control"
-        assert DependencyType.CAUSAL.value == "causal"
-        assert DependencyType.IMPLICIT.value == "implicit"
+        assert StepDependencyType.DATA.value == "data"
+        assert StepDependencyType.CONTROL.value == "control"
+        assert StepDependencyType.CAUSAL.value == "causal"
+        assert StepDependencyType.IMPLICIT.value == "implicit"
 
     def test_causal_effect_types_enum(self):
         """Should have standard effect types."""
@@ -203,7 +203,7 @@ class TestCausalModels:
         dep = Dependency(
             source_step_id="a",
             target_step_id="b",
-            dep_type=DependencyType.DATA,
+            dep_type=StepDependencyType.DATA,
         )
 
         assert dep.source_step_id == "a"

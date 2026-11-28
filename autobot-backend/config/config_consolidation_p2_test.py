@@ -16,7 +16,7 @@ Unwrapping it did not just make the asserts able to fire — most of them had
 silently drifted from the module they claim to check, because the swallow hid
 every one of nine remaining checks behind the first failure:
 
-* ``unified_config_manager._get_default_config()`` never existed on
+* ``config_manager._get_default_config()`` never existed on
   ``ConfigManager``; the real function is the module-level
   ``config.defaults.get_default_config()``. Every check that called it
   (sections, multimodal, npu, security) was one `AttributeError` away from
@@ -39,7 +39,8 @@ from __future__ import annotations
 
 import pytest
 
-from config import unified_config_manager
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
+from config import config_manager
 from config.defaults import get_default_config
 from config.loader import apply_env_overrides
 
@@ -64,7 +65,7 @@ EXPECTED_DEFAULT_SECTIONS = (
 
 def test_basic_config_loading() -> None:
     """``to_dict()`` returns the live, non-empty runtime config."""
-    config = unified_config_manager.to_dict()
+    config = config_manager.to_dict()
     assert isinstance(config, dict), "to_dict() should return a dictionary"
     assert len(config) > 0, "the runtime config should not be empty"
 
@@ -82,9 +83,9 @@ def test_sensitive_data_filtering() -> None:
         "redis": {"host": "localhost", "password": "secret123", "port": 6379},
         "api": {"endpoint": "http://api.example.com", "api_key": "key123"},
     }
-    filtered = unified_config_manager._filter_sensitive_data(test_data)
-    assert filtered["redis"]["password"] == "***REDACTED***"
-    assert filtered["api"]["api_key"] == "***REDACTED***"
+    filtered = config_manager._filter_sensitive_data(test_data)
+    assert filtered["redis"]["password"] == REDACTED_PLACEHOLDER
+    assert filtered["api"]["api_key"] == REDACTED_PLACEHOLDER
     assert filtered["redis"]["host"] == "localhost"
     assert filtered["redis"]["port"] == 6379
 
@@ -100,29 +101,29 @@ async def test_async_config_operations(tmp_path, monkeypatch) -> None:
     automatically afterward, so no state leaks to a sibling test (#13224's
     class of defect).
     """
-    monkeypatch.setattr(unified_config_manager, "config_dir", tmp_path)
-    loaded = await unified_config_manager.load_config_async("test", use_cache=False)
+    monkeypatch.setattr(config_manager, "config_dir", tmp_path)
+    loaded = await config_manager.load_config_async("test", use_cache=False)
     assert isinstance(loaded, dict), "async load should return a dictionary"
 
     payload = {"test_key": "test_value", "timestamp": "2025-11-11"}
-    await unified_config_manager.save_config_async("test", payload)
-    reloaded = await unified_config_manager.load_config_async("test", use_cache=False)
+    await config_manager.save_config_async("test", payload)
+    reloaded = await config_manager.load_config_async("test", use_cache=False)
     assert reloaded.get("test_key") == "test_value", "saved data should be retrievable"
 
 
 def test_redis_cache_key_generation() -> None:
     """The cache key carries the configured prefix and the config type."""
-    cache_key = unified_config_manager._get_redis_cache_key("test")
+    cache_key = config_manager._get_redis_cache_key("test")
     assert cache_key.startswith("config:"), "cache key should have the correct prefix"
     assert "test" in cache_key, "cache key should contain the config type"
 
 
 def test_nested_config_access() -> None:
     """``get_nested`` reaches a dict section and a leaf value."""
-    backend_config = unified_config_manager.get_nested("backend.llm", {})
+    backend_config = config_manager.get_nested("backend.llm", {})
     assert isinstance(backend_config, dict), "nested config should be a dictionary"
 
-    redis_host = unified_config_manager.get_nested("redis.host", "default")
+    redis_host = config_manager.get_nested("redis.host", "default")
     assert redis_host is not None, "should retrieve the nested Redis host"
 
 

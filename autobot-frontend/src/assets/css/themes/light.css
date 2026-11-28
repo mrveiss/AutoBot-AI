@@ -11,40 +11,24 @@
  * Activated via [data-theme="light"] on document root.
  */
 
-[data-theme="light"] {
+[data-theme="light"],
+[data-theme="contrast"],
+[data-theme="mono"] {
   /* ============================================
    * BACKGROUND COLORS - Light Theme
    * ============================================ */
 
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-tertiary: #f1f5f9;
-  --bg-elevated: #ffffff;
-  --bg-surface: #ffffff;
-  --bg-card: #ffffff;
-  --bg-input: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.08);
   --bg-overlay: rgba(0, 0, 0, 0.4);
 
-  /* ============================================
-   * TEXT COLORS - Light Theme
-   * ============================================ */
-
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #556377;
-  --text-muted: #64748b;
-  --text-inverse: #ffffff;
-  --text-link: #2563eb;
-  --text-link-hover: #1d4ed8;
+  /* Text colours, surfaces, card/table/input fills and default borders derive
+     from the Refined names declared for this theme (refined-map.css, #18223). */
 
   /* ============================================
    * BORDER COLORS - Light Theme
    * ============================================ */
 
-  --border-default: #e2e8f0;
-  --border-subtle: rgba(226, 232, 240, 0.8);
   --border-strong: #cbd5e1;
 
   /* ============================================
@@ -110,15 +94,8 @@
    * COMPONENT TOKENS - Light Theme
    * ============================================ */
 
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
   --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
-  --table-header-bg: #f8fafc;
-  --table-row-bg: #ffffff;
   --table-row-hover: rgba(0, 0, 0, 0.02);
-  --table-border: #e2e8f0;
-  --input-bg: #ffffff;
-  --input-border: #e2e8f0;
 
   /* Light-mode overrides for backward-compat aliases */
   --bg-primary-alpha: rgba(255, 255, 255, 0.7);
@@ -200,7 +177,7 @@
  * ============================================ */
 
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root:not([data-theme]) {
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;

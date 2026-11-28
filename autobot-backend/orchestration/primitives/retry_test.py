@@ -38,7 +38,7 @@ async def test_retries_then_succeeds():
             raise _Boom("transient")
         return "success"
 
-    with patch("orchestration.primitives.retry.asyncio.sleep", new_callable=AsyncMock):
+    with patch("autobot_shared.retry_mechanism.asyncio.sleep", new_callable=AsyncMock):
         result = await retry_with_backoff(flaky, max_retries=3, label="test")
 
     assert result == "success"
@@ -49,7 +49,7 @@ async def test_retries_then_succeeds():
 async def test_raises_after_exhausted_retries():
     fn = AsyncMock(side_effect=_Boom("always fails"))
 
-    with patch("orchestration.primitives.retry.asyncio.sleep", new_callable=AsyncMock):
+    with patch("autobot_shared.retry_mechanism.asyncio.sleep", new_callable=AsyncMock):
         with pytest.raises(_Boom, match="always fails"):
             await retry_with_backoff(fn, max_retries=2, label="test")
 
@@ -60,7 +60,7 @@ async def test_raises_after_exhausted_retries():
 async def test_non_retryable_exception_propagates_immediately():
     fn = AsyncMock(side_effect=_Permanent("not retryable"))
 
-    with patch("orchestration.primitives.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("autobot_shared.retry_mechanism.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         with pytest.raises(_Permanent):
             await retry_with_backoff(
                 fn,
@@ -83,7 +83,7 @@ async def test_backoff_delay_grows_exponentially():
         raise _Boom("fail")
 
     delays = []
-    with patch("orchestration.primitives.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("autobot_shared.retry_mechanism.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         mock_sleep.side_effect = lambda d: delays.append(d)
         with pytest.raises(_Boom):
             await retry_with_backoff(
@@ -103,7 +103,7 @@ async def test_max_delay_caps_backoff():
         raise _Boom("fail")
 
     delays = []
-    with patch("orchestration.primitives.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("autobot_shared.retry_mechanism.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         mock_sleep.side_effect = lambda d: delays.append(d)
         with pytest.raises(_Boom):
             await retry_with_backoff(

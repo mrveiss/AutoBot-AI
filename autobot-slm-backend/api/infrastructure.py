@@ -2,11 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM Infrastructure API Routes
+"""SLM Infrastructure API Routes
 
-Issue #786: Provides endpoints for running infrastructure setup playbooks
-such as database deployment, monitoring setup, and other infrastructure tasks.
+Issue #786: Endpoints that run infrastructure setup playbooks (database, monitoring, other).
 """
 
 import asyncio
@@ -21,16 +19,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
+from api.infrastructure_command import build_playbook_command
 from autobot_shared.async_compat import fire_and_forget
-from services.ansible_utils import _extract_failure_summary
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
+from services.ansible_utils import _extract_failure_summary, ansible_run_failure
 from services.auth import get_current_user
+from services.pending_role_provisioning import provision_before_raw_update
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
+from services.rollback_target import FLEET_UPDATE_PLAYBOOK
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
-
-# Directory where infrastructure playbooks are stored
-PLAYBOOKS_DIR = os.getenv("SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible")
+# Playbooks resolve through _ansible_dir() (the executor's directory, #14351); #18094 retired PLAYBOOKS_DIR.
 
 
 class PlaybookCategory(str, Enum):
@@ -124,8 +125,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         id="redis-stack",
         name="Redis Stack Deployment",
         description="Deploy Redis Stack server with RediSearch, RedisJSON, "
-        "RedisGraph, and RedisTimeSeries modules for high-performance "
-        "data operations.",
+        "RedisGraph, and RedisTimeSeries modules for high-performance data operations.",
         category=PlaybookCategory.DATABASE,
         # #12095: deploy-redis-stack.yml never existed; setup-redis-stack.yml is the
         # real Redis Stack provisioning playbook (same file the setup-redis-stack entry uses).
@@ -212,7 +212,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         variables={},
         estimated_duration="1-2 minutes",
         # Confirmation required: deploy-slm-agent.yml has `hosts: slm_nodes`
-        # and NO `serial:`, unlike update-all-nodes.yml (`serial: 3`). With
+        # and NO `serial:`, unlike the fleet-update playbook (`serial: 3`). With
         # limit_hosts omitted, one click restarts every agent in the fleet
         # concurrently with no rolling or health-gated pacing (#14351 review).
         requires_confirmation=True,
@@ -279,7 +279,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-user-frontend.yml",
         target_hosts=["frontend"],
-        variables={"frontend_port": 443},
+        variables={"frontend_tls_port": 443},
         estimated_duration="5 minutes",
         requires_confirmation=True,
     ),
@@ -291,7 +291,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-browser-worker.yml",
         target_hosts=["browser_worker"],
-        variables={"browser_port": 3000},
+        variables={"browser_port": config.port.browser},  # #19324: was Grafana's 3000
         estimated_duration="7 minutes",
         requires_confirmation=True,
     ),
@@ -315,7 +315,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.DATABASE,
         playbook_file="setup-ai-stack.yml",
         target_hosts=["ai_stack"],
-        variables={"chromadb_port": 8080},
+        variables={"chromadb_port": config.port.chromadb},  # #19321: was 8080, the AI-stack port
         estimated_duration="4 minutes",
         requires_confirmation=True,
     ),
@@ -329,7 +329,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "Syncs latest code, restarts services gracefully (3 nodes at a time). "
         "NO system package updates or configuration changes. ~30s per node.",
         category=PlaybookCategory.NETWORKING,
-        playbook_file="update-all-nodes.yml",
+        playbook_file=FLEET_UPDATE_PLAYBOOK,
         target_hosts=["infrastructure"],
         variables={},
         estimated_duration="2 minutes (fleet-wide)",
@@ -368,7 +368,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         playbook_file="backup-node-data.yml",
         target_hosts=["all"],
         variables={
-            "backup_dir": "/opt/autobot/backups",
+            "backup_dir": f"{FLEET_INSTALL_ROOT}/backups",
             "include_models": True,
         },
         estimated_duration="10-30 minutes (depends on data size)",
@@ -546,32 +546,6 @@ async def cancel_execution(
     return ExecutionResponse(execution=execution)
 
 
-def _build_playbook_command(
-    playbook_path: str,
-    inventory_path: str,
-    playbook: PlaybookInfo,
-    limit_hosts,
-    variables,
-):
-    """Build ansible-playbook command with arguments.
-
-    Helper for _run_playbook (Issue #665).
-    """
-    cmd = ["ansible-playbook", "-i", inventory_path, playbook_path]
-
-    if limit_hosts:
-        cmd.extend(["--limit", ",".join(limit_hosts)])
-
-    if playbook.tags:
-        cmd.extend(["--tags", ",".join(playbook.tags)])
-
-    merged_vars = {**playbook.variables, **variables}
-    for key, value in merged_vars.items():
-        cmd.extend(["-e", f"{key}={value}"])
-
-    return cmd
-
-
 def _ansible_dir() -> Path:
     """The repo ansible directory this stack must run from (#14351).
 
@@ -607,8 +581,8 @@ def _get_ansible_environment():
     env.update(
         {
             "ANSIBLE_CONFIG": str(_ansible_dir() / "ansible.cfg"),
-            "ANSIBLE_HOME": "/opt/autobot/.ansible",
-            "ANSIBLE_LOCAL_TEMP": "/opt/autobot/.ansible/tmp",
+            "ANSIBLE_HOME": f"{FLEET_INSTALL_ROOT}/.ansible",
+            "ANSIBLE_LOCAL_TEMP": f"{FLEET_INSTALL_ROOT}/.ansible/tmp",
         }
     )
     return env
@@ -652,7 +626,6 @@ async def _run_playbook(
         # `playbook_path = self.ansible_dir / playbook_name`.
         playbook_path = str(_ansible_dir() / playbook.playbook_file)
 
-        # Check if playbook exists
         if not os.path.exists(playbook_path):
             execution.status = PlaybookStatus.FAILED
             execution.completed_at = datetime.now(timezone.utc)
@@ -675,6 +648,8 @@ async def _run_playbook(
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
         inventory_path = str(inventory_path_obj)
+        # #22262: this route runs the fleet-update playbook raw, so its targets' assigned roles are provisioned first
+        execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts, variables))
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
         # secrets as the full wizard provisioning flow (#3519, #3778).
@@ -684,7 +659,7 @@ async def _run_playbook(
         # Caller-supplied variables take precedence over stored secrets.
         merged_variables = {**deploy_secrets, **(variables or {})}
 
-        cmd = _build_playbook_command(playbook_path, inventory_path, playbook, limit_hosts, merged_variables)
+        cmd = build_playbook_command(playbook_path, inventory_path, playbook, limit_hosts, merged_variables)
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")
 
@@ -705,13 +680,14 @@ async def _run_playbook(
 
         await process.wait()
 
-        if process.returncode == 0:
+        text = "\n".join(execution.output)
+        failure = ansible_run_failure(text, None, process.returncode)
+        if not failure:
             execution.status = PlaybookStatus.COMPLETED
             execution.output.append("[SUCCESS] Playbook completed successfully")
         else:
             execution.status = PlaybookStatus.FAILED
-            _summary = _extract_failure_summary("\n".join(execution.output))
-            execution.error = _summary or f"Playbook failed with exit code {process.returncode}"
+            execution.error = _extract_failure_summary(text) or f"Playbook failed: {failure[-300:]}"
             execution.output.append(f"[FAILED] Exit code: {process.returncode}")
 
     except Exception:

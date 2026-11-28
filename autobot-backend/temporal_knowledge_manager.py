@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import Priority
 from constants.threshold_constants import TimingConstants
 
 logger = get_llm_logger("temporal_knowledge_manager")
@@ -37,13 +38,13 @@ MEDIUM_CATEGORY_KEYWORDS = {"developer", "documentation"}
 LOW_CATEGORY_KEYWORDS = {"reports", "logs", "archive"}
 
 
-class KnowledgePriority(Enum):
-    """Priority levels for knowledge content."""
+#: A subset of the canonical urgency vocabulary, so an alias rather than a class (#18098).
+KnowledgePriority = Priority
 
-    CRITICAL = "critical"  # Core system docs, security
-    HIGH = "high"  # User guides, API docs
-    MEDIUM = "medium"  # Developer docs, tutorials
-    LOW = "low"  # Reports, logs, archived content
+#: The four rungs knowledge content is graded on, in the order the old enum declared them.
+#: Iterated instead of the canonical `Priority` (which also carries `normal` and `urgent`,
+#: in a different order) so `priority_distribution` and the expiry-job order stay as shipped.
+KNOWLEDGE_PRIORITY_ORDER = (Priority.CRITICAL, Priority.HIGH, Priority.MEDIUM, Priority.LOW)
 
 
 class FreshnessStatus(Enum):
@@ -253,7 +254,7 @@ class TemporalKnowledgeManager:
         current_time = time.time()
 
         # Group by priority for efficient processing
-        expired_by_priority = {priority: [] for priority in KnowledgePriority}
+        expired_by_priority = {priority: [] for priority in KNOWLEDGE_PRIORITY_ORDER}
 
         for content_id, meta in self.temporal_metadata.items():
             if meta.is_expired():
@@ -348,7 +349,7 @@ class TemporalKnowledgeManager:
         Issue #620.
         """
         status_distribution = {status.value: 0 for status in FreshnessStatus}
-        priority_distribution = {priority.value: 0 for priority in KnowledgePriority}
+        priority_distribution = {priority.value: 0 for priority in KNOWLEDGE_PRIORITY_ORDER}
         ages: List[float] = []
         access_counts: List[int] = []
         freshness_scores: List[float] = []

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PortInfo:
+class ListeningPort:
     """Information about a listening port."""
 
     port: int
@@ -93,7 +93,7 @@ def _parse_process_info(parts: List[str]) -> tuple:
     return process, pid
 
 
-def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
+def _deduplicate_ports(ports: List[ListeningPort]) -> List[ListeningPort]:
     """
     Remove duplicate (port, address) pairs, keeping first occurrence.
 
@@ -101,10 +101,10 @@ def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
     collapsed into a loopback bind on the same port.
 
     Args:
-        ports: List of PortInfo objects
+        ports: List of ListeningPort objects
 
     Returns:
-        Deduplicated list of PortInfo objects
+        Deduplicated list of ListeningPort objects
     """
     seen = set()
     unique_ports = []
@@ -118,7 +118,7 @@ def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
     return unique_ports
 
 
-def get_listening_ports() -> List[PortInfo]:
+def get_listening_ports() -> List[ListeningPort]:
     """
     Get all listening TCP ports.
 
@@ -149,7 +149,7 @@ def get_listening_ports() -> List[PortInfo]:
                 continue
 
             process, pid = _parse_process_info(parts)
-            ports.append(PortInfo(port=port, process=process, pid=pid, address=_parse_bind_address(parts[3])))
+            ports.append(ListeningPort(port=port, process=process, pid=pid, address=_parse_bind_address(parts[3])))
 
     except subprocess.TimeoutExpired:
         logger.warning("Port scan timed out")
@@ -162,7 +162,7 @@ def get_listening_ports() -> List[PortInfo]:
     return _deduplicate_ports(ports)
 
 
-def _get_ports_netstat() -> List[PortInfo]:
+def _get_ports_netstat() -> List[ListeningPort]:
     """Fallback using netstat."""
     ports = []
 
@@ -187,7 +187,7 @@ def _get_ports_netstat() -> List[PortInfo]:
 
             try:
                 port = int(port_str)
-                ports.append(PortInfo(port=port, address=_parse_bind_address(local_addr)))
+                ports.append(ListeningPort(port=port, address=_parse_bind_address(local_addr)))
             except ValueError:
                 continue
 

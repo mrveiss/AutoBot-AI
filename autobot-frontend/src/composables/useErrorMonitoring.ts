@@ -37,7 +37,7 @@ const logger = createLogger('ErrorMonitoring')
 
 // ─── Types matching backend Pydantic models ───────────────────────────────────
 
-export interface ErrorStatistics {
+export interface ErrorStatisticsReport {
   total_errors: number
   categories: Record<string, number>
   components: Record<string, number>
@@ -47,7 +47,7 @@ export interface ErrorStatistics {
 
 /** Matches boundary_manager.py:303-313 — the exact keys stored to Redis.
  *  `resolved` is annotated by GET /recent (#9983), keyed on `error_id` (== trace_id). */
-export interface RecentError {
+export interface RecentErrorRecord {
   error_id: string
   error_type: string
   message: string
@@ -65,12 +65,12 @@ export interface CategoryStats {
   percentage: number
 }
 
-export interface CategoryBreakdown {
+export interface ErrorCategoryBreakdown {
   categories: Record<string, CategoryStats>
   total_errors: number
 }
 
-export interface ComponentBreakdown {
+export interface ErrorComponentBreakdown {
   components: Record<string, number>
   most_problematic: [string, number][]
 }
@@ -78,7 +78,7 @@ export interface ComponentBreakdown {
 // ─── Metrics shapes (#9983 — reimplemented Prometheus/Redis metrics endpoints) ──
 
 /** GET /metrics/summary → data */
-export interface MetricsSummary {
+export interface ErrorMetricsOverview {
   total_errors: number
   unique_error_types: number
   category_breakdown: Record<string, number>
@@ -88,20 +88,20 @@ export interface MetricsSummary {
 }
 
 /** A single timeline point from GET /metrics/timeline. */
-export interface TimelinePoint {
+export interface ErrorTimelinePoint {
   timestamp: string
   value: number
 }
 
 /** GET /metrics/timeline → data */
 export interface TimelineData {
-  timeline: TimelinePoint[]
+  timeline: ErrorTimelinePoint[]
   hours: number
   component: string | null
 }
 
 /** A row from GET /metrics/top-errors. */
-export interface TopError {
+export interface TopErrorComponent {
   component: string
   error_code: string
   count: number
@@ -109,7 +109,7 @@ export interface TopError {
 
 /** GET /metrics/top-errors → data */
 export interface TopErrorsData {
-  top_errors: TopError[]
+  top_errors: TopErrorComponent[]
 }
 
 /** POST /metrics/resolve/{trace_id} response (no `data` envelope). */
@@ -143,13 +143,13 @@ export interface UseErrorMonitoringOptions {
 
 export interface UseErrorMonitoringReturn {
   // State
-  statistics: Ref<ErrorStatistics | null>
-  recentErrors: Ref<RecentError[]>
-  categories: Ref<CategoryBreakdown | null>
-  components: Ref<ComponentBreakdown | null>
-  summary: Ref<MetricsSummary | null>
-  timeline: Ref<TimelinePoint[]>
-  topErrors: Ref<TopError[]>
+  statistics: Ref<ErrorStatisticsReport | null>
+  recentErrors: Ref<RecentErrorRecord[]>
+  categories: Ref<ErrorCategoryBreakdown | null>
+  components: Ref<ErrorComponentBreakdown | null>
+  summary: Ref<ErrorMetricsOverview | null>
+  timeline: Ref<ErrorTimelinePoint[]>
+  topErrors: Ref<TopErrorComponent[]>
   isLoading: Ref<boolean>
   error: Ref<string | null>
   lastUpdate: Ref<Date | null>
@@ -160,7 +160,7 @@ export interface UseErrorMonitoringReturn {
   totalErrors: ComputedRef<number>
   // Client-side thresholds mirror api/error_monitoring.py:192-204
   healthStatus: ComputedRef<'excellent' | 'healthy' | 'warning' | 'degraded' | 'critical' | 'unknown'>
-  filteredRecentErrors: ComputedRef<RecentError[]>
+  filteredRecentErrors: ComputedRef<RecentErrorRecord[]>
   prometheusAvailable: ComputedRef<boolean>
   // Actions
   fetchStatistics: () => Promise<void>
@@ -190,15 +190,17 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   const api = useApiClient()
   const base = `${getApiBase()}/errors`
+  /** Dashboard polling fails fast while the errors API is down (#12363). */
+  const polled = { circuitBreaker: 'error-monitoring' } as const
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const statistics = ref<ErrorStatistics | null>(null)
-  const recentErrors = ref<RecentError[]>([])
-  const categories = ref<CategoryBreakdown | null>(null)
-  const components = ref<ComponentBreakdown | null>(null)
-  const summary = ref<MetricsSummary | null>(null)
-  const timeline = ref<TimelinePoint[]>([])
-  const topErrors = ref<TopError[]>([])
+  const statistics = ref<ErrorStatisticsReport | null>(null)
+  const recentErrors = ref<RecentErrorRecord[]>([])
+  const categories = ref<ErrorCategoryBreakdown | null>(null)
+  const components = ref<ErrorComponentBreakdown | null>(null)
+  const summary = ref<ErrorMetricsOverview | null>(null)
+  const timeline = ref<ErrorTimelinePoint[]>([])
+  const topErrors = ref<TopErrorComponent[]>([])
   const error = ref<string | null>(null)
   const lastUpdate = ref<Date | null>(null)
 
@@ -231,10 +233,10 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
   const filteredRecentErrors = computed(() => {
     let list = recentErrors.value
     if (categoryFilter.value) {
-      list = list.filter((e: RecentError) => e.category === categoryFilter.value)
+      list = list.filter((e: RecentErrorRecord) => e.category === categoryFilter.value)
     }
     if (componentFilter.value) {
-      list = list.filter((e: RecentError) => e.component === componentFilter.value)
+      list = list.filter((e: RecentErrorRecord) => e.component === componentFilter.value)
     }
     return list
   })
@@ -243,7 +245,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchStatistics(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<ErrorStatistics>>(`${base}/statistics`)
+      const res = await api.get<DataResponse<ErrorStatisticsReport>>(`${base}/statistics`, polled)
       statistics.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error statistics'
@@ -254,8 +256,9 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchRecentErrors(limit = defaultRecentLimit): Promise<void> {
     try {
-      const res = await api.get<DataResponse<{ errors: RecentError[]; total_count: number }>>(
+      const res = await api.get<DataResponse<{ errors: RecentErrorRecord[]; total_count: number }>>(
         `${base}/recent?limit=${limit}`,
+        polled,
       )
       recentErrors.value = res.data?.errors ?? []
     } catch (err) {
@@ -267,7 +270,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchCategories(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<CategoryBreakdown>>(`${base}/categories`)
+      const res = await api.get<DataResponse<ErrorCategoryBreakdown>>(`${base}/categories`, polled)
       categories.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error categories'
@@ -278,7 +281,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchComponents(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<ComponentBreakdown>>(`${base}/components`)
+      const res = await api.get<DataResponse<ErrorComponentBreakdown>>(`${base}/components`, polled)
       components.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch component errors'
@@ -291,7 +294,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchSummary(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<MetricsSummary>>(`${base}/metrics/summary`)
+      const res = await api.get<DataResponse<ErrorMetricsOverview>>(`${base}/metrics/summary`, polled)
       summary.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error metrics summary'
@@ -304,7 +307,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
     try {
       const params = new URLSearchParams({ hours: String(hours) })
       if (component) params.set('component', component)
-      const res = await api.get<DataResponse<TimelineData>>(`${base}/metrics/timeline?${params.toString()}`)
+      const res = await api.get<DataResponse<TimelineData>>(`${base}/metrics/timeline?${params.toString()}`, polled)
       timeline.value = res.data?.timeline ?? []
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error timeline'
@@ -315,7 +318,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchTopErrors(limit = defaultTopErrorsLimit): Promise<void> {
     try {
-      const res = await api.get<DataResponse<TopErrorsData>>(`${base}/metrics/top-errors?limit=${limit}`)
+      const res = await api.get<DataResponse<TopErrorsData>>(`${base}/metrics/top-errors?limit=${limit}`, polled)
       topErrors.value = res.data?.top_errors ?? []
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch top errors'
@@ -333,7 +336,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
     try {
       const res = await api.post<ResolveResult>(`${base}/metrics/resolve/${encodeURIComponent(errorId)}`)
       if (res.status === 'success') {
-        recentErrors.value = recentErrors.value.map((e: RecentError) =>
+        recentErrors.value = recentErrors.value.map((e: RecentErrorRecord) =>
           e.error_id === errorId ? { ...e, resolved: true } : e,
         )
         return true

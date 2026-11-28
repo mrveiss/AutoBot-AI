@@ -3,7 +3,7 @@
 ---
 # Frontend role variables
 
-nodejs_version: "20"
+nodejs_version: "{{ node_major }}"
 frontend_port: 5173
 nginx_port: 80
 nginx_ssl_port: 443

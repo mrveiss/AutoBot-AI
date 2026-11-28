@@ -23,9 +23,6 @@ export interface VectorStats {
   categories?: string[]
 }
 
-export const EMBEDDING_MODEL = 'nomic-embed-text'
-export const EMBEDDING_DIMENSIONS = 768
-
 /**
  * Zeroed fallback for consumers whose UI must render a stats strip even when
  * the store has no facts yet or the backend is unreachable (KnowledgeHealth).
@@ -48,6 +45,8 @@ export const EMPTY_VECTOR_STATS: Readonly<VectorStats> = Object.freeze({
 
 export interface UseVectorStatsReturn {
   vectorStats: ComputedRef<VectorStats | null>
+  /** The backend's rag_available flag, true even for an empty knowledge base (vectorStats is null then). */
+  ragAvailable: ComputedRef<boolean>
   refresh: () => Promise<void>
 }
 
@@ -74,14 +73,17 @@ export function useVectorStats(): UseVectorStatsReturn {
       categories: Array.isArray(storeStats.categories)
         ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
         : [],
-      embedding_model: EMBEDDING_MODEL,
-      embedding_dimensions: EMBEDDING_DIMENSIONS,
+      // #15502: the backend reports the model the index was built with; none is assumed here.
+      embedding_model: storeStats.embedding_model || undefined,
+      embedding_dimensions: storeStats.embedding_dimensions || undefined,
     }
   })
+
+  const ragAvailable = computed(() => store.stats?.rag_available === true)
 
   async function refresh(): Promise<void> {
     await store.refreshStats()
   }
 
-  return { vectorStats, refresh }
+  return { vectorStats, ragAvailable, refresh }
 }

@@ -12,7 +12,7 @@ from pathlib import Path
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.ssot_config import config as ssot_config
-from config import unified_config_manager
+from config import config_manager
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -86,7 +86,7 @@ class PathsManager:
 
         try:
             # Get paths configuration from unified config
-            paths_config = unified_config_manager.get("paths", {})
+            paths_config = config_manager.get("paths", {})
 
             # Cache the paths
             PathsManager._paths_cache = paths_config
@@ -183,7 +183,7 @@ class PathsManager:
         """Get audit log path from backend configuration"""
         try:
             # Try to get from backend config first
-            backend_config = unified_config_manager.get("backend", {})
+            backend_config = config_manager.get("backend", {})
             audit_log_file = backend_config.get("audit_log_file")
 
             if audit_log_file:
@@ -203,7 +203,7 @@ class PathsManager:
         """Get chat data directory from backend configuration"""
         try:
             # Try to get from backend config first
-            backend_config = unified_config_manager.get("backend", {})
+            backend_config = config_manager.get("backend", {})
             chat_data_dir = backend_config.get("chat_data_dir")
 
             if chat_data_dir:
@@ -221,7 +221,7 @@ class PathsManager:
         """Get chat history file path from backend configuration"""
         try:
             # Try to get from backend config first
-            backend_config = unified_config_manager.get("backend", {})
+            backend_config = config_manager.get("backend", {})
             chat_history_file = backend_config.get("chat_history_file")
 
             if chat_history_file:
@@ -239,7 +239,7 @@ class PathsManager:
         """Get knowledge base database path from backend configuration"""
         try:
             # Try to get from backend config first
-            backend_config = unified_config_manager.get("backend", {})
+            backend_config = config_manager.get("backend", {})
             knowledge_base_db = backend_config.get("knowledge_base_db")
 
             if knowledge_base_db:
@@ -257,7 +257,7 @@ class PathsManager:
         """Get reliability stats file path from backend configuration"""
         try:
             # Try to get from backend config first
-            backend_config = unified_config_manager.get("backend", {})
+            backend_config = config_manager.get("backend", {})
             reliability_stats_file = backend_config.get("reliability_stats_file")
 
             if reliability_stats_file:
@@ -275,7 +275,7 @@ class PathsManager:
         """Get ChromaDB path from memory configuration"""
         try:
             # Get from memory.chromadb configuration
-            memory_config = unified_config_manager.get("memory", {})
+            memory_config = config_manager.get("memory", {})
             chromadb_config = memory_config.get("chromadb", {})
             chromadb_path = chromadb_config.get("path")
 

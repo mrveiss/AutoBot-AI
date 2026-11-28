@@ -14,6 +14,7 @@
  */
 
 import apiClient from './ApiClient';
+import { formatISOString } from './formatHelpers';
 import { getApiBase } from '@/config/ssot-config';
 
 export interface SecretData {
@@ -50,6 +51,11 @@ export interface UpdateSecretOptions {
 
 export interface DeleteSecretOptions {
   chatId?: string | null;
+  /**
+   * The `dependents_digest` of the 409 listing the user confirmed (#20557, #21039): the delete goes
+   * ahead only while exactly that set still depends on the secret.
+   */
+  dependentsDigest?: string;
 }
 
 export interface TransferSecretsOptions {
@@ -163,6 +169,10 @@ class SecretsApiClient {
 
     if (options.chatId || this.currentChatId) {
       params.append('chat_id', (options.chatId || this.currentChatId) as string);
+    }
+
+    if (options.dependentsDigest) {
+      params.append('dependents_digest', options.dependentsDigest);
     }
 
     // Issue #552: Fixed path - removed duplicate /secrets prefix
@@ -281,9 +291,9 @@ class SecretsApiClient {
       ...secret,
       type_label: type ? type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : '',
       scope_label: scope ? scope.charAt(0).toUpperCase() + scope.slice(1) : '',
-      created_at_formatted: createdAt ? new Date(createdAt).toLocaleString() : '',
-      expires_at_formatted: expiresAt ? new Date(expiresAt).toLocaleString() : null,
-      updated_at_formatted: updatedAt ? new Date(updatedAt).toLocaleString() : '',
+      created_at_formatted: formatISOString(createdAt),
+      expires_at_formatted: expiresAt ? formatISOString(expiresAt) : null,
+      updated_at_formatted: formatISOString(updatedAt),
       is_expired: expiresAt ? new Date(expiresAt) < new Date() : false,
       chat_id_short: chatId ? chatId.substring(0, 8) + '...' : null
     };

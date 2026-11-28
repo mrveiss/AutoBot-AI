@@ -24,7 +24,7 @@ import { useRoute } from 'vue-router'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { fetchDocCategories, fetchCategoryDocs, fetchDocContent } from '@/composables/knowledge/useKnowledgeSystemDocs'
 import type { SystemDoc, DocCategory } from '@/composables/knowledge/useKnowledgeSystemDocs'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, saveTextFile } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -188,16 +188,7 @@ async function exportDoc(format: 'json' | 'markdown'): Promise<void> {
       mimeType = 'text/markdown'
     }
 
-    // Create and trigger download
-    const blob = new Blob([content], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    saveTextFile(content, filename, mimeType)
   } catch (err) {
     logger.error('Failed to export document:', err)
     error.value = t('knowledge.systemDocs.errorExport')
@@ -228,15 +219,7 @@ async function exportAllDocs(format: 'json' | 'markdown'): Promise<void> {
       mimeType = 'text/markdown'
     }
 
-    const blob = new Blob([content], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    saveTextFile(content, filename, mimeType)
   } catch (err) {
     logger.error('Failed to export all documents:', err)
     error.value = t('knowledge.systemDocs.errorExportAll')
@@ -300,7 +283,7 @@ onMounted(() => {
           />
         </div>
         <div class="export-dropdown" v-if="selectedCategory">
-          <BaseButton variant="outline-solid" class="export-btn">
+          <BaseButton variant="outline" class="export-btn">
             <Icon name="download" />
             {{ $t('knowledge.systemDocs.exportAll') }}
           </BaseButton>

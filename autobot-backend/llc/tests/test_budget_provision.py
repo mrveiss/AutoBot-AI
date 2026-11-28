@@ -75,7 +75,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
 
     from llc.api import agent_hires as hires_api
     from llc.api import budget as budget_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -91,7 +91,8 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await session.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    # budget.py and agent_hires both resolve llc.deps.get_session (SESSION_DEP).
+    application.dependency_overrides[get_session] = _override_session
 
     def _override_current_user() -> dict:
         return {
@@ -375,7 +376,8 @@ async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> 
     mock_execute = AsyncMock(return_value=MagicMock())
 
     with (
-        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("llc.services.budget.BudgetService.provision_budget", mock_provision),
+        patch("llc.api.agent_hires.company_requires_hire_approval", new=AsyncMock(return_value=False)),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute),
         patch("llc.api.agent_hires.adapter_unavailable_reason", return_value=None),
     ):
@@ -490,7 +492,8 @@ async def test_hire_accepts_registered_adapter_type(client) -> None:  # noqa: AN
         )
     )
     with (
-        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("llc.services.budget.BudgetService.provision_budget", mock_provision),
+        patch("llc.api.agent_hires.company_requires_hire_approval", new=AsyncMock(return_value=False)),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", AsyncMock(return_value=MagicMock())),
         patch("llc.api.agent_hires.adapter_unavailable_reason", return_value=None),
     ):
@@ -514,3 +517,42 @@ def test_registered_adapter_types_includes_all_five() -> None:
         "codex_subscription",
     ):
         assert expected in types, types
+
+
+# ---------------------------------------------------------------------------
+# A stored token_limit of 0 reports over-limit on every read path (#20930)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stored_zero_token_limit_reports_over_limit_on_get_and_patch(
+    client, session_factory
+) -> None:  # noqa: ANN001
+    """Stored limit 0 with 0 spent: GET and PATCH both say is_over_limit (the one rule, token_limit_blocks)."""
+    from llc.models.budget import LLCAgentBudget
+
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    async with session_factory() as session:
+        session.add(
+            LLCAgentBudget(
+                id=uuid.uuid4(),
+                agent_id=agent_id,
+                company_id=company_id,
+                budget_mode="tokens",
+                budget_limit=Decimal("100"),
+                budget_spent=Decimal("0"),
+                token_limit=0,
+                tokens_spent=0,
+                alert_threshold=0.8,
+            )
+        )
+        await session.commit()
+
+    got = await client.get(f"/api/llc/budget/{agent_id}")
+    assert got.status_code == 200, got.text
+    assert got.json()["is_over_limit"] is True
+
+    patched = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"alert_threshold": 0.5})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["is_over_limit"] is True

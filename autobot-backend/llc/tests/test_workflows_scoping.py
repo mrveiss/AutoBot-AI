@@ -23,6 +23,7 @@ import pytest_asyncio
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.models.activity import LLCActivityLog
 from llc.models.enums import WorkflowStatus
 from llc.services.workflow import WorkflowConflictError, WorkflowService, _is_workflow_unique_conflict
 
@@ -39,8 +40,8 @@ _SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine(_SQLITE_MEMORY_URL)
-    tables = [Workflow.__table__]
+    eng = create_async_engine(_SQLITE_MEMORY_URL)  # canonical: ignore py-adhoc-db-engine (test-local)
+    tables = [LLCActivityLog.__table__, Workflow.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
@@ -52,8 +53,9 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    # canonical: ignore py-adhoc-db-engine (test-local session factory)
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 async def _seed_workflow(session_factory, company_id: uuid.UUID, *, workflow_id: str, name: str) -> str:  # noqa: ANN001

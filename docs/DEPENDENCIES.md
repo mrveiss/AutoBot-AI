@@ -29,7 +29,7 @@ This document tracks ALL dependencies across the AutoBot platform for each compo
 curl
 gnupg
 ca-certificates
-python3 (3.12+)
+python3 (3.14+)
 python3-pip
 python3-venv
 nginx (1.18+)
@@ -101,7 +101,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.12+)
+python3 (3.14+)
 python3-pip
 python3-venv
 redis-tools
@@ -180,7 +180,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.12+)
+python3 (3.14+)
 python3-pip
 python3-venv
 
@@ -244,7 +244,7 @@ redis-stack-server (7.2+)
 
 ### System Packages
 ```bash
-python3 (3.12+)
+python3 (3.14+)
 python3-pip
 python3-venv
 curl
@@ -262,7 +262,7 @@ Key packages:
 ### Optional: Ollama
 - Ollama (latest) for local LLM hosting
 - Install: `curl -fsSL https://ollama.com/install.sh | sh`
-- Models: llama2, mistral, codellama
+- Models: the provisioned set in [Tiered Model Routing](developer/TIERED_MODEL_ROUTING.md)
 
 ### SSH Keys
 - `/home/autobot/.ssh/autobot_key` - For Ansible management
@@ -276,7 +276,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.12+)
+python3 (3.14+)
 python3-pip
 python3-venv
 
@@ -437,7 +437,7 @@ All VMs must be able to reach:
 
 | Component | Ubuntu 22.04 | Kali Rolling | Notes |
 |-----------|--------------|--------------|-------|
-| Python | 3.12+ | 3.12+ | ✅ Compatible |
+| Python | 3.14+ | 3.14+ | ✅ Compatible |
 | Ansible (control) | 2.17.14 (PPA) | 2.19.4 | ✅ Compatible |
 | Ansible (target) | 2.17+ modules | 2.17+ modules | ⚠️ MUST upgrade SLM from 2.10.8 |
 | Node.js | 20.x (NodeSource) | 20.x | ✅ Compatible |

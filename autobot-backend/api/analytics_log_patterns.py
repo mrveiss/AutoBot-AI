@@ -30,13 +30,13 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.path_constants import PATH
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["log-patterns", "analytics"])
 
-# Log directory
-LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+LOG_DIR = PATH.LOGS_DIR  # the log directory (#20894: one resolver)
 
 # Performance optimization: O(1) lookup for error levels and log level iteration (Issue #326)
 ERROR_LEVELS = {"ERROR", "CRITICAL"}
@@ -53,7 +53,7 @@ LOG_LEVEL_PRIORITIES = ["CRITICAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG"]
 # ============================================================================
 
 
-class LogPatternMiner:
+class AnalyticsLogPatternMiner:
     """Engine for mining patterns from log data"""
 
     # Common log patterns to detect
@@ -540,7 +540,7 @@ class LogPatternMiner:
 
 
 # Global miner instance
-pattern_miner = LogPatternMiner()
+pattern_miner = AnalyticsLogPatternMiner()
 
 
 # =============================================================================

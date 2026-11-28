@@ -14,6 +14,8 @@ and what an unset key or ``log_only`` mean is left exactly as it was.
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
+from services import feature_flags as feature_flags_module
 from services.feature_flags import (
     ENFORCEMENT_MODE_KEY,
     PROVISIONED_ENFORCEMENT_MODE_DEFAULT,
@@ -195,7 +197,7 @@ class TestTheReaderAndTheSeederStateOneDefault:
     async def test_an_unset_flag_resolves_to_the_provisioned_default(self):
         redis = _FakeRedis()
         flags = _flags(redis)
-        flags._enforcement_default_logged = False
+        reset_log_once(feature_flags_module.logger)
 
         assert await flags.get_enforcement_mode() is PROVISIONED_ENFORCEMENT_MODE_DEFAULT
 
@@ -204,7 +206,7 @@ class TestTheReaderAndTheSeederStateOneDefault:
         """The assertion that would have caught the original defect."""
         redis = _FakeRedis()
         flags = _flags(redis)
-        flags._enforcement_default_logged = False
+        reset_log_once(feature_flags_module.logger)
 
         assert await flags.get_enforcement_mode() is not EnforcementMode.DISABLED
 

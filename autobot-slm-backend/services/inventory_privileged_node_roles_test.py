@@ -17,8 +17,9 @@ update playbook.
 
 The fix stamps a second hostvar, ``node_roles_declared`` (declared roles
 only, see ``inventory_builder._declared_roles``), and repoints the five
-privileged facts' node_roles branch at it. The other facts (redis, vnc,
-xrdp, llm, tts_worker) deliberately keep the raw ``node_roles`` union --
+privileged facts' node_roles branch at it. ``role_vnc_active`` reads it too (#22262): a detected-only
+vnc is not a fleet VNC node. The other facts (redis, xrdp, llm, tts_worker) deliberately keep the
+raw ``node_roles`` union --
 ``role_tts_worker_active`` in particular has no group fallback at all
 (#9965), so node_roles is its only activation path by design.
 
@@ -50,7 +51,7 @@ yaml = pytest.importorskip("yaml")
 jinja2 = pytest.importorskip("jinja2")
 
 _SLM_ROOT = Path(__file__).resolve().parent.parent
-_FACTS_FILE = _SLM_ROOT / "ansible" / "playbooks" / "vars" / "role_active_facts.yml"
+_FACTS_FILE = _SLM_ROOT / "ansible" / "inventory" / "group_vars" / "all.yml"
 _PROVISION_PLAYBOOK = _SLM_ROOT / "ansible" / "playbooks" / "provision-fleet-roles.yml"
 
 # Facts the #9965 comment on inventory_builder._build_hostvars names as
@@ -73,7 +74,6 @@ _DELIBERATELY_UNION_FACTS = frozenset(
     {
         "role_tts_worker_active",
         "role_redis_active",
-        "role_vnc_active",
         "role_xrdp_active",
     }
 )
@@ -245,3 +245,19 @@ def test_static_inventory_without_node_roles_declared_is_unaffected():
     assert result["role_backend_active"] is True
     assert result["role_vnc_active"] is True
     assert result["role_frontend_active"] is False
+
+
+def test_a_detected_only_vnc_does_not_activate_the_vnc_gate():
+    """#22262 (owner 2026-11-27): the SLM manager's own vncserver is detected, never declared.
+
+    ``role_vnc_active`` gates the fleet update's ``autobot-vnc`` account check and the vnc provisioning, so a
+    detected-only vnc must leave it false; a declared vnc and the static ``vnc_nodes`` group still activate it.
+    """
+    facts = _load_facts()
+    detected = {"node_roles": ["vnc"], "node_roles_declared": [], "groups": {}, "inventory_hostname": "slm"}
+    declared = {**detected, "node_roles_declared": ["vnc"]}
+    static_group = {**detected, "groups": {"vnc_nodes": ["slm"]}}
+    assert _render_all(facts, detected)["role_vnc_active"] is False
+    assert _render_all(facts, declared)["role_vnc_active"] is True
+    assert _render_all(facts, static_group)["role_vnc_active"] is True
+    assert not _RAW_NODE_ROLES_MEMBERSHIP_RE.search(facts["role_vnc_active"])

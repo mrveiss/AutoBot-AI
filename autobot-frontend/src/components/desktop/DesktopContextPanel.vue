@@ -93,6 +93,7 @@ import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('DesktopContextPanel')
@@ -148,14 +149,7 @@ function refresh(): void {
   startContextPolling('')
 }
 
-function formatTime(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString()
-  } catch {
-    return timestamp
-  }
-}
+const formatTime = createDateFormatter({ kind: 'time' })
 
 onMounted(() => {
   startContextPolling('')  // fires immediately + every 5s; auto-cleans via onScopeDispose

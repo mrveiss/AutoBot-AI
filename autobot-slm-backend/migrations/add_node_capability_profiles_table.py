@@ -15,6 +15,7 @@ nothing else depends on it beyond its own FK to nodes(node_id).
 import logging
 import sys
 
+from autobot_shared.secret_redaction import redact_url_credentials
 from migrations.utils import get_connection, table_exists
 
 logger = logging.getLogger(__name__)
@@ -59,5 +60,5 @@ if __name__ == "__main__":
     from migrations.runner import get_db_url
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    logger.info("Migrating database: %s", db_url)
+    logger.info("Migrating database: %s", redact_url_credentials(db_url))  # #18664
     migrate(db_url)

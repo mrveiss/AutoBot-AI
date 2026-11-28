@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # than the one the service under test uses, so patching it here would be a
 # no-op against production behaviour.
 from autobot_shared.tool_sdk.registry import get_tool_registry
+from llc.models.activity import LLCActivityLog
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_tool import LLCRoleTool
@@ -68,7 +69,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [Role.__table__, LLCCompanyMembership.__table__, LLCRoleTool.__table__]
+    tables = [LLCActivityLog.__table__, Role.__table__, LLCCompanyMembership.__table__, LLCRoleTool.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)

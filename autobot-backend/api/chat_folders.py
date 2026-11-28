@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
-from api.schemas_chat import FolderCreate, FolderUpdate, SessionFolderAssign
+from api.schemas_chat_folders import FolderCreate, FolderUpdate, SessionFolderAssign
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -50,6 +50,25 @@ async def _load_folders(redis: Any, username: str) -> List[Dict]:
 
 async def _save_folders(redis: Any, username: str, folders: List[Dict]) -> None:
     await redis.set(_folder_redis_key(username), json.dumps(folders))
+
+
+def _folder_errors() -> tuple:
+    """Return (ResourceNotFoundError, ValidationError) via the lazy exceptions import."""
+    from exceptions import get_exceptions_lazy
+
+    _, _, resource_not_found, validation, _ = get_exceptions_lazy()
+    return resource_not_found, validation
+
+
+async def _open_folders(current_user: dict) -> tuple | None:
+    """Return (redis, username, folders) for the user, or None when Redis is unavailable."""
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+
+    username = current_user.get("username", "")
+    redis = await get_redis_mgr(async_client=True, database="main")
+    if redis is None:
+        return None
+    return redis, username, await _load_folders(redis, username)
 
 
 def _folder_depth(folders: List[Dict], folder_id: str, seen: set | None = None) -> int:
@@ -116,22 +135,16 @@ async def create_folder(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Create a new folder. Enforces max 3-level nesting."""
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from exceptions import get_exceptions_lazy
-
-    _, _, _, ValidationError, _ = get_exceptions_lazy()
-
-    username = current_user.get("username", "")
-    redis = await get_redis_mgr(async_client=True, database="main")
-    if redis is None:
+    ctx = await _open_folders(current_user)
+    if ctx is None:
         return JSONResponse(status_code=503, content={"error": "Redis unavailable"})
+    redis, username, folders = ctx
 
-    folders = await _load_folders(redis, username)
-
+    ResourceNotFoundError, ValidationError = _folder_errors()
     if body.parent_id:
         parent = next((f for f in folders if f["id"] == body.parent_id), None)
         if not parent:
-            raise ValidationError("Parent folder not found")
+            raise ResourceNotFoundError("Parent folder not found")
         depth = _folder_depth(folders, body.parent_id)
         if depth >= _MAX_NESTING:
             raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")
@@ -165,17 +178,11 @@ async def update_folder(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Rename, pin, or re-parent a folder."""
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from exceptions import get_exceptions_lazy
-
-    _, _, ResourceNotFoundError, ValidationError, _ = get_exceptions_lazy()
-
-    username = current_user.get("username", "")
-    redis = await get_redis_mgr(async_client=True, database="main")
-    if redis is None:
+    ctx = await _open_folders(current_user)
+    if ctx is None:
         return JSONResponse(status_code=503, content={"error": "Redis unavailable"})
-
-    folders = await _load_folders(redis, username)
+    redis, username, folders = ctx
+    ResourceNotFoundError, ValidationError = _folder_errors()
     folder = next((f for f in folders if f["id"] == folder_id), None)
     if not folder:
         raise ResourceNotFoundError(f"Folder {folder_id} not found")
@@ -192,7 +199,7 @@ async def update_folder(
                 raise ValidationError("A folder cannot be its own parent")
             parent = next((f for f in folders if f["id"] == body.parent_id), None)
             if not parent:
-                raise ValidationError("Parent folder not found")
+                raise ResourceNotFoundError("Parent folder not found")
             depth = _folder_depth(folders, body.parent_id)
             if depth >= _MAX_NESTING:
                 raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")
@@ -214,17 +221,11 @@ async def delete_folder(
     current_user: dict = Depends(get_current_user),
 ) -> Response:
     """Delete a folder. Child folders are re-parented to root; sessions stay unfoldered."""
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from exceptions import get_exceptions_lazy
-
-    _, _, ResourceNotFoundError, _, _ = get_exceptions_lazy()
-
-    username = current_user.get("username", "")
-    redis = await get_redis_mgr(async_client=True, database="main")
-    if redis is None:
+    ResourceNotFoundError, _ = _folder_errors()
+    ctx = await _open_folders(current_user)
+    if ctx is None:
         return Response(status_code=503)
-
-    folders = await _load_folders(redis, username)
+    redis, username, folders = ctx
     folder = next((f for f in folders if f["id"] == folder_id), None)
     if not folder:
         raise ResourceNotFoundError(f"Folder {folder_id} not found")
@@ -253,17 +254,11 @@ async def assign_session_to_folder(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """Assign a chat session to a folder (or remove it when folder_id is None)."""
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from exceptions import get_exceptions_lazy
-
-    _, _, ResourceNotFoundError, _, _ = get_exceptions_lazy()
-
-    username = current_user.get("username", "")
-    redis = await get_redis_mgr(async_client=True, database="main")
-    if redis is None:
+    ResourceNotFoundError, _ = _folder_errors()
+    ctx = await _open_folders(current_user)
+    if ctx is None:
         return JSONResponse(status_code=503, content={"error": "Redis unavailable"})
-
-    folders = await _load_folders(redis, username)
+    redis, username, folders = ctx
 
     # Remove session from all folders first
     for f in folders:

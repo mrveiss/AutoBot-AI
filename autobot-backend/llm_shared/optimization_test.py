@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autobot_shared.retry_mechanism import RetryStrategy
 from llm_shared.optimization.cloud_batcher import CloudRequestBatcher
 from llm_shared.optimization.prompt_compressor import (
     CompressionConfig,
@@ -23,10 +24,9 @@ from llm_shared.optimization.rate_limiter import (
     RateLimitConfig,
     RateLimitError,
     RateLimitHandler,
-    RetryStrategy,
 )
 from llm_shared.optimization.router import (
-    OptimizationCategory,
+    LLMServingOptimizationCategory,
     OptimizationConfig,
     OptimizationRouter,
 )
@@ -64,20 +64,20 @@ class TestOptimizationRouter:
         router = OptimizationRouter()
         optimizations = router.get_optimizations(ProviderType.OLLAMA)
 
-        assert OptimizationCategory.SPECULATIVE_DECODING in optimizations
-        assert OptimizationCategory.FLASH_ATTENTION in optimizations
-        assert OptimizationCategory.CUDA_GRAPHS in optimizations
-        assert OptimizationCategory.QUANTIZATION in optimizations
+        assert LLMServingOptimizationCategory.SPECULATIVE_DECODING in optimizations
+        assert LLMServingOptimizationCategory.FLASH_ATTENTION in optimizations
+        assert LLMServingOptimizationCategory.CUDA_GRAPHS in optimizations
+        assert LLMServingOptimizationCategory.QUANTIZATION in optimizations
 
     def test_cloud_optimizations_include_api_features(self):
         """Cloud providers should get API-level optimizations."""
         router = OptimizationRouter()
         optimizations = router.get_optimizations(ProviderType.OPENAI)
 
-        assert OptimizationCategory.CONNECTION_POOLING in optimizations
-        assert OptimizationCategory.API_REQUEST_BATCHING in optimizations
-        assert OptimizationCategory.RETRY_WITH_BACKOFF in optimizations
-        assert OptimizationCategory.RATE_LIMIT_HANDLING in optimizations
+        assert LLMServingOptimizationCategory.CONNECTION_POOLING in optimizations
+        assert LLMServingOptimizationCategory.API_REQUEST_BATCHING in optimizations
+        assert LLMServingOptimizationCategory.RETRY_WITH_BACKOFF in optimizations
+        assert LLMServingOptimizationCategory.RATE_LIMIT_HANDLING in optimizations
 
     def test_universal_optimizations_apply_to_all(self):
         """Universal optimizations should apply to all providers."""
@@ -85,9 +85,9 @@ class TestOptimizationRouter:
 
         for provider in [ProviderType.OLLAMA, ProviderType.OPENAI]:
             optimizations = router.get_optimizations(provider)
-            assert OptimizationCategory.RESPONSE_CACHING in optimizations
-            assert OptimizationCategory.PROMPT_COMPRESSION in optimizations
-            assert OptimizationCategory.REQUEST_DEDUPLICATION in optimizations
+            assert LLMServingOptimizationCategory.RESPONSE_CACHING in optimizations
+            assert LLMServingOptimizationCategory.PROMPT_COMPRESSION in optimizations
+            assert LLMServingOptimizationCategory.REQUEST_DEDUPLICATION in optimizations
 
     def test_should_apply_respects_config(self):
         """should_apply should respect config enablement."""
@@ -95,14 +95,14 @@ class TestOptimizationRouter:
         router = OptimizationRouter(config)
 
         # Speculation is disabled in config
-        assert router.should_apply(OptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA) is False
+        assert router.should_apply(LLMServingOptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA) is False
 
     def test_cloud_optimizations_not_on_local(self):
         """Cloud-only optimizations should not apply to local providers."""
         router = OptimizationRouter()
 
-        assert router.should_apply(OptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA) is False
-        assert router.should_apply(OptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM) is False
+        assert router.should_apply(LLMServingOptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA) is False
+        assert router.should_apply(LLMServingOptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM) is False
 
 
 class TestPromptCompressor:
@@ -206,7 +206,7 @@ class TestRateLimitHandler:
         """Should initialize with default config."""
         handler = RateLimitHandler()
         assert handler.config.max_retries == 3
-        assert handler.config.strategy == RetryStrategy.EXPONENTIAL
+        assert handler.config.strategy == RetryStrategy.EXPONENTIAL_BACKOFF
 
     @pytest.mark.asyncio
     async def test_execute_with_retry_success(self):
@@ -351,7 +351,7 @@ class TestOptimizationIntegration:
         compressor = PromptCompressor()
 
         # Check if compression should be applied
-        should_compress = router.should_apply(OptimizationCategory.PROMPT_COMPRESSION, ProviderType.OPENAI)
+        should_compress = router.should_apply(LLMServingOptimizationCategory.PROMPT_COMPRESSION, ProviderType.OPENAI)
 
         if should_compress:
             text = "Please note that this is a test. It is important to check."

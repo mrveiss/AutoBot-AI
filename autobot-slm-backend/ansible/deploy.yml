@@ -23,22 +23,19 @@
   # already-combined host reclaimed the unit from redis on every run, even though
   # redis was never touched (#4090).
   #
-  # #14678: everywhere else, this is the ONLY tracked definition of the
-  # role-active facts -- provision-fleet-roles.yml dropped this same
-  # vars_files because every inventory builder now links the real
-  # group_vars beside its temp inventory (#11781, #14286). This play is
-  # the one exception: its only two callers, services/deployment.py
+  # #14678/#18514: inventory/group_vars/all.yml (never a group_vars/all/ directory,
+  # which would shadow it) holds the ONLY definition of the role-active facts. Inventories with a group_vars/
+  # directory beside them (every dynamic-inventory builder links one,
+  # #11781, #14286) discover it on their own; this play cannot rely on
+  # that: its only two callers, services/deployment.py
   # (_build_ansible_base_command) and services/blue_green.py
   # (_deploy_roles_to_node), invoke it with a bare `-i "<host>,"` string,
-  # not a directory, so Ansible has nowhere to auto-discover group_vars
-  # from -- group_vars/all.yml never loads on this codepath. vars_files
-  # is not a leftover duplicate here; it is the only way these facts
-  # reach this play. Removing it needs those two callers to write a real
-  # inventory (with group_vars linked, as playbook_executor.py's dynamic
-  # inventories already do) first -- tracked as its own follow-up (#15348)
-  # so it doesn't block the rest of #14678.
+  # not a directory, so the vars_files load below is the only way the facts
+  # reach this play. It names the single definition itself -- it is not a
+  # copy. Dropping it needs those callers to write a real inventory first
+  # (#15348).
   vars_files:
-    - playbooks/vars/role_active_facts.yml
+    - inventory/group_vars/all.yml
 
   tasks:
     - name: Parse target roles
@@ -75,6 +72,9 @@
       when: "'ai-stack' in role_list or 'backend' in role_list"
 
     - name: Deploy backend role
+      # #19731: the LLM role runs after this one here, so a model still missing may yet be pulled.
+      vars:
+        backend_model_check_warn_only: true
       ansible.builtin.include_role:
         name: backend
       when: "'backend' in role_list"

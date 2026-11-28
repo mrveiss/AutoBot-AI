@@ -14,8 +14,6 @@ own model tests the model against itself.
 
 from __future__ import annotations
 
-import ast
-
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
@@ -27,6 +25,8 @@ from repo_tests.router_auth_enumerator import (
     enumerate_routers,
     registered_routers,
 )
+
+from tools.lint import _parse_cache as parse_cache
 
 #: Routers with no gate of any detectable kind, frozen so a NEW one fails.
 #: May only SHRINK. Each entry is a real finding on #15745, not an exemption --
@@ -52,7 +52,6 @@ KNOWN_UNGATED: frozenset[str] = frozenset()
 REACH = declare(
     "router-auth-coverage",
     discover=registered_routers,
-    floor=90,
     what="routers registered in core_routers.py",
     growth=20,
 )
@@ -268,12 +267,12 @@ def test_mounting_and_defining_routes_are_asked_separately() -> None:
     contain no mixed module today, and a guard that can only fail once one appears
     is a guard that reports clean about a case it never examined.
     """
-    mounts_only = ast.parse(
+    mounts_only = parse_cache.parse(
         "from api.user_management.users import router as users_router\n"
         "router = APIRouter()\n"
         "router.include_router(users_router)\n"
     )
-    mounts_and_defines = ast.parse(
+    mounts_and_defines = parse_cache.parse(
         "from api.user_management.users import router as users_router\n"
         "router = APIRouter()\n"
         "router.include_router(users_router)\n"
@@ -297,10 +296,10 @@ def test_a_dict_read_is_not_a_route() -> None:
     in every file that reads a dictionary -- which would make `_defines_routes` true
     almost everywhere and silently disable the aggregator branch it gates.
     """
-    reads_a_dict = ast.parse("config = {}\nvalue = config.get('key')\nrows = payload.get('items', [])\n")
+    reads_a_dict = parse_cache.parse("config = {}\nvalue = config.get('key')\nrows = payload.get('items', [])\n")
     assert not _defines_routes(reads_a_dict), "a dict read must not be counted as a route registration"
 
-    adds_explicitly = ast.parse("router.add_api_route('/x', handler)\n")
+    adds_explicitly = parse_cache.parse("router.add_api_route('/x', handler)\n")
     assert _defines_routes(adds_explicitly), "an explicit add_api_route call registers a route"
 
 

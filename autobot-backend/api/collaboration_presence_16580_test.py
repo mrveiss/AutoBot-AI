@@ -127,3 +127,30 @@ class TestTheGateStillLetsTheRightPeopleThrough:
                 response = await get_presence(SESSION_ID, mock_db, _as_user(owner_id))
         assert response["online_users"] == []
         assert response["count"] == 0
+
+
+class TestOnlineUsersIsTypedAsUserIds:
+    """#16754 AC2: the contract says string ids, not ``unknown[]``."""
+
+    def test_the_schema_items_are_strings(self) -> None:
+        from api.schemas_workflows import SessionPresenceResponse
+
+        items = SessionPresenceResponse.model_json_schema()["properties"]["online_users"]["items"]
+        assert items == {"type": "string"}, "List[Any] generated unknown[] on the frontend"
+
+    @pytest.mark.asyncio
+    async def test_the_real_handler_output_validates_against_it(self, mock_db, collab, owner_id) -> None:
+        from api.schemas_workflows import SessionPresenceResponse
+
+        with patch("api.collaboration._get_session_collab", AsyncMock(return_value=collab)):
+            with _presence_returning(ONLINE):
+                response = await get_presence(SESSION_ID, mock_db, _as_user(owner_id))
+        assert SessionPresenceResponse(**response).online_users == ONLINE
+
+    def test_a_non_string_element_is_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from api.schemas_workflows import SessionPresenceResponse
+
+        with pytest.raises(ValidationError):
+            SessionPresenceResponse(session_id=SESSION_ID, online_users=[{"id": 1}], count=1)

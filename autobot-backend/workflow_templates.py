@@ -22,9 +22,9 @@ DEPRECATED: Import directly from workflow_templates instead.
 
 # Re-export everything from the new package for backward compatibility
 from workflow_templates import (  # noqa: E401 — re-export facade for backward compat
-    TemplateCategory,
     WorkflowStep,
     WorkflowTemplate,
+    WorkflowTemplateCategory,
     WorkflowTemplateManager,
     create_backup_and_recovery_template,
     create_code_review_template,
@@ -55,7 +55,7 @@ from workflow_templates import (  # noqa: E401 — re-export facade for backward
 
 __all__ = [
     # Core types
-    "TemplateCategory",
+    "WorkflowTemplateCategory",
     "WorkflowStep",
     "WorkflowTemplate",
     # Manager

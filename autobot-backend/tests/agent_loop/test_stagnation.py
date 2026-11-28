@@ -8,7 +8,7 @@ Tests for the semantic stagnation detector.
 Covers GitHub issue #6627:
   - ObservationFingerprint dataclass (types.py)
   - TaskContext.record_observation (types.py)
-  - fingerprint module: compute_novel_token_ratio, content_hash, normalize_content
+  - fingerprint module: compute_novel_token_ratio, normalized_content_hash, normalize_content
   - AgentLoop._record_observation_fingerprints (loop.py)
   - AgentLoop._check_observation_stagnation (loop.py)
   - LoopOutcome.STAGNATED propagated through _build_result (loop.py)
@@ -22,8 +22,8 @@ import pytest
 
 from agent_loop.fingerprint import (
     compute_novel_token_ratio,
-    content_hash,
     normalize_content,
+    normalized_content_hash,
     tokenize,
 )
 from agent_loop.loop import AgentLoop
@@ -94,14 +94,14 @@ class TestNormalizeContent:
 
 class TestContentHash:
     def test_same_content_same_hash(self):
-        assert content_hash("abc") == content_hash("abc")
+        assert normalized_content_hash("abc") == normalized_content_hash("abc")
 
     def test_different_content_different_hash(self):
-        assert content_hash("abc") != content_hash("xyz")
+        assert normalized_content_hash("abc") != normalized_content_hash("xyz")
 
     def test_dict_order_independent(self):
-        a = content_hash({"x": 1, "y": 2})
-        b = content_hash({"y": 2, "x": 1})
+        a = normalized_content_hash({"x": 1, "y": 2})
+        b = normalized_content_hash({"y": 2, "x": 1})
         assert a == b
 
 
@@ -394,3 +394,18 @@ class TestFalsyErrorFilter:
         error_result = {"error": "something went wrong", "data": []}
         loop._record_observation_fingerprints({"tool": error_result})
         assert len(loop._current_context.observation_fingerprints) == 0
+
+
+def test_content_hash_is_the_canonical_digest_of_normalized_content():
+    """#15722: the loop fingerprint delegates to the one digest primitive, byte-identical to before."""
+    import hashlib
+    import json
+
+    from agent_loop.fingerprint import normalize_content, normalized_content_hash
+    from autobot_shared.content_digest import content_digest
+
+    for value in ("plain text", {"b": 2, "a": [1, "é"]}, 42, None):
+        legacy = hashlib.sha256(normalize_content(value).encode()).hexdigest()
+        assert normalized_content_hash(value) == legacy
+        assert normalized_content_hash(value) == content_digest(normalize_content(value))
+    assert normalized_content_hash({"b": 1, "a": 2}) == normalized_content_hash(json.loads('{"a": 2, "b": 1}'))

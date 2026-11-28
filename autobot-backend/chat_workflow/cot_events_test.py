@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
+
 # Load cot_events.py directly without triggering the full backend import chain
 cot_events_path = Path(__file__).parent / "cot_events.py"
 spec = importlib.util.spec_from_file_location("cot_events", cot_events_path)
@@ -77,7 +79,7 @@ class TestCausalLink:
         )
         result = link.to_dict()
         # Reason should be redacted because it contains sensitive fragment
-        assert result["reason"] == "<redacted>"
+        assert result["reason"] == REDACTED_PLACEHOLDER
 
     def test_causal_link_redacts_token_in_reason(self):
         """CausalLink.to_dict() redacts 'token' in reason."""
@@ -87,7 +89,7 @@ class TestCausalLink:
             reason="bearer_token_expired",
         )
         result = link.to_dict()
-        assert result["reason"] == "<redacted>"
+        assert result["reason"] == REDACTED_PLACEHOLDER
 
     def test_causal_link_redacts_password_in_reason(self):
         """CausalLink.to_dict() redacts 'password' in reason."""
@@ -97,7 +99,7 @@ class TestCausalLink:
             reason="password_reset_required",
         )
         result = link.to_dict()
-        assert result["reason"] == "<redacted>"
+        assert result["reason"] == REDACTED_PLACEHOLDER
 
     def test_causal_link_preserves_non_sensitive_reason(self):
         """CausalLink.to_dict() preserves non-sensitive reasons."""
@@ -177,7 +179,7 @@ class TestBuildCausalChain:
         assert result[1].reason == "token_validation_failed"
         # After serialization, it should be redacted
         serialized = result[1].to_dict()
-        assert serialized["reason"] == "<redacted>"
+        assert serialized["reason"] == REDACTED_PLACEHOLDER
 
 
 class TestEmitFunctionSignatures:
@@ -386,16 +388,16 @@ class TestSensitiveDataRedaction:
                 reason=f"some_{word}_check",
             )
             result = link.to_dict()
-            assert result["reason"] == "<redacted>", f"Failed to redact {word}"
+            assert result["reason"] == REDACTED_PLACEHOLDER, f"Failed to redact {word}"
 
     def test_case_insensitive_redaction(self):
         """Redaction is case-insensitive."""
         variations = [
-            ("SECRET_FOUND", "<redacted>"),
-            ("Secret_Found", "<redacted>"),
-            ("sEcReT_FoUnD", "<redacted>"),
-            ("TOKEN_EXPIRED", "<redacted>"),
-            ("Token_Expired", "<redacted>"),
+            ("SECRET_FOUND", REDACTED_PLACEHOLDER),
+            ("Secret_Found", REDACTED_PLACEHOLDER),
+            ("sEcReT_FoUnD", REDACTED_PLACEHOLDER),
+            ("TOKEN_EXPIRED", REDACTED_PLACEHOLDER),
+            ("Token_Expired", REDACTED_PLACEHOLDER),
         ]
 
         for reason, expected in variations:
@@ -468,3 +470,17 @@ class TestSessionScopedPublishing:
     def test_a_tool_call_with_no_session_is_not_published_at_all(self):
         """Dropped rather than broadcast: an unaddressable trace has no safe channel."""
         assert self._publish_calls() == []
+
+
+class TestQuantityNamesAreValueAware:
+    """Only the template export unmasks a count; this caller masks it as it did on main (#17336)."""
+
+    _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pragma: allowlist secret
+
+    def test_a_real_number_under_a_credential_noun_is_still_masked(self):
+        # origin/main masked max_tokens here (substring match); #17337 AC2: nothing leaves the masked set.
+        assert cot_events._is_sensitive("max_tokens", 4096) is True
+
+    def test_a_credential_or_a_digit_string_under_a_quantity_name_is_masked(self):
+        for value in (self._JWT, "4821", True, ["sk-abc"]):
+            assert cot_events._is_sensitive("token_count", value) is True, value

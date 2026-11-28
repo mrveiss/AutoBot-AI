@@ -59,15 +59,6 @@
     # Resolved in a task below, not here: `vars_files` outranks inventory, so
     # loading the role defaults at play level would make this play ignore a host
     # that sets a different root — the mirror of the bug it was fixing.
-    # This literal mirrors clean_wrong_node_dir.yml:91, which builds its
-    # deletion target as the literal "/opt/autobot/{{ dir_name }}" rather than
-    # from slm_base_dir. The fixtures MUST be created where the cleanup will
-    # actually delete, so this value is not a configuration choice: it is a copy
-    # of the code under test, and the assert below fails if the two ever differ.
-    # That file's form is frozen as a fixture for #15831, so the coupling is
-    # asserted rather than removed. Retiring both literals belongs with that
-    # unfreeze.
-    _cleanup_root: "/opt/autobot"  # noqa: mirrors the cleanup's own literal; asserted below
     _fixture_removed: "_test_wrong_node_15822"
     _fixture_kept: "_test_right_node_15822"
     _fixture_undecidable: "_test_undecidable_15822"
@@ -83,33 +74,24 @@
     # the play rather than fall back to a literal. A fallback would let this
     # create fixtures under a root the deployment does not use, then assert
     # about them successfully — a green run proving nothing about the host.
-    # #15822/#15824: inventory wins, and the fallback is the cleanup's own root.
-    #
-    # `vars_files` at play level would have outranked inventory — the mirror of
-    # the bug being fixed. `include_vars` into a namespace does not, but reading
-    # one key out of the role defaults forces Ansible to template the whole
-    # mapping, and half of it interpolates `slm_base_dir`, which is what we are
-    # trying to resolve.
-    #
-    # So the fallback is `_cleanup_root` directly. That is not a second
-    # hardcoded path: it is the SAME value the assert below requires this to
-    # equal, so a fallback that disagreed with the cleanup would fail there
-    # rather than run a test that proves nothing.
+    # #15822/#15824: inventory wins. clean_wrong_node_dir.yml deletes under `autobot.base_dir`
+    # (#18882), the install root's one definition in inventory/group_vars/all.yml. This play runs
+    # with `-i localhost,`, which loads no group_vars, so when no inventory supplies `autobot` it
+    # reads that one definition from the file -- through a file lookup, which returns data and
+    # templates nothing else in all.yml. Never a literal: undefined still stops the play.
+    - name: "Pre-flight: the install root's one definition, when no inventory supplies it"
+      ansible.builtin.set_fact:
+        autobot: "{{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../inventory/group_vars/all.yml') | from_yaml).autobot }}"
+      when: autobot is not defined
+
     - name: "Pre-flight: resolve the install root"
       ansible.builtin.set_fact:
-        _base_dir: "{{ slm_base_dir | default(_cleanup_root) }}"
+        _cleanup_root: "{{ autobot.base_dir }}"
+        _base_dir: "{{ slm_base_dir | default(autobot.base_dir) }}"
 
-    # The fixtures must live where the cleanup will actually delete.
-    #
-    # roles/_shared/tasks/clean_wrong_node_dir.yml:91 builds its target as the
-    # LITERAL "/opt/autobot/{{ dir_name }}" rather than from slm_base_dir. So if
-    # this play creates fixtures under a different root, every assertion still
-    # passes — they are assertions about directories the play created itself —
-    # while the cleanup deletes somewhere else entirely and nothing is tested.
-    #
-    # That file's form is frozen as a fixture for #15831, so this asserts the
-    # coupling instead of changing it. A host that relocates the install would
-    # fail here loudly rather than run a test that proves nothing.
+    # The fixtures must live where the cleanup will actually delete: clean_wrong_node_dir.yml
+    # builds its target from autobot.base_dir, so a host whose slm_base_dir names another root
+    # would have this play assert about directories the cleanup never touches. Fail loudly.
     - name: "Pre-flight: the fixture root must equal the cleanup's deletion root"
       ansible.builtin.assert:
         that:
@@ -131,7 +113,7 @@
         that:
           - _fixtures_before.results | rejectattr('stat.exists') | list | length == (_fixtures | length)
         fail_msg: >-
-          A fixture path under /opt/autobot already exists. This play deletes
+          A fixture path under {{ _base_dir }} already exists. This play deletes
           for real, so it will only ever operate on directories it created in
           this run. Remove the leftovers by hand and re-run.
         success_msg: "No fixture leftovers — safe to create and delete."
@@ -165,7 +147,7 @@
         that:
           - not _after_removed.stat.exists
         fail_msg: >-
-          /opt/autobot/{{ _fixture_removed }} is still there after a cleanup run
+          {{ _base_dir }}/{{ _fixture_removed }} is still there after a cleanup run
           whose role fact was explicitly false. Wrong-node cleanup is not firing.
           This is the silent half of #15822: nothing raises, and nothing happens.
         success_msg: "Wrong-node directory removed."
@@ -205,7 +187,7 @@
         that:
           - _after_kept.stat.exists
         fail_msg: >-
-          /opt/autobot/{{ _fixture_kept }} was deleted even though its role fact
+          {{ _base_dir }}/{{ _fixture_kept }} was deleted even though its role fact
           is true. A cleanup that deletes unconditionally would pass Case A for
           the wrong reason; this is the row that catches it.
         success_msg: "Right-node directory kept."
@@ -241,7 +223,7 @@
         that:
           - _after_undecidable.stat.exists
         fail_msg: >-
-          /opt/autobot/{{ _fixture_undecidable }} was deleted on a host where the
+          {{ _base_dir }}/{{ _fixture_undecidable }} was deleted on a host where the
           role fact is not defined at all. Unknown must never mean inactive
           (#14856).
         success_msg: "Undecidable directory kept."
@@ -291,7 +273,7 @@
         that:
           - not _after_loopvar.stat.exists
         fail_msg: >-
-          /opt/autobot/{{ _fixture_loopvar }} survived a cleanup run whose role
+          {{ _base_dir }}/{{ _fixture_loopvar }} survived a cleanup run whose role
           fact was explicitly false, reached the way ai-stack, browser,
           npu-worker and slm_manager reach it. The normalised fact is being
           shadowed by the loop item, so the gate reads an attribute that is not

@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { useTranscriberApi, type Project } from '@/composables/transcriber/useTranscriberApi'
 import { useTranscriberStore } from '@/stores/transcriber/useTranscriberStore'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('TranscriberProjectsView')
 
@@ -77,10 +78,7 @@ function openProject(projectId: number) {
   router.push({ name: 'transcriber-project-detail', params: { projectId: String(projectId) } })
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 onMounted(load)
 </script>
@@ -180,9 +178,9 @@ onMounted(load)
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  background: var(--bg-secondary, #f9fafb);
+  background: var(--bg-secondary);
 }
 
 .project-form-field {
@@ -190,20 +188,20 @@ onMounted(load)
   flex-direction: column;
   gap: 0.25rem;
   font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .project-form-field input {
   padding: 0.5rem;
-  border: 1px solid var(--border-color, #d1d5db);
+  border: 1px solid var(--border-color);
   border-radius: 0.375rem;
-  background: var(--bg-primary, #fff);
+  background: var(--bg-primary);
   color: var(--text-primary);
 }
 
 .project-form-error {
   margin: 0;
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
   font-size: var(--text-sm, 0.875rem);
 }
 
@@ -218,12 +216,12 @@ onMounted(load)
   align-items: center;
   gap: 0.5rem;
   padding: 2rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   text-align: center;
 }
 
 .projects-error {
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .projects-list {
@@ -239,9 +237,9 @@ onMounted(load)
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  background: var(--bg-primary, #fff);
+  background: var(--bg-primary);
 }
 
 .project-card-main {
@@ -258,7 +256,7 @@ onMounted(load)
 }
 
 .project-card-main:hover {
-  background: var(--bg-hover, #f3f4f6);
+  background: var(--bg-hover);
 }
 
 .project-card-name {
@@ -268,12 +266,12 @@ onMounted(load)
 
 .project-card-desc {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .project-card-meta {
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-tertiary);
 }
 
 .project-card-delete {

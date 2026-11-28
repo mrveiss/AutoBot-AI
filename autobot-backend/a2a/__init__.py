@@ -21,13 +21,13 @@ from .capability_verifier import CapabilityReport, verify_local_card, verify_rem
 from .security import SecurityCardSigner
 from .task_manager import TaskManager, get_task_manager
 from .tracing import TraceContext, extract_caller_id, new_trace_id
-from .types import A2ATaskStatus, AgentCard, AgentSkill, Task, TaskArtifact, TaskState
+from .types import A2ATaskArtifact, A2ATaskStatus, AgentCard, AgentSkill, Task, TaskState
 
 __all__ = [
     "AgentCard",
     "AgentSkill",
     "Task",
-    "TaskArtifact",
+    "A2ATaskArtifact",
     "TaskState",
     "A2ATaskStatus",
     "TaskManager",

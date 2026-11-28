@@ -12,7 +12,7 @@ god-class orchestrator. Canonical inference lives in
 What remains here is shared infra reused across the new stack:
 
     types.py          - Enums (ProviderType, LLMType)
-    models.py         - Dataclasses (LLMSettings, LLMResponse, ChatMessage, LLMRequest)
+    models.py         - Dataclasses (LLMSettings, LLMResponse, LLMChatMessage, LLMRequest)
     hardware.py       - Hardware detection and backend selection
     streaming.py      - Streaming state and failure management
     cache.py          - L1/L2 dual-tier caching (Issue #551)
@@ -29,22 +29,13 @@ from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
 
 # Pluggable LLM observability (GH#6593, GH#9012)
 from .observability import LLMObserver, register
-from .observability.langfuse_observer import LangFuseObserver
-from .observability.langsmith_observer import LangSmithObserver
 from .observability.otel_observer import OTELObserver
 from .observability.prometheus_observer import PrometheusObserver
-from .observability.tracing_config import LangFuseTracingConfig, LangSmithTracingConfig
+from .observability.tracing_registration import register_tracing_observers
 
 register(OTELObserver())
 register(PrometheusObserver())
-
-_langfuse_cfg = LangFuseTracingConfig()
-if _langfuse_cfg.enabled:
-    register(LangFuseObserver(_langfuse_cfg))
-
-_langsmith_cfg = LangSmithTracingConfig()
-if _langsmith_cfg.enabled:
-    register(LangSmithObserver(_langsmith_cfg))
+register_tracing_observers()
 
 # Provider registry and base (canonical imports for MVA-62 consolidation)
 # These were in llm_providers/ but are now consolidated in llm_shared
@@ -57,7 +48,7 @@ from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 from .fallback_chain import FallbackChain, FallbackChainManager, get_fallback_chain_manager
 
 # Hardware detection
-from .hardware import TORCH_AVAILABLE, HardwareDetector
+from .hardware import TORCH_AVAILABLE, AccelerationDetector
 
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
@@ -74,7 +65,7 @@ from .model_param_registry import (
 )
 
 # Models
-from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
+from .models import LLMChatMessage, LLMRequest, LLMResponse, LLMSettings
 from .ollama_helpers import call_ollama_generate
 from .provider_registry import ProviderRegistry, get_provider_registry
 
@@ -99,10 +90,10 @@ __all__ = [
     # Models
     "LLMSettings",
     "LLMResponse",
-    "ChatMessage",
+    "LLMChatMessage",
     "LLMRequest",
     # Hardware
-    "HardwareDetector",
+    "AccelerationDetector",
     "TORCH_AVAILABLE",
     # Streaming
     "StreamingManager",

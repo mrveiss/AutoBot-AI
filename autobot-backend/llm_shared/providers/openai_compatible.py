@@ -29,6 +29,7 @@ from llm_shared.structured_output import StructuredOutputMode, response_format_f
 
 from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,7 @@ class OpenAICompatibleProvider(BaseProvider):
         self._api_key: str | None = None
         self._base_url: str | None = None
         self._client = None
+        self._oauth_client = None  # #19241: base client for signed-in tokens
 
     # ------------------------------------------------------------------
     # Subclass hooks — override only genuine per-provider deltas
@@ -92,17 +94,25 @@ class OpenAICompatibleProvider(BaseProvider):
 
     def _create_client(self):
         """Construct the async SDK client (Groq swaps in its own SDK)."""
+        api_key = self._resolve_api_key()
+        if not api_key:
+            raise ValueError(self.missing_key_error)
+        return self._create_client_for_key(api_key)
+
+    def _create_client_for_key(self, api_key: str):
+        """The OpenAI-SDK client for *api_key* (an API key or a signed-in bearer token, #19241)."""
         try:
             import openai
         except ImportError as exc:
             raise ImportError("openai package not installed. Run: pip install openai") from exc
-        api_key = self._resolve_api_key()
-        if not api_key:
-            raise ValueError(self.missing_key_error)
+
         kwargs: Dict[str, Any] = {"api_key": api_key}
         base_url = self._resolve_base_url()
         if base_url:
             kwargs["base_url"] = base_url
+        http_client = self._headroom_http_client(getattr(openai, "DefaultAsyncHttpxClient", None))
+        if http_client is not None:
+            kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
         return openai.AsyncOpenAI(**kwargs)
 
     def _fallback_model_list(self) -> List[str]:
@@ -126,6 +136,19 @@ class OpenAICompatibleProvider(BaseProvider):
             self._client = self._create_client()
         return self._client
 
+    async def _request_client(self):
+        """The client for this call: the signed-in token's when there is one, else the API-key client (#19241).
+
+        Signed-in clients are copies of one base client (``with_options``), so they
+        share its connection pool instead of opening one per call.
+        """
+        token = await self._signed_in_token()
+        if not token:
+            return self._ensure_client()
+        if self._oauth_client is None:
+            self._oauth_client = self._create_client_for_key(token)
+        return self._oauth_client.with_options(api_key=token)
+
     def _build_params(self, request: LLMRequest, model: str) -> Dict[str, Any]:
         """Build the chat-completions payload from an LLMRequest."""
         params: Dict[str, Any] = {
@@ -141,7 +164,7 @@ class OpenAICompatibleProvider(BaseProvider):
         if request.stop:
             params["stop"] = request.stop
         if request.tools:
-            params["tools"] = self._tools_payload(request)
+            params["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 params["tool_choice"] = request.tool_choice
         if self.forward_penalty_params:
@@ -170,21 +193,6 @@ class OpenAICompatibleProvider(BaseProvider):
         reject (``note_structured_output`` records what was applied).
         """
         return response_format_for_mode(request, self.structured_output_mode)
-
-    @staticmethod
-    def _tools_payload(request: LLMRequest) -> List[Dict[str, Any]]:
-        """Map ToolDefinition objects to OpenAI function-tool dicts."""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema,
-                },
-            }
-            for t in request.tools
-        ]
 
     @staticmethod
     def _parse_tool_calls(message: Any) -> List[ToolCall]:
@@ -248,7 +256,7 @@ class OpenAICompatibleProvider(BaseProvider):
         start = time.time()
         model = request.model_name or self._default_model_name()
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             params = self._build_params(request, model)
             response = await client.chat.completions.create(**params)
             return self._build_response(request, response, params, start)
@@ -269,7 +277,7 @@ class OpenAICompatibleProvider(BaseProvider):
         self._total_requests += 1
         model = request.model_name or self._default_model_name()
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             params = self._build_params(request, model)
             params["stream"] = True
             stream = await client.chat.completions.create(**params)

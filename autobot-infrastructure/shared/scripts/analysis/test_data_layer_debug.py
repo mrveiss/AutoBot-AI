@@ -12,16 +12,27 @@ import asyncio
 import logging
 import os
 import sqlite3
+import sys
 import traceback
 from pathlib import Path
 
-import redis
-from redis import asyncio as aioredis
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.redis_client import (  # noqa: E402
+    RedisDatabase,
+    get_async_redis_client,
+    require_redis_client,
+    survey_databases,
+)
 
 logger = logging.getLogger(__name__)
 
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+# The async probe visits these named databases (main, knowledge, logs/vectors = DB 0, 1, 8).
+_ASYNC_PROBE_DATABASES = (RedisDatabase.MAIN, RedisDatabase.KNOWLEDGE, RedisDatabase.LOGS)
 
 
 def test_redis_basic():
@@ -30,20 +41,13 @@ def test_redis_basic():
 
     try:
         # Test direct connection
-        client = redis.Redis(host="localhost", port=6379, decode_responses=True, socket_timeout=2)
+        client = require_redis_client(database="main", decode_responses=True)
         response = client.ping()
         logger.info("✅ Basic Redis connection: %s", response)
 
-        # Check all 16 databases
-        for db_num in range(16):
+        # Check every database the server has, named or not, via the canonical survey (#18553)
+        for db_num, _name, db_client in survey_databases(decode_responses=True):
             try:
-                db_client = redis.Redis(
-                    host="localhost",
-                    port=6379,
-                    db=db_num,
-                    decode_responses=True,
-                    socket_timeout=2,
-                )
                 key_count = db_client.dbsize()
                 if key_count > 0:
                     logger.info("✅ DB %s: %s keys", db_num, key_count)
@@ -67,13 +71,7 @@ def test_vector_database():
     logger.info("\n=== VECTOR DATABASE TEST (Redis knowledge DB) ===")
 
     try:
-        client = redis.Redis(
-            host="localhost",
-            port=6379,
-            db=_DB_KNOWLEDGE,
-            decode_responses=False,
-            socket_timeout=2,
-        )
+        client = require_redis_client(database="knowledge", decode_responses=False)
 
         # Check for LlamaIndex keys
         keys = client.keys("llama_index:*")
@@ -97,7 +95,7 @@ def test_vector_database():
 
         # Check for any vector-like keys
         all_keys = client.keys("*")
-        logger.info("Total keys in DB 8: %s", len(all_keys))
+        logger.info("Total keys in the knowledge DB: %s", len(all_keys))
         for key in all_keys[:10]:  # Show first 10
             key_type = client.type(key)
             logger.info("    - %s (%s)", key, key_type)
@@ -193,8 +191,6 @@ def test_backend_errors():
 
     try:
         # Test Redis database manager import
-        import sys
-
         from autobot_shared.paths import project_root
 
         sys.path.append(str(project_root()))
@@ -235,27 +231,32 @@ def test_backend_errors():
         logger.info(traceback.format_exc())
 
 
+async def _require_async_client(database: RedisDatabase):
+    """The canonical async client for *database* (decoded), or ConnectionError when there is none."""
+    client = await get_async_redis_client(database=database, decode_responses=True)
+    if client is None:
+        raise ConnectionError(f"Redis '{database.name.lower()}' unavailable (disabled, unreachable or circuit open)")
+    return client
+
+
 async def test_async_redis():
     """Test async Redis connections"""
     logger.info("\n=== ASYNC REDIS TEST ===")
 
     try:
         # Test async connection
-        redis_client = aioredis.from_url("redis://localhost:6379/0", decode_responses=True)
+        redis_client = await _require_async_client(RedisDatabase.MAIN)
         result = await redis_client.ping()
         logger.info("✅ Async Redis ping: %s", result)
 
         # Test different databases async
-        for db_num in [0, 1, 8]:
+        for database in _ASYNC_PROBE_DATABASES:
             try:
-                db_client = aioredis.from_url(f"redis://localhost:6379/{db_num}", decode_responses=True)
+                db_client = await _require_async_client(database)
                 key_count = await db_client.dbsize()
-                logger.info("✅ Async DB %s: %s keys", db_num, key_count)
-                await db_client.close()
+                logger.info("✅ Async DB %s: %s keys", database.value, key_count)
             except Exception as e:
-                logger.error("❌ Async DB %s: %s", db_num, e)
-
-        await redis_client.close()
+                logger.error("❌ Async DB %s: %s", database.value, e)
 
     except Exception as e:
         logger.error("❌ Async Redis test failed: %s", e)

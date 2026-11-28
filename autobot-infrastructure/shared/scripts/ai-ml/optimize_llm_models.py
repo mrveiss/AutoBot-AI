@@ -17,7 +17,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.paths import project_root
+from autobot_shared.subprocess_reap import kill_and_reap
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -58,6 +60,8 @@ _CLASSIFICATION_MODEL = _get_model("classification", "gemma2:2b")
 _RAG_MODEL = _get_model("rag", "mistral:7b-instruct")
 _CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
 _CODE_MODEL = _get_model("npu_code_search", "phi3:mini")
+#: Wait for one `ollama pull`; the timeout result reports this same value (#18056).
+_MODEL_PULL_TIMEOUT_S = env_float_clamped("AUTOBOT_MODEL_PULL_TIMEOUT_SECONDS", 1800.0, positive_finite=True)
 _EMBEDDING_MODEL = "nomic-embed-text:latest"  # embeddings.model in agents.yaml
 
 # Critical models that must be installed (derived from SSOT roles above)
@@ -193,7 +197,7 @@ class LLMModelOptimizer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=1800)
+            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_MODEL_PULL_TIMEOUT_S)
 
             if process.returncode == 0:
                 elapsed = time.time() - start
@@ -208,8 +212,9 @@ class LLMModelOptimizer:
             return {"status": "failed", "error": stderr.decode()}
 
         except asyncio.TimeoutError:
+            await kill_and_reap(process)
             logger.error("Installation of %s timed out", model)
-            return {"status": "timeout", "error": "Timed out after 30 minutes"}
+            return {"status": "timeout", "error": f"Timed out after {_MODEL_PULL_TIMEOUT_S / 60:g} minutes"}
         except Exception as e:
             logger.error("Error installing %s: %s", model, e)
             return {"status": "error", "error": str(e)}

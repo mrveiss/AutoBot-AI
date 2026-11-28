@@ -15,28 +15,38 @@ Endpoints:
 - GET /api/audit/user/{user_id} - Get audit trail for specific user
 - GET /api/audit/failures - Get failed/denied operations for security monitoring
 - POST /api/audit/cleanup - Trigger cleanup of old audit logs (admin only)
+- GET /api/audit/integrity - Last audit-chain verification and the chain's current head (admin only)
+- POST /api/audit/integrity/verify - Run the audit-chain verification (admin only, human only)
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.schemas_audit import (
+    AuditIntegrityReport,
+    AuditIntegrityRequest,
+    AuditIntegrityStatus,
+    AuditQueryResponse,
+)
 from api.schemas_system import (
     AuditCleanupData,
     AuditCleanupRequest,
     AuditOperationsData,
-    AuditQueryResponse,
     AuditStatisticsResponse,
 )
-from auth_middleware import get_auth_middleware
-from autobot_shared.auth.permissions import is_admin_role
+from auth_middleware import check_admin_permission
+from autobot_shared.audit_chain_writer import ChainKeyUnavailable
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import parse_utc_iso
+from security.human_admin import refuse_service_principal
+from services.audit.integrity import current_head, last_report, report_summary, verify_chain
 from services.audit_logger import AuditResult, get_audit_logger
+from user_management.database import db_session_context
 from utils.catalog_http_exceptions import (
-    raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
@@ -44,31 +54,8 @@ from utils.catalog_http_exceptions import (
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = get_logger(__name__)
 
-
-def check_admin_permission(request: Request) -> bool:
-    """Check if user has admin permission for audit log access"""
-    try:
-        # Get user from auth middleware
-        user_data = get_auth_middleware().get_user_from_request(request)
-
-        if not user_data:
-            raise_auth_error("AUTH_0002", "Authentication required for audit log access")
-
-        # Check for admin role
-        # Issue #744: Require explicit role - no guest fallback for security
-        user_role = user_data.get("role")
-        if not user_role:
-            raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if not is_admin_role(user_role):
-            raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
-
-        return True
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Permission check failed: %s", e)
-        raise_server_error("API_0003", "Permission check error")
+#: One verification at a time per process: it streams the whole chain, so a second run only adds load (#17219).
+_verify_in_flight = asyncio.Lock()
 
 
 def _build_query_dict(
@@ -339,6 +326,7 @@ async def get_failed_operations(
 async def cleanup_old_logs(
     request: Request,
     cleanup_request: AuditCleanupRequest,
+    _human: None = Depends(refuse_service_principal),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -403,3 +391,45 @@ async def list_operation_types(request: Request, admin_check: bool = Depends(che
     except Exception as e:
         logger.error("Failed to list operations: %s", e)
         raise_server_error("API_0003", "Operation listing error")
+
+
+@router.get("/integrity", response_model=AuditIntegrityStatus)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_audit_integrity",
+    error_code_prefix="AUDIT",
+)
+async def get_audit_integrity(request: Request, admin_check: bool = Depends(check_admin_permission)):
+    """The last chain verification run by this process and the chain's current head (#17219)."""
+    async with db_session_context() as session:
+        head_seq, head_hash = await current_head(session)
+    last = last_report()
+    return {
+        "last_result": report_summary(last) if last else None,
+        "head_seq": head_seq,
+        "head_hash": head_hash,
+    }
+
+
+@router.post("/integrity/verify", response_model=AuditIntegrityReport)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="verify_audit_integrity",
+    error_code_prefix="AUDIT",
+)
+async def verify_audit_integrity(
+    request: Request,
+    body: AuditIntegrityRequest | None = None,
+    _human: None = Depends(refuse_service_principal),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Verify the audit hash chain now. A failed verification is reported, never enforced (#17219)."""
+    if _verify_in_flight.locked():
+        raise HTTPException(status_code=409, detail="An audit chain verification is already running")
+    async with _verify_in_flight:
+        try:
+            report = await verify_chain(body.from_seq if body else None)
+        except ChainKeyUnavailable as exc:
+            logger.error("Audit chain verification cannot run: the chain key is unavailable")
+            raise HTTPException(status_code=503, detail="The audit chain key is unavailable") from exc
+    return report_summary(report)

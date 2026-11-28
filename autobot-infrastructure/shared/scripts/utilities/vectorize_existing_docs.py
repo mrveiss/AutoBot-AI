@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -195,8 +196,9 @@ async def main():
     args = parser.parse_args()
 
     logger.info("Initializing Knowledge Base...")
-    kb = KnowledgeBase()
-    await kb.initialize()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     if not kb.initialized:
         logger.error("Failed to initialize knowledge base")

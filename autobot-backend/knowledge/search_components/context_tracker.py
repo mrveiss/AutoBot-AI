@@ -3,6 +3,7 @@
 """Per-query context tracker preventing redundant chunk reads (#1994, #2005)."""
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import resolve_chunk_id
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,7 @@ class ContextTracker:
 
     def filter_unseen(self, chunks: list[dict]) -> list[dict]:
         """Return only chunks not yet seen in this session."""
-        return [c for c in chunks if c.get("chunk_id") not in self._seen_chunk_ids]
+        return [c for c in chunks if resolve_chunk_id(c) not in self._seen_chunk_ids]
 
     def record(self, chunk_ids: list[str], tokens: int) -> None:
         """Mark chunks as seen and update token budget."""

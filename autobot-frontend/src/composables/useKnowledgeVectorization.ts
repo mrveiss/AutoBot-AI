@@ -9,6 +9,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { getEnvPositiveInt } from '@autobot/ui'
 import { useKnowledgeJobs } from './knowledge/useKnowledgeJobs'
 import { usePollingJob } from './usePollingJob'
 import { useBatchSelection } from './useBatchSelection'
@@ -51,7 +52,7 @@ const logger = createLogger('useKnowledgeVectorization')
 
 // Request cache for batch status API calls (Issue #4006)
 interface CachedRequest {
-  data: Promise<void>
+  data: Promise<boolean>
   time: number
 }
 
@@ -204,8 +205,8 @@ export function useKnowledgeVectorization() {
   const fetchBatchStatus = async (
     documentIds: string[],
     documentNames?: Map<string, string>
-  ): Promise<void> => {
-    if (documentIds.length === 0) return
+  ): Promise<boolean> => {
+    if (documentIds.length === 0) return true
 
     // Issue #4006: Check request cache for deduplication
     clearExpiredCache()
@@ -239,13 +240,12 @@ export function useKnowledgeVectorization() {
             })
           }
         }
+        return true
       } catch (error) {
         logger.error('Failed to fetch batch vectorization status:', error)
         // Mark all as unknown on error, preserving names if provided (Issue #165)
-        documentIds.forEach(id => {
-          const name = documentNames?.get(id)
-          setDocumentStatus(id, 'unknown', undefined, undefined, name)
-        })
+        documentIds.forEach(id => setDocumentStatus(id, 'unknown', undefined, undefined, documentNames?.get(id)))
+        return false
       }
     })()
 
@@ -381,8 +381,7 @@ export function useKnowledgeVectorization() {
       // Poll for completion
       let completed = false
       let attempts = 0
-      // Configurable timeout via environment variable (default: 60 seconds)
-      const maxAttempts = Number(import.meta.env.VITE_VECTORIZATION_TIMEOUT) || 60
+      const maxAttempts = getEnvPositiveInt(import.meta.env, 'VITE_VECTORIZATION_TIMEOUT', 60) // env-tunable, default 60 s
 
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second

@@ -20,7 +20,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true; : "${AUTOBOT_AI_STACK_PORT:?ssot-config.sh not loaded — AUTOBOT_AI_STACK_PORT unset}"
 INVENTORY_FILE="$SCRIPT_DIR/inventory/production.yml"
 PLAYBOOK_FILE="$SCRIPT_DIR/playbooks/deploy-hybrid-docker.yml"
 LOG_DIR="/tmp/autobot-deployment"
@@ -36,60 +36,9 @@ NC='\033[0m'
 # Create log directory
 mkdir -p "$LOG_DIR"
 
-# Logging
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-
-    case "$level" in
-        INFO)  echo -e "${BLUE}ℹ️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        WARN)  echo -e "${YELLOW}⚠️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        ERROR) echo -e "${RED}❌ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        SUCCESS) echo -e "${GREEN}✅ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        DEBUG) echo -e "${timestamp} [DEBUG] ${message}" >> "$LOG_FILE" ;;
-    esac
-}
-
-error_exit() {
-    log "ERROR" "$1"
-    exit 1
-}
-
-success() {
-    log "SUCCESS" "$1"
-}
-
-# Check prerequisites
-check_prerequisites() {
-    log "INFO" "Checking prerequisites..."
-
-    if ! command -v ansible-playbook &> /dev/null; then
-        error_exit "Ansible is not installed. Please install ansible first."
-    fi
-
-    if [[ ! -f "$INVENTORY_FILE" ]]; then
-        error_exit "Inventory file not found: $INVENTORY_FILE"
-    fi
-
-    if [[ ! -f "$PLAYBOOK_FILE" ]]; then
-        error_exit "Playbook file not found: $PLAYBOOK_FILE"
-    fi
-
-    success "Prerequisites checked"
-}
-
-# Test VM connectivity
-test_connectivity() {
-    log "INFO" "Testing connectivity to all VMs..."
-
-    if ansible all -i "$INVENTORY_FILE" -m ping --ask-pass; then
-        success "All VMs are accessible"
-    else
-        error_exit "Some VMs are not accessible. Please check network connectivity."
-    fi
-}
+# Logging + preflight helpers (log, error_exit, success, check_prerequisites, test_connectivity)
+# shellcheck source=scripts/lib/deploy-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/deploy-common.sh"
 
 # Show deployment plan
 show_deployment_plan() {
@@ -108,12 +57,12 @@ show_deployment_plan() {
     log "INFO" "  • RedisInsight (port 8002)"
     log "INFO" ""
     log "INFO" "VM4 (${AUTOBOT_AI_STACK_HOST:-localhost}) - autobot-aiml:"
-    log "INFO" "  • AI Stack (port 8080)"
+    log "INFO" "  • AI Stack (port ${AUTOBOT_AI_STACK_PORT})"
     log "INFO" "  • NPU Worker (port 8081)"
     log "INFO" "  • Ollama LLM server (port 11434)"
     log "INFO" ""
     log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}) - autobot-browser:"
-    log "INFO" "  • Playwright browser service (port 3000)"
+    log "INFO" "  • Playwright browser service (port ${AUTOBOT_BROWSER_SERVICE_PORT:-9001})"
     log "INFO" "  • VNC server for desktop access (port 5900)"
     log "INFO" ""
 }
@@ -163,7 +112,7 @@ AUTOBOT_REDIS_PASSWORD=${redis_password}
 AUTOBOT_REDIS_USERNAME=${redis_username}
 
 AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
-AUTOBOT_AI_STACK_PORT=8080
+AUTOBOT_AI_STACK_PORT=${AUTOBOT_AI_STACK_PORT}
 
 AUTOBOT_NPU_WORKER_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_NPU_WORKER_PORT=8081
@@ -172,26 +121,17 @@ AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_OLLAMA_PORT=11434
 
 AUTOBOT_BROWSER_SERVICE_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}
-AUTOBOT_BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT:-9001}
 
 AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-localhost}
 AUTOBOT_FRONTEND_PORT=5173
+AUTOBOT_FRONTEND_SERVED_BY=vite
 
 # Deployment mode
 AUTOBOT_DEPLOYMENT_MODE=hybrid
 
-# Database assignments for VM Redis
-AUTOBOT_REDIS_DB_MAIN=0
-AUTOBOT_REDIS_DB_KNOWLEDGE=1
-AUTOBOT_REDIS_DB_PROMPTS=2
-AUTOBOT_REDIS_DB_AGENTS=3
-AUTOBOT_REDIS_DB_METRICS=4
-AUTOBOT_REDIS_DB_LOGS=5
-AUTOBOT_REDIS_DB_SESSIONS=6
-AUTOBOT_REDIS_DB_WORKFLOWS=7
-AUTOBOT_REDIS_DB_VECTORS=8
-AUTOBOT_REDIS_DB_MODELS=9
-AUTOBOT_REDIS_DB_TESTING=15
+# Redis database numbers: redis-databases.yaml (#19232). Set AUTOBOT_REDIS_DB_<NAME> only
+# where this deployment differs; a copy of the whole table here is a second source.
 EOF
 
     success "Backend configuration updated: $env_file"
@@ -234,10 +174,10 @@ validate_deployment() {
         "${AUTOBOT_FRONTEND_HOST:-localhost}:5173|Frontend"
         "${AUTOBOT_REDIS_HOST:-localhost}:6379|Redis"
         "${AUTOBOT_REDIS_HOST:-localhost}:8002|RedisInsight"
-        "${AUTOBOT_AI_STACK_HOST:-localhost}:8080|AI Stack"
+        "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}|AI Stack"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:8081|NPU Worker"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:11434|Ollama"
-        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000|Browser Service"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}|Browser Service"
     )
 
     local failed_services=()
@@ -295,10 +235,10 @@ show_summary() {
     log "INFO" "  Backend (Host):   http://localhost:8001"
     log "INFO" "  Redis (VM):       redis://${AUTOBOT_REDIS_HOST:-localhost}:6379"
     log "INFO" "  RedisInsight:     http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
-    log "INFO" "  AI Stack (VM):    http://${AUTOBOT_AI_STACK_HOST:-localhost}:8080"
+    log "INFO" "  AI Stack (VM):    http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  NPU Worker (VM):  http://${AUTOBOT_AI_STACK_HOST:-localhost}:8081"
     log "INFO" "  Ollama (VM):      http://${AUTOBOT_AI_STACK_HOST:-localhost}:11434"
-    log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
     log "INFO" ""
     log "INFO" "Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${PROJECT_ROOT}/.env.hybrid"

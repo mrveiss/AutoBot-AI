@@ -41,12 +41,12 @@ def _env_selected() -> Optional[str]:
     return raw or None
 
 
-def get_active_provider_id() -> Optional[str]:
+def get_active_asr_provider_id() -> Optional[str]:
     """Return the currently active provider id (override > env > None)."""
     return _active_provider_override or _env_selected()
 
 
-def set_active_provider(provider_id: Optional[str]) -> None:
+def set_active_asr_provider(provider_id: Optional[str]) -> None:
     """Set the in-process active-provider override.
 
     Limitation: this is process-local and lost on restart.  Configure
@@ -80,7 +80,7 @@ def list_available_providers() -> List[Dict[str, Any]]:
 
 def get_selected_cloud_provider() -> Optional[Any]:
     """Return an instance of the selected + configured cloud provider, or None."""
-    pid = get_active_provider_id()
+    pid = get_active_asr_provider_id()
     if pid is None:
         return None
     cls = _PROVIDER_MAP.get(pid)

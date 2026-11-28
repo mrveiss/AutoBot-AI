@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RankedResult
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 
@@ -47,7 +47,7 @@ class TestSemanticSearch:
 
         # Verify results are properly formatted
         assert len(results) == 2
-        assert isinstance(results[0], SearchResult)
+        assert isinstance(results[0], RankedResult)
         assert results[0].content == "test content"
         assert results[0].source_path == "test.md"
 
@@ -187,8 +187,8 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 
-def _sr(hybrid: float, rerank: float | None = None) -> SearchResult:
-    return SearchResult(
+def _sr(hybrid: float, rerank: float | None = None) -> RankedResult:
+    return RankedResult(
         content="c",
         metadata={},
         semantic_score=0.0,
@@ -224,9 +224,9 @@ def test_relevance_floor_keeps_exact_boundary():
     assert len(kept) == 1
 
 
-def _mapelites_sr(hybrid: float, *, category: str | None = None, source_path: str) -> SearchResult:
+def _mapelites_sr(hybrid: float, *, category: str | None = None, source_path: str) -> RankedResult:
     metadata = {"category": category} if category is not None else {}
-    return SearchResult(
+    return RankedResult(
         content="c",
         metadata=metadata,
         semantic_score=0.0,
@@ -270,3 +270,107 @@ class TestMapElitesCategoryDefault:
 
         assert no_category in selected
         assert explicit_other in selected
+
+
+# ---------------------------------------------------------------------------
+# #21525 -- query expansion matches keywords as whole words in any case
+# ---------------------------------------------------------------------------
+# Hermetic: AdvancedRAGOptimizer() needs no network/Redis (as in the classes above)
+# and _expand_query is pure.
+
+
+class TestExpandQueryWholeWordAnyCase:
+    """Keyword synonyms apply to Install/ERROR/Configure and never inside longer words."""
+
+    def test_capitalised_install_yields_variants_that_differ(self):
+        out = AdvancedRAGOptimizer()._expand_query("Install the worker", "technical")
+
+        assert out == [
+            "Install the worker",
+            "Setup the worker",
+            "Deploy the worker",
+            "autobot Install the worker",
+        ]
+
+    def test_upper_case_error_keeps_rest_of_casing(self):
+        out = AdvancedRAGOptimizer()._expand_query("ERROR on startup", "troubleshooting")
+
+        assert out[1:3] == ["ISSUE on startup", "PROBLEM on startup"]
+        assert all(v != out[0] for v in out[1:])
+
+    def test_capitalised_configure_family(self):
+        out = AdvancedRAGOptimizer()._expand_query("Configure nginx", "technical")
+
+        assert out[:3] == ["Configure nginx", "Setup nginx", "Config nginx"]
+
+    def test_lower_case_families_keep_order(self):
+        opt = AdvancedRAGOptimizer()
+
+        assert opt._expand_query("install redis", "technical")[:3] == [
+            "install redis",
+            "setup redis",
+            "deploy redis",
+        ]
+        assert opt._expand_query("error 500", "troubleshooting") == [
+            "error 500",
+            "issue 500",
+            "problem 500",
+            "how to fix error 500",
+            "troubleshoot error 500",
+        ]
+
+    def test_keyword_inside_longer_word_is_not_rewritten(self):
+        opt = AdvancedRAGOptimizer()
+
+        assert opt._expand_query("installation guide", "technical") == [
+            "installation guide",
+            "autobot installation guide",
+        ]
+        # Only the whole word "configure" is rewritten; "reinstall" is left alone.
+        assert opt._expand_query("reinstall and configure Redis", "technical")[:3] == [
+            "reinstall and configure Redis",
+            "reinstall and setup Redis",
+            "reinstall and config Redis",
+        ]
+
+    def test_plurals_are_not_rewritten(self):
+        """Decision (#21525): whole-word only -- "errors" gets no synonym variant."""
+        out = AdvancedRAGOptimizer()._expand_query("errors in log", "troubleshooting")
+
+        assert out == [
+            "errors in log",
+            "how to fix errors in log",
+            "troubleshoot errors in log",
+            "autobot errors in log",
+        ]
+
+    def test_query_without_keyword_gets_only_generic_variants(self):
+        opt = AdvancedRAGOptimizer()
+
+        assert opt._expand_query("docker networking", "technical") == [
+            "docker networking",
+            "autobot docker networking",
+        ]
+        assert opt._expand_query("disk full", "troubleshooting") == [
+            "disk full",
+            "how to fix disk full",
+            "troubleshoot disk full",
+            "autobot disk full",
+        ]
+
+    def test_cap_of_five_and_original_first(self):
+        out = AdvancedRAGOptimizer()._expand_query("install and configure", "technical")
+
+        assert out == [
+            "install and configure",
+            "setup and configure",
+            "deploy and configure",
+            "install and setup",
+            "install and config",
+        ]
+
+    def test_duplicates_are_removed(self):
+        out = AdvancedRAGOptimizer()._expand_query("INSTALL", "technical")
+
+        assert out == list(dict.fromkeys(out))
+        assert out == ["INSTALL", "SETUP", "DEPLOY", "autobot INSTALL"]

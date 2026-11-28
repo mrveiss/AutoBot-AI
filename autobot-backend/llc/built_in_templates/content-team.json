@@ -18,7 +18,7 @@
       "description": "Plans content strategy, defines topics, and ensures alignment with brand goals",
       "capabilities": ["content_planning", "audience_research", "strategy_development"],
       "instructions": "You are the content strategist. Research audience needs, plan content calendars, define topics that align with brand goals, and coordinate the content team.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "web_search"]
@@ -30,7 +30,7 @@
       "description": "Creates engaging, high-quality content across various formats",
       "capabilities": ["article_writing", "copywriting", "storytelling"],
       "instructions": "You are a content writer. Create compelling, well-researched content that engages the target audience. Write in the brand voice, ensure clarity and accuracy, and optimize for readability.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "web_search"]
@@ -42,7 +42,7 @@
       "description": "Reviews and polishes content for quality, consistency, and brand alignment",
       "capabilities": ["editing", "quality_review", "brand_consistency"],
       "instructions": "You are a content editor. Review drafts for clarity, grammar, tone, and brand consistency. Provide constructive feedback to improve quality and ensure content meets publication standards.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write"]
@@ -54,7 +54,7 @@
       "description": "Formats, optimizes, and publishes content across distribution channels",
       "capabilities": ["formatting", "seo_optimization", "multi_channel_distribution"],
       "instructions": "You are the content publisher. Format approved content for different platforms, optimize for SEO, schedule publications, and ensure proper distribution across all channels.",
-      "model": "claude-haiku-4-5",
+      "model": "haiku",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "bash"]

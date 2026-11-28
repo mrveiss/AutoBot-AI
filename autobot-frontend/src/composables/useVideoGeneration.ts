@@ -5,6 +5,7 @@
 // GH#9016 — async video generation composable (submit + poll)
 import apiClient from '@/utils/ApiClient'
 import { ref } from 'vue'
+import { getEnvPositiveInt } from '@autobot/ui'
 
 export interface GenerateVideoParams {
   prompt: string
@@ -40,8 +41,8 @@ export interface VideoProviderStatus {
 }
 
 // Poll cadence is env-tunable on the backend; the UI default is conservative.
-const DEFAULT_POLL_MS = Number(import.meta.env.VITE_VIDEO_POLL_MS ?? 4000)
-const DEFAULT_MAX_POLLS = Number(import.meta.env.VITE_VIDEO_MAX_POLLS ?? 150)
+const DEFAULT_POLL_MS = getEnvPositiveInt(import.meta.env, 'VITE_VIDEO_POLL_MS', 4000)
+const DEFAULT_MAX_POLLS = getEnvPositiveInt(import.meta.env, 'VITE_VIDEO_MAX_POLLS', 150)
 
 export function useVideoGeneration() {
   const generating = ref(false)

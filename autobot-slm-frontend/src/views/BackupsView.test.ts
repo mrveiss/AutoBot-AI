@@ -47,6 +47,7 @@ const COMPLETED_BACKUP = {
   started_at: '2026-08-04T10:15:00Z',
   completed_at: '2026-08-04T10:15:30Z',
   created_at: '2026-08-04T10:15:00Z',
+  restorable: true,
 }
 
 const IN_PROGRESS_BACKUP = {
@@ -130,6 +131,18 @@ describe('BackupsView (#13307)', () => {
     expect(restore.length, 'the Restore button never rendered — it was gated on a field that is always undefined').toBe(
       1,
     )
+  })
+
+  it('does not offer Restore for a backup the API cannot restore (#19455)', async () => {
+    // Restoring a PostgreSQL dump through the Redis path replaced dump.rdb and destroyed the Redis data.
+    const postgres = { ...COMPLETED_BACKUP, id: 3, backup_id: 'pg0000000000', service_type: 'postgres', restorable: false }
+    fetchMock.mockImplementation(async (url: string) =>
+      jsonResponse(String(url).includes('/stateful/backups') ? { backups: [postgres], total: 1 } : routeBody(String(url))),
+    )
+    const wrapper = await mountBackups()
+
+    expect(wrapper.findAll('button').filter((b) => b.text() === en.backupsView.restore)).toHaveLength(0)
+    expect(wrapper.findAll('button').filter((b) => b.text() === en.backupsView.delete)).toHaveLength(1)
   })
 
   it('does not offer Restore or Delete while a backup is still running', async () => {

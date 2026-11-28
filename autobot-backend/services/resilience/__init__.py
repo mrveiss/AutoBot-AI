@@ -9,7 +9,7 @@ Issue #4342: Error isolation & graceful degradation for external services.
 Enables system to continue with reduced functionality when dependencies fail.
 """
 
-from .circuit_breaker_manager import (
+from autobot_shared.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerManager,
@@ -19,6 +19,7 @@ from .circuit_breaker_manager import (
     CircuitBreakerTimeout,
     get_circuit_breaker_manager,
 )
+
 from .error_budget import ErrorBudget, ErrorBudgetTracker
 from .error_isolation import isolate_errors
 from .fallback_manager import FallbackManager, get_fallback_manager

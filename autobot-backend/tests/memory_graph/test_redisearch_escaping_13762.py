@@ -22,9 +22,13 @@ from autobot_shared.security.input_sanitizer import escape_redisearch, escape_re
 @pytest.fixture
 def build():
     """The query builder, bound to a stand-in so no Redis connection is needed."""
+    from functools import partial  # noqa: PLC0415
+
+    from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS  # noqa: PLC0415
     from autobot_memory_graph.queries import QueryOperationsMixin  # noqa: PLC0415
 
-    return QueryOperationsMixin._build_redis_search_query.__get__(object())
+    # #18825: the owner is required; these tests are about escaping, so they read unscoped.
+    return partial(QueryOperationsMixin._build_redis_search_query.__get__(object()), owner=UNSCOPED_ALL_USERS)
 
 
 # ------------------------------------------------------- free-text query

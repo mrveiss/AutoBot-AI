@@ -34,6 +34,7 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 | `py-banned-suffix-filename` | #10575 | Python | block | Source file named `_fix`/`_v2`/`_old`/`_copy` — edit canonical module | 0 (clean after sibling PRs; BLOCK safe) |
 | `py-sync-requests-in-async` | #10576 | Python | block | Blocking `requests.*` inside `async def` — use async HTTP client | 0 (promoted to BLOCK after #10627 cohort 1 cleared all 14 sites) |
 | `py-duplicate-concept` | #10577 | Python | block | `Enhanced*`/`Unified*` class shadows a base-name class in the same file | 0 (promoted to BLOCK in #10666: all 5 sites renamed/consolidated) |
+| `py-client-disconnect-one-home` | #20939 | Python | block | An `except` for `WebSocketDisconnect`/`ClientDisconnect`/connection reset that skips `autobot_shared.client_disconnect` | 0 |
 
 **Severity rationale:**
 

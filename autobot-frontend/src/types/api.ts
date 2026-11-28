@@ -7,6 +7,8 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   error?: string;
   status?: string;
+  /** The HTTP status of a failed response; absent when the request got no response (network error, timeout). */
+  httpStatus?: number;
 }
 
 // Chat API Types
@@ -38,6 +40,7 @@ export type ChatMessageDisplayType =
   | 'response'
   | 'message'
   | 'command_approval_request'
+  | 'human_question'
   | 'overseer_plan'
   | 'overseer_step'
   | 'terminal_output'
@@ -53,6 +56,20 @@ export interface RagSource {
   score: number;
   /** Knowledge-base chunk identifier. */
   chunk_id: string;
+  /** Kind of source (#21976): `knowledge_base`, `web_search`, `web_page`, `system_state`, `tool_output`, `llm_training`. */
+  type?: string;
+  /** `verified`, `high`, `medium`, `low`. */
+  reliability?: string;
+  /** Source id; for a tool step, the step id. */
+  id?: string;
+  /** Id of the tool step this source is, so the UI can scroll to the step's messages. */
+  step_id?: string;
+  /** Link to the page or first result URL of a step. */
+  url?: string;
+  /** A step's tool, arguments, origin and times; the model of an `llm_training` source. */
+  metadata?: Record<string, unknown>;
+  model?: string;
+  content?: string;
 }
 
 /**
@@ -217,51 +234,6 @@ export interface LLMResponse {
 }
 
 // System Health Types
-
-/**
- * All status values that the backend health endpoint may return.
- * Backend sends: 'healthy', 'unhealthy', 'degraded'.
- * Frontend display layer uses: 'healthy', 'warning', 'error'.
- * Legacy values kept for backward compatibility: 'online', 'offline'.
- */
-export type ServiceHealthStatusValue =
-  | 'healthy'
-  | 'unhealthy'
-  | 'degraded'
-  | 'warning'
-  | 'error'
-  | 'online'
-  | 'offline';
-
-/**
- * One service's health, as the main GUI's status surfaces render it (#15401).
- * Named `ServiceStatus` until #15401 -- the SLM's `ServiceStatus` is a run-state
- * union, a different concept, and keeps the name. `types/system.ts` carried a
- * drifted copy of this row; it now re-exports this one.
- */
-export interface ServiceHealthEntry {
-  name: string;
-  version?: string;
-  status: ServiceHealthStatusValue;
-  statusText?: string;
-  responseTime?: number;
-  lastCheck?: number | string;
-  consecutiveFailures?: number;
-  error?: string;
-  timestamp?: number | string;
-  details?: Record<string, unknown>;
-}
-
-export interface SystemAlert {
-  id: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  message: string;
-  visible: boolean;
-  statusDetails?: ServiceHealthEntry;
-  timestamp: number;
-  type?: string;
-}
 
 // Workflow Types
 export interface WorkflowApproval {

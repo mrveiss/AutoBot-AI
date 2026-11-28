@@ -19,21 +19,33 @@ logger = get_logger(__name__)
 _COMPLEX_PATTERNS = frozenset({"complex", "multi_hop", "multi_step"})
 
 
-class AgentConnection(Protocol):
-    """Protocol for a connection entry returned by AgentTopology."""
+class RoutableConnection(Protocol):
+    """The ONE field this router needs from a connection: where it points.
+
+    Named for the capability, not for the class it happens to describe. It was
+    `AgentConnection`, which is also the concrete `@dataclass` in `topology.py`
+    (#12771) — so the same name meant two different things in one package: a
+    seven-field record and a one-field structural view of it. A reader could not
+    tell which they had, and the narrow Protocol is deliberately NOT the dataclass:
+    depending on `to_agent` alone is what keeps this module independent of it.
+    """
 
     to_agent: str
 
 
-class AgentTopology(Protocol):
-    """Protocol for the topology layer used by TopologyAwareRouter."""
+class CollaboratorSource(Protocol):
+    """Whatever can answer `get_collaborators`, which is all this router asks for.
+
+    Was `AgentTopology`, colliding with the concrete class of that name in
+    `topology.py` for the same reason.
+    """
 
     async def get_collaborators(
         self,
         agent_id: str,
         task_type: str | None,
         limit: int,
-    ) -> list[AgentConnection]: ...
+    ) -> list[RoutableConnection]: ...
 
 
 class TopologyAwareRouter:
@@ -43,7 +55,7 @@ class TopologyAwareRouter:
     collaborator agents that have historically succeeded together.
     """
 
-    def __init__(self, topology: AgentTopology, base_router: Any = None):
+    def __init__(self, topology: CollaboratorSource, base_router: Any = None):
         self.topology = topology
         self.base_router = base_router
 

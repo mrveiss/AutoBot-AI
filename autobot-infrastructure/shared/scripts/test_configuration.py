@@ -46,6 +46,11 @@ from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# `autobot_shared` lives at the repository root, which is not on the path when this
+# script is run standalone (#18094; same bootstrap as deployment_rollback.py).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # #14518: the ``src.`` package prefix below is a pre-restructure path that no
 # longer exists (src/unified_config.py was a re-export wrapper deleted by
@@ -53,9 +58,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # autobot-backend/). autobot-backend was also never on sys.path, so this
 # script raised ModuleNotFoundError on its own import block. Add the
 # directory the way the other operator entry points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `autobot_shared` (#18289)
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
@@ -86,7 +92,7 @@ def test_config_values():
     (Redis URL, the legacy-ms API timeout) now live on the SSOT
     ``autobot_shared.ssot_config.config`` singleton, not on the ``config``
     package's compat constants. There is also only one VNC port surface left
-    (``PLAYWRIGHT_VNC_PORT`` / ``get_vnc_direct_url``, an HTTP noVNC URL) --
+    (``ssot_config.port.vnc`` / ``browser_vnc_url``, an HTTP noVNC URL) --
     the old dual display/container port selection is gone, so the assertions
     below check what the current API actually provides instead of restoring
     the retired names.
@@ -94,25 +100,24 @@ def test_config_values():
     logger.info("Testing configuration values...")
 
     from autobot_shared.ssot_config import config as ssot_config
-    from config import API_BASE_URL, OLLAMA_URL, PLAYWRIGHT_VNC_PORT, get_vnc_direct_url
 
     # Test basic values
-    assert API_BASE_URL.startswith("http"), "API_BASE_URL should start with http"
+    assert ssot_config.backend_url.startswith("http"), "backend_url should start with http"
     assert ssot_config.redis_url.startswith("redis"), "redis_url should start with redis"
-    assert OLLAMA_URL.startswith("http"), "OLLAMA_URL should start with http"
+    assert ssot_config.ollama_url.startswith("http"), "ollama_url should start with http"
     assert isinstance(ssot_config.timeout.api, int), "timeout.api should be integer"
 
     # Test VNC configuration
-    vnc_url = get_vnc_direct_url()
-    assert isinstance(PLAYWRIGHT_VNC_PORT, int), "VNC port should be integer"
+    vnc_url = ssot_config.browser_vnc_url
+    assert isinstance(ssot_config.port.vnc, int), "VNC port should be integer"
     assert vnc_url.startswith("http://"), "VNC URL should start with http://"
-    assert f":{PLAYWRIGHT_VNC_PORT}/" in vnc_url, "VNC URL should embed the VNC port"
+    assert f":{ssot_config.port.vnc}/" in vnc_url, "VNC URL should embed the VNC port"
 
-    logger.info("   API_BASE_URL: %s", API_BASE_URL)
+    logger.info("   BACKEND_URL: %s", ssot_config.backend_url)
     logger.info("   REDIS_URL: %s", ssot_config.redis_url)
-    logger.info("   OLLAMA_URL: %s", OLLAMA_URL)
+    logger.info("   OLLAMA_URL: %s", ssot_config.ollama_url)
     logger.info("   API_TIMEOUT: %dms", ssot_config.timeout.api)
-    logger.info("   VNC_PORT: %d", PLAYWRIGHT_VNC_PORT)
+    logger.info("   VNC_PORT: %d", ssot_config.port.vnc)
     logger.info("   VNC_URL: %s", vnc_url)
 
     return True
@@ -174,15 +179,15 @@ def test_environment_overrides():
         # Reload configuration to pick up changes
         reload_config()
 
-        from config import API_BASE_URL
+        from autobot_shared.ssot_config import config as ssot_config
 
         # Check if override worked
-        if API_BASE_URL == test_value:
-            logger.info("   Environment override successful: %s", API_BASE_URL)
+        if ssot_config.backend_url == test_value:
+            logger.info("   Environment override successful: %s", ssot_config.backend_url)
         else:
             logger.warning(
                 "   Environment override partial: got %s, expected %s",
-                API_BASE_URL,
+                ssot_config.backend_url,
                 test_value,
             )
         return True

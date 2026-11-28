@@ -17,7 +17,8 @@ from typing import Any, Dict
 import aiofiles
 import yaml
 
-from retry_mechanism import RetryConfig, RetryStrategy, with_retry
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
+from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class AsyncOperationsMixin:
 
                     # Check if field name contains sensitive pattern
                     if any(pattern in key_lower for pattern in sensitive_patterns):
-                        obj[key] = "***REDACTED***"
+                        obj[key] = REDACTED_PLACEHOLDER  # the one value placeholder (#19337)
                         logger.debug("Redacted sensitive field: %s", current_path)
                     elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
@@ -144,7 +145,7 @@ class AsyncOperationsMixin:
         except Exception as e:
             logger.debug("Failed to save %s to Redis cache: %s", config_type, e)
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _read_file_async(self, file_path: Path) -> Dict[str, Any] | None:
         """Read config file asynchronously with retry"""
         # Issue #358 - avoid blocking
@@ -169,7 +170,7 @@ class AsyncOperationsMixin:
             logger.error("Failed to parse config file %s: %s", file_path, e)
             raise
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _write_file_async(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Write config file asynchronously with retry"""
         try:
@@ -196,9 +197,10 @@ class AsyncOperationsMixin:
         async with await self._get_async_lock():
             # For main config, return current config
             if config_type == "main":
-                if self._should_refresh_sync_cache():
-                    self._reload_config()
-                return self._config.copy()
+                # Same lock and re-entry guard as the sync readers (#18661).
+                with self._get_sync_lock():
+                    self._refresh_if_stale()
+                    return self._config.copy()
 
             # Try Redis cache first for other config types
             if use_cache:

@@ -16,13 +16,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.sso_deps import get_audit_db
+from autobot_shared.audit_actions import spellings_of
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_int
-from models.database import AuditLog
+from autobot_shared.http_refusal import fixed_refusal
+from models.database import SlmNodeAuditLog
 from services.auth import require_permission
-from services.database import get_db
 from services.step_up_auth import require_step_up
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.schemas.sso import (
     SSOProviderCreate,
     SSOProviderHealthResponse,
@@ -46,18 +48,6 @@ SSO_HEALTH_WINDOW_DAYS = env_int("SSO_HEALTH_WINDOW_DAYS", 7)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sso-providers", tags=["sso-providers"])
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
-
-
-async def get_audit_db():
-    """Dependency for the audit (main SLM security) database session."""
-    async for session in get_db():
-        yield session
 
 
 def _derive_health_status(
@@ -119,10 +109,7 @@ async def create_provider(
         return SSOProviderResponse.model_validate(provider)
     except Exception as e:
         logger.error("Failed to create SSO provider: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.get("/health", response_model=list[SSOProviderHealthResponse])
@@ -145,15 +132,15 @@ async def get_providers_health(
     # Single grouped aggregation over the window
     agg_result = await audit_db.execute(
         select(
-            AuditLog.resource_id,
-            func.count(AuditLog.id).filter(AuditLog.success.is_(True)).label("success_count"),
-            func.count(AuditLog.id).filter(AuditLog.success.is_(False)).label("failure_count"),
-            func.max(AuditLog.timestamp).filter(AuditLog.success.is_(True)).label("last_success_at"),
+            SlmNodeAuditLog.resource_id,
+            func.count(SlmNodeAuditLog.id).filter(SlmNodeAuditLog.success.is_(True)).label("success_count"),
+            func.count(SlmNodeAuditLog.id).filter(SlmNodeAuditLog.success.is_(False)).label("failure_count"),
+            func.max(SlmNodeAuditLog.timestamp).filter(SlmNodeAuditLog.success.is_(True)).label("last_success_at"),
         )
-        .where(AuditLog.category == "sso")
-        .where(AuditLog.action == "login")
-        .where(AuditLog.timestamp >= window_start)
-        .group_by(AuditLog.resource_id)
+        .where(SlmNodeAuditLog.category == "sso")
+        .where(SlmNodeAuditLog.action.in_(sorted(spellings_of("auth.login"))))  # old rows say "login" (#18716)
+        .where(SlmNodeAuditLog.timestamp >= window_start)
+        .group_by(SlmNodeAuditLog.resource_id)
     )
     rows = {row.resource_id: row for row in agg_result.all()}
 
@@ -197,10 +184,7 @@ async def get_provider(
         provider = await sso_service.get_provider(provider_id)
         return SSOProviderResponse.model_validate(provider)
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
 
 @router.patch("/{provider_id}", response_model=SSOProviderResponse)
@@ -220,16 +204,10 @@ async def update_provider(
         provider = await sso_service.update_provider(provider_id, updates)
         return SSOProviderResponse.model_validate(provider)
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
     except Exception as e:
         logger.error("Failed to update SSO provider: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -247,10 +225,7 @@ async def delete_provider(
     try:
         await sso_service.delete_provider(provider_id)
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
 
 @router.get("/{provider_id}/test", response_model=SSOTestResponse)
@@ -268,16 +243,10 @@ async def test_provider(
         result = await sso_service.test_provider_connection(provider_id)
         return SSOTestResponse(**result)
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
     except SSOServiceError as e:
         logger.error("SSO provider test failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.get("/provider-templates/{provider_type}", response_model=dict)

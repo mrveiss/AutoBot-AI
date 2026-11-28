@@ -23,6 +23,18 @@ from services.workflow_automation.vision_step_handler import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _backend_origins_are_internal(monkeypatch):
+    """#17576: the vision calls are egress-guarded; these fixture origins stand in for ``config.backend_url``."""
+    from autobot_shared import egress_allowlist
+
+    origins = ["https://localhost:8443", "https://192.0.2.20:8443"]
+    monkeypatch.setattr(egress_allowlist, "_ssot_service_urls", lambda: origins)
+    egress_allowlist.reset_internal_origin_state()
+    yield
+    egress_allowlist.reset_internal_origin_state()
+
+
 class TestVisionStepTypes:
     """Tests for step type constants."""
 

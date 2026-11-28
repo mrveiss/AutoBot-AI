@@ -1,0 +1,4 @@
+{"id": "cross-q1", "query": "how do sessions reach redis and which pattern gets a connection", "bucket": "cross", "gold": ["docs-1", "patterns-3"]}
+{"id": "cross-q2", "query": "what controls cache expiry and which function computes the sha256 digest", "bucket": "cross", "gold": ["facts-4", "code-4"]}
+{"id": "cross-q3", "query": "which embedding model is default and what theme does the user prefer", "bucket": "cross", "gold": ["facts-1", "memory-1"]}
+{"id": "cross-q4", "query": "function returning a configured logger and pattern for reading configuration", "bucket": "cross", "gold": ["code-1", "patterns-2"]}

@@ -20,27 +20,10 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.isolated_git import IDENTITY_EMAIL, IDENTITY_NAME, isolated_git_env
+from autobot_shared.paths import strict_git_env
 from code_intelligence.co_change import CoChangeAnalyzer, CoChangePair
 from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler
-
-#: Supplied by :func:`hermetic_git_env` to any fixture building a throwaway repo.
-#: Config is nulled so the runner's global git config cannot leak in. Identity is
-#: deliberately NOT here: an env-level identity silently outranks the repo-level
-#: ``git config user.name`` a fixture sets, so a sibling asserting on an author
-#: name would get this one instead of its own.
-_SUPPLIED_GIT_VARS = {
-    "GIT_CONFIG_GLOBAL": os.devnull,
-    "GIT_CONFIG_SYSTEM": os.devnull,
-}
-
-#: This file's identity, layered on top. Supplied via the environment so the
-#: fixture does not depend on the runner having a global git identity configured.
-_FIXTURE_IDENTITY = {
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "a@b.c",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "a@b.c",
-}
 
 #: #14323: ``git commit``/``git add`` can decide housekeeping is due and run
 #: ``git gc --auto``. ``gc.autoDetach`` defaults to ``true``, which makes that
@@ -67,39 +50,25 @@ _HOUSEKEEPING_OVERRIDES = {
 }
 
 
-def _fixture_git_env() -> dict:
-    """:func:`hermetic_git_env` plus this file's own identity."""
-    return {**hermetic_git_env(), **_FIXTURE_IDENTITY}
-
-
-def hermetic_git_env() -> dict:
+def hermetic_git_env(*, identity: bool = False) -> dict:
     """A git environment that cannot reach outside the repo passed to ``-C``.
 
-    #13983: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
-    **one** index while committing in its **own** tmpdir repo, so a worker
-    commits a tree whose blobs live in another worker's object store:
-
-        error: invalid object 100644 <sha> for 'solo_12.py'
-        error: Error building trees
-
-    That reads as repository corruption and is nowhere near the code under test.
-
-    #13882: the same failure came back after that fix, with a second line of
-    ``error: bad tree object HEAD``. #13983 stripped a hand-written LIST of nine
-    variables, which is a denylist -- narrower than its own subject, and silently
-    wrong for the tenth. Git has more than nine such variables and gains new ones
-    between releases, so the list could only ever be correct for the failures
-    already seen.
-
-    Inverted here: strip **everything** beginning with ``GIT_``, then add back
-    exactly what the fixture needs. The fixture runs only local commands in a
-    throwaway repo, so nothing inherited is load-bearing, and a variable git adds
-    next year is stripped without anyone updating a list. Identity is supplied
-    too, so this does not depend on the runner having a global git identity.
+    #13983 / #13882: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
+    **one** index while committing in its **own** tmpdir repo, so a worker commits a
+    tree whose blobs live in another worker's object store ("invalid object ... Error
+    building trees"). A hand-written denylist of nine names was narrower than its own
+    subject, so the rule is inverted: strip **every** inherited ``GIT_`` variable
+    (:func:`strict_git_env`), then :func:`isolated_git_env` (#18940) adds back exactly
+    what a throwaway repo needs -- config files cut off, signing off, default branch
+    pinned. ``identity=False`` leaves the author to the repo's own ``user.*`` config,
+    because an env-level identity silently outranks it.
     """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update(_SUPPLIED_GIT_VARS)
-    return env
+    return isolated_git_env(strict_git_env(), identity=identity)
+
+
+def _fixture_git_env() -> dict:
+    """:func:`hermetic_git_env` plus the fixed fixture identity."""
+    return isolated_git_env(strict_git_env(), identity=True)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -642,8 +611,8 @@ def test_the_variables_the_fixture_needs_are_supplied(monkeypatch):
 
     env = _fixture_git_env()
 
-    assert env["GIT_AUTHOR_NAME"] == "t"
-    assert env["GIT_COMMITTER_EMAIL"] == "a@b.c"
+    assert env["GIT_AUTHOR_NAME"] == IDENTITY_NAME
+    assert env["GIT_COMMITTER_EMAIL"] == IDENTITY_EMAIL
     assert env["GIT_CONFIG_GLOBAL"] == os.devnull
 
 
@@ -651,7 +620,7 @@ def test_a_supplied_variable_overrides_an_inherited_one(monkeypatch):
     """A runner exporting GIT_AUTHOR_NAME must not change what this fixture commits."""
     monkeypatch.setenv("GIT_AUTHOR_NAME", "the-runner")
 
-    assert _fixture_git_env()["GIT_AUTHOR_NAME"] == "t"
+    assert _fixture_git_env()["GIT_AUTHOR_NAME"] == IDENTITY_NAME
 
 
 def test_non_git_environment_is_left_alone(monkeypatch):

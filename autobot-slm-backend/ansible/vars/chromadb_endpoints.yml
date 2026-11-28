@@ -1,0 +1,9 @@
+---
+# Loaded by name (vars_files) by every play that probes ChromaDB, so the value is defined
+# under any inventory. A file of its own, not group_vars/all.yml: loading all.yml through
+# vars_files would raise every key in it above the per-group inventory values.
+# The ONE ansible literal for the ChromaDB liveness path. Mirrors
+# autobot_shared/chromadb_endpoints.py CHROMADB_HEARTBEAT_PATH; chromadb 1.x serves only the v2
+# heartbeat (v1 answers 410, /health 404). Kept equal by
+# repo_tests/chromadb_heartbeat_one_home_19413_test.py.
+chromadb_heartbeat_path: "/api/v2/heartbeat"

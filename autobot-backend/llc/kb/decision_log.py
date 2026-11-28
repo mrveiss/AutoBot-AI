@@ -20,20 +20,18 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
-logger = get_logger(__name__)
+from .collections import KbCollectionManager, company_collection
 
-_COMPANY_PREFIX = "company"
-_DECISIONS_SUFFIX = "decisions"
+logger = get_logger(__name__)
 
 
 def _decisions_collection(company_id: uuid.UUID | str) -> str:
     """Return the canonical collection name for company decisions.
 
-    Format: ``company:{company_id}:decisions``
-    Consistent with KbCollectionManager naming (GH#8235).
+    Format: ``company:{company_id}:decisions`` — built by the one name builder
+    (GH#8235, #19519).
     """
-    cid = str(company_id) if isinstance(company_id, uuid.UUID) else company_id
-    return f"{_COMPANY_PREFIX}:{cid}:{_DECISIONS_SUFFIX}"
+    return company_collection(company_id, KbCollectionManager.DECISIONS_SUFFIX)
 
 
 def _compose_document(approval: Any) -> str:

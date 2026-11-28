@@ -18,7 +18,10 @@ vi.mock('@/config/ssot-config', () => ({
   getBackendUrl: () => '',
 }))
 
-let useAiAnalysis: typeof import('../useAiAnalysis')['useAiAnalysis']
+// A static import: every piece of state lives inside each useAiAnalysis() call, so a
+// per-test resetModules + dynamic import bought no isolation and put a cold module-graph
+// load inside the 10s beforeEach, which timed out when the kit-related run was loaded.
+import { useAiAnalysis } from '../useAiAnalysis'
 
 /** Build a Response-like object whose body streams the given SSE chunks. */
 function sseResponse(chunks: string[]): Response {
@@ -40,10 +43,8 @@ function sseResponse(chunks: string[]): Response {
   } as unknown as Response
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   fetchWithAuthMock.mockReset()
-  vi.resetModules()
-  ;({ useAiAnalysis } = await import('../useAiAnalysis'))
 })
 
 describe('useAiAnalysis', () => {

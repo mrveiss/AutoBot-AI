@@ -16,6 +16,7 @@ points existing tests and call sites pin by name (``_get_language_patterns``,
 """
 
 import re
+from pathlib import Path
 from typing import Dict, List
 
 #: Per-language regex patterns for functions, classes, imports and variables.
@@ -38,43 +39,27 @@ LANGUAGE_PATTERNS: Dict[str, Dict[str, str]] = {
     },
 }
 
-#: File-extension to language name, used to select a `LANGUAGE_PATTERNS` entry.
-_LANGUAGE_BY_EXTENSION: Dict[str, str] = {
-    ".py": "python",
-    ".js": "javascript",
-    ".ts": "typescript",
-    ".jsx": "javascript",
-    ".tsx": "typescript",
-    ".java": "java",
-    ".cpp": "cpp",
-    ".c": "c",
-    ".h": "c",
-    ".cs": "csharp",
-    ".rb": "ruby",
-    ".go": "go",
-    ".rs": "rust",
-    ".php": "php",
-    ".swift": "swift",
-    ".kt": "kotlin",
-    ".scala": "scala",
-    ".sh": "bash",
-    ".bash": "bash",
-    ".zsh": "zsh",
-    ".ps1": "powershell",
-    ".yaml": "yaml",
-    ".yml": "yaml",
-    ".json": "json",
-    ".xml": "xml",
-    ".html": "html",
-    ".css": "css",
-    ".sql": "sql",
-    ".md": "markdown",
-}
+#: Shell files keep the dialect name this module has always emitted ("bash" for .sh and
+#: .bash, "zsh" for .zsh); the shared Language enum has the single member SHELL (#18094).
+_SHELL_NAME_BY_EXTENSION: Dict[str, str] = {".zsh": "zsh"}
+_DEFAULT_SHELL_NAME = "bash"
 
 
-def detect_language(file_ext: str) -> str:
-    """Detect programming language from file extension"""
-    return _LANGUAGE_BY_EXTENSION.get(file_ext.lower(), "unknown")
+def language_name_for_extension(file_ext: str) -> str:
+    """Detect programming language name from file extension.
+
+    One detector: ``code_intelligence.base_analyzer.detect_language``. Its Language
+    members carry the names this module emits, except SHELL, which maps back to the
+    dialect name above so stored and emitted values do not change.
+    """
+    from code_intelligence.base_analyzer import Language
+    from code_intelligence.base_analyzer import detect_language as detect_enum
+
+    ext = file_ext.lower()
+    language = detect_enum(Path(f"x{ext}"))
+    if language is Language.SHELL:
+        return _SHELL_NAME_BY_EXTENSION.get(ext, _DEFAULT_SHELL_NAME)
+    return language.value
 
 
 def extract_elements_by_pattern(

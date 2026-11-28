@@ -36,6 +36,14 @@ import logging
 import os
 import re
 import sys
+from pathlib import Path
+
+# scripts/lib holds the one outward-text stripper and the wording detector (#19645),
+# the same way scripts/pr_required_gate.py reaches scripts/lib/check_run_status.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+from outward_wording import COMMENT as _COMMENT  # noqa: E402
+from outward_wording import Hit, describe, find_hits, prose_lines  # noqa: E402
 
 # The set the template publishes. Named here and quoted verbatim in the failure
 # output, so an author who used different headings is told which four to use
@@ -46,9 +54,9 @@ TEMPLATE_PATH = ".github/PULL_REQUEST_TEMPLATE.md"
 # `^## ` -- with the space, as the awk had it. `##Foo` is not a heading and
 # `### Foo` does not close the section it sits inside.
 _HEADING = re.compile(r"^## (.*)$")
-# Single-line only, matching `sed 's/<!--[^>]*-->//g'`. A comment spanning lines
-# was never stripped and still is not; widening that would change what passes.
-_COMMENT = re.compile(r"<!--[^>]*-->")
+# _COMMENT (imported above) is single-line only, matching `sed 's/<!--[^>]*-->//g'`.
+# A comment spanning lines was never stripped and still is not; widening that would
+# change what passes.
 
 # Plain stdlib logging, deliberately (#1082): this runs as a bare script in CI,
 # where autobot_shared.logging_manager would pull in config this job does not
@@ -120,6 +128,30 @@ def _missing_report(missing: list[str], found: list[str]) -> list[str]:
     ]
 
 
+_REF = r"(?:[\w.-]+/[\w.-]+)?#\d+"
+# A closing keyword whose ref is followed by a LIST of refs. GitHub links only the first:
+# `Closes #19397, #17120, #19248` left #19248 open after #19451 landed (#19521).
+_MULTI_CLOSE = re.compile(
+    rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+{_REF}(?:(?:\s*,\s*|\s*&\s*|\s+and\s+){_REF})+",
+    re.IGNORECASE,
+)
+
+
+def multi_close_lines(body: str) -> list[str]:
+    """Lines where one closing keyword is followed by several issues (#19521).
+
+    Fenced blocks and inline code are skipped, so a body may quote the wrong form as an example.
+    """
+    return [raw.strip() for raw, prose in prose_lines(body) if _MULTI_CLOSE.search(prose)]
+
+
+def _multi_close_report(found: list[str]) -> list[str]:
+    lines = [
+        f"::error::One closing keyword names several issues; GitHub closes only the first: {line}" for line in found
+    ]
+    return lines + ["Write one per line instead -- `Closes #A` on one line, `Closes #B` on the next (#19521)."]
+
+
 def report(body: str) -> tuple[bool, list[str]]:
     """Return (ok, output lines) for one pull request body.
 
@@ -133,10 +165,29 @@ def report(body: str) -> tuple[bool, list[str]]:
     module runs ``check_pr_template_sections_test.py`` and never
     ``validate_pr_body_test.py``. CI catches it, after the push.
     """
+    missing, empty, lines = _check_sections(body)
+    failed: list[str] = []
+    multi = multi_close_lines(body)
+    if multi:
+        lines.extend(_multi_close_report(multi))
+        failed.append("a closing keyword lists more than one issue")
+    wording = find_hits(body)
+    if wording:
+        lines.extend(_wording_report(wording))
+        failed.append("the body names an automation session or an internal process role")
+
+    if not missing and not empty and not failed:
+        return True, lines + ["All required PR template sections are filled in."]
+    if not missing and not empty:
+        return False, lines + [f"::error::PR template check failed: {'; '.join(failed)}."]
+    return False, lines + [_summary(missing, empty)]
+
+
+def _check_sections(body: str) -> tuple[list[str], list[str], list[str]]:
+    """(missing, empty, output lines) for the required sections."""
     missing: list[str] = []
     empty: list[str] = []
     lines: list[str] = []
-
     for section in REQUIRED_SECTIONS:
         content = section_content(body, section)
         if content is None:
@@ -145,7 +196,6 @@ def report(body: str) -> tuple[bool, list[str]]:
             empty.append(section)
         else:
             lines.append(f"::notice::Section '{section}': OK")
-
     for section in empty:
         # Verbatim the message this gate has always printed. #16793 is about the
         # OTHER state borrowing it; where it was already accurate it stays put,
@@ -153,10 +203,13 @@ def report(body: str) -> tuple[bool, list[str]]:
         lines.append(f"::error::Required section '{section}' is empty. Please fill it in before merging.")
     if missing:
         lines.extend(_missing_report(missing, headings(body)))
+    return missing, empty, lines
 
-    if not missing and not empty:
-        return True, lines + ["All required PR template sections are filled in."]
-    return False, lines + [_summary(missing, empty)]
+
+def _wording_report(hits: list[Hit]) -> list[str]:
+    """The matches and the replacement wording (#19645); code spans are not scanned."""
+    found = describe(hits)
+    return [f"::error::{line}" for line in found[:-1]] + [found[-1], "Quote a pattern inside `code` to mention it."]
 
 
 def _summary(missing: list[str], empty: list[str]) -> str:

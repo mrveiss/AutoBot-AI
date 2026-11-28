@@ -9,18 +9,19 @@ Migrates data from database 0 to appropriate specialized databases
 """
 
 import logging
-import os
 import sys
+from pathlib import Path
 
-import redis
-
-# Add project root to Python path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # #14518: `utils.redis_database_manager` exists nowhere; the RedisDatabase enum
 # is re-exported by autobot_shared/redis_client.py (see its __all__).
-from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_client import RedisDatabase, require_redis_client  # noqa: E402
+from autobot_shared.redis_management.database_names import database_number  # noqa: E402
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -29,26 +30,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 class RedisMigrator:
     def __init__(self):
         """Initialize Redis migrator with connection to all databases"""
-        redis_host = os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
-
-        # Connect to each database
+        # Connect to each database through the canonical client (#18553)
         self.connections = {}
         for db_enum in RedisDatabase:
             try:
-                client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    db=db_enum.value,
-                    decode_responses=False,  # Keep as bytes to handle binary data
-                    socket_timeout=5,
-                )
+                # Keep as bytes to handle binary data
+                client = require_redis_client(database=db_enum, decode_responses=False)
                 # Test connection
                 client.ping()
                 self.connections[db_enum.name] = client
-                logger.info("Connected to Redis database %s (%s)", db_enum.value, db_enum.name)
+                logger.info("Connected to Redis database %s (%s)", database_number(db_enum), db_enum.name)
             except Exception as e:
-                logger.error("Failed to connect to Redis database %s: %s", db_enum.value, e)
+                logger.error("Failed to connect to Redis database %s: %s", database_number(db_enum), e)
 
         self.source_db = self.connections.get("MAIN")  # Database 0
 
@@ -242,8 +235,8 @@ class RedisMigrator:
             if db_name in self.connections:
                 client = self.connections[db_name]
                 key_count = client.dbsize()
-                results[f"db_{db_enum.value}_{db_name}"] = key_count
-                logger.info("Database %s (%s): %s keys", db_enum.value, db_name, key_count)
+                results[f"db_{database_number(db_enum)}_{db_name}"] = key_count
+                logger.info("Database %s (%s): %s keys", database_number(db_enum), db_name, key_count)
 
         return results
 

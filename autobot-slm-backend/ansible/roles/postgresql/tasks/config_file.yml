@@ -1,0 +1,49 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# postgresql.conf only (#19848). configure.yml includes it on install; the builtin updater
+# (playbooks/update-all-nodes.yml) includes it on every Code Sync, so a change to a rendered
+# setting such as postgresql_listen_addresses reaches an existing host. It needs no db_user and
+# never touches pg_hba.conf. PostgreSQL restarts only when the rendered file changes.
+---
+
+- name: PostgreSQL's config directory (only hosts that run PostgreSQL are configured)
+  ansible.builtin.stat:
+    path: "{{ postgresql_config_dir }}"
+  register: _postgresql_config_dir
+  become: true
+
+- name: Render postgresql.conf where PostgreSQL is installed
+  when: _postgresql_config_dir.stat.exists
+  block:
+    - name: A host serving the fleet knows its own address (#19239, #19944)
+      ansible.builtin.include_tasks: fleet_address.yml
+      when: postgresql_serves_fleet | bool
+
+    - name: Deploy postgresql.conf
+      ansible.builtin.template:
+        src: postgresql.conf.j2
+        dest: "{{ postgresql_config_dir }}/postgresql.conf"
+        owner: postgres
+        group: postgres
+        mode: '0644'
+        backup: true
+      become: true
+      notify: Restart PostgreSQL
+
+    # #20001: a handler notified above dies with a run that fails before handlers run, and later runs see
+    # no file change. So ask the server, and restart when what it is running is not what the file says.
+    - name: The running listen_addresses matches the rendered value
+      ansible.builtin.command:
+        cmd: psql -Atc "SHOW listen_addresses"
+      become: true
+      become_user: postgres
+      register: _postgresql_running_listen
+      check_mode: false
+      failed_when: false
+      changed_when: >-
+        _postgresql_running_listen.rc == 0
+        and _postgresql_running_listen.stdout | trim != postgresql_listen_addresses | trim
+      notify: Restart PostgreSQL

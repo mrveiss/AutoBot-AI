@@ -15,7 +15,7 @@ conflicts with confidence scoring, age decay, and human review escalation.
 Models:
 - KBFact: Knowledge base fact with confidence and timestamp
 - Claim: Agent assertion with source and confidence
-- ResearchResult: Extended research finding with validation
+- ResearchedFact: Extended research finding with validation
 - ResolvedClaim: Final resolved truth with source and reasoning
 - Conflict: Conflict record for analysis and escalation
 - ReviewTicket: Human review request with metadata
@@ -27,8 +27,11 @@ from enum import Enum
 from typing import List
 from uuid import uuid4
 
+from autobot_shared.status_enums import Priority
+from services.knowledge_grounding_models import Claim
 
-class SourceType(str, Enum):
+
+class GroundingSourceType(str, Enum):
     """Types of information sources for facts."""
 
     DOCUMENT = "document"  # From KB documents
@@ -47,6 +50,10 @@ class ConflictResolution(str, Enum):
     AGENT_WINS = "agent_wins"  # Agent claim was most confident
     HUMAN_REVIEW = "human_review"  # Escalated for human decision
     UNRESOLVED = "unresolved"  # Could not resolve with confidence
+    # GroundedAgent's status vocabulary for a Conflict (#18086); these values are on its wire.
+    RESOLVED = "resolved"  # Conflict resolved with clear winner
+    PENDING_REVIEW = "pending_review"  # Needs human review
+    INCONCLUSIVE = "inconclusive"  # Multiple valid interpretations
 
 
 class ReviewTicketStatus(str, Enum):
@@ -58,12 +65,11 @@ class ReviewTicketStatus(str, Enum):
     DISMISSED = "dismissed"  # Rejected as false conflict
 
 
-class ReviewTicketPriority(str, Enum):
-    """Priority level for human review."""
-
-    LOW = "low"  # Confidence difference 0.05-0.1
-    MEDIUM = "medium"  # Confidence difference 0.0-0.05
-    HIGH = "high"  # Critical facts with low confidence
+#: Human-review urgency. The three members the resolver assigns are in the canonical urgency
+#: vocabulary, so this is an alias rather than a class (#18098): LOW (confidence difference
+#: 0.05-0.1), MEDIUM (0.0-0.05) and HIGH (critical facts with low confidence). Every consumer
+#: reads `.value` (the JSON ticket and the `review_queue:<value>` key) or compares members.
+ReviewTicketPriority = Priority
 
 
 # ===== DATA MODELS =====
@@ -134,33 +140,7 @@ class KBFact:
 
 
 @dataclass
-class Claim:
-    """Agent claim/assertion to compare against KB facts.
-
-    Attributes:
-        claim_text: The actual claim being made
-        source: Where the claim came from (agent name, etc.)
-        confidence: Confidence level [0.0-1.0], defaults to 0.5 for unknown
-        timestamp: Unix timestamp of when claim was made
-        metadata: Additional metadata (reasoning, sources, etc.)
-    """
-
-    claim_text: str
-    source: str
-    confidence: float = 0.5
-    timestamp: float | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Validate and normalize claim."""
-        if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(f"Confidence must be in [0.0, 1.0], got {self.confidence}")
-        if self.timestamp is None:
-            self.timestamp = time.time()
-
-
-@dataclass
-class ResearchResult:
+class ResearchedFact:
     """Result from web research validation.
 
     Attributes:
@@ -208,7 +188,7 @@ class ResolvedClaim:
     source: str
     confidence: float
     kb_fact: KBFact | None = None
-    research_result: ResearchResult | None = None
+    research_result: ResearchedFact | None = None
     agent_claim: Claim | None = None
     update_kb: bool = False
     requires_human_review: bool = False
@@ -223,30 +203,51 @@ class ResolvedClaim:
 
 @dataclass
 class Conflict:
-    """Record of a conflict between KB and agent claim.
+    """Record of a conflict between KB, agent claim and research (#18086: the one Conflict).
 
-    Tracks all three sources (KB, agent, research) and their confidence
-    levels for analysis and escalation to human review if needed.
+    Tracks all three sources and their confidence levels for analysis and escalation
+    to human review. ConflictResolver fills the ``*_says`` and ``*_confidence`` fields;
+    GroundedAgent records a claim-versus-KB contradiction by claim id and fills
+    ``claim_1_id``/``description``/``severity`` instead. Each leaves the other's at default.
 
     Attributes:
         kb_says: The KB fact involved
         agent_says: The agent claim involved
-        research_says: Research validation result if available
         kb_confidence: Effective confidence of KB fact
         agent_confidence: Confidence of agent claim
+        research_says: Research validation result if available
         research_confidence: Confidence of research result
         created_at: Unix timestamp when conflict was detected
         conflict_id: Unique identifier for this conflict
+        claim_1_id: First claim id (GroundedAgent)
+        claim_2_id: Second claim id or KB fact id
+        description: Description of the conflict
+        severity: "low", "medium" or "high"
+        resolution: Resolution status
+        chosen_fact: Fact id chosen for resolution
+        reasoning: Human/system reasoning for the resolution
     """
 
-    kb_says: KBFact
-    agent_says: Claim
-    kb_confidence: float
-    agent_confidence: float
-    research_says: ResearchResult | None = None
+    kb_says: KBFact | None = None
+    agent_says: Claim | None = None
+    kb_confidence: float = 0.0
+    agent_confidence: float = 0.0
+    research_says: ResearchedFact | None = None
     research_confidence: float = 0.0
     created_at: float = field(default_factory=time.time)
     conflict_id: str = field(default_factory=lambda: str(uuid4()))
+    claim_1_id: str = ""
+    claim_2_id: str | None = None
+    description: str = ""
+    severity: str = "medium"
+    resolution: ConflictResolution = ConflictResolution.PENDING_REVIEW
+    chosen_fact: str | None = None
+    reasoning: str = ""
+
+    def __post_init__(self):
+        """Require one producer's identity: claim_1_id, or both kb_says and agent_says."""
+        if not self.claim_1_id and (self.kb_says is None or self.agent_says is None):
+            raise ValueError("Conflict needs claim_1_id (claim-vs-KB) or both kb_says and agent_says (resolver)")
 
     def max_confidence(self) -> float:
         """Get highest confidence across all sources.

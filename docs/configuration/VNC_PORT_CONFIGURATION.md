@@ -33,13 +33,13 @@ AutoBot automatically detects the appropriate VNC port based on the environment:
 
 ### Usage in Code
 ```python
-from src.config import get_vnc_direct_url, get_vnc_display_port
+from autobot_shared.ssot_config import config
 
-# Get intelligent VNC connection URL
-vnc_url = get_vnc_direct_url()  # Returns vnc://localhost:5900 or vnc://localhost:5901
+# Browser VM noVNC (browser-vnc-websockify), http://<vm.browser>:<port.vnc>/vnc.html
+browser_vnc = config.browser_vnc_url
 
-# Get the selected port number
-port = get_vnc_display_port()  # Returns 5900 or 5901
+# Backend host desktop VNC, http://<vm.main>:<port.vnc>/vnc.html
+desktop_vnc = config.vnc_url
 ```
 
 ## Common Scenarios

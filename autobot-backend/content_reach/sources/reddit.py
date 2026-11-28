@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Reddit/HN content source: RedditJsonBackend → HnAlgoliaBackend → BrowserBackend (#10932).
+"""Reddit/HN content source: RedditJsonBackend → HnAlgoliaBackend → BrowserContentBackend (#10932).
 
 Chain priority:
   1. RedditJsonBackend — Reddit public JSON API (no auth required)
   2. HnAlgoliaBackend  — HN Algolia search API (https://hn.algolia.com/api/v1/search)
-  3. BrowserBackend    — Playwright-backed page fetch (browser required)
+  3. BrowserContentBackend    — Playwright-backed page fetch (browser required)
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ import httpx
 from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
-from content_reach.backends.browser import BrowserBackend
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.backends.browser import BrowserContentBackend
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class RedditJsonBackend(ContentBackend):
     """
 
     name = "reddit_json"
-    source_type = SourceType.REDDIT
+    source_type = SourceKind.REDDIT
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -63,7 +63,7 @@ class RedditJsonBackend(ContentBackend):
         """Always return True — liveness validated at fetch-time via circuit breaker."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch Reddit posts; raise BackendError on network, HTTP, or parse failure."""
         headers = {"User-Agent": _USER_AGENT}
 
@@ -122,9 +122,9 @@ class RedditJsonBackend(ContentBackend):
             else:
                 text_lines.append(title)
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
-            source_type=SourceType.REDDIT,
+            source_type=SourceKind.REDDIT,
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"posts": posts},
@@ -136,13 +136,13 @@ class HnAlgoliaBackend(ContentBackend):
     """HN content backend using the Algolia search API for Hacker News.
 
     probe() always returns True — pure-HTTP backend, always capable.
-    fetch() searches via hn.algolia.com and maps hits to ContentResult.
+    fetch() searches via hn.algolia.com and maps hits to ContentReachResult.
 
     Accepts an optional injected httpx.AsyncClient for testing.
     """
 
     name = "hn_algolia"
-    source_type = SourceType.FORUM  # #11079: Hacker News is a forum, not Reddit
+    source_type = SourceKind.FORUM  # #11079: Hacker News is a forum, not Reddit
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -151,7 +151,7 @@ class HnAlgoliaBackend(ContentBackend):
         """Always return True — pure-HTTP backend, always capable."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch HN hits from Algolia; raise BackendError on failure."""
         try:
             response = await http_get(
@@ -191,9 +191,9 @@ class HnAlgoliaBackend(ContentBackend):
             hits.append({"title": title, "url": url, "points": points, "hn_url": hn_url})
             text_lines.append(f"{title} — {url}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
-            source_type=SourceType.FORUM,  # #11079: HN is a forum, not Reddit
+            source_type=SourceKind.FORUM,  # #11079: HN is a forum, not Reddit
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"hits": hits},
@@ -205,6 +205,6 @@ def build_reddit_chain() -> ContentSourceChain:
     """Build the reddit/HN fallback chain: reddit_json → hn_algolia → browser."""
     return ContentSourceChain(
         source="reddit",
-        source_type=SourceType.REDDIT,
-        backends=[RedditJsonBackend(), HnAlgoliaBackend(), BrowserBackend(SourceType.REDDIT)],
+        source_type=SourceKind.REDDIT,
+        backends=[RedditJsonBackend(), HnAlgoliaBackend(), BrowserContentBackend(SourceKind.REDDIT)],
     )

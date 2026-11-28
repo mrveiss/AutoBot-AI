@@ -171,8 +171,10 @@ class Role(str, Enum):
     constant that merely happens to hold ``"user"`` too (#13934).
 
     ``SUPERADMIN`` (#13854/#12786) is administrative — it is admitted by
-    ``require_role`` at 17 endpoints and by :func:`is_admin_role` — and holds
-    **no** granular permissions. See ``ROLE_PERMISSIONS`` for why.
+    ``require_role`` at 17 endpoints and by :func:`is_admin_role` — and, per the
+    owner decision of 2026-10-21 (#19125, "Super admin is the highest form of
+    admin"), holds a superset of admin's granular permissions, derived from
+    admin's set. See ``ROLE_PERMISSIONS``.
     """
 
     ADMIN = "admin"
@@ -292,7 +294,7 @@ def is_admin_role(role: "Role | str | None") -> bool:
 # #16270 grants.
 # chat.use / chat.history are behaviour-preserving. Every chat route is
 # login-only today (autobot-backend/api/chat*.py), so every role that can log
-# in holds them; superadmin stays empty by design.
+# in holds them; superadmin inherits admin's set (#19125).
 # teams.* and webhooks.trigger are a policy choice: admin only. teams.* follows
 # the #16276 ruling; webhooks.trigger gates nothing yet.
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
@@ -363,35 +365,6 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.MCP_HTTP_WRITE,
         Permission.MCP_DESKTOP_CONTROL,
     ],
-    # superadmin holds NO granular permissions. This is deliberate, it is the
-    # decision #13854 asked for, and it is written as an explicit empty entry
-    # rather than an omission so that a reader who looks here finds an answer
-    # instead of a gap (#13854, #12786).
-    #
-    # What superadmin IS: an administrative *predicate*. It is admitted by
-    # ``require_role("admin", "superadmin")`` at 17 endpoints and by
-    # ``is_admin_role`` at the imperative checks that cannot use a dependency.
-    # Those are unchanged by this entry.
-    #
-    # What it is NOT: a permission holder. Granting it admin's set would have
-    # added 54 permissions — ``admin.system``, ``security.manage``,
-    # ``admin.users.write`` and ``allow_shell_execute`` among them — none of
-    # which it held through the SecurityLayer gate before. #13820 measured that
-    # expansion and refused to let it ride along inside a resolver fix; nothing
-    # since has decided to widen the role, so this change does not either. An
-    # authorization change is a separate, deliberate act.
-    #
-    # The effect is that superadmin now resolves the SAME WAY through every
-    # path — Role(), ROLE_PERMISSIONS, canonical_role_permissions,
-    # SecurityLayer.check_permission, role_has_permission and SYSTEM_ROLES all
-    # say "administrative, zero granular grants". Before this it resolved four
-    # different ways, including allow-all at one gate and deny-all at another.
-    #
-    # If superadmin should instead be operational, the change is one line here:
-    #     Role.SUPERADMIN: list(ROLE_PERMISSIONS[Role.ADMIN]),
-    # It is an authorization expansion and needs a security review and a data
-    # migration for the ``roles`` table, which an empty entry does not.
-    Role.SUPERADMIN: [],
     Role.OPERATOR: [
         Permission.API_READ,
         Permission.CHAT_USE,
@@ -509,6 +482,27 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
 }
 
+# superadmin is the highest form of admin (#19125, owner decision 2026-10-21:
+# "Super admin is the highest form of admin"). This REVERSES #13854, which had
+# written an explicit empty SUPERADMIN entry so that every ``require_permission``
+# route refused superadmin while admitting admin.
+#
+# Its grants are DERIVED from admin's, never copied: a permission added to
+# ``Role.ADMIN`` above is inherited here automatically, so the two cannot drift.
+# Anything granted to superadmin ALONE would be appended to this list; today
+# there is nothing, so the delta over admin is zero and the delta over #13854's
+# empty set is admin's full set (see the PR's security review for the count).
+#
+# This is still the ONE canonical path: Role(), ROLE_PERMISSIONS,
+# canonical_role_permissions, SecurityLayer.check_permission, role_has_permission
+# and SYSTEM_ROLES (the DB seed rows) all read this entry, so every gate agrees.
+# ``is_admin_role`` stays a predicate only -- it is not a permission source.
+_SUPERADMIN_ONLY: List[Permission] = []
+ROLE_PERMISSIONS[Role.SUPERADMIN] = [
+    *ROLE_PERMISSIONS[Role.ADMIN],
+    *(p for p in _SUPERADMIN_ONLY if p not in ROLE_PERMISSIONS[Role.ADMIN]),
+]
+
 
 # ---------------------------------------------------------------------------
 # Role -> permission lookup (#14420)
@@ -540,8 +534,9 @@ def role_has_permission(role: "Role | str | None", permission: str) -> bool:
     Removing it costs ``admin`` nothing: ``ROLE_PERMISSIONS[Role.ADMIN]``
     contains every member of ``Permission`` (asserted in
     ``roles_are_canonical_test``), so the short-circuit never decided an admin
-    call. It changes exactly one role — ``superadmin``, from allow-all to the
-    empty set its ROLE_PERMISSIONS entry declares.
+    call. It changes exactly one role — ``superadmin``, which resolves through
+    its ROLE_PERMISSIONS entry (admin's set plus anything superadmin-only,
+    #19125) rather than through the predicate.
 
     An absent, unrecognised, or unmapped role is denied — this fails closed
     rather than defaulting to permissive for a role this module cannot resolve.
@@ -579,9 +574,12 @@ _ROLE_META: Dict[Role, Dict] = {
     # Priority stated explicitly: the ``_ROLE_META.get`` fallback below would
     # otherwise hand superadmin priority 0, sorting the most privileged role in
     # the system BELOW readonly (10). 110 keeps the ordering honest — it is
-    # administrative at every gate that admits admin. The empty permission list
-    # in ROLE_PERMISSIONS is what limits it; priority is not a grant.
-    Role.SUPERADMIN: {"description": "Administrative role; holds no granular permissions (#13854)", "priority": 110},
+    # administrative at every gate that admits admin. The ROLE_PERMISSIONS
+    # entry is what grants; priority is not a grant.
+    Role.SUPERADMIN: {
+        "description": "Highest administrative role; holds admin's permissions plus superadmin-only grants (#19125)",
+        "priority": 110,
+    },
     Role.OPERATOR: {"description": "Operator access for day-to-day service management", "priority": 80},
     Role.ANALYST: {"description": "Analytics and read-heavy access", "priority": 60},
     Role.EDITOR: {"description": "Content and knowledge editing access", "priority": 55},

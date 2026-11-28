@@ -30,8 +30,9 @@ import aiohttp
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, role_value
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import NetworkConstants
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -103,12 +104,13 @@ class MCPDispatcher:
         Makes a single HTTP request to /api/mcp/tools which aggregates all
         bridges.  Returns the number of tools cached.
         """
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = config.backend_url
         try:
             http_client = get_http_client()
             async with await http_client.get(
                 f"{backend_url}/api/mcp/tools",
                 timeout=aiohttp.ClientTimeout(total=5),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 if response.status != 200:
                     logger.warning(
@@ -189,6 +191,16 @@ class MCPDispatcher:
         """Return the cached tool entry for tool_name, or None if not found."""
         return self._tool_cache.get(tool_name)
 
+    async def ensure_loaded(self) -> None:
+        """Load the tool cache once if it never has been (#18430: one public way, not ``_cache_loaded``)."""
+        if not self._cache_loaded:
+            await self.refresh_tool_cache()
+
+    async def has_tool(self, tool_name: str) -> bool:
+        """Whether *tool_name* is in the registry, loading the cache first if needed."""
+        await self.ensure_loaded()
+        return self.find_tool(tool_name) is not None
+
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------
@@ -226,12 +238,11 @@ class MCPDispatcher:
         # existed because ``superadmin`` was not a ``Role`` member, so resolving
         # it through ``Role()`` raised and reported the most privileged role in
         # the system as denied on every tool. It is a Role member now, so the
-        # canonical mapping answers for it like any other role — and what that
-        # mapping says is that superadmin holds no granular permission, so an
-        # MCP tool requiring one is refused. That is the deliberate reading of
-        # an empty ROLE_PERMISSIONS entry, not an accident of resolution: the
-        # short-circuit was the last place where being in ``ADMIN_ROLES``
-        # granted access that ``ROLE_PERMISSIONS`` never wrote down.
+        # canonical mapping answers for it like any other role — and since #19125
+        # (owner decision 2026-10-21) that mapping gives superadmin admin's
+        # permissions, so an MCP tool requiring one is admitted for it exactly
+        # as for admin, through the written-down grant and not through
+        # ``ADMIN_ROLES`` membership.
         try:
             # role_value(), not str(): a ``Role`` member stringifies to
             # "Role.ADMIN" and would be reported as unknown-role (#14944).
@@ -281,6 +292,7 @@ class MCPDispatcher:
         arguments: dict,
         role: str = "user",
         session_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict:
         """Dispatch a tool call to its registered MCP bridge.
 
@@ -295,6 +307,8 @@ class MCPDispatcher:
             tool_name: Tool name from the LLM tool call.
             arguments: Tool arguments dict.
             role: Caller role — "admin" or "user" (default).
+            user_id: VERIFIED caller identity from the authenticated context (#20709); never
+                taken from ``arguments``. None means a system call (audited as such).
 
         Returns:
             Dict with keys: success (bool), result (str | dict), bridge (str | None).
@@ -323,7 +337,7 @@ class MCPDispatcher:
 
         # Issue #3232: emit CoT events around bridge call.
         _cot_start = emit_tool_call(tool_name, arguments, session_id=session_id)
-        result = await self._call_bridge(tool_name, bridge, endpoint, arguments, role)
+        result = await self._call_bridge(tool_name, bridge, endpoint, arguments, role, user_id, session_id)
         emit_tool_result(
             tool_name,
             result.get("result", ""),
@@ -365,7 +379,9 @@ class MCPDispatcher:
             return None
 
     @staticmethod
-    async def _call_external_bridge(tool_name: str, arguments: dict, role: str) -> dict:
+    async def _call_external_bridge(
+        tool_name: str, arguments: dict, role: str, user_id: str | None = None, session_id: str | None = None
+    ) -> dict:
         """Route a tool call to MCPExternalBridge (#11542) and adapt its result shape.
 
         MCPExternalBridge.call_tool() applies the owning server's own
@@ -375,7 +391,9 @@ class MCPDispatcher:
         """
         from services.mcp_external_bridge import get_mcp_external_bridge
 
-        outcome = await get_mcp_external_bridge().call_tool(tool_name, arguments, role=role)
+        outcome = await get_mcp_external_bridge().call_tool(
+            tool_name, arguments, role=role, user_id=user_id, session_id=session_id
+        )
         return {
             "success": outcome.success,
             "result": outcome.result if outcome.success else outcome.error,
@@ -383,7 +401,14 @@ class MCPDispatcher:
         }
 
     async def _call_bridge(
-        self, tool_name: str, bridge: str, endpoint: str, arguments: dict, role: str = "user"
+        self,
+        tool_name: str,
+        bridge: str,
+        endpoint: str,
+        arguments: dict,
+        role: str = "user",
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> dict:
         """Execute a tool call against an MCP bridge.
 
@@ -400,12 +425,14 @@ class MCPDispatcher:
             endpoint: Full URL path of the tool's bridge endpoint.
             arguments: Arguments to pass to the bridge.
             role: Caller role, forwarded to MCPExternalBridge's allowed_roles check.
+            user_id: Verified caller identity, forwarded to MCPExternalBridge's audit row (#20709).
+            session_id: Chat session, recorded on that audit row (#20709).
 
         Returns:
             Dict with keys: success, result, bridge.
         """
         if bridge == "external":
-            return await self._call_external_bridge(tool_name, arguments, role)
+            return await self._call_external_bridge(tool_name, arguments, role, user_id, session_id)
 
         # Issue #3229: isolated-worker routing.
         from services.mcp_isolated_runtime import get_isolated_registry
@@ -419,10 +446,11 @@ class MCPDispatcher:
 
         try:
             http_client = get_http_client()
-            async with await http_client.post(
+            async with await http_client.post(  # see #18355: endpoint is a relative path
                 endpoint,
                 json={"arguments": arguments},
                 timeout=aiohttp.ClientTimeout(total=30),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 if response.status == 200:
                     result = await response.json()

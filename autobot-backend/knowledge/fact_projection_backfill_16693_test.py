@@ -120,6 +120,11 @@ class _SetStore:
 
     def __init__(self):
         self.sets: dict[str, set] = defaultdict(set)
+        self.counters: dict[str, str] = {}
+
+    def set(self, key, value, nx=False):
+        self.counters[key] = value
+        return True
 
     def sadd(self, key, *members):
         self.sets[key].update(members)
@@ -142,6 +147,11 @@ class _KB(FactsMixin):
         }
         self.vector_store = MagicMock()
         self.ownership_manager = KnowledgeOwnership(index_store)
+        self._async_redis = AsyncMock()
+        self._async_redis.hget.return_value = None  # an uncategorised fact: no quarantine index to sync
+
+    def redis(self):
+        return self._async_redis
 
 
 @pytest.mark.asyncio
@@ -182,6 +192,7 @@ async def test_the_backfill_runs_after_legacy_adoption():
 
     order = []
     kb = MagicMock()
+    kb.redis.return_value = AsyncMock(get=AsyncMock(return_value="1"))  # #21957: the rebuild finds its marker current
     kb.adopt_legacy_facts = AsyncMock(side_effect=lambda: order.append("adopt"))
     kb.backfill_document_visibility = AsyncMock(side_effect=lambda: order.append("backfill"))
     await _adopt_then_backfill(kb)

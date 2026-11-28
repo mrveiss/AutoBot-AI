@@ -14,20 +14,63 @@ import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { isoDateStamp } from '@/utils/formatHelpers'
 import type {
   AuditEntry,
   AuditQueryParams,
-  AuditQueryResponse,
+  AuditDashboardResponse,
   AuditStatisticsResponse,
-  AuditStatistics,
+  AuditServerStatistics,
   AuditCleanupRequest,
   AuditCleanupResponse,
   AuditOperationsResponse,
   AuditFilter,
   AuditResult
 } from '@/types/audit'
-import { DEFAULT_AUDIT_FILTER, getDateRangeForFilter } from '@/types/audit'
+import {
+  DEFAULT_AUDIT_FILTER,
+  auditTimestampToDate,
+  calculateSuccessRate,
+  getDateRangeForFilter,
+  isTerminalAuditResult,
+  resolveAuditStatistics,
+} from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
+import type { operations } from '@/types/generated/api'
+
+/** Query of `GET /admin/event-logs` and `GET /security/command-history` (source of truth: generated api.ts). */
+export type EventLogQuery = NonNullable<operations['list_event_logs_api_admin_event_logs_get']['parameters']['query']>
+export type CommandHistoryQuery = NonNullable<
+  operations['get_command_history_api_security_command_history_get']['parameters']['query']
+>
+
+/** One compliance event as `GET /admin/event-logs` returns it (the audit store's event dict, untyped in the contract). */
+export interface ComplianceEvent {
+  id: string
+  action: string
+  actor_id: string
+  occurred_at: number
+  outcome: string
+  resource_type?: string | null
+}
+
+/** The page `GET /admin/event-logs` returns (an untyped dict in the contract). */
+export interface EventLogsPage {
+  events: ComplianceEvent[]
+  count: number
+  limit: number
+  offset: number
+  available_event_types: string[]
+}
+
+/** One command-execution record in `command_history` of `GET /security/command-history` (a dict in the contract). */
+export interface CommandHistoryEntry {
+  timestamp: string
+  user: string | null
+  action: string
+  outcome: string
+  details: Record<string, unknown>
+}
 
 const logger = createLogger('useAuditApi')
 
@@ -35,7 +78,7 @@ export function useAuditApi() {
   const api = useApiClient()
 
   return {
-    async queryLogs(params?: AuditQueryParams): Promise<AuditQueryResponse | null> {
+    async queryLogs(params?: AuditQueryParams): Promise<AuditDashboardResponse | null> {
       try {
         const searchParams = new URLSearchParams()
         if (params?.start_time) searchParams.append('start_time', params.start_time)
@@ -49,11 +92,32 @@ export function useAuditApi() {
         if (params?.offset) searchParams.append('offset', params.offset.toString())
         const queryString = searchParams.toString()
         const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
-        return await api.get<AuditQueryResponse>(url)
+        return await api.get<AuditDashboardResponse>(url)
       } catch (error: unknown) {
         logger.error('Failed to load audit logs', error)
         showSubtleErrorNotification('Error', 'Failed to load audit logs', 'error')
         return { success: false, total_returned: 0, has_more: false, entries: [], query: {} }
+      }
+    },
+
+    /** Compliance events, newest first; admin only (the backend is the gate). `null` when the call fails. */
+    async queryEventLogs(params: EventLogQuery = {}): Promise<EventLogsPage | null> {
+      try {
+        return (await api.call('get', '/api/admin/event-logs', { query: params })) as unknown as EventLogsPage
+      } catch (error: unknown) {
+        logger.error('Failed to load event logs', error)
+        return null
+      }
+    },
+
+    /** Command execution history from the audit trail; admin only. `null` when the call fails. */
+    async getCommandHistory(params: CommandHistoryQuery = {}): Promise<CommandHistoryEntry[] | null> {
+      try {
+        const reply = await api.call('get', '/api/security/command-history', { query: params })
+        return reply.command_history as unknown as CommandHistoryEntry[]
+      } catch (error: unknown) {
+        logger.error('Failed to load command history', error)
+        return null
       }
     },
 
@@ -67,9 +131,9 @@ export function useAuditApi() {
       }
     },
 
-    async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
+    async getSessionAuditTrail(sessionId: string): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/session/${sessionId}`)
+        return await api.get<AuditDashboardResponse>(`${getApiBase()}/audit/session/${sessionId}`)
       } catch (error: unknown) {
         logger.error('Failed to load session audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load session audit trail', 'error')
@@ -77,9 +141,9 @@ export function useAuditApi() {
       }
     },
 
-    async getUserAuditTrail(userId: string, days: number = 7): Promise<AuditQueryResponse | null> {
+    async getUserAuditTrail(userId: string, days: number = 7): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
+        return await api.get<AuditDashboardResponse>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
       } catch (error: unknown) {
         logger.error('Failed to load user audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load user audit trail', 'error')
@@ -87,9 +151,9 @@ export function useAuditApi() {
       }
     },
 
-    async getFailedOperations(hours: number = 24, resultFilter: AuditResult = 'denied'): Promise<AuditQueryResponse | null> {
+    async getFailedOperations(hours: number = 24, resultFilter: AuditResult = 'denied'): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(
+        return await api.get<AuditDashboardResponse>(
           `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
         )
       } catch (error: unknown) {
@@ -125,7 +189,11 @@ export function useAuditState() {
   const auditApi = useAuditApi()
 
   const entries = ref<AuditEntry[]>([])
-  const statistics = ref<AuditStatistics | null>(null)
+  const statistics = ref<AuditServerStatistics | null>(null)
+  // Failed Operations rows live apart from `entries`: dashboard figures derive from the general log window.
+  const failureEntries = ref<AuditEntry[]>([])
+  // True when the last statistics request failed: the row-derived estimates are then NOT the server's figures.
+  const statisticsFailed = ref(false)
   const vmInfo = ref<{ vm_source: string; vm_name: string } | null>(null)
   const operationCategories = ref<Record<string, string[]>>({})
   const totalOperations = ref(0)
@@ -140,6 +208,8 @@ export function useAuditState() {
   const currentPage = ref(1)
   const pageSize = ref(100)
   const isPolling = ref(false)
+  // Bumped on every poll so panels that own their own rows (event logs, command history) reload too.
+  const refreshTick = ref(0)
   const pollingIntervalMs = ref(30000)
   const selectedEntry = ref<AuditEntry | null>(null)
   const selectedSessionId = ref<string | null>(null)
@@ -148,14 +218,20 @@ export function useAuditState() {
   const userTrail = ref<AuditEntry[]>([])
 
   const successEntries = computed(() => entries.value.filter((e) => e.result === 'success'))
-  const failedEntries = computed(() => entries.value.filter((e) => e.result !== 'success'))
+  // An `attempted` row has no outcome yet, so it is neither a success nor a failure (#20665).
+  const terminalEntries = computed(() => entries.value.filter((e) => isTerminalAuditResult(e.result)))
+  const failedEntries = computed(() => terminalEntries.value.filter((e) => e.result !== 'success'))
   const deniedEntries = computed(() => entries.value.filter((e) => e.result === 'denied'))
 
   const successRate = computed(() => {
-    if (statistics.value) return statistics.value.success_rate
-    if (entries.value.length === 0) return 0
-    return Math.round((successEntries.value.length / entries.value.length) * 100)
+    // The server does not send a rate today, so the object being present says nothing about it.
+    const served: unknown = statistics.value?.success_rate
+    if (typeof served === 'number' && Number.isFinite(served)) return served
+    return calculateSuccessRate(successEntries.value.length, terminalEntries.value.length)
   })
+
+  // What the statistics panel shows: the server's figures where it sent them, else derived from the rows (#21513).
+  const resolvedStatistics = computed(() => resolveAuditStatistics(statistics.value, entries.value))
 
   const uniqueOperations = computed(() => {
     const ops = new Set(entries.value.map((e) => e.operation))
@@ -207,14 +283,18 @@ export function useAuditState() {
   }
 
   async function loadStatistics() {
+    statisticsFailed.value = false
     await wrapStats(async () => {
       try {
         const result = await auditApi.getStatistics()
         if (result && result.success) {
           statistics.value = result.statistics
           vmInfo.value = result.vm_info
+        } else {
+          statisticsFailed.value = true // getStatistics resolves null when the request failed
         }
       } catch (e) {
+        statisticsFailed.value = true
         logger.error('Failed to load audit statistics:', e)
       }
     })
@@ -265,8 +345,7 @@ export function useAuditState() {
       try {
         const result = await auditApi.getFailedOperations(hours)
         if (result && result.success) {
-          entries.value = result.entries
-          totalReturned.value = result.total_returned
+          failureEntries.value = result.entries
         }
       } catch (e) {
         logger.error('Failed to load failed operations:', e)
@@ -333,6 +412,7 @@ export function useAuditState() {
         logger.debug('Polling for audit log updates...')
         await loadLogs()
         await loadStatistics()
+        refreshTick.value++
       },
       { intervalMs }
     )
@@ -368,16 +448,15 @@ export function useAuditState() {
   }
 
   function exportToCsv(): string {
-    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address', 'Error Message']
+    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address']
     const rows = entries.value.map((entry) => [
-      escapeCsvField(entry.timestamp),
+      escapeCsvField(auditTimestampToDate(entry.timestamp).toISOString()),
       escapeCsvField(entry.operation),
       escapeCsvField(entry.result),
       escapeCsvField(entry.user_id),
       escapeCsvField(entry.session_id),
       escapeCsvField(entry.vm_name),
-      escapeCsvField(entry.ip_address),
-      escapeCsvField(entry.error_message)
+      escapeCsvField(entry.ip_address)
     ])
     return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n')
   }
@@ -385,7 +464,7 @@ export function useAuditState() {
   function downloadExport(format: 'json' | 'csv') {
     const content = format === 'json' ? exportToJson() : exportToCsv()
     const mimeType = format === 'json' ? 'application/json' : 'text/csv'
-    const filename = `audit-logs-${new Date().toISOString().split('T')[0]}.${format}`
+    const filename = `audit-logs-${isoDateStamp()}.${format}`
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -400,11 +479,11 @@ export function useAuditState() {
   // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
-    entries, statistics, vmInfo, operationCategories, totalOperations,
+    entries, failureEntries, statistics, statisticsFailed, vmInfo, operationCategories, totalOperations,
     loading, loadingStats, error, hasMore, totalReturned,
-    filter, currentPage, pageSize, isPolling, pollingIntervalMs,
+    filter, currentPage, pageSize, isPolling, refreshTick, pollingIntervalMs,
     selectedEntry, selectedSessionId, selectedUserId, sessionTrail, userTrail, loadingTrail,
-    successEntries, failedEntries, deniedEntries, successRate, uniqueOperations, uniqueUsers,
+    successEntries, failedEntries, deniedEntries, successRate, resolvedStatistics, uniqueOperations, uniqueUsers,
     loadLogs, loadStatistics, loadOperationCategories, loadSessionTrail, loadUserTrail,
     loadFailedOperations, cleanupLogs, setFilter, resetFilter, nextPage, prevPage,
     selectEntry, startPolling, stopPolling, initialize, exportToJson, exportToCsv, downloadExport

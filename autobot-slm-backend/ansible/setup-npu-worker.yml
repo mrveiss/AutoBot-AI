@@ -34,7 +34,7 @@
 
   vars:
     # NPU worker configuration
-    npu_worker_install_dir: /opt/autobot
+    npu_worker_install_dir: "{{ autobot.base_dir }}"
     npu_worker_code_dir: "{{ npu_worker_install_dir }}/autobot-npu-worker"
     npu_worker_old_code_dir: "{{ npu_worker_install_dir }}/npu-worker"
     npu_worker_user: autobot

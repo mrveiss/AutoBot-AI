@@ -194,7 +194,7 @@ class RunReplayService:
         """Create a new heartbeat run re-executing stored inputs for *run_id*.
 
         Returns the new (QUEUED) run; caller must commit, then call
-        ``HeartbeatScheduler.dispatch_run(agent, new_run.id, context)``.
+        ``LLCHeartbeatScheduler.dispatch_run(agent, new_run.id, context)``.
         """
         # Load the original log.
         result = await session.execute(

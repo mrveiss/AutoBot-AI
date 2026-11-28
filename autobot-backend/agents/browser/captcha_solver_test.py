@@ -22,10 +22,10 @@ import pytest
 
 from agents.browser.captcha_solver import (
     CaptchaDetector,
+    CaptchaSolveResult,
     CaptchaSolverPipeline,
     CaptchaType,
     LocalCaptchaSolver,
-    SolveResult,
     _answer_cache,
     _image_hash,
 )
@@ -78,11 +78,11 @@ class TestCaptchaDetectorDetect:
 
     def test_text_image_detected_by_keyword(self):
         html = '<img id="captcha" src="/captcha.png">'
-        assert self.detector.detect(html) == CaptchaType.TEXT_IMAGE
+        assert self.detector.detect(html) == CaptchaType.TEXT
 
     def test_text_image_detected_verify_phrase(self):
         html = "<p>Verification required</p><img class='captcha' src='/c.png'>"
-        assert self.detector.detect(html) == CaptchaType.TEXT_IMAGE
+        assert self.detector.detect(html) == CaptchaType.TEXT
 
     def test_unknown_when_no_pattern(self):
         html = "<p>Hello world</p>"
@@ -147,7 +147,7 @@ class TestLocalCaptchaSolverCanSolve:
     @pytest.mark.parametrize(
         "captcha_type, expected",
         [
-            (CaptchaType.TEXT_IMAGE, True),
+            (CaptchaType.TEXT, True),
             (CaptchaType.MATH, True),
             (CaptchaType.RECAPTCHA, False),
             (CaptchaType.HCAPTCHA, False),
@@ -296,9 +296,9 @@ class TestCaptchaSolverPipeline:
         result = await pipeline.solve(page, CaptchaType.MATH)
 
         assert result.success is True
-        assert result.answer == "7"
+        assert result.solution == "7"
         assert result.method_used == "math"
-        assert result.confidence == 1.0
+        assert result.confidence_score == 1.0
 
     @pytest.mark.asyncio
     async def test_local_ml_success_path(self):
@@ -314,10 +314,10 @@ class TestCaptchaSolverPipeline:
         page.content = AsyncMock(return_value="<p>no expression here</p>")
 
         pipeline = self._make_pipeline(solver=solver, detector=detector)
-        result = await pipeline.solve(page, CaptchaType.TEXT_IMAGE)
+        result = await pipeline.solve(page, CaptchaType.TEXT)
 
         assert result.success is True
-        assert result.answer == "ABCD12"
+        assert result.solution == "ABCD12"
         assert result.method_used == "local_ml"
 
     @pytest.mark.asyncio
@@ -337,12 +337,12 @@ class TestCaptchaSolverPipeline:
         page.content = AsyncMock(return_value="<img class='captcha'>")
 
         pipeline = self._make_pipeline(solver=solver, detector=detector)
-        result = await pipeline.solve(page, CaptchaType.TEXT_IMAGE)
+        result = await pipeline.solve(page, CaptchaType.TEXT)
 
         assert result.success is True
-        assert result.answer == "CACHED"
+        assert result.solution == "CACHED"
         assert result.method_used == "cache"
-        assert result.confidence == 1.0
+        assert result.confidence_score == 1.0
 
     @pytest.mark.asyncio
     async def test_human_fallback_when_ml_and_cache_fail(self):
@@ -367,7 +367,7 @@ class TestCaptchaSolverPipeline:
             mock_get_loop.return_value = loop_instance
 
             pipeline = self._make_pipeline(solver=solver, detector=detector)
-            result = await pipeline.solve(page, CaptchaType.TEXT_IMAGE)
+            result = await pipeline.solve(page, CaptchaType.TEXT)
 
         assert result.success is True
         assert result.method_used == "human_loop"
@@ -397,7 +397,7 @@ class TestCaptchaSolverPipeline:
 
         assert result.success is False
         assert result.method_used == "human_loop"
-        assert result.error == "timeout"
+        assert result.error_message == "timeout"
 
     @pytest.mark.asyncio
     async def test_human_fallback_exception_returns_failure(self):
@@ -416,7 +416,7 @@ class TestCaptchaSolverPipeline:
 
         assert result.success is False
         assert result.method_used == "human_loop"
-        assert "no module" in result.error
+        assert "no module" in result.error_message
 
     @pytest.mark.asyncio
     async def test_image_extraction_failure_goes_to_human(self):
@@ -441,24 +441,24 @@ class TestCaptchaSolverPipeline:
             mock_get_loop.return_value = loop_instance
 
             pipeline = self._make_pipeline(solver=solver, detector=detector)
-            result = await pipeline.solve(page, CaptchaType.TEXT_IMAGE)
+            result = await pipeline.solve(page, CaptchaType.TEXT)
 
         assert result.success is True
         assert result.method_used == "human_loop"
 
     @pytest.mark.asyncio
     async def test_solve_result_dataclass_fields(self):
-        """SolveResult has all required fields."""
-        r = SolveResult(
+        """CaptchaSolveResult has all required fields."""
+        r = CaptchaSolveResult(
             success=True,
-            answer="TEST",
+            solution="TEST",
             method_used="local_ml",
-            confidence=0.95,
-            captcha_type=CaptchaType.TEXT_IMAGE,
+            confidence_score=0.95,
+            captcha_type=CaptchaType.TEXT,
         )
         assert r.success is True
-        assert r.answer == "TEST"
+        assert r.solution == "TEST"
         assert r.method_used == "local_ml"
-        assert r.confidence == 0.95
-        assert r.captcha_type == CaptchaType.TEXT_IMAGE
-        assert r.error is None
+        assert r.confidence_score == 0.95
+        assert r.captcha_type == CaptchaType.TEXT
+        assert r.error_message is None

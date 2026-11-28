@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
 
+from autobot_shared.embedding_model import EmbeddingUnavailableError
 from autobot_shared.logging_manager import get_logger
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
@@ -26,12 +27,12 @@ from memory.storage.general_storage import SYSTEM_OWNER
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
-    ProcessingIntent,
+    MultimodalProcessingIntent,
     processor,
 )
 from task_execution_tracker import get_task_tracker
 
-from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine
+from .classifiers import ElementClassifier, ScreenContextAnalyzer, TemplateMatchingEngine
 from .collections import ProcessingResultExtractor, UIElementCollection
 from .types import ElementType, InteractionType, ScreenState, UIElement
 
@@ -73,7 +74,7 @@ class ScreenAnalyzer:
         """Initialize analyzer with template matcher and classifiers."""
         self.template_matcher = TemplateMatchingEngine()
         self.element_classifier = ElementClassifier()
-        self.context_analyzer = ContextAnalyzer()
+        self.context_analyzer = ScreenContextAnalyzer()
 
         # Multi-modal processor integration
         self.multimodal_processor = processor
@@ -200,7 +201,7 @@ class ScreenAnalyzer:
         return MultiModalInput(
             input_id=f"screen_vision_{int(time.time())}",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data=screenshot,
             metadata={"session_id": session_id},
             # #13688: screen analysis is system-initiated — there is no human
@@ -214,7 +215,7 @@ class ScreenAnalyzer:
         return MultiModalInput(
             input_id=f"screen_audio_{int(time.time())}",
             modality_type=ModalityType.AUDIO,
-            intent=ProcessingIntent.VOICE_COMMAND,
+            intent=MultimodalProcessingIntent.VOICE_COMMAND,
             data=context_audio,
             metadata={"session_id": session_id, "context": "screen_analysis"},
             user_id=SYSTEM_OWNER,
@@ -225,7 +226,7 @@ class ScreenAnalyzer:
         combined_input = MultiModalInput(
             input_id=f"screen_combined_{int(time.time())}",
             modality_type=ModalityType.COMBINED,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data="",
             user_id=SYSTEM_OWNER,
             metadata={
@@ -581,12 +582,9 @@ class ScreenAnalyzer:
     ) -> List[UIElement]:
         """Find UI elements matching voice description using cross-modal search"""
         try:
-            # Import npu_semantic_search for cross-modal capabilities
-            from npu_semantic_search import NPUSearchEngine
+            from npu_semantic_search import get_npu_search_engine  # the initialized shared engine
 
-            # Get NPU search engine instance
-            search_engine = NPUSearchEngine()
-
+            search_engine = await get_npu_search_engine()
             # Use cross-modal search to find UI elements matching voice description
             search_results = await search_engine.cross_modal_search(
                 query=voice_description,
@@ -606,6 +604,8 @@ class ScreenAnalyzer:
             )
             return matched_elements
 
+        except EmbeddingUnavailableError:
+            raise  # an unavailable or unrecorded embedding space reaches the caller, not "no match"
         except Exception as e:
             logger.error("Voice-guided element detection failed: %s", e)
             return []

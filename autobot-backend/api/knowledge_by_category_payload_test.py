@@ -31,6 +31,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from testkit.fake_redis_pipeline import FakePipeline
+
 
 @pytest.fixture
 def large_fact_data():
@@ -110,23 +112,6 @@ class TestDetailEndpointCarriesFullContent:
         assert "content" in FactByKeyResponse.model_fields
 
 
-class _FakePipeline:
-    """Minimal sync pipeline stand-in for ``redis_client.pipeline()``."""
-
-    def __init__(self, facts: dict):
-        self._facts = facts
-        self._ops: list[str] = []
-
-    def hgetall(self, key: str):
-        self._ops.append(key)
-        return self
-
-    def execute(self):
-        results = [self._facts.get(key, {}) for key in self._ops]
-        self._ops = []
-        return results
-
-
 class _FakeRedisClient:
     """Minimal sync Redis stand-in exercising SMEMBERS + pipeline hgetall."""
 
@@ -139,8 +124,11 @@ class _FakeRedisClient:
         category = key.split(":", 2)[-1]
         return self._category_sets.get(category, set())
 
+    def hgetall(self, key: str):
+        return self._facts.get(key, {})
+
     def pipeline(self):
-        return _FakePipeline(self._facts)
+        return FakePipeline(self)
 
     def get(self, key: str):
         return self._cache.get(key)

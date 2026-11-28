@@ -59,6 +59,18 @@ class _RecordingHistory(MessagesMixin):
         self.sessions[session_id] = messages
         return True
 
+    async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None:
+        return None
+
+    async def _locked_update(self, session_id: str, operation: str, mutate: Any, *, must_exist: bool = False, **_: Any):
+        """The real one's contract over the in-memory store: mutate the stored session, None when absent."""
+        if must_exist and session_id not in self.sessions:
+            return None
+        chat_data: Dict[str, Any] = {"messages": self.sessions.get(session_id, [])}
+        mutate(chat_data)
+        self.sessions[session_id] = chat_data["messages"]
+        return chat_data
+
 
 def test_filter_tolerates_metadata_present_and_null() -> None:
     """A null metadata value must not raise; it simply matches nothing."""

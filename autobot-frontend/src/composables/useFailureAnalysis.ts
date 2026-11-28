@@ -15,6 +15,7 @@ import { useApiClient } from '@/plugins/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useLoadingState } from '@/composables/useLoadingState'
+import type { RiskTier } from '@/types/riskTier'
 
 const logger = createLogger('FailureAnalysis')
 
@@ -40,6 +41,8 @@ export interface InterventionItem {
   predicted_success_rate: number
   cost_level: string
   risk_level: string
+  /** The one risk ladder the badge renders; null when the backend could not grade it (#13422). */
+  risk_tier: RiskTier | null
   recommendation_type: string
   impact_rank: number
   confidence: number

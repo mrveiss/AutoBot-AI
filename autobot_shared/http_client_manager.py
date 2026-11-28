@@ -25,21 +25,42 @@ from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
+from multidict import CIMultiDict
 
 # #15522: a launch whose handle is discarded can be collected before it runs —
 # the loop holds only a weak reference. ``fire_and_forget`` retains the task
 # until completion and logs a failure that would otherwise vanish. The import
 # is what #15641 could not afford until this file existed.
 from autobot_shared.async_compat import fire_and_forget
-from autobot_shared.http_egress_guard import _assert_egress_allowed
+from autobot_shared.http_egress_guard import _EgressPolicy, apply_egress_guard
 
 # #12656: import from the canonical source directly. This previously went via
 # `constants.threshold_constants`, an autobot-backend module that is itself a
 # pure re-export of ssot_constants — so autobot_shared depended on the backend
 # to reach its own constants, and could not be imported standalone.
 from autobot_shared.ssot_constants import TimingConstants
+from autobot_shared.tracing import get_trace_context
 
 logger = logging.getLogger(__name__)
+
+
+_W3C_TRACE_HEADERS = frozenset({"traceparent", "tracestate"})
+
+
+def _with_trace_headers(headers) -> CIMultiDict:
+    """A copy of *headers* (repeated values kept) plus the active trace context the caller did not set.
+
+    ``traceparent`` and ``tracestate`` travel as a unit: a caller-set ``traceparent`` keeps the caller's
+    ``tracestate`` and the active span's is not mixed in (#21685).
+    """
+    merged = CIMultiDict(headers or ())
+    present = {name.lower() for name in merged}
+    if "traceparent" in present:
+        present |= _W3C_TRACE_HEADERS
+    for name, value in get_trace_context().items():
+        if name.lower() not in present:
+            merged[name] = value
+    return merged
 
 
 class HTTPClientManager:
@@ -212,7 +233,7 @@ class HTTPClientManager:
         url: str,
         *,
         suppress_error_log: bool = False,
-        guard_egress: bool | None = None,
+        guard_egress: bool | None | _EgressPolicy = None,
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """
@@ -238,7 +259,9 @@ class HTTPClientManager:
                 by ~103 call sites, most of them internal service-to-service
                 traffic (NPU workers, SLM nodes) that legitimately targets private
                 addresses. Guarding everything here would either break that
-                traffic or silently widen egress policy for all of it. Connectors
+                traffic or silently widen egress policy for all of it. Pass
+                ``autobot_shared.http_egress_guard.EGRESS_POLICY`` (#17576) for the general rule: origins on the
+                internal allowlist bypass, everything else must be public. Connectors
                 and integrations pass this explicitly, so "this request is
                 guarded" is visible at the call site.
             **kwargs: Additional arguments for aiohttp request
@@ -269,7 +292,7 @@ class HTTPClientManager:
                     "and re-pins every hop."
                 )
             kwargs["allow_redirects"] = False
-            await _assert_egress_allowed(url, allow_private=guard_egress)
+            await apply_egress_guard(url, guard_egress)
 
         # Check if pool adjustment needed (non-blocking). #15522: retained by
         # ``fire_and_forget`` — a discarded task can be collected before it
@@ -283,15 +306,7 @@ class HTTPClientManager:
 
         # Issue #697: Inject W3C trace context into outgoing headers
         try:
-            from opentelemetry.propagate import inject
-
-            headers = kwargs.pop("headers", {}) or {}
-            inject(headers)
-            kwargs["headers"] = headers
-        except ImportError:
-            pass  # OTel not installed, skip propagation
-
-        try:
+            kwargs["headers"] = _with_trace_headers(kwargs.pop("headers", None))
             response = await session.request(method, url, **kwargs)
             return response
         except Exception as e:

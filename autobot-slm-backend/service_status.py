@@ -29,7 +29,7 @@ import enum
 from typing import Dict
 
 
-class ServiceStatus(str, enum.Enum):
+class SystemdState(str, enum.Enum):
     """Systemd service status enumeration."""
 
     RUNNING = "running"
@@ -47,7 +47,7 @@ class ServiceStatus(str, enum.Enum):
 
 
 #: Healthy for the operator's counts (#16019): COMPLETED is a succeeded oneshot.
-_HEALTHY_STATUSES = (ServiceStatus.RUNNING.value, ServiceStatus.COMPLETED.value)
+_HEALTHY_STATUSES = (SystemdState.RUNNING.value, SystemdState.COMPLETED.value)
 
 
 def bucket_service_counts(rows) -> Dict[str, int]:
@@ -59,6 +59,6 @@ def bucket_service_counts(rows) -> Dict[str, int]:
     for row in rows:
         if row.status in _HEALTHY_STATUSES:
             counts["running"] += row.count
-        elif row.status == ServiceStatus.FAILED.value:
+        elif row.status == SystemdState.FAILED.value:
             counts["failed"] += row.count
     return counts

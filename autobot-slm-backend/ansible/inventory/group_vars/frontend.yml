@@ -45,7 +45,7 @@ security:
 frontend:
   # Node.js and Vue.js configuration
   nodejs:
-    version: "20"
+    version: "{{ node_major }}"
     npm_version: "latest"
     global_packages:
       - "@vue/cli"
@@ -87,7 +87,6 @@ nginx:
 
   # Performance tuning
   keepalive_timeout: 65
-  client_max_body_size: "100m"
   gzip_enabled: true
 
   # Log configuration

@@ -12,15 +12,15 @@ Route group: /llc/import
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access
-from llc.services.portability import PortabilityService
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
+from llc.deps import SESSION_DEP, assert_company_access
+from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 router = APIRouter(prefix="/import", tags=["llc-import"])
@@ -43,6 +43,7 @@ class ImportPreviewResponse(BaseModel):
 
 class RemappingOptions(BaseModel):
     require_approval_for_hires: Optional[bool] = None
+    require_approval_for_budget_raises: Optional[bool] = None
 
 
 class ImportExecuteRequest(BaseModel):
@@ -76,7 +77,7 @@ class ImportExecuteResponse(BaseModel):
 )
 async def preview_import(
     body: ImportPreviewRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportPreviewResponse:
@@ -89,7 +90,7 @@ async def preview_import(
     try:
         result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
     except LLCImportError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     return ImportPreviewResponse(**result)
 
 
@@ -101,7 +102,7 @@ async def preview_import(
 )
 async def execute_import(
     body: ImportExecuteRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportExecuteResponse:
@@ -117,7 +118,9 @@ async def execute_import(
             remapping_options=remapping,
             secret_mapping=body.secret_mapping or {},
         )
+    except ImportNeedsApprovalError as exc:
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="portability.execute_import") from None
     except LLCImportError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     await session.commit()
     return ImportExecuteResponse(**result)

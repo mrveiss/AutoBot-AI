@@ -149,8 +149,7 @@ per-file-ignores =
     autobot-backend/judges/multi_agent_arbitrator.py:E501
     autobot-backend/judges/security_risk_judge.py:E501
     autobot-backend/judges/workflow_step_judge.py:E501
-    # Intent detection and prompt management (intentionally long prompt strings)
-    autobot-backend/chat_intent_detector.py:E501
+    # Prompt management (intentionally long prompt strings)
     autobot-backend/llm_self_awareness.py:E501
     autobot-backend/middleware/llm_awareness_middleware.py:E501
     autobot-backend/planner/planner.py:E501
@@ -158,7 +157,6 @@ per-file-ignores =
     # Dashboard/monitoring files with long command strings and JS templates
     autobot-slm-backend/monitoring/performance_optimizer.py:E501
     # Backward-compatibility re-export shims (intentionally long inline comments)
-    autobot-backend/context_aware_decision_system.py:E501
     autobot-backend/enhanced_project_state_tracker.py:E501
     autobot-backend/workflow_templates.py:E501
 

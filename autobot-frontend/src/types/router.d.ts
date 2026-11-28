@@ -36,6 +36,13 @@ declare module 'vue-router' {
     requiresAuth?: boolean
 
     /**
+     * Advanced-only area (#18244): its navigation link carries `.adv`, so Minimal mode
+     * hides it, and a section layout shows the "advanced area" notice when it is opened
+     * directly. Child routes inherit it from a matched parent.
+     */
+    adv?: boolean
+
+    /**
      * Hide from navigation menu
      */
     hideInNav?: boolean
@@ -66,6 +73,13 @@ declare module 'vue-router' {
      */
     minRole?: Role
 
+    /**
+     * Company-scoped route the company layout must not remount when the route's company changes
+     * (#21502). Everything else remounts. Two users: CEO chat handles the switch itself and keeps its
+     * session state; the workflow builder keeps an unsaved draft until its switch behaviour is decided
+     * (#21520). A flag on a parent record applies to its children (route.meta merges matched records).
+     */
+    keepOnCompanySwitch?: boolean
   }
 }
 

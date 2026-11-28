@@ -24,8 +24,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.http_refusal import fixed_refusal
 from services.auth import get_current_user
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.models.api_key import API_KEY_SCOPES
 from user_management.models.user import User
 from user_management.schemas.api_key import (
@@ -38,6 +39,7 @@ from user_management.schemas.api_key import (
 )
 from user_management.services.api_key_service import (
     APIKeyNotFoundError,
+    APIKeyPepperNotConfiguredError,
     APIKeyService,
     APIKeyServiceError,
 )
@@ -45,12 +47,6 @@ from user_management.services.base_service import TenantContext
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
 
 
 @router.post("", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -88,9 +84,15 @@ async def create_api_key(
             expires_at=api_key.expires_at,
             created_at=api_key.created_at,
         )
+    except APIKeyPepperNotConfiguredError as e:
+        logger.warning("API key creation refused for %s: %s", username, e)
+        raise HTTPException(
+            status_code=503,
+            detail="API key creation is unavailable until an administrator completes setup.",
+        )
     except APIKeyServiceError as e:
         logger.warning("API key creation error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.get("", response_model=APIKeyListResponse)
@@ -181,7 +183,7 @@ async def update_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
     except APIKeyServiceError as e:
         logger.warning("API key update error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -206,7 +208,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
     except APIKeyServiceError as e:
         logger.warning("API key revoke error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 async def _get_user_by_username(db: AsyncSession, username: str) -> User:

@@ -26,11 +26,28 @@ from fastapi.testclient import TestClient
 
 
 def _make_app() -> FastAPI:
-    """Build a minimal FastAPI app with just the realtime_session router."""
+    """Build a minimal FastAPI app with just the realtime_session router.
+
+    The router is gated (#16375), so the gate is overridden here: these tests are
+    about SDP proxying and provider selection, not about who may call them. What
+    the gate actually is gets asserted directly in TestRouterIsGated below, which
+    reads the router's declared dependencies instead of round-tripping HTTP --
+    a request-level assertion would depend on whichever auth singleton a sibling
+    test left installed.
+    """
     from api.realtime_session import router
+    from api.user_management.dependencies import get_current_user
+    from auth_middleware import check_admin_permission
 
     app = FastAPI()
     app.include_router(router, prefix="/api/voice/realtime")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "user_id": "test-user",
+        "sub": "test-sub",
+        "username": "test",
+        "org_id": "test-org",
+    }
+    app.dependency_overrides[check_admin_permission] = lambda: True
     return app
 
 
@@ -322,3 +339,138 @@ class TestProvidersEndpoint:
     def test_patch_unknown_provider_422(self, client: TestClient):
         resp = client.patch("/api/voice/realtime/providers", json={"provider": "bogus"})
         assert resp.status_code == 422
+
+
+class TestRouterIsGated:
+    """#16375 -- these routes spend money and invoke tools; none of them is open.
+
+    Asserted against the router's declared dependencies rather than a response
+    code, because ``get_auth_middleware`` is a process-global singleton that
+    sibling tests stub: a 200 here would say more about test order than about
+    the gate.
+    """
+
+    @staticmethod
+    def _deps(deps) -> set:
+        """The dependency callables themselves, not their names.
+
+        The repo's conftest installs an ``auth_middleware`` stub, so under pytest
+        ``check_admin_permission.__name__`` is ``_check_admin_permission_stub``. A
+        name assertion would therefore be checking the test double. Identity holds
+        under the stub and in production alike, because the router and this test
+        import the same symbol either way.
+        """
+        return {d.dependency for d in (deps or [])}
+
+    def test_router_requires_authentication(self):
+        from api.realtime_session import router
+        from api.user_management.dependencies import get_current_user
+
+        assert get_current_user in self._deps(router.dependencies)
+
+    def test_patch_providers_requires_admin(self):
+        """set_active_provider changes the provider for every session, not the caller's."""
+        from api.realtime_session import router
+        from auth_middleware import check_admin_permission
+
+        patch_routes = [
+            r
+            for r in router.routes
+            if getattr(r, "path", "") == "/providers" and "PATCH" in getattr(r, "methods", set())
+        ]
+        assert len(patch_routes) == 1, f"expected exactly one PATCH /providers, found {len(patch_routes)}"
+        assert check_admin_permission in self._deps(patch_routes[0].dependencies)
+
+    def test_tool_dispatch_is_not_reachable_anonymously(self):
+        """POST /tools/call dispatches an arbitrary named MCP tool (#16375).
+
+        It carries no gate of its own, so what protects it is the router-level
+        dependency -- this asserts the route exists and that the gate reaches it.
+        """
+        from api.realtime_session import router
+        from api.user_management.dependencies import get_current_user
+
+        tool_routes = [r for r in router.routes if getattr(r, "path", "") == "/tools/call"]
+        assert len(tool_routes) == 1
+        assert get_current_user in self._deps(tool_routes[0].dependencies)
+
+
+class TestToolCallIsTheOneScopedHandler:
+    """POST /api/voice/realtime/tools/call has one handler, and it is this one (#18721, #18430)."""
+
+    @staticmethod
+    def _bridge(allowed: list[str]) -> MagicMock:
+        bridge = MagicMock()
+        bridge.list_realtime_tools = AsyncMock(return_value=[MagicMock(**{"name": n}) for n in allowed])
+        for tool, name in zip(bridge.list_realtime_tools.return_value, allowed):
+            tool.name = name
+        bridge.call_tool = AsyncMock(return_value=MagicMock(content="ok", is_error=False))
+        return bridge
+
+    def _post(self, client: TestClient, bridge: MagicMock, headers: dict | None = None):
+        with patch("services.realtime_mcp_bridge.get_realtime_bridge", AsyncMock(return_value=bridge)):
+            return client.post(
+                "/api/voice/realtime/tools/call",
+                json={"call_id": "c1", "name": "crm", "arguments": {"a": 1}},
+                headers=headers or {},
+            )
+
+    def test_a_tool_outside_the_active_bundle_is_refused(self, client: TestClient):
+        bridge = self._bridge(["other"])
+        assert self._post(client, bridge).status_code == 403
+        bridge.call_tool.assert_not_called()
+
+    def test_a_permitted_call_carries_the_authenticated_scope_and_the_session_header(self, client: TestClient):
+        bridge = self._bridge(["crm"])
+        response = self._post(client, bridge, {"X-Session-Id": "sess-1"})
+        assert response.json() == {"call_id": "c1", "content": "ok", "is_error": False}
+        kwargs = bridge.call_tool.call_args.kwargs
+        assert (kwargs["session_id"], kwargs["user_id"]) == ("sess-1", "test-user")
+        assert kwargs["company_id"] == "test-org"
+        bridge.list_realtime_tools.assert_awaited_once_with(user_id="test-user", role="user")
+
+
+class TestTelemetryWriteFailureDegrades:
+    """A failed telemetry write is logged and degrades; it never 500s and never skips the cost cap (#21678)."""
+
+    _ERRORS = [RuntimeError("contended"), ConnectionError("redis down")]
+
+    @staticmethod
+    def _telemetry(write_error, breach=None):
+        from services.voice_realtime_telemetry import CapBreachError, DisconnectReason
+
+        t = MagicMock()
+        t.record_response_done = AsyncMock(side_effect=write_error)
+        t.session_end = AsyncMock(side_effect=write_error)
+        exc = CapBreachError(DisconnectReason.COST_CAP, "session ended: cost limit reached") if breach else None
+        t.check_caps = AsyncMock(side_effect=exc)
+        return t
+
+    @staticmethod
+    def _post(client: TestClient, telemetry, path: str, body: dict):
+        with patch("services.voice_realtime_telemetry.get_voice_realtime_telemetry", return_value=telemetry):
+            return client.post(f"/api/voice/realtime/session/s1/{path}", json=body)
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_response_done_still_checks_the_caps_when_the_usage_write_fails(self, client, error, caplog):
+        t = self._telemetry(error)
+        response = self._post(client, t, "response_done", {})
+        assert response.status_code == 200 and response.json() == {"status": "ok"}
+        t.check_caps.assert_awaited_once_with("s1")
+        assert "session_id=s1" in caplog.text
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_response_done_cap_breach_still_ends_the_session_when_the_write_fails(self, client, error):
+        t = self._telemetry(error, breach=True)
+        response = self._post(client, t, "response_done", {})
+        assert response.status_code == 200 and response.json()["status"] == "cap_breach"
+        t.check_caps.assert_awaited_once_with("s1")
+        t.session_end.assert_awaited_once()  # attempted even though it fails too
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_end_returns_cleanly_when_the_telemetry_write_fails(self, client, error, caplog):
+        t = self._telemetry(error)
+        response = self._post(client, t, "end", {"reason": "normal"})
+        assert response.status_code == 200 and response.json()["session_id"] == "s1"
+        t.session_end.assert_awaited_once()
+        assert "session_id=s1" in caplog.text

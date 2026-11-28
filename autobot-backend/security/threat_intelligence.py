@@ -18,7 +18,6 @@ Features:
 
 import asyncio
 import hashlib
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Tuple
@@ -29,14 +28,14 @@ import aiohttp
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monotonic_clock import Clock, monotonic_now
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.ssot_config import config
+from constants.ttl_constants import THREAT_INTEL_CACHE_TTL
 from services.provider_key_vault import resolve_provider_key
 
-# Single-window duration used by the per-client rate limiters below — both
-# VirusTotal and URLVoid clients were rate-limited on a 1-minute window
-# (Issue #12646 fold-in of security/threat_intelligence.py's local
-# RateLimiter onto the shared implementation's custom-window mode).
+# Single 1-minute window for the VirusTotal and URLVoid rate limiters below (Issue #12646
+# folded this module's local RateLimiter onto the shared implementation's custom-window mode).
 _RATE_LIMIT_WINDOW_SECONDS = 60
 
 logger = get_logger(__name__)
@@ -69,10 +68,11 @@ class ThreatScore:
 class ThreatIntelligenceCache:
     """Thread-safe cache for threat intelligence results"""
 
-    def __init__(self, default_ttl: int = 7200):
-        """Initialize cache with default TTL in seconds."""
+    def __init__(self, default_ttl: int = THREAT_INTEL_CACHE_TTL, clock: Clock = monotonic_now):
+        """Initialize cache with default TTL in seconds and a monotonic clock (#18888)."""
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._default_ttl = default_ttl
+        self._clock = clock
         self._lock = asyncio.Lock()
 
     def _get_cache_key(self, url: str) -> str:
@@ -87,7 +87,7 @@ class ThreatIntelligenceCache:
                 return None
 
             entry = self._cache[cache_key]
-            if time.time() > entry["expires_at"]:
+            if self._clock() > entry["expires_at"]:
                 del self._cache[cache_key]
                 return None
 
@@ -101,14 +101,14 @@ class ThreatIntelligenceCache:
             cache_key = self._get_cache_key(url)
             self._cache[cache_key] = {
                 "result": result,
-                "expires_at": time.time() + (ttl or self._default_ttl),
+                "expires_at": self._clock() + (ttl or self._default_ttl),
             }
 
     async def clear_expired(self):
         """Remove expired entries from cache."""
         async with self._lock:
-            current_time = time.time()
-            self._cache = {k: v for k, v in self._cache.items() if v["expires_at"] > current_time}
+            now = self._clock()
+            self._cache = {k: v for k, v in self._cache.items() if v["expires_at"] > now}
 
 
 class VirusTotalClient:
@@ -509,7 +509,7 @@ class ThreatIntelligenceService:
         self,
         virustotal_api_key: str | None = None,
         urlvoid_api_key: str | None = None,
-        cache_ttl: int = 7200,
+        cache_ttl: int = THREAT_INTEL_CACHE_TTL,
         virustotal_rate_limit: int = 4,
         urlvoid_rate_limit: int = 10,
     ):
@@ -519,13 +519,12 @@ class ThreatIntelligenceService:
         Args:
             virustotal_api_key: VirusTotal API key (env: VIRUSTOTAL_API_KEY)
             urlvoid_api_key: URLVoid API key (env: URLVOID_API_KEY)
-            cache_ttl: Cache TTL in seconds (default: 2 hours)
+            cache_ttl: Cache TTL in seconds (default: THREAT_INTEL_CACHE_TTL)
             virustotal_rate_limit: VirusTotal requests per minute
             urlvoid_rate_limit: URLVoid requests per minute
         """
         self._cache = ThreatIntelligenceCache(default_ttl=cache_ttl)
 
-        # Get rate limits from environment if not specified
         vt_rate = int(config.virustotal_rate_limit)
         uv_rate = int(config.urlvoid_rate_limit)
 

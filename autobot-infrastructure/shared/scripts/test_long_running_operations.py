@@ -20,7 +20,8 @@ Run this script to see:
 6. Graceful failure handling
 
 Usage:
-    python scripts/test_long_running_operations.py [--demo-type all|indexing|testing|security]
+    python3 autobot-infrastructure/shared/scripts/test_long_running_operations.py
+        [--demo-type all|indexing|testing|security]
 """
 
 import argparse
@@ -28,11 +29,19 @@ import asyncio
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
-from autobot_shared.paths import project_root
+# A backend tool (#18288): it demonstrates the backend's `utils.long_running_operations_framework`.
+# Before this, `autobot_shared` was imported before any path was set, and the framework import
+# always fell through to FRAMEWORK_AVAILABLE = False because only the repo root was appended.
+# It puts the backend and the repository root (for `autobot_shared`) on its own path, so it runs
+# from any directory with no PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-# Add AutoBot paths
-sys.path.append(str(project_root()))
+from autobot_shared.paths import project_root  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

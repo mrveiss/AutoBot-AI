@@ -10,10 +10,11 @@ Endpoints for pattern extraction and code completion.
 
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from models.code_pattern import CodePattern
@@ -23,7 +24,7 @@ from user_management.database import db_session_context
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["code-completion"])
+router = APIRouter(tags=["code-completion"], dependencies=[Depends(get_current_user)])
 
 get_context_analyzer = lazy_singleton(ContextAnalyzer)
 
@@ -91,7 +92,7 @@ class PatternSearchRequest(BaseModel):
 
 
 @router.post("/extract", response_model=ExtractionResponse)
-async def extract_patterns(request: ExtractionRequest):
+async def extract_patterns(request: ExtractionRequest, _: bool = Depends(check_admin_permission)):
     """
     Trigger pattern extraction from codebase.
 

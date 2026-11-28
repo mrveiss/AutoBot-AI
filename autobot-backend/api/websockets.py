@@ -14,14 +14,17 @@ import json
 import uuid
 from typing import Callable, Dict, Optional, Tuple
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.message_schema import ATTACHMENT_NOTICE_TYPE
 from events.bus import get_event_bus
+from security.session_company import connection_company, session_in_company
 from type_defs.common import BROADCAST_EVENT_TYPES, SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = get_logger(__name__)
@@ -272,10 +275,9 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
 # evict real dialogue from a message_limit-bounded window. `user_message` and
 # `llm_response` are the two keys in this table that ARE a conversation turn
 # (the user's own text; the assistant's own reply) and stay eligible.
-NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES: frozenset[str] = frozenset(MESSAGE_TYPE_FORMATTERS) - {
-    "user_message",
-    "llm_response",
-}
+NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES: frozenset[str] = frozenset(  # + the stored attachment notice (#21006)
+    MESSAGE_TYPE_FORMATTERS
+).union({ATTACHMENT_NOTICE_TYPE}) - {"user_message", "llm_response"}
 
 
 def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | None, str]:
@@ -510,7 +512,7 @@ def register_chat_history_persistence() -> None:
         logger.error("Failed to register chat-history persistence hook: %s", e)
 
 
-async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache: dict) -> bool:
+async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache: dict, company=None) -> bool:
     """Decide whether one broadcast event may be shown to this connection.
 
     Issue #14814 made ``/ws`` delivery additive so several clients could receive
@@ -554,6 +556,8 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
             # #17428: unresolved owner withholds unless the type is declared.
             declared = event_data.get("type") in BROADCAST_EVENT_TYPES
             allowed = declared if owner is None else str(owner) == current_user_id
+            if allowed and owner is not None and company is not None:  # #21997: another company's chat is withheld
+                allowed = await session_in_company(manager, session_id, company)
     except Exception as exc:
         logger.warning("Could not resolve session owner for %s, withholding: %s", session_id, exc)
         allowed = False
@@ -562,15 +566,10 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
     return allowed
 
 
-async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager, current_user_id: str = ""):
+async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager, current_user_id="", company=None):
     """Create broadcast event handler function (Issue #315 - extracted).
 
-    Args:
-        websocket: The WebSocket connection
-        chat_history_manager: Chat history manager instance
-
-    Returns:
-        Async function that broadcasts events
+    *company* is the connection's active company (#21997); events of a chat in another one are withheld.
     """
     # Per-connection memo so a burst on one session costs a single lookup.
     owner_cache: dict[str, bool] = {}
@@ -586,7 +585,7 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
         try:
             # #14814 follow-up: this endpoint has no channel scoping, so filter
             # per event rather than shipping every user's traffic to everyone.
-            if not await _event_is_for_user(event_data, current_user_id, owner_cache):
+            if not await _event_is_for_user(event_data, current_user_id, owner_cache, company):
                 return
             await websocket.send_json(event_data)
         except RuntimeError as e:
@@ -618,8 +617,8 @@ async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id:
             # ROOT CAUSE FIX: Replace timeout with natural message receive
             message = await websocket.receive_text()
             # No timeout needed - WebSocketDisconnect will be raised on disconnect
-        except WebSocketDisconnect as e:
-            logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
+        except PEER_CLOSED_ERRORS as e:
+            log_client_disconnect(logger, e, "_websocket_message_receive_loop")
             break
         except Exception as e:
             logger.error("Error receiving message: %s", e)
@@ -704,14 +703,13 @@ async def websocket_test_endpoint(websocket: WebSocket):
         logger.info("Test WebSocket connected successfully")
         await websocket.send_json({"type": "connected", "message": "Test connection successful"})
 
-        # ROOT CAUSE FIX: Replace timeout-based handling with event-driven pattern
         while websocket.client_state == WebSocketState.CONNECTED:
             try:
                 # No timeout - WebSocketDisconnect will be raised on disconnect
                 message = await websocket.receive_text()
                 await websocket.send_json({"type": "echo", "message": message})
-            except WebSocketDisconnect:
-                logger.info("Test WebSocket client disconnected")
+            except PEER_CLOSED_ERRORS as disconnect:
+                log_client_disconnect(logger, disconnect, "websocket_test_endpoint")
                 break
             except Exception as e:
                 logger.error("Error in test WebSocket: %s", e)
@@ -810,6 +808,8 @@ async def websocket_endpoint(websocket: WebSocket):
         await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
+    if (company := await connection_company(websocket, user)) is None:  # #21997: the active company, once
+        return
 
     # Extract stable user ID for ownership checks (mirrors canvas.py _user_id())
     current_user_id: str = user.get("user_id") or user.get("id") or user.get("username", "")
@@ -831,15 +831,15 @@ async def websocket_endpoint(websocket: WebSocket):
     # Issue #665: Use helper for chat history manager access
     chat_history_manager = _get_chat_history_manager(websocket)
 
-    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager, current_user_id)
+    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager, current_user_id, company)
 
     # Issue #665: Use helper for event manager registration
     _register_event_manager_broadcast(broadcast_event)
 
     try:
         await _websocket_message_receive_loop(websocket, current_user_id, user)
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected normally")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "websocket_endpoint")
     except Exception as e:
         logger.error("WebSocket error: %s", e, exc_info=True)
     finally:
@@ -1017,8 +1017,8 @@ async def _npu_message_receive_loop(websocket: WebSocket) -> None:
             message = await websocket.receive_text()
             await _handle_npu_websocket_message(websocket, message)
 
-        except WebSocketDisconnect:
-            logger.info("NPU Worker WebSocket client disconnected")
+        except PEER_CLOSED_ERRORS as disconnect:
+            log_client_disconnect(logger, disconnect, "_npu_message_receive_loop")
             break
         except Exception as e:
             logger.error("Error in NPU worker WebSocket: %s", e)

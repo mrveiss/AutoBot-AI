@@ -80,6 +80,8 @@ from typing import Callable, Dict, Iterable, List, Sequence, Set, Tuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
 
@@ -125,7 +127,7 @@ _DIRISH = re.compile(r"^[\w.\-]+(/[\w.\-]+)+/?$")
 
 def _one_path_per_line(text: str) -> List[str]:
     """Every non-comment, non-blank line, whole."""
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    return [cl.text.strip() for cl in code_lines(text) if cl.text.strip()]
 
 
 def _pipe_field_two(text: str) -> List[str]:
@@ -212,6 +214,18 @@ TEXT_RECORDERS: Tuple[TextRecorder, ...] = (
 #: never as a place to put a finding instead of fixing it.
 KNOWN_STRANDED: Dict[str, Tuple[str, ...]] = {}
 
+#: Ledgers whose entries record paths that must stay ABSENT -- a tombstone, not a
+#: record of the tree. Each names a module a change deliberately deleted, kept so
+#: a guard can fail if it comes back. Absence is their point, so they are never
+#: "stranded"; they are checked the other way round instead
+#: (:func:`test_every_tombstone_stays_buried`): an entry the tree holds again is
+#: the failure. Keyed like a census record (``<file>:<symbol>``), with the reason.
+TOMBSTONE_LEDGERS: Dict[str, str] = {
+    "repo_tests/audit_writer_single_source_17225_test.py:_RETIRED_MODULES": (
+        "#17225 D2: the three legacy audit stores deleted when their callers moved to the canonical service"
+    ),
+}
+
 
 class Tree:
     """The tracked tree, answering "is this recorded path still here?"."""
@@ -258,7 +272,7 @@ def ledgers_in(source: str, tree: Tree) -> Dict[str, Tuple[str, ...]]:
     dormant list this whole check exists to prevent.
     """
     found: Dict[str, Tuple[str, ...]] = {}
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         for name, value in _module_level_bindings(node):
             entries = _string_entries(value)
             rooted = [e for e in entries if tree.is_rooted(e)]
@@ -347,7 +361,7 @@ def _pinned_records(tree: Tree) -> Dict[str, Tuple[str, ...]]:
     out: Dict[str, Tuple[str, ...]] = {}
     for relative, symbol in PINNED_LEDGERS:
         source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-        for node in ast.parse(source).body:
+        for node in parse_cache.parse(source).body:
             for name, value in _module_level_bindings(node):
                 if name != symbol:
                     continue
@@ -422,7 +436,7 @@ def test_the_stranded_census_is_pinned_and_may_only_shrink():
     """No recorder may strand a new entry, and no fixed entry may stay pinned."""
     census = _census()
     _assert_reach(census)
-    stranded = census.stranded(_tree())
+    stranded = {k: v for k, v in census.stranded(_tree()).items() if k not in TOMBSTONE_LEDGERS}
 
     new = {
         recorder: tuple(e for e in entries if e not in KNOWN_STRANDED.get(recorder, ()))
@@ -440,6 +454,16 @@ def test_the_stranded_census_is_pinned_and_may_only_shrink():
     }
     healed = {recorder: entries for recorder, entries in healed.items() if entries}
     assert not healed, f"The census over-states the tree -- drop these in the same commit as their fix: {healed}"
+
+
+def test_every_tombstone_stays_buried():
+    """A tombstone ledger must be found, and every path it names must still be absent."""
+    census = _census()
+    tree = _tree()
+    for key, reason in TOMBSTONE_LEDGERS.items():
+        assert key in census.records, f"FIX THE SWEEP: tombstone ledger {key} was not discovered ({reason})"
+        back = sorted(e for e in census.records[key] if tree.holds(e))
+        assert not back, f"{key}: {back} exist again. {reason}"
 
 
 # --------------------------------------------------------------------------
@@ -574,4 +598,3 @@ def test_a_pinned_ledger_is_censused_below_the_discovery_floor():
         "the pins are no longer being exercised, so re-read whether they still "
         "describe a real risk rather than deleting them reflexively."
     )
-

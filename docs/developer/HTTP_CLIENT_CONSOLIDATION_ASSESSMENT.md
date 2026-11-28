@@ -50,7 +50,6 @@
 - `backend/services/provider_health/providers.py`
 - `backend/services/ai_stack_client.py`
 - `src/npu_integration.py`
-- `autobot-backend/utils/service_discovery.py`
 
 ### 2. Httpx - Specialized Authenticated Client (15%)
 

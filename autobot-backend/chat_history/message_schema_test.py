@@ -226,3 +226,18 @@ class TestMalformedHistoryIsData:
 
     def test_a_message_with_neither_key_gets_the_default_role(self):
         assert message_role({}) == "unknown"
+
+
+class TestRecordsOfATurnAreNotConversation:
+    """#21228: terminal output and approval requests are what a turn did, not something said in it."""
+
+    @pytest.mark.parametrize("kind", ["terminal_output", "command_approval_request", "attachment_notice"])
+    def test_a_stored_record_is_dropped_from_the_conversation(self, kind):
+        from chat_history.messages import MessagesMixin
+
+        record = MessagesMixin._build_message_dict(
+            None, sender="system", text="$ ls\nsecret.txt", message_type=kind, raw_data={}, tool_markers=None
+        )
+        said = [_stored("user", "list files"), record, _stored("assistant", "one file")]
+
+        assert [m["content"] for m in as_llm_messages(said)] == ["list files", "one file"]

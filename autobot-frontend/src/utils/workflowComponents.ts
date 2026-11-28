@@ -14,7 +14,7 @@
 /**
  * Notification types for workflow events
  */
-export type NotificationType =
+export type WorkflowNotificationType =
   | 'info'
   | 'success'
   | 'warning'
@@ -27,7 +27,7 @@ export type NotificationType =
  */
 export interface WorkflowNotification {
   id: string | number
-  type: NotificationType
+  type: WorkflowNotificationType
   title: string
   message: string
   timestamp: number
@@ -62,8 +62,8 @@ export interface WorkflowProgress {
  * const icon = getNotificationIcon('success') // 'fas fa-check-circle'
  * ```
  */
-export function getNotificationIcon(type: NotificationType): string {
-  const icons: Record<NotificationType, string> = {
+export function getNotificationIcon(type: WorkflowNotificationType): string {
+  const icons: Record<WorkflowNotificationType, string> = {
     'info': 'fas fa-info-circle',
     'success': 'fas fa-check-circle',
     'warning': 'fas fa-exclamation-triangle',
@@ -80,8 +80,8 @@ export function getNotificationIcon(type: NotificationType): string {
  * @param type - Notification type
  * @returns CSS color value
  */
-export function getNotificationColor(type: NotificationType): string {
-  const colors: Record<NotificationType, string> = {
+export function getNotificationColor(type: WorkflowNotificationType): string {
+  const colors: Record<WorkflowNotificationType, string> = {
     'info': '#17a2b8',
     'success': '#28a745',
     'warning': '#ffc107',
@@ -172,7 +172,7 @@ export function formatProgressText(
  * ```
  */
 export function createNotification(
-  type: NotificationType,
+  type: WorkflowNotificationType,
   title: string,
   message: string,
   options: Partial<WorkflowNotification> = {}
@@ -193,8 +193,8 @@ export function createNotification(
  * @param type - Notification type
  * @returns Timeout in milliseconds (0 = no auto-dismiss)
  */
-export function getNotificationTimeout(type: NotificationType): number {
-  const timeouts: Record<NotificationType, number> = {
+export function getNotificationTimeout(type: WorkflowNotificationType): number {
+  const timeouts: Record<WorkflowNotificationType, number> = {
     'info': 10000,      // 10 seconds
     'success': 5000,    // 5 seconds
     'warning': 0,       // No auto-dismiss

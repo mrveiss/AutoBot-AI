@@ -101,7 +101,8 @@ backend/
 **Environment Variables**:
 ```bash
 # Core Configuration
-BACKEND_HOST=0.0.0.0
+AUTOBOT_BACKEND_BIND_HOST=0.0.0.0   # listen address
+AUTOBOT_BACKEND_HOST=<backend-ip>   # address clients dial; never 0.0.0.0
 BACKEND_PORT=8001
 REDIS_HOST=<database-ip>
 OLLAMA_HOST=127.0.0.1
@@ -185,7 +186,7 @@ server {
 - **OS**: Ubuntu 22.04 LTS with Intel NPU drivers
 - **Hardware**: Intel NPU (AI Boost), RTX 4070 GPU access
 - **Services**: OpenVINO runtime, NPU service, GPU passthrough
-- **Ports**: 8081 (NPU API), 8082 (health check)
+- **Ports**: 8081 (NPU API, including `/health`)
 
 **NPU Service Architecture**:
 ```python
@@ -348,7 +349,7 @@ providers:
   ollama:
     enabled: true
     base_url: "http://<backend-ip>:11434"
-    models: ["tinyllama", "phi", "llama2", "codellama"]
+    models: ["tinyllama", "phi", "llama2", "codellama"]  # example names, not provisioned
     health_check_interval: 30
 
 routing_rules:

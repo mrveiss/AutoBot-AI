@@ -13,7 +13,7 @@ Part of god class refactoring initiative.
 
 import ast
 import os
-from typing import List, Set
+from typing import List
 
 import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
 from autobot_shared.logging_manager import get_logger
@@ -24,7 +24,7 @@ from code_intelligence.doc_generation.models import (
     ModuleDoc,
     PackageDoc,
 )
-from code_intelligence.doc_generation.types import ElementType, ParameterDoc, ReturnDoc
+from code_intelligence.doc_generation.types import CodeElementType, ParameterDoc, ReturnDoc
 
 # Re-export constants for internal use
 _FUNCTION_DEF_TYPES = helpers.FUNCTION_DEF_TYPES
@@ -67,7 +67,6 @@ class ModuleAnalyzer:
         self.include_private = include_private
         self.include_dunder = include_dunder
         self.max_depth = max_depth
-        self._analyzed_files: Set[str] = set()
         self._docstring_parser = DocstringParser()
 
     def analyze_module(self, file_path: str) -> ModuleDoc | None:
@@ -109,7 +108,6 @@ class ModuleAnalyzer:
         module_doc.dependencies = helpers.extract_dependencies(module_doc.imports)
         module_doc.completeness = module_doc.calculate_completeness()
 
-        self._analyzed_files.add(validated_path)
         return module_doc
 
     def _process_module_node(self, node: ast.AST, source: str, module_doc: ModuleDoc) -> None:
@@ -261,7 +259,7 @@ class ModuleAnalyzer:
     def analyze_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef, source: str) -> FunctionDoc:
         """Analyze a function/method definition and extract documentation."""
         is_async = isinstance(node, ast.AsyncFunctionDef)
-        element_type = ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
+        element_type = CodeElementType.METHOD if helpers.is_method(node) else CodeElementType.FUNCTION
 
         func_doc = FunctionDoc(
             name=node.name,
@@ -297,7 +295,7 @@ class ModuleAnalyzer:
         # Handle property decorator specially
         if dec_name == "property":
             func_doc.is_property = True
-            func_doc.element_type = ElementType.PROPERTY
+            func_doc.element_type = CodeElementType.PROPERTY
             return
 
         # Use lookup for simple attribute decorators

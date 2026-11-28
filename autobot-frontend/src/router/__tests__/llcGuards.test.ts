@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import type { RouteLocationNormalized } from 'vue-router'
-import { llcCompanyParamGuard } from '../llcGuards'
+import { companyIdFromParams, llcCompanyParamGuard } from '../llcGuards'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 
 vi.mock('@/plugins/api', () => ({
@@ -80,5 +80,20 @@ describe('llcCompanyParamGuard (GH#9627)', () => {
       name: 'llc-company-select',
       query: { redirect: '/llc/companies//costs' },
     })
+  })
+})
+
+describe('companyIdFromParams (#21511)', () => {
+  it.each([
+    [{ companyId: 'c1' }, 'c1'],
+    [{ companyId: ['c1', 'c2'] }, 'c1'],
+    [{ companyId: 'c1', boardId: 'b1' }, 'c1'],
+    [{}, ''],
+    [{ companyId: '' }, ''],
+    [{ companyId: [] }, ''],
+    [{ companyId: 'undefined' }, ''],
+    [{ companyId: 'null' }, ''],
+  ])('reads %j as "%s"', (params, expected) => {
+    expect(companyIdFromParams(params)).toBe(expected)
   })
 })

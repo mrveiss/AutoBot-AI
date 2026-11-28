@@ -119,7 +119,9 @@ Numeric scale `--spacing-1` through `--spacing-32` (0.25 rem increments). Micro 
 - `--font-mono` — JetBrains Mono (code blocks)
 - `--font-numeric` — IBM Plex Mono (tabular data)
 
-**Sizes:** `--text-xs` (12px) through `--text-3xl` (30px)
+**Sizes:** `--text-xs` (12px) through `--text-3xl` (30px), then `--text-4xl` to `--text-6xl`. `--text-*` is the one font-size scale; there is no `--font-size-*` (a guard, `ds-second-font-scale`, fails on it).
+
+**Font-size preference and themes.** Each `--text-*` step is written as its size times `--font-scale`, for example `--text-xl: calc(1.25rem * var(--font-scale))`. The user's font-size preference sets only the factor, through `[data-font-size]` in `themes/preferences.css`: small is `0.9375`, medium is `1` (no rule), large is `1.0625`. A theme that redefines a step (ember sets its own `--text-xl` and `--text-2xl`) keeps its own size and multiplies it by `var(--font-scale)` too, so the theme picks the size and the preference scales it. A theme step written as a plain `rem` would ignore the preference. `src/assets/css/__tests__/fontScale.test.ts` pins the combinations.
 
 **Weights:** `--font-normal` (400), `--font-medium` (500), `--font-semibold` (600), `--font-bold` (700)
 

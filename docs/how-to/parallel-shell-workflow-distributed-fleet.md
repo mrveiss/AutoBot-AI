@@ -202,6 +202,6 @@ Set `ALLOWED_COMMANDS_PATTERN` on the SLM host to restrict commands to a regex a
 
 ## Architecture reference
 
-- **Step handler** — `autobot-backend/orchestration/dag_executor.py` (`NodeType.DISTRIBUTED_SHELL`)
+- **Step handler** — `autobot-backend/orchestration/dag_executor.py` (`DagNodeType.DISTRIBUTED_SHELL`)
 - **SLM execute endpoint** — `autobot-slm-backend/api/nodes_execution.py`
 - **Full example** — `docs/examples/parallel_fleet_workflow.py`

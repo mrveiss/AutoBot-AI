@@ -42,15 +42,15 @@ async def engine():  # noqa: ANN201
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine
         engine, expire_on_commit=False, class_=AsyncSession
-    )  # canonical: ignore py-adhoc-db-engine
+    )
 
 
 def _make_app(session_factory, company_id: str) -> FastAPI:  # noqa: ANN001
     from api.user_management.dependencies import get_current_user, require_org_context
     from llc.api import costs as costs_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     app = FastAPI()
@@ -60,7 +60,7 @@ def _make_app(session_factory, company_id: str) -> FastAPI:  # noqa: ANN001
         async with session_factory() as session:
             yield session
 
-    app.dependency_overrides[get_async_session] = _override_session
+    app.dependency_overrides[get_session] = _override_session
     app.dependency_overrides[get_current_user] = lambda: {
         "id": str(_FIXED_USER_ID),
         "user_id": str(_FIXED_USER_ID),

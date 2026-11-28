@@ -17,7 +17,8 @@ API contract::
       "respect_robots": true,        # default: true
       "ingest":         true,        # default: true
       "same_origin":    true,        # default: true
-      "render":         "auto"       # default: "auto"
+      "render":         "auto",      # default: "auto"
+      "profile":        "document"   # default: "document" (#18826)
     }
 
     200 OK::
@@ -39,6 +40,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.knowledge_web_profile import require_profile_or_501
 from api.schemas_knowledge_web import CrawlRequest, CrawlResponse
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
@@ -68,6 +70,7 @@ def _make_connector(request: CrawlRequest) -> WebCrawlerConnector:
             "max_pages": request.max_pages,
             "respect_robots": request.respect_robots,
             "same_origin": request.same_origin,
+            "profile": request.profile.value,
         },
     )
     return WebCrawlerConnector(cfg)
@@ -103,6 +106,7 @@ async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
     The field is accepted on the wire for forward-compatibility.
     """
     RenderMode(request.render)  # validate enum; surfaced in future connector update
+    profile = require_profile_or_501(request.profile)
 
     connector = _make_connector(request)
     try:
@@ -113,6 +117,7 @@ async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
             respect_robots=request.respect_robots,
             ingest=request.ingest,
             same_origin=request.same_origin,
+            profile=profile,
         )
     except Exception as exc:
         logger.error("crawl failed for seeds %s: %s", request.seeds, exc)

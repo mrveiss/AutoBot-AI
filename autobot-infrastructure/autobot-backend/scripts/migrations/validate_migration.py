@@ -28,7 +28,8 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_async_redis_client
+from _session_redis import RedisConnectMixin
+
 from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
@@ -36,7 +37,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-class MigrationValidator:
+class MigrationValidator(RedisConnectMixin):
     """Validates migration completion and data integrity"""
 
     def __init__(self, verbose: bool = False):
@@ -75,16 +76,6 @@ class MigrationValidator:
                 "team_sessions": 0,
             },
         }
-
-    async def connect_redis(self) -> None:
-        """Connect to Redis database"""
-        try:
-            self.redis_client = await get_async_redis_client(database="main")
-            await self.redis_client.ping()
-            logger.info("Connected to Redis successfully")
-        except Exception as e:
-            logger.error("Failed to connect to Redis: %s", e)
-            raise
 
     async def validate_sessions(self) -> None:
         """Validate all sessions have required fields"""

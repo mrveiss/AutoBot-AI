@@ -8,74 +8,19 @@ Simple script to populate KB with docs, bypassing Redis issues.
 Uses concurrent uploads for better performance.
 """
 
-import glob
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set environment to force ChromaDB
-os.environ["AUTOBOT_VECTOR_STORE_TYPE"] = "chroma"
-
 import requests
 
 from autobot_shared.paths import project_root
+from kb_api_upload import API_URL, upload_docs  # the one uploader (#19339)
+from populate_knowledge_base import collect_documentation_files
 
-API_URL = "http://localhost:8001"
-
-
-@dataclass
-class AddResult:
-    """Result of adding a document."""
-
-    rel_path: str
-    success: bool
-    error: Optional[str] = None
-
-
-def add_single_doc(file_path: str, project_root: str) -> AddResult:
-    """Add a single document to the knowledge base."""
-    rel_path = os.path.relpath(file_path, project_root)
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        if not content.strip():
-            return AddResult(rel_path=rel_path, success=False, error="Empty file")
-
-        data = {
-            "text": content,
-            "title": f"Project Docs: {rel_path}",
-            "source": "project-documentation",
-        }
-
-        resp = requests.post(
-            f"{API_URL}/api/knowledge_base/add_text",
-            json=data,
-            timeout=10,
-        )
-
-        if resp.status_code == 200:
-            return AddResult(rel_path=rel_path, success=True)
-        else:
-            return AddResult(rel_path=rel_path, success=False, error=resp.text)
-
-    except Exception as e:
-        return AddResult(rel_path=rel_path, success=False, error=str(e))
-
-
-def add_docs_batch(files: list, project_root: str, max_workers: int = 5) -> list:
-    """Add multiple documents concurrently."""
-    results = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {executor.submit(add_single_doc, f, project_root): f for f in files}
-        for future in as_completed(future_to_file):
-            results.append(future.result())
-    return results
 
 
 def main():
@@ -97,16 +42,8 @@ def main():
     # ``root``: assigning to the imported ``project_root`` would shadow it as a
     # local and raise UnboundLocalError on the call itself.
     root = str(project_root())
-    doc_files = []
-
-    patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
-    for pattern in patterns:
-        files = glob.glob(os.path.join(root, pattern), recursive=True)
-        doc_files.extend(files)
-
-    # Remove duplicates and filter
-    unique_files = list(set(doc_files))
-    filtered_files = [f for f in unique_files if os.path.isfile(f) and "node_modules" not in f]
+    # The one documentation set and exclude list: the canonical populate script's (#19339).
+    filtered_files = collect_documentation_files(Path(root))
 
     print(f"Found {len(filtered_files)} documentation files")
 
@@ -115,7 +52,7 @@ def main():
     print(f"Adding {len(files_to_add)} documents concurrently...")
 
     try:
-        results = add_docs_batch(files_to_add, root)
+        results = upload_docs(files_to_add, root, "Project Docs")
 
         added_count = 0
         for result in results:

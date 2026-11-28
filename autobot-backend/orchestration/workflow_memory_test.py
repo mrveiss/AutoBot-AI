@@ -295,9 +295,9 @@ class TestWorkflowMemoryAutoInjection:
         """When shared_memory has data, it appears in context['prior_agent_findings']."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from orchestration.workflow_executor import WorkflowExecutor
+        from orchestration.workflow_executor import LegacyWorkflowExecutor
 
-        executor = WorkflowExecutor.__new__(WorkflowExecutor)
+        executor = LegacyWorkflowExecutor.__new__(LegacyWorkflowExecutor)
         executor.logger = MagicMock()
 
         mock_memory = MagicMock()
@@ -326,9 +326,9 @@ class TestWorkflowMemoryAutoInjection:
         """When shared_memory is empty, no prior_agent_findings key is added."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from orchestration.workflow_executor import WorkflowExecutor
+        from orchestration.workflow_executor import LegacyWorkflowExecutor
 
-        executor = WorkflowExecutor.__new__(WorkflowExecutor)
+        executor = LegacyWorkflowExecutor.__new__(LegacyWorkflowExecutor)
         executor.logger = MagicMock()
 
         mock_memory = MagicMock()

@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from services.research.models import Citation, ResearchFactOut, ResearchResponse
+from services.research.models import ResearchFactCitation, ResearchFactOut, ResearchResponse
 
 
 def _build_app(orchestrator: AsyncMock) -> TestClient:
@@ -46,7 +46,7 @@ class TestPostResearch:
         """A successful run returns the full #12622 response contract."""
         response = ResearchResponse(
             answer="X is Y [F1].",
-            citations=[Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")],
+            citations=[ResearchFactCitation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")],
             facts=[
                 ResearchFactOut(fact_id="fact-1", content="X is Y.", source_url="https://a.example", confidence=0.8)
             ],

@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-// System Status Types
+// System Status Types: the one home of the notification shapes (#16253). The store and
+// SystemStatusNotification import these; there are no other copies.
 export type SystemSeverity = 'info' | 'warning' | 'error' | 'success';
 
 export interface SystemStatusDetails {
@@ -11,7 +12,8 @@ export interface SystemStatusDetails {
   timestamp: number;
 }
 
-export interface SystemAlert {
+/** A system notification as the store keeps it and SystemStatusNotification shows it (#16253). */
+export interface SystemNotification {
   id: string;
   severity: SystemSeverity;
   title: string;
@@ -20,9 +22,3 @@ export interface SystemAlert {
   statusDetails?: SystemStatusDetails;
   timestamp: number;
 }
-
-// #15401: this was a drifted copy of `types/api.ts`'s service-health row -- a
-// narrower status union, number-only timestamps -- under a name that also
-// collided with the SLM's `ServiceHealth`. It had no importers. The canonical row
-// is `ServiceHealthEntry`, whose fields are a superset of this one's.
-export type { ServiceHealthEntry } from './api'

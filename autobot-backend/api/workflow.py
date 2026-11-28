@@ -26,8 +26,10 @@ from api.schemas_workflows import (
     WorkflowPendingApprovalsResponse,
     WorkflowStatusResponse,
 )
+from api.workflow_complex import _execute_complex_workflow
+from api.workflow_librarian_step import _handle_librarian_step
 from api.workflow_state import get_workflow_state_machine
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
@@ -37,6 +39,7 @@ from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
 from monitoring.prometheus_metrics import get_metrics_manager
 from patterns.conversation_patterns import conversation_patterns
+from services.workflow_automation.workflow_ownership import caller_id
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -49,29 +52,15 @@ prometheus_metrics = get_metrics_manager()
 
 # Issue #336: Agent step handlers extracted from elif chain
 # Issue #322: Refactored to use WorkflowStepContext to eliminate data clump pattern
-async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
-    """Handle librarian agent step (Issue #336 - extracted handler)."""
-    from agents.kb_librarian_agent import KBLibrarianAgent
-
-    kb_agent = KBLibrarianAgent()
-    search_query = ctx.action.replace("Search Knowledge Base", "").strip()
-    if not search_query:
-        search_query = "network security scanning tools"
-
-    result = await kb_agent.process_query(search_query)
-    response = result.get("response", "Search completed")
-    ctx.step["result"] = f"Knowledge base search completed: {response}"
-
-
 async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from agents.web_researcher import ResearchRequest, WebResearcher
+    from agents.web_researcher import WebResearcher, WebResearchRequest
 
     research_agent = WebResearcher()
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
-        request = ResearchRequest(query="network security scanning tools", focus="tools")
+        request = WebResearchRequest(query="network security scanning tools", focus="tools")
         result = await research_agent.research_specific_tools(request)
         ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
@@ -79,7 +68,7 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
         guide = result.get("installation_guide", "Guide obtained")
         ctx.step["result"] = f"Installation guide retrieved: {guide}"
     else:
-        request = ResearchRequest(query=ctx.action, focus="general")
+        request = WebResearchRequest(query=ctx.action, focus="general")
         result = await research_agent.perform_research(request)
         ctx.step["result"] = f"Research completed: {result.summary}"
 
@@ -110,9 +99,9 @@ async def _handle_orchestrator_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
     """Handle knowledge manager agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from knowledge_base import KnowledgeBase
+    from knowledge import get_knowledge_base
 
-    kb = KnowledgeBase()
+    kb = await get_knowledge_base()  # raises RuntimeError when the canonical KB is unavailable (D2)
     content = f"Workflow step result: {ctx.step.get('result', ctx.action)}"
     metadata = {
         "workflow_id": ctx.workflow_id,
@@ -274,45 +263,12 @@ def _try_simple_response(user_message: str) -> Dict | None:
     }
 
 
-async def _execute_complex_workflow(
-    workflow_request: "WorkflowExecutionRequest",
-    background_tasks: BackgroundTasks,
-    session_id: str,
+def _prepare_workflow_data(
+    workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool, user_id: str | None = None
 ) -> Dict:
-    """Delegate a complex workflow request to WorkflowAutomationManager (#1770).
-
-    Creates the workflow via the automation service and starts execution as a
-    background task so the endpoint returns immediately.
-    """
-    from services.workflow_automation.routes import get_workflow_manager
-
-    manager = get_workflow_manager()
-    workflow_id = await manager.create_workflow_from_chat_request(workflow_request.user_message, session_id)
-
-    if not workflow_id:
-        logger.error(
-            "workflow_automation could not create workflow for message: %s",
-            workflow_request.user_message,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Could not create workflow from request",
-        )
-
-    background_tasks.add_task(manager.start_workflow_execution, workflow_id)
-
+    """Prepare workflow data structure (Issue #281: extracted; #16665: records the triggering user)."""
     return {
-        "success": True,
-        "type": "workflow_orchestration",
-        "workflow_id": workflow_id,
-        "execution_started": True,
-        "status_endpoint": f"/api/workflow_automation/workflow_status/{workflow_id}",
-    }
-
-
-def _prepare_workflow_data(workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool) -> Dict:
-    """Prepare workflow data structure (Issue #281: extracted)."""
-    return {
+        "user_id": user_id,
         "workflow_id": workflow_id,
         "user_message": user_message,
         "classification": workflow_response.get("message_classification"),
@@ -580,6 +536,7 @@ async def execute_workflow(
     background_tasks: BackgroundTasks,
     request: Request,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Execute a workflow with coordination of multiple agents.
@@ -604,7 +561,9 @@ async def execute_workflow(
     # Complex workflow — delegate to the workflow_automation service (#1770)
     try:
         session_id = str(uuid.uuid4())
-        return await _execute_complex_workflow(workflow_request, background_tasks, session_id)
+        return await _execute_complex_workflow(
+            workflow_request, background_tasks, session_id, owner_id=caller_id(current_user)
+        )
     except Exception as e:
         logger.error("Workflow execution error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Workflow execution failed")
@@ -920,6 +879,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             step=step,
             orchestrator=orchestrator,
             action=action,
+            user_id=active_workflows.get(workflow_id, {}).get("user_id"),  # #16665: the triggering user
         )
         handler = AGENT_STEP_HANDLERS.get(agent_type)
         if handler:

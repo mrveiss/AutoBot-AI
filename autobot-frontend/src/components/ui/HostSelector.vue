@@ -89,6 +89,7 @@
           </div>
         </button>
 
+        <p v-if="desktopVmHint" class="empty-state" data-testid="desktop-vm-hint">{{ desktopVmHint }}</p>
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
           <Icon name="server" size="lg" />
@@ -136,6 +137,8 @@ const { t } = useI18n();
 const props = defineProps<{
   chatId?: string;
   requiredCapability?: 'ssh' | 'vnc';
+  /** Also offer AutoBot's own desktop VM (chat Desktop picker). */
+  includeDesktopVm?: boolean;
   modelValue?: InfrastructureHost | null;
 }>();
 
@@ -147,9 +150,10 @@ const emit = defineEmits<{
 }>();
 
 // Composable
-const { hosts, loading, loadHosts } = useHostSelector({
+const { hosts, loading, loadHosts, desktopVmHint } = useHostSelector({
   requiredCapability: props.requiredCapability,
   chatId: props.chatId,
+  includeDesktopVm: props.includeDesktopVm,
 });
 
 // State
@@ -307,7 +311,7 @@ defineExpose({
   flex: 1;
 }
 
-.selected-host i {
+.selected-host .icon {
   color: var(--color-primary);
 }
 
@@ -325,15 +329,15 @@ defineExpose({
   margin-left: auto;
 }
 
-.connection-status.disconnected i {
+.connection-status.disconnected .icon {
   color: var(--text-muted);
 }
 
-.connection-status.connecting i {
+.connection-status.connecting .icon {
   color: var(--color-warning);
 }
 
-.connection-status.connected i {
+.connection-status.connected .icon {
   color: var(--color-success);
 }
 
@@ -529,9 +533,10 @@ defineExpose({
   color: var(--text-muted);
 }
 
-.empty-state i,
-.loading-state i {
-  font-size: 32px;
+.empty-state .icon,
+.loading-state .icon {
+  width: 32px;
+  height: 32px;
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }

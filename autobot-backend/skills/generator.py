@@ -9,11 +9,9 @@ Uses the LLM to generate SKILL.md + skill.py for a detected capability gap.
 Structured output ensures valid manifests every time.
 """
 
-import re
 from typing import Any, Dict
 
-import yaml
-
+from autobot_shared.frontmatter import parse_frontmatter_mapping
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -76,7 +74,7 @@ class SkillGenerator:
             raise ValueError(f"LLM returned invalid JSON: {e}\nResponse: {response.content[:500]}") from e
         if not isinstance(result, dict) or "skill_md" not in result or "skill_py" not in result:
             raise ValueError(f"LLM response missing required keys: {list(result.keys())}")
-        manifest = _parse_manifest(result["skill_md"])
+        manifest = parse_frontmatter_mapping(result["skill_md"])
         return {
             "name": manifest.get("name", "generated-skill"),
             "skill_md": result["skill_md"],
@@ -91,14 +89,3 @@ class SkillGenerator:
         from services.llm_service import get_llm_service
 
         return get_llm_service()
-
-
-def _parse_manifest(skill_md: str) -> Dict[str, Any]:
-    """Parse YAML frontmatter from SKILL.md content into manifest dict."""
-    match = re.match(r"^---\n(.*?)\n---", skill_md, re.DOTALL)
-    if not match:
-        return {}
-    try:
-        return yaml.safe_load(match.group(1)) or {}
-    except yaml.YAMLError:
-        return {}

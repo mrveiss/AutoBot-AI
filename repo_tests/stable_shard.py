@@ -29,11 +29,31 @@ So a module's shard depends on its own path and on a file nobody edits
 casually — never on what else was collected. Adding, removing or growing a
 module moves **no** other module. Measured across 50 trials: zero.
 
-Balance is computed on **test count**, not recorded seconds. The durations file
-sums to ~338s while a shard takes minutes, so recorded duration describes a
-small fraction of real shard cost (import and collection dominate); balancing
-on it optimises the wrong quantity. Test count gives 1.18x spread between the
-lightest and heaviest shard.
+Balance is computed on **recorded seconds** (#17787). It used to be test count,
+for a reason that confused magnitude with proportionality: the durations file
+sums to ~338s while a head takes ~21 minutes, so recorded duration is indeed a
+small fraction of real shard cost -- but a *weight* only has to be
+**proportional** to cost, never equal to it, and the fixed part of a shard's
+cost is the same for every shard and therefore creates no imbalance at all.
+
+What the count-based balance actually produced, measured over the current
+durations file at 12 splits:
+
+    test count per shard   1813..2136   max/mean = 1.16   <- balanced
+    recorded sec per shard      3..64   max/mean = 2.28   <- not
+    observed wall clock (min)   5..13   max/mean = 1.59
+
+So the proxy was balanced and the quantity that costs money was not. Balancing
+on recorded milliseconds instead gives max/mean = 1.13 on seconds, and under
+``wall ~= fixed + k*seconds`` predicts ~1.06 on wall clock. That model is fitted
+from two summary statistics of one run and is therefore *consistent with* the
+observations rather than validated by them -- the acceptance evidence is the
+twelve durations of the next head on ``main``, not this paragraph.
+
+Milliseconds as integers, not float seconds, so the sum is order-independent and
+the table is byte-stable across platforms; a module present in the file but
+totalling under a millisecond is floored to 1, because "fast" and "never
+recorded" must not become the same weight.
 
 Enabled only when ``--shard-splits`` is passed; otherwise this plugin does
 nothing at all.
@@ -43,6 +63,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Dict, List
 
@@ -64,19 +85,45 @@ def bucket_of(module: str, buckets: int) -> int:
 
 
 def load_module_weights(durations_path: Path) -> Dict[str, int]:
-    """Test count per module, read from a pytest-split durations file.
+    """Recorded test time per module in integer **milliseconds** (#17787).
 
     A missing or unreadable file yields an empty mapping — every module then
     weighs the same, which is still stable, just less balanced.
+
+    Integer milliseconds rather than float seconds: the sum is then independent
+    of iteration order and identical on every platform, which the on-disk shard
+    table depends on. A non-numeric value contributes nothing rather than
+    raising, because one malformed entry must not make the whole file unreadable
+    and silently re-deal every module.
     """
     try:
         raw = json.loads(durations_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     weights: Dict[str, int] = {}
-    for nodeid in raw:
-        weights[module_of(nodeid)] = weights.get(module_of(nodeid), 0) + 1
-    return weights
+    for nodeid, seconds in raw.items():
+        module = module_of(nodeid)
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+            millis = 0
+        elif not math.isfinite(seconds) or seconds < 0:
+            # Rejected at the boundary, named, rather than handed to the balancer
+            # (review). Python's JSON parser accepts `NaN` and `Infinity`, and
+            # `int(round(...))` on either raises from inside this loop -- outside
+            # the try above, so collection dies with a bare
+            # "cannot convert float NaN to integer" naming nothing. A negative
+            # duration is worse than a crash: it makes a negative bucket weight,
+            # which the LPT pass consumes happily and silently mis-balances.
+            raise ValueError(
+                f"durations file {durations_path.name} has an unusable time for {module}: "
+                f"{seconds!r}. A duration must be finite and non-negative."
+            )
+        else:
+            millis = int(round(seconds * 1000))
+        weights[module] = weights.get(module, 0) + millis
+    # Present-but-fast is not absent. A module whose recorded total rounds to
+    # zero would otherwise weigh exactly what a module the file has never seen
+    # weighs, and the two are different facts.
+    return {module: max(total, 1) for module, total in weights.items()}
 
 
 def build_bucket_table(weights: Dict[str, int], splits: int, buckets: int) -> List[int]:

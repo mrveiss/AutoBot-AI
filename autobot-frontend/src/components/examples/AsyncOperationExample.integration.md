@@ -52,7 +52,6 @@ http://172.16.168.21:5173/#/examples/async-operations
 **2. Import component:**
 ```vue
 <script setup lang="ts">
-import SettingsPanel from '@/components/SettingsPanel.vue'
 import AsyncOperationExample from '@/components/examples/AsyncOperationExample.vue'
 </script>
 ```
@@ -62,8 +61,7 @@ import AsyncOperationExample from '@/components/examples/AsyncOperationExample.v
 <template>
   <div class="settings-view">
     <div class="container mx-auto px-4 py-6">
-      <!-- Existing settings -->
-      <SettingsPanel />
+      <!-- Existing page content (the old main-GUI SettingsPanel is retired, #19532) -->
 
       <!-- Example component (for demo) -->
       <div class="mt-8">

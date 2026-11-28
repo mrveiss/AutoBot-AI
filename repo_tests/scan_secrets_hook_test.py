@@ -33,6 +33,8 @@ import subprocess
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _HOOK = repo_root() / ".claude" / "hooks" / "scan-secrets.sh"
 
 _BLOCK = 2
@@ -73,9 +75,9 @@ def _run(content: str) -> int:
 
 def test_hook_exists_and_is_valid_shell():
     assert _HOOK.is_file(), f"{_HOOK} missing -- the PreToolUse hook is configured against it"
-    assert subprocess.run(["bash", "-n", str(_HOOK)], capture_output=True).returncode == 0, (
-        "the hook has a shell syntax error; a hook that cannot run blocks nothing"
-    )
+    assert (
+        subprocess.run(["bash", "-n", str(_HOOK)], capture_output=True).returncode == 0
+    ), "the hook has a shell syntax error; a hook that cannot run blocks nothing"
 
 
 @pytest.mark.parametrize("expected,content,label", CASES, ids=[c[2] for c in CASES])
@@ -100,13 +102,19 @@ def test_no_broken_quote_escape_survives_in_the_patterns():
     """
     needle = chr(92) + "x27"
     text = _HOOK.read_text(encoding="utf-8")
+    # #17941: shared stripper, and now trailing comments too -- a hook line
+    # ending `# the old hex-escape form` named the needle without using it.
     offending = [
-        (n, line)
-        for n, line in enumerate(text.splitlines(), 1)
-        if needle in line and not line.lstrip().startswith("#")
+        (entry.lineno, entry.text)
+        for entry in code_lines(text, name="pre-commit", strip_trailing=True)
+        if needle in entry.text
     ]
-    assert not offending, (
-        "hook patterns still spell a single quote as a hex escape, which GNU grep "
-        "collapses to a literal " + _SQ + "x" + _SQ + ":" + chr(10) + "  "
-        + (chr(10) + "  ").join(f"{n}: {line.strip()}" for n, line in offending)
+    assert (
+        not offending
+    ), "hook patterns still spell a single quote as a hex escape, which GNU grep " "collapses to a literal " + _SQ + "x" + _SQ + ":" + chr(
+        10
+    ) + "  " + (
+        chr(10) + "  "
+    ).join(
+        f"{n}: {line.strip()}" for n, line in offending
     )

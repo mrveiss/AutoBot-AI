@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.summary_search import SummarySearchService
 
 logger = get_logger(__name__)
@@ -71,7 +72,9 @@ class TestSearchSummaries:
         await service.search_summaries("query", level="document")
         mock_collection.query.assert_called_once()
         call_kwargs = mock_collection.query.call_args[1]
-        assert call_kwargs["where"] == {"level": "document"}
+        # #19163: the level filter is AND-ed with the research-quarantine exclusion.
+        assert {"level": "document"} in call_kwargs["where"]["$and"]
+        assert {"collection": {"$ne": config.research_quarantine_collection}} in call_kwargs["where"]["$and"]
 
     @pytest.mark.asyncio
     async def test_no_results(self, service, mock_chromadb, mock_collection):

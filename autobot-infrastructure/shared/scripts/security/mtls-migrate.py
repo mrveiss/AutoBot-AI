@@ -37,9 +37,14 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+PROJECT_ROOT = _REPO_ROOT  # the repository root, where `certs/` and `.env` live (it was `shared/`)
 
 from pki.config import REDIS_STACK_CONFIG_PATH, VM_DEFINITIONS, TLSConfig
 from pki.configurator import ServiceConfigurator

@@ -106,14 +106,14 @@
 }
 
 .view-title {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 var(--spacing-sm) 0;
 }
 
 .view-description {
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -132,7 +132,7 @@
 
 .view-nav-link {
   padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
@@ -169,7 +169,7 @@
   }
 
   .view-title {
-    font-size: var(--font-size-2xl);
+    font-size: var(--text-2xl);
   }
 
   .view-nav {

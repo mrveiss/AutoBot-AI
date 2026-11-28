@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.url_safety import is_public_url_async
@@ -65,7 +66,9 @@ class PlaywrightService:
         """Check if Playwright container is healthy"""
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
+            async with await self.http_client.get(
+                f"{self.base_url}/health", timeout=timeout, guard_egress=EGRESS_POLICY
+            ) as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self._healthy = health_data.get("status") == "healthy"
@@ -108,7 +111,7 @@ class PlaywrightService:
         """
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         async with await self.http_client.post(
-            f"{self.base_url}/{endpoint}", json=payload, timeout=timeout
+            f"{self.base_url}/{endpoint}", json=payload, timeout=timeout, guard_egress=EGRESS_POLICY
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -191,7 +194,7 @@ class PlaywrightService:
                 "results": [],
             }
 
-    async def test_frontend(self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL) -> Metadata:
+    async def test_frontend(self, frontend_url: str | None = None) -> Metadata:
         """
         Test frontend functionality using embedded Playwright
 
@@ -201,6 +204,7 @@ class PlaywrightService:
         Returns:
             Test results with detailed analysis
         """
+        frontend_url = frontend_url or ServiceURLs.FRONTEND_LOCAL
         try:
             if not await self.is_ready():
                 raise ServiceUnavailableError(
@@ -249,7 +253,7 @@ class PlaywrightService:
     async def send_test_message(
         self,
         message: str = "what network scanning tools do we have available?",
-        frontend_url: str = ServiceURLs.FRONTEND_LOCAL,
+        frontend_url: str | None = None,
     ) -> Metadata:
         """
         Send test message through frontend using embedded Playwright
@@ -261,6 +265,7 @@ class PlaywrightService:
         Returns:
             Message sending results with step-by-step details
         """
+        frontend_url = frontend_url or ServiceURLs.FRONTEND_LOCAL
         try:
             if not await self.is_ready():
                 raise ServiceUnavailableError(
@@ -336,7 +341,7 @@ class PlaywrightService:
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with await self.http_client.post(
-                f"{self.base_url}/test-frontend", json=payload, timeout=timeout
+                f"{self.base_url}/test-frontend", json=payload, timeout=timeout, guard_egress=EGRESS_POLICY
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -386,7 +391,9 @@ class PlaywrightService:
             if self._healthy:
                 # Get additional health info from container
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
-                async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
+                async with await self.http_client.get(
+                    f"{self.base_url}/health", timeout=timeout, guard_egress=EGRESS_POLICY
+                ) as response:
                     if response.status == 200:
                         container_health = await response.json()
                         status.update(
@@ -465,7 +472,7 @@ async def search_web_embedded(query: str, **kwargs) -> Metadata:
 async def test_frontend_embedded(frontend_url: str = None) -> Metadata:
     """Convenience function for frontend testing"""
     async with playwright_service() as service:
-        return await service.test_frontend(frontend_url or ServiceURLs.FRONTEND_LOCAL)
+        return await service.test_frontend(frontend_url)
 
 
 async def send_test_message_embedded(message: str, **kwargs) -> Metadata:

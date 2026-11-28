@@ -39,6 +39,7 @@ from typing import Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
+from constants.user_scope_constants import GLOBAL_USER, LEGACY_GLOBAL_USER_SPELLINGS
 
 logger = get_logger(__name__)
 
@@ -64,7 +65,8 @@ _MAX_BIAS = 0.30
 _REDIS_TIMEOUT_SECONDS = 1.5
 # Sentinels for unauthenticated / org-less scope.
 GLOBAL_ORG = "__global_org__"
-GLOBAL_USER = "__global_user__"
+# GLOBAL_USER comes from its single owner (constants.user_scope_constants, #18094);
+# rows written under LEGACY_GLOBAL_USER_SPELLINGS stay readable.
 
 # Action → which counter it increments and its aversion contribution [0,1].
 # rejected/edited raise aversion; accepted lowers it.
@@ -324,7 +326,8 @@ class FeedbackAggregator:
         candidates: List[str] = []
         if user_id:
             candidates.append(self._key(org, user_id, task_class, behavior))
-        candidates.append(self._key(org, GLOBAL_USER, task_class, behavior))
+        for spelling in (GLOBAL_USER, *LEGACY_GLOBAL_USER_SPELLINGS):
+            candidates.append(self._key(org, spelling, task_class, behavior))
         try:
             redis = await self._get_redis()
             if redis is None:

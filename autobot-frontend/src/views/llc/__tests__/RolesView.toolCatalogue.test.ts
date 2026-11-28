@@ -50,6 +50,10 @@ const CATALOGUE = [
 
 function respond(catalogue: unknown): void {
   get.mockImplementation((url: string) => {
+    // #21241: the workflows panel also reads the company's workflows and the viewer's standing. The
+    // company list URL contains '/workflows', which the role routes below match on, so both go first.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
+    if (url.endsWith('/members')) return Promise.resolve({ members: [], viewer_grantable_roles: [], viewer_can_manage: true })
     // Company-scoped catalogue first — see the header note.
     if (url.startsWith('/api/llc/tools/')) {
       return catalogue instanceof Error ? Promise.reject(catalogue) : Promise.resolve(catalogue)

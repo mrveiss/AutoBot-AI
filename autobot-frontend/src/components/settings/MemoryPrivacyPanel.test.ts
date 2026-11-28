@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import MemoryPrivacyPanel from './MemoryPrivacyPanel.vue'
@@ -79,7 +80,7 @@ describe('MemoryPrivacyPanel forget-everywhere (#13739)', () => {
   })
 
   it('tells the user to delete per store when the id is ambiguous', async () => {
-    await forgetEverywhere(() => Promise.reject(new Error('HTTP 409: conflict')))
+    await forgetEverywhere(() => Promise.reject(new HttpError(409, 'conflict')))
 
     expect(showToast).toHaveBeenCalledWith(
       en.settings.memoryPrivacy.forgetEverywhereAmbiguous,
@@ -88,7 +89,7 @@ describe('MemoryPrivacyPanel forget-everywhere (#13739)', () => {
   })
 
   it('still reports an ordinary failure as a failure', async () => {
-    await forgetEverywhere(() => Promise.reject(new Error('HTTP 500: boom')))
+    await forgetEverywhere(() => Promise.reject(new HttpError(500, 'boom')))
 
     expect(showToast).toHaveBeenCalledWith(en.settings.memoryPrivacy.forgetEverywhereFailed, 'error')
   })

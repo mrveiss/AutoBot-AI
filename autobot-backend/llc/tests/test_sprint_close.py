@@ -11,7 +11,7 @@ Run with: python -m pytest autobot-backend/llc/ -k sprint_close
 import uuid
 from datetime import date
 from typing import Optional
-from unittest.mock import ANY, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -179,7 +179,7 @@ async def test_execute_close_happy_path() -> None:
     assert closed.status == SprintStatus.CLOSED.value
     assert closed.actual_points == 13
     assert closed.pending_close_approval_id is None
-    mock_summarizer.summarize_and_merge.assert_called_once_with(sprint.id, session=ANY)
+    mock_summarizer.summarize_and_merge.assert_not_called()  # post-commit step, see summarize_closed_sprint (#8214)
 
 
 @pytest.mark.asyncio

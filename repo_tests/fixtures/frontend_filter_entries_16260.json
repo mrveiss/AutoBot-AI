@@ -1,0 +1,7 @@
+[
+  "autobot-frontend/**",
+  "libs/autobot-ui/**",
+  "autobot-plugins/terminal/**",
+  "autobot_shared/ssot_config.py",
+  "pipeline-scripts/npm_audit_gate.py"
+]

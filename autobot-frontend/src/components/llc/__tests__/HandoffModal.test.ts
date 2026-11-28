@@ -47,7 +47,10 @@ describe('HandoffModal (GH#10531)', () => {
         return Promise.resolve({ nodes: [{ node_id: 'agent-pk-1', name: 'Builder', is_human: false }] })
       }
       if (url.includes('/members')) {
-        return Promise.resolve([{ user_id: 'human-1', display_name: 'Reviewer Rita', role: 'member' }])
+        return Promise.resolve({
+          members: [{ user_id: 'human-1', display_name: 'Reviewer Rita', role: 'member' }],
+          viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [],
+        })
       }
       return Promise.resolve([])
     })
@@ -68,12 +71,14 @@ describe('HandoffModal (GH#10531)', () => {
     expect(url).toBe('/api/llc/work-items/wi-1/handoff/to-agent')
     expect(url).not.toContain('/release')
     expect(body.target_agent_id).toBe('agent-pk-1')
-    expect(body.user_id).toBe('user-1')
+    // The backend takes the actor from the verified caller (#20476).
+    expect(body.user_id).toBeUndefined()
+    expect(body.company_id).toBeUndefined()
   })
 
-  it('to_human posts to /handoff/to-human with reviewer_user_id + the agent assignee', async () => {
+  it('to_human posts only the reviewer: the backend takes the agent from the item (#20476)', async () => {
     const wrapper = mount(HandoffModal, {
-      props: { workItemId: 'wi-2', companyId: 'c1', direction: 'to_human', agentAssigneeId: 'agent-pk-9' },
+      props: { workItemId: 'wi-2', companyId: 'c1', direction: 'to_human' },
       ...mountOpts,
     })
     await flushPromises()
@@ -84,6 +89,6 @@ describe('HandoffModal (GH#10531)', () => {
     const [url, body] = post.mock.calls[0]
     expect(url).toBe('/api/llc/work-items/wi-2/handoff/to-human')
     expect(body.reviewer_user_id).toBe('human-1')
-    expect(body.agent_id).toBe('agent-pk-9')
+    expect(body.agent_id).toBeUndefined()
   })
 })

@@ -13,17 +13,19 @@
     shell: /usr/sbin/nologin
     create_home: false
 
-- name: Check if node_exporter binary exists
-  ansible.builtin.stat:
-    path: /opt/node_exporter/node_exporter
-  register: _node_exporter_binary
+# A version bump replaces the installed binary, not only a missing one (#18556 review).
+- name: Check whether the pinned node_exporter release is installed
+  ansible.builtin.include_tasks: release_binary.yml
+  vars:
+    release_binary: /opt/node_exporter/node_exporter
+    release_version: "{{ node_exporter_version }}"
 
 - name: Download Node Exporter
   ansible.builtin.get_url:
     url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
     dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
     mode: "0644"
-  when: not _node_exporter_binary.stat.exists
+  when: release_install_needed | bool
 
 - name: Create node_exporter directory
   ansible.builtin.file:
@@ -42,7 +44,8 @@
       - --strip-components=1
     owner: node_exporter
     group: node_exporter
-  when: not _node_exporter_binary.stat.exists
+  when: release_install_needed | bool
+  notify: Restart node_exporter
 
 - name: Create Node Exporter systemd service
   ansible.builtin.template:

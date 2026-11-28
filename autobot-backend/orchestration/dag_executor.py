@@ -51,7 +51,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class NodeType(str, Enum):
+class DagNodeType(str, Enum):
     """Recognised node types in a workflow DAG."""
 
     STEP = "step"
@@ -61,7 +61,7 @@ class NodeType(str, Enum):
     SWITCH = "switch"
 
     @classmethod
-    def _missing_(cls, value: object) -> "NodeType":
+    def _missing_(cls, value: object) -> "DagNodeType":
         """Treat unknown node types as STEP so new types degrade gracefully."""
         return cls.STEP
 
@@ -88,7 +88,7 @@ class DAGNode:
     """Single node in the workflow DAG."""
 
     node_id: str
-    node_type: NodeType
+    node_type: DagNodeType
     data: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -157,7 +157,7 @@ class WorkflowDAG:
             nid = raw["id"]
             self._nodes[nid] = DAGNode(
                 node_id=nid,
-                node_type=NodeType(raw.get("type", NodeType.STEP)),
+                node_type=DagNodeType(raw.get("type", DagNodeType.STEP)),
                 data=raw.get("data", {}),
             )
             self._successors[nid] = []
@@ -211,7 +211,7 @@ class WorkflowDAG:
 
     def has_condition_nodes(self) -> bool:
         """True when at least one node is a CONDITION node."""
-        return any(n.node_type == NodeType.CONDITION for n in self._nodes.values())
+        return any(n.node_type == DagNodeType.CONDITION for n in self._nodes.values())
 
     def detect_cycle(self) -> List[str] | None:
         """
@@ -606,14 +606,14 @@ class DAGExecutor:
         matching branch's targets are returned; the other branch's
         descendants are marked skipped.
         """
-        if node.node_type == NodeType.CONDITION:
+        if node.node_type == DagNodeType.CONDITION:
             return await self._execute_condition_node(node, dag, ctx)
 
-        if node.node_type == NodeType.SWITCH:
+        if node.node_type == DagNodeType.SWITCH:
             return await self._execute_switch_node(node, dag, ctx)
 
         # Issue #3406: distributed_shell has its own fan-out executor
-        if node.node_type == NodeType.DISTRIBUTED_SHELL:
+        if node.node_type == DagNodeType.DISTRIBUTED_SHELL:
             try:
                 result = await execute_distributed_shell(node, ctx)
             except Exception as exc:

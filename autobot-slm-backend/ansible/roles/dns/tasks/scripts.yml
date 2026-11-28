@@ -7,7 +7,7 @@
 
 - name: Create DNS scripts directory
   file:
-    path: /opt/autobot/scripts/dns
+    path: "{{ autobot.base_dir }}/scripts/dns"
     state: directory
     owner: root
     group: root
@@ -16,7 +16,7 @@
 - name: Deploy test DNS resolution script
   template:
     src: test-dns-resolution.sh.j2
-    dest: /opt/autobot/scripts/dns/test-dns-resolution.sh
+    dest: "{{ autobot.base_dir }}/scripts/dns/test-dns-resolution.sh"
     owner: root
     group: root
     mode: '0755'
@@ -24,7 +24,7 @@
 - name: Deploy show DNS entries script
   template:
     src: show-dns-entries.sh.j2
-    dest: /opt/autobot/scripts/dns/show-dns-entries.sh
+    dest: "{{ autobot.base_dir }}/scripts/dns/show-dns-entries.sh"
     owner: root
     group: root
     mode: '0755'
@@ -32,7 +32,7 @@
 - name: Deploy refresh DNS script
   template:
     src: refresh-dns.sh.j2
-    dest: /opt/autobot/scripts/dns/refresh-dns.sh
+    dest: "{{ autobot.base_dir }}/scripts/dns/refresh-dns.sh"
     owner: root
     group: root
     mode: '0755'

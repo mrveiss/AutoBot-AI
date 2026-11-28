@@ -1,7 +1,15 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-up">
-      <div v-if="activeCaptcha" class="captcha-notification">
+      <div v-if="!activeCaptcha && pendingLoadFailed" class="captcha-notification" role="alert" data-testid="captcha-restore-failed">
+        <div class="captcha-card">
+          <p class="captcha-message">{{ $t('research.captcha.restoreFailed') }}</p>
+          <div class="captcha-actions">
+            <button class="btn-skip" @click="loadPendingCaptchas">{{ $t('research.captcha.retry') }}</button>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="activeCaptcha" class="captcha-notification">
         <div class="captcha-card">
           <!-- Header -->
           <div class="captcha-header">
@@ -10,7 +18,7 @@
             </div>
             <div class="captcha-title">
               <h3>{{ $t('research.captcha.detected') }}</h3>
-              <p class="captcha-type">{{ captchaTypeLabel }}</p>
+              <p class="captcha-type">{{ $t(captchaTypeLabelKey) }}</p>
             </div>
             <div class="captcha-timer" :class="{ 'timer-warning': timeRemaining < 30 }">
               <Icon name="clock" />
@@ -23,7 +31,7 @@
             <p class="captcha-message">
               {{ $t('research.captcha.message') }}
             </p>
-            <p class="captcha-url">
+            <p v-if="activeCaptcha.url" class="captcha-url">
               <Icon name="link" />
               <a :href="activeCaptcha.url" target="_blank" rel="noopener">{{ truncatedUrl }}</a>
             </p>
@@ -74,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useCaptchaStatus } from '@/composables/research/useCaptchaStatus'
 
@@ -82,14 +91,19 @@ const {
   activeCaptcha,
   timeRemaining,
   isSubmitting,
-  captchaTypeLabel,
+  pendingLoadFailed,
+  captchaTypeLabelKey,
   truncatedUrl,
   progressPercentage,
   formatTime,
   openVnc,
   markSolved,
   skipCaptcha,
+  loadPendingCaptchas,
 } = useCaptchaStatus()
+
+// A reload must still show a CAPTCHA that was already waiting (#22215).
+onMounted(loadPendingCaptchas)
 </script>
 
 <style scoped>
@@ -115,7 +129,7 @@ const {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -228,8 +242,9 @@ const {
   opacity: 1;
 }
 
-.preview-overlay i {
-  font-size: var(--text-2xl);
+.preview-overlay .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 /* Actions */
@@ -261,7 +276,7 @@ const {
 }
 
 .btn-vnc {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

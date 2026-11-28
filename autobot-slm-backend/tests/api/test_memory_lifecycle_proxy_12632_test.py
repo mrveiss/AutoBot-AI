@@ -22,6 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
+import httpx
 import pytest
 
 pytest.importorskip("httpx")
@@ -53,18 +54,25 @@ class _Client:
     async def __aexit__(self, *_exc):
         return False
 
-    async def get(self, *_a, **_k):
+    async def request(self, *_a, **_k):
         if isinstance(self._result, Exception):
             raise self._result
         return self._result
 
 
 def _install(monkeypatch, result, *, key: str = "k", url: str = "https://node") -> None:
-    monkeypatch.setattr(proxy, "_INTERNAL_API_KEY", key)
-    monkeypatch.setattr(proxy, "_NODE_URL", url)
-    # The seam is the shared node client now (#14886): TLS policy, timeout and
-    # the internal-key header are its business, not this module's.
-    monkeypatch.setattr(proxy.node_proxy, "node_client", lambda **_k: _Client(result))
+    from services import main_backend_client as backend
+
+    # The call is the one SLM->backend client's (#20760), and its transport the shared node
+    # client (#14886): the key is read where the client reads it, the URL where it resolves it.
+    (
+        monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", key)
+        if key
+        else monkeypatch.delenv("AUTOBOT_INTERNAL_API_KEY", raising=False)
+    )
+    monkeypatch.setattr(backend, "backend_url", lambda: url)
+    monkeypatch.setattr(proxy, "backend_url", lambda: url)
+    monkeypatch.setattr(backend.node_proxy, "node_client", lambda **_k: _Client(result))
 
 
 _HEALTHY: Dict[str, Any] = {
@@ -97,8 +105,8 @@ async def test_a_partially_degraded_node_is_not_reported_healthy(monkeypatch):
 @pytest.mark.parametrize(
     "failure,expected",
     [
-        (proxy.httpx.ConnectError("refused"), "node_unreachable"),
-        (proxy.httpx.TimeoutException("slow"), "node_timeout"),
+        (httpx.ConnectError("refused"), "node_unreachable"),
+        (httpx.TimeoutException("slow"), "node_timeout"),
         (_Response(403), "node_status_403"),
         (_Response(404), "node_status_404"),
         (_Response(200, None, bad_json=True), "node_bad_payload"),
@@ -135,7 +143,7 @@ async def test_an_unreachable_node_still_has_every_section_key(monkeypatch):
     A missing `reinforcement` and an empty one mean the same thing to a reader
     and different things to code.
     """
-    _install(monkeypatch, proxy.httpx.ConnectError("refused"))
+    _install(monkeypatch, httpx.ConnectError("refused"))
     node = (await proxy.get_memory_lifecycle(limit=5, _user=None))["nodes"][0]
 
     assert node["reinforcement"] == {"hot": [], "cold": []}
@@ -197,4 +205,41 @@ def test_no_private_tls_or_timeout_switch_is_reintroduced():
     }
     private = {v for v in read_vars if "TLS" in v or "TIMEOUT" in v}
     assert not private, f"a private TLS/timeout switch was reintroduced: {sorted(private)}"
-    assert "node_proxy" in source, "the shared node client is no longer used here"
+    assert "services.main_backend_client" in source, "the one SLM->backend client (#20760) is no longer used here"
+    client = (Path(__file__).resolve().parents[2] / "services" / "main_backend_client.py").read_text(encoding="utf-8")
+    assert "node_proxy.node_client()" in client, "the client no longer uses the shared node transport (#14886)"
+
+
+def test_the_proxy_limit_ceiling_is_the_shared_one_the_node_enforces():
+    """#14887: `limit` is forwarded unchanged, so the proxy must not accept more than the node.
+
+    Both tiers bind to ``QueryDefaults.MAX_SEARCH_LIMIT``; the node side asserts the same
+    in ``autobot-backend/api/memory_lifecycle_test.py``. Read from the enforced route
+    parameter, not the source text.
+    """
+    from autobot_shared.api_routing.router_routes import effective_routes
+    from autobot_shared.ssot_constants import QueryDefaults
+
+    route = next(
+        m.route for m in effective_routes(proxy.router) if getattr(m.route, "path", None) == "/memory/lifecycle"
+    )
+    limit = next(p for p in route.dependant.query_params if p.name == "limit")
+    ceiling = next(m.le for m in limit.field_info.metadata if getattr(m, "le", None) is not None)
+    assert ceiling == QueryDefaults.MAX_SEARCH_LIMIT
+
+
+def test_the_proxy_limit_ceiling_is_bound_to_the_constant_not_a_matching_literal():
+    """A literal equal to the constant today would pass the value check above; this does not (#14887)."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(proxy))
+    handler = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and any("/lifecycle" in ast.unparse(d) for d in node.decorator_list)
+    )
+    args = handler.args.args
+    default = handler.args.defaults[[a.arg for a in args].index("limit") - (len(args) - len(handler.args.defaults))]
+    le = next(kw.value for kw in default.keywords if kw.arg == "le")
+    assert ast.unparse(le) == "QueryDefaults.MAX_SEARCH_LIMIT", f"limit ceiling is {ast.unparse(le)}, not the constant"

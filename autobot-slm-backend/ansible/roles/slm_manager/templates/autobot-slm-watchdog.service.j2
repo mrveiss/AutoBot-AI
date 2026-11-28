@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Restart the AutoBot SLM if it is down or hung (#20620)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/autobot-slm-watchdog

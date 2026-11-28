@@ -36,6 +36,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
+from autobot_shared.auth.internal_api_key import verify_internal_api_key
+
 logger = logging.getLogger(__name__)
 
 # HTTP methods that can change server state
@@ -55,6 +57,11 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/nodes/",  # agent heartbeats — no browser auth, endpoints have own guards
     "/api/events/sync",  # agent event sync — node_id validated in endpoint (#3193)
 )
+
+# Service-to-service routes: a caller here proves itself with the shared internal key instead of a bearer
+# token. A request is exempt only on this prefix AND with a key that verifies (#20046); a browser holds
+# neither the key nor a way to attach a custom header cross-origin, so CSRF stays closed for it.
+_INTERNAL_SERVICE_PREFIX = "/api/internal/"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -96,7 +103,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     @staticmethod
     def _is_exempt(request: Request) -> bool:
         path = request.url.path
-        return any(path.startswith(prefix) for prefix in _AUTH_EXEMPT_PREFIXES)
+        if any(path.startswith(prefix) for prefix in _AUTH_EXEMPT_PREFIXES):
+            return True
+        return path.startswith(_INTERNAL_SERVICE_PREFIX) and verify_internal_api_key(
+            request.headers.get("X-Internal-API-Key")
+        )
 
     @staticmethod
     def _has_authorization_header(request: Request) -> bool:

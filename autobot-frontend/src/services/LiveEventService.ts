@@ -10,10 +10,13 @@
  * Author: mrveiss
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import config, { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 import type { ConnectionState } from '@/services/GlobalWebSocketService'
@@ -129,7 +132,7 @@ class LiveEventService {
     logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(url), subprotocols)
       } catch (err: unknown) {
         this._handleError(err)
         reject(err)
@@ -306,10 +309,11 @@ class LiveEventService {
       return
     }
     this.reconnectAttempts++
-    const delay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) + (crypto.getRandomValues(new Uint16Array(1))[0] % 1000),
-      this.maxDelay
-    )
+    const delay = backoffDelay(this.reconnectAttempts - 1, {
+      base: this.baseDelay,
+      max: this.maxDelay,
+      jitterMs: 1000,
+    })
     logger.debug(
       `LiveEventService: reconnecting in ${Math.round(delay)}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     )
@@ -394,7 +398,7 @@ class LiveEventService {
    */
   async sendSteeringMessage(msg: SteeringMessage): Promise<Record<string, unknown>> {
     const url = `${getApiBase()}/agent-terminal/tasks/${encodeURIComponent(msg.task_id)}/steer`
-    const resp = await fetch(url, {
+    const resp = await fetchWithAuth(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ guidance: msg.guidance, task_id: msg.task_id }),
@@ -519,6 +523,10 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
+      onCompanySwitch(() => {
+        liveEventService.disconnect()
+        tryConnect()
+      })
       // React to login (token appears) and logout (token cleared).
       watch(
         () => userStore.authState.token,

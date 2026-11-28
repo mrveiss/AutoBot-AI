@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -168,14 +169,14 @@ onUnmounted(() => {
   <div class="grafana-embed" :class="{ 'fullscreen': isFullscreen }">
     <!-- Loading State -->
     <div v-if="loading" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <p class="text-sm text-gray-600 mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
+      <BaseSpinner size="md" />
+      <p class="text-sm text-autobot-text-secondary mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
     </div>
 
     <!-- Error State -->
     <div v-if="error" class="error-overlay">
       <div class="text-4xl mb-4">⚠️</div>
-      <p class="text-gray-700 mb-4">{{ error }}</p>
+      <p class="text-autobot-text-secondary mb-4">{{ error }}</p>
       <button @click="retry" class="btn btn-primary">
         {{ $t('monitoring.grafanaDashboard.retry') }}
       </button>
@@ -231,8 +232,8 @@ onUnmounted(() => {
   width: 100%;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--slm-gray-100);
-  border: 1px solid var(--slm-gray-200);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
 }
 
 .grafana-embed.fullscreen {
@@ -241,7 +242,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: var(--z-maximum);
   border-radius: 0;
 }
 
@@ -260,21 +261,8 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--slm-gray-50);
-  z-index: 10;
-}
-
-.loading-spinner {
-  width: var(--spacing-12);
-  height: var(--spacing-12);
-  border: 4px solid var(--slm-gray-200);
-  border-top-color: var(--slm-blue-500);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  background: var(--surface2);
+  z-index: var(--z-10);
 }
 
 .controls {
@@ -282,14 +270,14 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--slm-gray-50);
-  border-top: 1px solid var(--slm-gray-200);
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
 }
 
 .select-sm {
   padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-default);
   font-size: 13px;
   cursor: pointer;
@@ -297,7 +285,7 @@ onUnmounted(() => {
 
 .select-sm:focus {
   outline: none;
-  border-color: var(--slm-blue-500);
+  border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
@@ -305,7 +293,7 @@ onUnmounted(() => {
   margin-left: auto;
   padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 14px;
@@ -313,7 +301,7 @@ onUnmounted(() => {
 }
 
 .btn-icon:hover {
-  background: var(--slm-gray-100);
+  background: var(--bg-tertiary);
 }
 
 .btn {
@@ -321,7 +309,7 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
+  @apply bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover;
 }
 
 iframe {

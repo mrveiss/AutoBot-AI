@@ -132,7 +132,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90)
 
@@ -160,7 +160,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90)
 
@@ -187,7 +187,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90)
 
@@ -213,7 +213,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90)
 
@@ -241,7 +241,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90, dry_run=True)
 
@@ -270,7 +270,7 @@ class TestChatRetention:
 
         with (
             patch("tasks.chat_retention.get_redis_client", return_value=redis),
-            patch("tasks.chat_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_chats(retention_days=90)
 
@@ -309,7 +309,7 @@ class TestFileRetention:
 
         with (
             patch("tasks.file_retention._STORAGE_BASE", tmp_path),
-            patch("tasks.file_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = _cleanup_expired_files(retention_days=90)
 
@@ -326,7 +326,7 @@ class TestFileRetention:
 
         with (
             patch("tasks.file_retention._STORAGE_BASE", tmp_path),
-            patch("tasks.file_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = _cleanup_expired_files(retention_days=90)
 
@@ -355,7 +355,7 @@ class TestFileRetention:
         with (
             patch("tasks.file_retention._STORAGE_BASE", tmp_path),
             patch.object(old_file.__class__, "unlink", raise_not_found),
-            patch("tasks.file_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = _cleanup_expired_files(retention_days=90)
 
@@ -376,7 +376,7 @@ class TestFileRetention:
 
         with (
             patch("tasks.file_retention._STORAGE_BASE", tmp_path),
-            patch("tasks.file_retention.audit_emit") as mock_emit,
+            patch("tasks.retention_audit.audit_emit") as mock_emit,
         ):
             result = _cleanup_expired_files(retention_days=90, dry_run=True)
 
@@ -391,73 +391,64 @@ class TestFileRetention:
 
 
 class TestAuditLogRetention:
+    """The task delegates to the one purge path (#17225 D5); it scans no keys itself."""
+
     @pytest.mark.asyncio
     async def test_no_op_when_disabled(self):
-        """retention_days=0 → immediate return, Redis not touched."""
+        """retention_days=0 → immediate return, nothing purged."""
         from tasks.audit_log_retention import _async_cleanup_expired_audit_logs
 
-        with patch("tasks.audit_log_retention.get_redis_client") as mock_redis:
+        with patch("tasks.audit_log_retention.apply_retention") as mock_apply:
             result = await _async_cleanup_expired_audit_logs(retention_days=0)
 
-        mock_redis.assert_not_called()
+        mock_apply.assert_not_called()
         assert result["deleted_logs"] == 0
 
     @pytest.mark.asyncio
-    async def test_removes_old_entries_from_zset(self):
-        """Old entries in audit: zsets are removed."""
+    async def test_purges_through_the_policy_table_capped_at_the_setting(self):
+        """The configured days cap the table's per-category periods; one summary event."""
+        from services.audit.purge import PurgeResult
         from tasks.audit_log_retention import _async_cleanup_expired_audit_logs
 
-        redis = MagicMock()
-        redis.scan.side_effect = [
-            (1, [b"audit:unified"]),
-            (0, []),
-        ]
-        redis.type.return_value = "zset"
-        redis.zremrangebyscore.return_value = 5  # 5 entries removed
-
         with (
-            patch("tasks.audit_log_retention.get_redis_client", return_value=redis),
+            patch("tasks.audit_log_retention.apply_retention", return_value=PurgeResult(deleted=5)) as mock_apply,
             patch("tasks.audit_log_retention.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_audit_logs(retention_days=90)
 
-        assert result["deleted_logs"] == 5
-        redis.zremrangebyscore.assert_called_once()
+        mock_apply.assert_awaited_once_with(cap_days=90, dry_run=False)
+        assert result == {"deleted_logs": 5, "errors": 0}
         mock_emit.assert_called_once()  # summary audit event
 
     @pytest.mark.asyncio
-    async def test_idempotent_empty_zset(self):
-        """zremrangebyscore returning 0 → no audit emit, no errors."""
+    async def test_nothing_purged_emits_nothing(self):
+        """An idempotent re-run that finds nothing records no summary event."""
+        from services.audit.purge import PurgeResult
         from tasks.audit_log_retention import _async_cleanup_expired_audit_logs
 
-        redis = MagicMock()
-        redis.scan.side_effect = [(1, [b"audit:unified"]), (0, [])]
-        redis.type.return_value = "zset"
-        redis.zremrangebyscore.return_value = 0
-
         with (
-            patch("tasks.audit_log_retention.get_redis_client", return_value=redis),
+            patch("tasks.audit_log_retention.apply_retention", return_value=PurgeResult()),
             patch("tasks.audit_log_retention.audit_emit") as mock_emit,
         ):
             result = await _async_cleanup_expired_audit_logs(retention_days=90)
 
         assert result["deleted_logs"] == 0
-        mock_emit.assert_not_called()  # no deletions → no event
+        mock_emit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skips_non_zset_keys(self):
-        """String keys under audit:* are skipped (not deleted)."""
+    async def test_dry_run_reports_without_an_event(self):
+        from services.audit.purge import PurgeResult
         from tasks.audit_log_retention import _async_cleanup_expired_audit_logs
 
-        redis = MagicMock()
-        redis.scan.side_effect = [(1, [b"audit:config"]), (0, [])]
-        redis.type.return_value = "string"
+        with (
+            patch("tasks.audit_log_retention.apply_retention", return_value=PurgeResult(deleted=3)) as mock_apply,
+            patch("tasks.audit_log_retention.audit_emit") as mock_emit,
+        ):
+            result = await _async_cleanup_expired_audit_logs(retention_days=30, dry_run=True)
 
-        with patch("tasks.audit_log_retention.get_redis_client", return_value=redis):
-            result = await _async_cleanup_expired_audit_logs(retention_days=90)
-
-        redis.zremrangebyscore.assert_not_called()
-        assert result["deleted_logs"] == 0
+        mock_apply.assert_awaited_once_with(cap_days=30, dry_run=True)
+        assert result["deleted_logs"] == 3
+        mock_emit.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

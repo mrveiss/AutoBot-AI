@@ -1,6 +1,6 @@
 # Sandboxed agent VM/container orchestration CLI — source analysis
 
-Fetched 2026-09-17 via `gh api` (no clone). Source is anonymized per the research skill's
+Fetched 2026-09-17 via `gh api` (no clone). Source is anonymized per the `/autobot-dev-skills:lifecycle research` skill's
 default: name and repo URL stay in the chat reply, not on disk.
 
 ## Source Analysis: a multi-provider sandbox-orchestration CLI for coding agents
@@ -250,3 +250,14 @@ Ranked by how directly each maps to "sandboxing is not fully implemented":
 | `autobot-backend/services/execution/execution_manager.py` | Read the new capability descriptor instead of (or alongside) `verify_task_compatibility()` for routing decisions. |
 | `autobot-backend/api/sandbox_health.py` | Add a `paused` containment state distinct from `unhealthy` once pause/resume lands. |
 | `autobot-backend/services/execution/{local,ssh,modal,claude_code}_backend.py` | Each gets either a real `snapshot`/`restore` implementation or an explicit "why not" docstring/issue link, closing the silent-gap pattern `base_backend.py` currently allows. |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16867 — Execution-backend sandboxing: pause/resume, declared capability manifest, close snapshot/restore gap
+- #16868 — Add pause/resume to ExecutionBackend + DockerBackend
+- #16869 — Declared per-backend capability manifest for ExecutionBackend
+- #16870 — Bound Docker snapshot chain depth (auto-flatten)
+- #16871 — Resolve silent snapshot/restore gap on local/ssh/modal/claude_code backends
+- #16872 — Regression test: docker/modal stay declared runtime dependencies

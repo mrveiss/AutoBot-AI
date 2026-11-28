@@ -30,7 +30,7 @@
           <template v-if="config.status === 'paused'">
             <div class="config-row">
               <span class="label">Paused By</span>
-              <span class="value mono">{{ config.paused_by || '—' }}</span>
+              <span class="value mono">{{ actorLabel(config.paused_by, config.paused_by_name, $t('agent.systemActor')) }}</span>
             </div>
             <div class="config-row">
               <span class="label">Paused At</span>
@@ -38,7 +38,7 @@
             </div>
             <div class="config-row">
               <span class="label">Reason</span>
-              <span class="value">{{ config.paused_reason || '—' }}</span>
+              <span class="value">{{ reasonLabel(config.paused_reason) }}</span>
             </div>
           </template>
           <div class="config-row">
@@ -123,7 +123,7 @@
           <tbody>
             <tr v-for="req in pendingWakeups" :key="req.id">
               <td>{{ req.priority }}</td>
-              <td>{{ req.reason || '—' }}</td>
+              <td>{{ reasonLabel(req.reason) }}</td>
               <td class="mono">{{ formatTime(req.created_at) }}</td>
             </tr>
           </tbody>
@@ -194,10 +194,12 @@ import { createLogger } from '@/utils/debugUtils'
 import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
-
+import { createDateFormatter } from '@/utils/formatHelpers'
+import { actorLabel } from '@/utils/displayName'
+import { MANUAL_PAUSE_BODY, MANUAL_WAKEUP_BODY, useHeartbeatReasons } from '@/composables/useHeartbeatReasons'
 const logger = createLogger('HeartbeatPanel')
+const { reasonLabel } = useHeartbeatReasons()
 const { subscribe, unsubscribe } = useEventBus()
-
 interface HeartbeatConfig {
   agent_id: string
   heartbeat_enabled: boolean
@@ -205,6 +207,7 @@ interface HeartbeatConfig {
   paused_reason: string | null
   paused_at: string | null
   paused_by: string | null
+  paused_by_name?: string | null
   heartbeat_interval_seconds: number
   max_run_duration_seconds: number
   current_task_id: string | null
@@ -394,10 +397,7 @@ async function queueWakeup(): Promise<void> {
   queueing.value = true
   error.value = null
   try {
-    await apiFetch(`/${agentId.value}/wakeup`, {
-      method: 'POST',
-      body: { priority: 0, reason: 'Manual wakeup from UI' },
-    })
+    await apiFetch(`/${agentId.value}/wakeup`, { method: 'POST', body: MANUAL_WAKEUP_BODY })
     const wakeupsRes = await apiFetch(`/${agentId.value}/wakeup`)
     pendingWakeups.value = wakeupsRes as WakeupRequest[]
   } catch (err) {
@@ -412,10 +412,7 @@ async function pauseAgent(): Promise<void> {
   pausing.value = true
   error.value = null
   try {
-    const updated = await apiFetch(`/${agentId.value}/pause`, {
-      method: 'POST',
-      body: { reason: 'Manual pause from UI', paused_by: 'user' },
-    })
+    const updated = await apiFetch(`/${agentId.value}/pause`, { method: 'POST', body: MANUAL_PAUSE_BODY })
     config.value = updated as HeartbeatConfig
   } catch (err) {
     error.value = String(err)
@@ -454,10 +451,7 @@ function toggleEvents(runId: string): void {
   if (!wasExpanded) expandRun(runId)
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 
 function duration(run: HeartbeatRun): string {
   if (!run.started_at || !run.finished_at) return '—'

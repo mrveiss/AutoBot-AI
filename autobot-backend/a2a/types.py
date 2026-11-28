@@ -99,7 +99,7 @@ class AgentCard:
 
 
 @dataclass
-class TaskArtifact:
+class A2ATaskArtifact:
     """An output artifact produced by a task."""
 
     artifact_type: str  # "text", "json", "error"
@@ -150,7 +150,7 @@ class Task:
     status: A2ATaskStatus
     input: str
     context: Dict[str, Any] | None = None
-    artifacts: List[TaskArtifact] = field(default_factory=list)
+    artifacts: List[A2ATaskArtifact] = field(default_factory=list)
     created_at: str = field(default_factory=utc_timestamp)
     updated_at: str = field(default_factory=utc_timestamp)
     # Issue #968: distributed tracing — set on task creation

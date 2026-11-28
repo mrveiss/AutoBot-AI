@@ -89,14 +89,16 @@ assert _spec is not None and _spec.loader is not None
 _graph_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_graph_module)  # type: ignore[union-attr]
 
-_fingerprint_tool_call = _graph_module._fingerprint_tool_call
-_detect_tool_call_loop = _graph_module._detect_tool_call_loop
+from chat_workflow import tool_call_loop as _loop_module  # noqa: E402
+
+_fingerprint_tool_call = _loop_module.fingerprint_tool_call
+_detect_tool_call_loop = _loop_module.detect_tool_call_loop
 route_after_execution = _graph_module.route_after_execution
 prepare_llm = _graph_module.prepare_llm
 _inject_mid_conversation_warning = _graph_module._inject_mid_conversation_warning
-_LOOP_DETECTION_WINDOW = _graph_module._LOOP_DETECTION_WINDOW
-_LOOP_ABORT_THRESHOLD = _graph_module._LOOP_ABORT_THRESHOLD
-_LOOP_WARNING_MSG = _graph_module._LOOP_WARNING_MSG
+_LOOP_DETECTION_WINDOW = _loop_module.LOOP_DETECTION_WINDOW
+_LOOP_ABORT_THRESHOLD = _loop_module._LOOP_ABORT_THRESHOLD
+_LOOP_WARNING_MSG = _loop_module._LOOP_WARNING_MSG
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +282,9 @@ class TestRouteAfterExecutionLoopAbort:
         state = self._state(error="some error", tool_loop_count=0)
         assert route_after_execution(state) == "persist_conversation"
 
-    def test_max_iterations_reached_routes_to_persist(self):
+    def test_max_iterations_reached_routes_to_a_final_answer(self):
         state = self._state(tool_loop_count=0, iteration_count=10)
-        assert route_after_execution(state) == "persist_conversation"
+        assert route_after_execution(state) == "force_final_answer"
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ from api.schemas_agent import (
     PersonalityToggleRequest,
 )
 from auth_middleware import check_admin_permission
+from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
@@ -152,6 +153,7 @@ async def get_profile(pid: str) -> PersonalityProfileDetail:
     operation="create_profile",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def create_profile(body: PersonalityProfileCreate) -> PersonalityProfileDetail:
     """Create a new user personality profile."""
     profile = get_personality_manager().create_profile(**body.model_dump())
@@ -168,6 +170,7 @@ async def create_profile(body: PersonalityProfileCreate) -> PersonalityProfileDe
     operation="update_profile",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def update_profile(pid: str, body: PersonalityProfileUpdate) -> PersonalityProfileDetail:
     """Update fields on an existing profile."""
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -189,6 +192,7 @@ async def update_profile(pid: str, body: PersonalityProfileUpdate) -> Personalit
     operation="delete_profile",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def delete_profile(pid: str) -> None:
     """Delete a user-created profile. System profiles cannot be deleted."""
     try:
@@ -211,6 +215,7 @@ async def delete_profile(pid: str) -> None:
     operation="activate_profile",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def activate_profile(pid: str) -> None:
     """Set a profile as the active personality."""
     try:
@@ -229,6 +234,7 @@ async def activate_profile(pid: str) -> None:
     operation="reset_profile",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def reset_profile(pid: str) -> PersonalityProfileDetail:
     """Reset a profile's content to match the default profile."""
     try:
@@ -248,6 +254,7 @@ async def reset_profile(pid: str) -> PersonalityProfileDetail:
     operation="toggle_personality",
     error_code_prefix="PERSONALITY",
 )
+@service_opt_in("slm-personality-proxy")
 async def toggle_personality(body: PersonalityToggleRequest) -> PersonalityStatusResponse:
     """Enable or disable the personality system globally."""
     mgr = get_personality_manager()

@@ -63,6 +63,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -93,7 +95,7 @@ _WRONG = (
 #: entry is a live path a process resolves; an exemption that covered one would
 #: be this guard reporting a clean sweep over the bug it exists to catch.
 _EXEMPT = {
-    "autobot-slm-backend/services/backup.py:524": (
+    "autobot-slm-backend/services/backup.py:492": (
         "docstring prose recording #16625's finding -- it names the path to say "
         "roles/redis never renders it. Not a `#` comment, so the sweep sees it."
     ),
@@ -124,20 +126,51 @@ _SELF = "repo_tests/redis_config_path_is_canonical_17434_test.py"
 #: non-canonical path is NOT caught here.
 _EXTENSIONS = ("*.py", "*.yml", "*.md")
 
+
 #: A sweep that stops reaching the tree would report a clean repository.
 #:
-#: Measured, not estimated: the first floor here was 9000, taken from a shell
-#: count over a DIFFERENT extension list, and the declaration caught it at 8400.
-#: `floor + growth` must cover the population, so the pair leaves room in both
-#: directions -- the sweep may reach 9500 files before the ceiling binds, and the
-#: floor fires if it ever drops below 6500. A floor pinned at `population -
-#: growth` is red on the next file anyone adds.
+#: CONVERTED to a RELATIVE floor 2026-10-04 (#17914; mechanism from #17142). It carried
+#: `floor=6500, growth=3000` -- the largest allowance in the registry, which is the same
+#: statement as "nobody can say what this population should be".
+#:
+#: It converts where most of the 52 cannot, on three measured grounds. Its population is a
+#: FILE CLASS -- tracked files carrying one of `_EXTENSIONS` -- so an independent enumeration
+#: of that class co-moves with it exactly and no welcome change moves one side alone
+#: (RATCHET_BASELINES.md rule 7). Its `completed()` is handed `_files(root)`, the discovery
+#: list ITSELF, so there is no completion gap for one fraction to straddle -- that is read off
+#: the call site below, not estimated. And the reference enumerates with NO patterns and
+#: filters in Python, so it cannot fail in lockstep with the `tracked_paths(root, *_EXTENSIONS)`
+#: glob it exists to check.
+#:
+#: `relative_reach_floor_17142_test` asserts the fraction is TIGHTER than the 6500 it replaced
+#: rather than leaving that claim here.
+def _extension_matched_count(root: Path) -> int:
+    """Tracked files carrying one of `_EXTENSIONS`, counted INDEPENDENTLY of the sweep's glob.
+
+    Not `tracked_paths(root, *_EXTENSIONS)`: that is the sweep's own call, and a reference
+    sharing it would break together with the thing it measures. Filtering by suffix here keeps
+    the reference independent of the pattern list while still going through the canonical
+    helper -- a bare `git ls-files` is refused by the #15176 hook, because an inherited
+    `GIT_DIR` outranks `cwd` and would answer confidently about another checkout.
+    """
+    try:
+        listed = tracked_paths(root)
+    except EmptyEnumeration:
+        return 0
+    suffixes = tuple(pattern[1:] for pattern in _EXTENSIONS)
+    return sum(
+        1
+        for rel in listed
+        if rel.endswith(suffixes) and not rel.startswith("node_modules/") and "/node_modules/" not in rel
+    )
+
+
 REACH = declare(
     "redis-config-path-census",
     discover=lambda root: _files(root),
-    floor=6500,
+    min_fraction=0.99,
+    reference=_extension_matched_count,
     what="tracked text files swept for a Redis config-path literal",
-    growth=3000,
 )
 
 
@@ -167,7 +200,7 @@ def _declared_in_python(root: Path) -> str | None:
     Parsed, not imported: `pki.config` pulls pydantic-settings and the shared
     paths module, and what is being pinned is the declaration itself.
     """
-    tree = ast.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
             for target in node.targets:
@@ -188,7 +221,7 @@ def scan_text(rel: str, text: str) -> list[str]:
     """
     findings: list[str] = []
     for number, line in enumerate(text.splitlines(), start=1):
-        if is_comment_line(line):
+        if is_comment_line(line, rel):
             continue
         hit = next((wrong for wrong in _WRONG if wrong in line), None)
         if hit and f"{rel}:{number}" not in _EXEMPT:
@@ -196,15 +229,18 @@ def scan_text(rel: str, text: str) -> list[str]:
     return findings
 
 
-def is_comment_line(line: str) -> bool:
-    """A whole-line `#` comment, which the sweep never reports.
+def is_comment_line(line: str, rel: str) -> bool:
+    """A whole-line comment in file `rel`'s syntax, which the sweep never reports.
+
+    `rel` selects the comment syntax: Markdown has none, so a `# heading` in a
+    `.md` file is content and is scanned (#17941 review).
 
     Named rather than inlined because `_EXEMPT`'s liveness check needs the same
     question: an exemption pointing at a line the sweep skips anyway covers
     nothing, and used to read as live because the line still contained a
     `_WRONG` literal (#17444 review).
     """
-    return line.strip().startswith("#")
+    return bool(line.strip()) and not code_lines(line, name=rel)
 
 
 def _sweep(root: Path) -> list[str]:
@@ -221,7 +257,9 @@ def _sweep(root: Path) -> list[str]:
         if not any(wrong in text for wrong in _WRONG):
             continue
         offenders.extend(scan_text(rel, text))
-    REACH.completed(files)
+    # `root` is REQUIRED since this declaration went relative (#17914): a relative
+    # declaration carries floor=0, so the absolute path would assert nothing.
+    REACH.completed(files, root)
     return offenders
 
 
@@ -371,7 +409,7 @@ def test_every_exemption_is_still_live() -> None:
         index = int(number) - 1
         if index >= len(lines) or not any(wrong in lines[index] for wrong in _WRONG):
             stale.append(f"{where} (no longer names a non-canonical path) -- {reason}")
-        elif is_comment_line(lines[index]):
+        elif is_comment_line(lines[index], rel):
             # The sweep never reports a `#` comment line, so an exemption on one
             # excuses nothing while reading as live -- the literal is still there,
             # which is all the old check asked (#17444 review). A dead entry that
@@ -420,6 +458,12 @@ class TestTheDetectorTripsAndStaysQuiet:
         """
         findings = scan_text("fake.yml", "dest: ok  # was /etc/redis/redis.conf\n")
         assert len(findings) == 1
+
+    def test_a_markdown_heading_is_content_not_a_comment(self) -> None:
+        """Markdown has no comment syntax, so `# heading` is scanned (#17941)."""
+        line = "# /etc/redis/redis.conf\n"
+        assert len(scan_text("guide.md", line)) == 1
+        assert scan_text("guide.py", line) == []
 
     def test_an_exempt_line_is_not_reported(self) -> None:
         rel, number = next(iter(_EXEMPT)).rsplit(":", 1)

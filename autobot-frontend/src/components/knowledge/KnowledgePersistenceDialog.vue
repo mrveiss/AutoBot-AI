@@ -16,7 +16,7 @@
       </div>
 
       <!-- Load Error -->
-      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible @dismiss="loadError = null" class="dialog-load-error" />
+      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible :dismiss-label="t('ui.alert.dismissAlert')" @dismiss="loadError = null" class="dialog-load-error" />
 
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
@@ -142,7 +142,7 @@
         <h4 class="section-title">{{ $t('knowledge.persistence.bulkActionsTitle') }}</h4>
         <div class="bulk-buttons">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="selectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.selectAllAria')"
@@ -150,7 +150,7 @@
             {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="deselectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.deselectAllAria')"
@@ -223,7 +223,7 @@
         v-if="submitError"
         variant="error"
         :message="submitError"
-        dismissible
+        dismissible :dismiss-label="t('ui.alert.dismissAlert')"
         @dismiss="submitError = null"
       />
 
@@ -270,11 +270,9 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useBatchSelection } from '@/composables/useBatchSelection';
-import { apiService } from '@/services/api';
-import { getApiBase } from '@/config/ssot-config';
+import apiClient from '@/utils/ApiClient';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
-import BaseButton from '@/components/base/BaseButton.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
+import { BaseAlert, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 
 type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';
@@ -366,7 +364,7 @@ const loadPendingItems = async (): Promise<void> => {
     loading.value = true;
     loadError.value = null;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
+    const response = (await apiClient.call('get', '/api/chat-knowledge/knowledge/pending/{chat_id}', { path: { chat_id: props.chatId as string } })) as { success: boolean; pending_items?: PendingKnowledgeItem[] };
 
     if (response.success) {
       pendingItems.value = response.pending_items ?? [];
@@ -433,7 +431,7 @@ const applyAllDecisions = async (): Promise<void> => {
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     await Promise.all(
       decisions.map(decision =>
-        apiService.post(`${getApiBase()}/chat-knowledge/knowledge/decide`, decision)
+        apiClient.call('post', '/api/chat-knowledge/knowledge/decide', { body: decision })
       )
     );
 
@@ -454,11 +452,9 @@ const compileChat = async (): Promise<void> => {
     loading.value = true;
 
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.post(`${getApiBase()}/chat-knowledge/compile`, {
-      chat_id: props.chatId,
-      title: compileOptions.value.title || null,
-      include_system_messages: compileOptions.value.includeSystemMessages,
-    }) as { success: boolean; compiled: unknown };
+    const response = (await apiClient.call('post', '/api/chat-knowledge/compile', {
+      body: { chat_id: props.chatId as string, title: compileOptions.value.title || null, include_system_messages: compileOptions.value.includeSystemMessages },
+    })) as { success: boolean; compiled?: unknown };
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
@@ -569,7 +565,7 @@ watch(() => props.visible, (newVal: boolean) => {
 }
 
 .keyword-tag {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-full);

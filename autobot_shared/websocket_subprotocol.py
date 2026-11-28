@@ -38,20 +38,11 @@ one line per handshake attempt.
 """
 
 import hashlib
-import logging
 
 from autobot_shared.alert_cooldown import AlertCooldownManager, AlertTier
+from autobot_shared.logging_manager import get_logger
 
-# Plain stdlib logging, deliberately -- this module is imported at module
-# scope by `autobot-slm-backend/api/websocket.py`, whose test harness
-# (`tests/test_websocket_auth_smoke.py` et al.) loads that file with most of
-# the config stack replaced by MagicMock.
-# `autobot_shared.logging_manager.get_logger` builds a RotatingFileHandler
-# from config at call time and raises under that harness (mirrors
-# `autobot_shared/user_management/password_epoch.py`'s documented reason for
-# the same choice; CLAUDE.md's pattern table prescribes it for exactly this
-# situation).
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ROUTINE: this is a migration-visibility signal, not a paging alert -- 2/hr
 # and a 60-minute per-route cooldown is plenty to notice a straggler client
@@ -103,7 +94,13 @@ def resolve_ws_token(websocket) -> str | None:
         route = websocket.url.path
         cooldown_key = _route_cooldown_key(route)
         if _fallback_cooldown.should_send(cooldown_key, AlertTier.ROUTINE):
-            logger.warning("WS auth via ?token= fallback, not subprotocol | path=%s", route)
+            # flood_exempt: _fallback_cooldown already bounds this to one line per route per window.
+            # The flood guard keys on the template, so it would drop the sixth DIFFERENT route.
+            logger.warning(
+                "WS auth via ?token= fallback, not subprotocol | path=%s",
+                route,
+                extra={"flood_exempt": True},
+            )
             _fallback_cooldown.record_sent(cooldown_key, AlertTier.ROUTINE)
     return token
 

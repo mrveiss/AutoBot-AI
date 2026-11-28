@@ -1,0 +1,4 @@
+{"id": "memory-q1", "query": "what interface theme does the user prefer", "bucket": "memory", "gold": ["memory-1"]}
+{"id": "memory-q2", "query": "previous request about migrating the database", "bucket": "memory", "gold": ["memory-2"]}
+{"id": "memory-q3", "query": "which timezone does the user work in", "bucket": "memory", "gold": ["memory-3"]}
+{"id": "memory-q4", "query": "did the user accept automatic log deletion", "bucket": "memory", "gold": ["memory-4"]}

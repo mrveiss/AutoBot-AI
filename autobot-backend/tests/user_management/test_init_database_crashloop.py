@@ -76,6 +76,8 @@ class TestInitDatabaseFailFast:
 
         verify = AsyncMock(side_effect=_AuthError("password authentication failed for user"))
         monkeypatch.setattr(db, "_verify_postgres_connection", verify)
+        ensure = AsyncMock()
+        monkeypatch.setattr(db, "_apply_secret_unique_constraint", ensure)
         sleep = AsyncMock()
         monkeypatch.setattr(db.asyncio, "sleep", sleep)
 
@@ -85,6 +87,7 @@ class TestInitDatabaseFailFast:
         # Fail fast: exactly one attempt, no sleeps, and a credential-naming message.
         assert verify.await_count == 1
         assert sleep.await_count == 0
+        assert ensure.await_count == 0
         msg = str(exc.value).lower()
         assert "credential" in msg or "authorization" in msg
         assert "autobot_app" in str(exc.value)
@@ -104,6 +107,8 @@ class TestInitDatabaseFailFast:
             ]
         )
         monkeypatch.setattr(db, "_verify_postgres_connection", verify)
+        ensure = AsyncMock()
+        monkeypatch.setattr(db, "_apply_secret_unique_constraint", ensure)
         sleep = AsyncMock()
         monkeypatch.setattr(db.asyncio, "sleep", sleep)
 
@@ -111,6 +116,7 @@ class TestInitDatabaseFailFast:
 
         assert verify.await_count == 3
         assert sleep.await_count == 2  # one sleep between each of the two failures
+        assert ensure.await_count == 1
 
     @pytest.mark.asyncio
     async def test_transient_error_bounded_then_gives_up(self, monkeypatch):
@@ -120,6 +126,8 @@ class TestInitDatabaseFailFast:
 
         verify = AsyncMock(side_effect=ConnectionRefusedError("connection refused"))
         monkeypatch.setattr(db, "_verify_postgres_connection", verify)
+        ensure = AsyncMock()
+        monkeypatch.setattr(db, "_apply_secret_unique_constraint", ensure)
         sleep = AsyncMock()
         monkeypatch.setattr(db.asyncio, "sleep", sleep)
 
@@ -129,6 +137,7 @@ class TestInitDatabaseFailFast:
         # Bounded: exactly MAX attempts, not infinite; clear "unreachable" signal.
         assert verify.await_count == 3
         assert sleep.await_count == 2  # no sleep after the final failing attempt
+        assert ensure.await_count == 0
         assert "unreachable" in str(exc.value).lower()
 
     @pytest.mark.asyncio

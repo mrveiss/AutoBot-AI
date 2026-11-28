@@ -18,8 +18,8 @@
 - name: "SLM Agent | Clean: legacy agent dirs"
   ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
   loop:
-    - /opt/autobot/agent
-    - /opt/autobot/slm-agent
+    - "{{ autobot.base_dir }}/agent"
+    - "{{ autobot.base_dir }}/slm-agent"
   loop_control:
     loop_var: _agent_legacy_dir
   vars:

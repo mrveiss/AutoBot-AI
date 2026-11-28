@@ -1,55 +1,319 @@
+# Issue Triage
+#
+# triage (#13050): area/difficulty labels on opened/edited, decided by
+#   .github/scripts/issue-triage-labels.js.
+# structure (#19522): every open issue needs a goal milestone `M<n> - ...`, a
+#   `phase:M<n>.<k>` label with the same <n>, and a native parent unless it is an
+#   umbrella with sub-issues. `Parent: #N` in the body links an orphan as a native
+#   sub-issue (never re-parents) when its author is OWNER/MEMBER/COLLABORATOR and
+#   #N is an open issue; otherwise the comment says why. A gap adds `needs-structure` plus ONE marked
+#   comment, updated in place; the label clears when all three are present. Logic
+#   and fixture tests: pipeline-scripts/issue_structure.py.
+#   Native parent/sub-issue changes emit no workflow event (the `sub_issues`
+#   webhook is not an Actions trigger), so `schedule` lists EVERY open issue
+#   (paginated) and fully checks those whose label disagrees with their listed
+#   facts, or that carry an unlinked maintainer `Parent:`, at most
+#   SWEEP_MAX_CHECKS (issue_structure.py) per run (the rest next run), which also
+#   labels the backlog that predates the guard; `workflow_dispatch` re-checks
+#   one issue or sweeps.
+# wording (#19645): flags automation session ids and internal process roles in an
+#   issue body on opened/edited; see the job's own comment.
+
+# One run at a time (#21854). Owner rule 2026-11-19: one triage run, not one per issue event.
+#   Design: a WORKFLOW-WIDE concurrency group with cancel-in-progress: false. GitHub then
+#   holds one running run plus at most one pending run, and a newer pending run replaces the
+#   older. Nothing is lost because no run reads its own event payload: the `window` job
+#   lists every open issue updated since the last SUCCESSFUL run started
+#   (issue_structure.py window) and triage, structure and wording all process that set, so
+#   the surviving pending run covers every event it replaced. A failed run never advances
+#   the window; the next run re-covers it. For the same reason no job carries an
+#   event-level `if`: a run whose jobs all skip would still take the pending slot and
+#   displace a run that did the work. Nothing needs to stay per-issue-immediate: with no
+#   run in flight the first event starts a run at once, and `opened`'s one-time comment is
+#   decided by the issue's age (ASK_MAX_AGE_HOURS) plus the shared upsert, whose marker keeps it to one ask per issue (asks posted before the marker existed are not recognised, so a young issue asked earlier may be asked once more).
+#   The window advances only through the final `cursor` job (its name carries the cursor `<updated_at>#<issue number>`), so
+#   a failed job never advances it. The changed set is capped (ISSUE_TRIAGE_MAX_CHANGED in
+#   issue_structure.py, oldest first) and the cursor then stops at the last processed issue;
+#   the backlog sweep runs only on schedule or dispatch.
+#   Behaviour change: the "could not classify" ask is no longer "once, on creation". It is now
+#   "once, if never asked and created within ASK_MAX_AGE_HOURS" (repository variable
+#   ISSUE_TRIAGE_ASK_MAX_AGE_HOURS, default 168), so it can fire on a later edit of a young issue.
+#   Recovery if a cursor job name ever fails to parse (the `window` job then fails with
+#   "unparseable window cursor" and every run stays red): the newest successful run holds the bad
+#   name, so delete that run (`gh run delete <run id>`, the `window` error names it as
+#   "run <id>: unparseable window cursor"). The next window then starts from the previous
+#   successful run's cursor, or from the 24h fallback when none is left. Nothing is lost: windows
+#   only ever re-cover issues, and every step is idempotent.
+#   Known limit: updated_at cannot tell a body edit from a label change, so triage may
+#   re-add an area label the text implies after a human removed it; selectLabels still
+#   applies nothing to an issue whose author already labelled it.
+
 name: Issue Triage
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, milestoned, demilestoned, labeled, unlabeled]
+  schedule:
+    - cron: '23 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Issue number to re-check (empty: sweep every open issue)'
+        required: false
+        default: ''
 
+permissions: {}
+
+# #21854: ONE group for the whole workflow, queued not cancelled (see the header).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number }}
-  cancel-in-progress: true
+  group: issue-triage-single-run
+  cancel-in-progress: false
 
 jobs:
-  triage:
+  window:
+    name: Issues changed since the last successful run
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
+      contents: read
+      actions: read
+      issues: read
+    outputs:
+      since: ${{ steps.window.outputs.since }}
+      changed: ${{ steps.window.outputs.changed }}
+      until: ${{ steps.window.outputs.until }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            autobot_shared
+
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      - name: List the changed issues
+        id: window
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/issue_structure.py window
+
+  triage:
+    needs: window
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Triage issue
-        uses: actions/github-script@v9
+        id: triage
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          # A deferral lasts at most a few runs (events and the 2h schedule); a week bounds it.
+          ASK_MAX_AGE_HOURS: ${{ vars.ISSUE_TRIAGE_ASK_MAX_AGE_HOURS || '168' }}
+          CHANGED: ${{ needs.window.outputs.changed }}
         with:
           script: |
             // #13050: the label decision lives in .github/scripts/issue-triage-labels.js
             // so it is a pure function with unit tests, instead of untestable
             // inline substring matching that mislabelled #13032-#13036.
             const { selectLabels } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-triage-labels.js`);
-            const issue = context.payload.issue;
+            // #21854: the one-time ask is decided by age and posted through the marker upsert, never by
+            // the window: a capped window can defer an issue past its own creation time.
+            const askAfter = Date.now() - Number(process.env.ASK_MAX_AGE_HOURS) * 3600 * 1000;
+            const numbers = process.env.CHANGED.split(' ').filter(Boolean).map(Number);
+            const ASK = 'Auto-triage could not confidently classify this issue';
+            const ASK_MARKER = '<!-- issue-triage:ask -->';
+            const fs = require('fs');
+            const asked = [];
+            const { owner, repo } = context.repo;
 
-            const { labels, reason, suppressed } = selectLabels(issue);
-            console.log(`Triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
+            const failed = [];
+            for (const number of numbers) {
+              try {
+                const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number });
+                if (issue.pull_request) continue;
+                const { labels, reason, suppressed } = selectLabels(issue);
+                console.log(`#${number} triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
 
-            if (labels.length === 0) {
-              // #13050: no label beats a wrong one — but only ASK when we are
-              // genuinely uncertain. `suppressed` means the author already
-              // triaged it, and this workflow also fires on `edited`, so
-              // commenting there would nag a correctly-labelled issue on every
-              // checklist tick. Ask once, on creation, and never again.
-              if (!suppressed && context.payload.action === 'opened') {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `👋 Auto-triage could not confidently classify this issue (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
-                });
+                if (labels.length === 0) {
+                  // #13050: no label beats a wrong one — but only ASK when we are genuinely
+                  // uncertain, once, on creation. `suppressed` means the author already triaged
+                  // it. A failed run is re-covered by the next window, so also skip an issue
+                  // that already carries our question.
+                  if (!suppressed && new Date(issue.created_at).getTime() >= askAfter) {
+                  // The shared upsert posts it once and updates it in place (marker), so a
+                  // re-covered window or a later edit never adds a second ask.
+                  const body = `${ASK_MARKER}\n👋 ${ASK} (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`;
+                  fs.writeFileSync(`${process.env.RUNNER_TEMP}/ask-${number}.md`, body);
+                  asked.push(number);
+                }
+                continue;
+                }
+
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+                console.log(`#${number} triage complete! Applied labels: ${labels.join(', ')}`);
+              } catch (error) {
+                // One bad issue must not strand the rest; the run still fails so the window holds.
+                console.log(`#${number} triage failed: ${error.message}`);
+                failed.push(number);
               }
-              return;
             }
+            core.setOutput('asked', asked.join(' '));
+            if (failed.length) core.setFailed(`triage failed for: ${failed.join(', ')}`);
 
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              labels
-            });
-            console.log(`Triage complete! Applied labels: ${labels.join(', ')}`);
+      - name: Post or update the one-time ask
+        if: ${{ !cancelled() && steps.triage.outputs.asked != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          ASKED: ${{ steps.triage.outputs.asked }}
+        run: |
+          failed=""
+          for number in $ASKED; do
+            python3 .github/actions/upsert-pr-comment/upsert_pr_comment.py --marker '<!-- issue-triage:ask -->' \
+              --body-file "$RUNNER_TEMP/ask-$number.md" --number "$number" --repo "$REPO" --api-url "$API_URL" || failed="$failed #$number"
+          done
+          if [ -n "$failed" ]; then echo "ask failed for:$failed"; exit 1; fi
+
+  structure:
+    name: Issue structure (milestone, phase, parent)
+    needs: window
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            autobot_shared
+            .github/actions/upsert-pr-comment
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      - name: Check one issue
+        if: ${{ !cancelled() && inputs.issue != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue }}
+        run: python3 pipeline-scripts/issue_structure.py check --number "$ISSUE_NUMBER"
+
+      # #21854: every run checks the issues changed since the last successful run; only
+      # schedule and dispatch also take the backlog entries the sweep ranks (about 400 calls).
+      - name: Check the changed issues (and the backlog on schedule or dispatch)
+        if: ${{ !cancelled() }}
+        env:
+          BACKLOG: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CHANGED: ${{ needs.window.outputs.changed }}
+        run: |
+          args=(--changed "$CHANGED")
+          if [ -n "$BACKLOG" ]; then args+=(--backlog); fi
+          python3 pipeline-scripts/issue_structure.py sweep "${args[@]}"
+
+  # #19645: issue bodies must make sense to an outside contributor -- no automation
+  # session ids, no internal process roles. Flagged, never blocked: a hit adds the
+  # `needs-wording` label and ONE marker-identified comment, updated in place; a
+  # clean edit updates that comment and clears the label. The detector is
+  # scripts/lib/outward_wording.py, the same one behind the PR body check and the
+  # commit-msg hook.
+  wording:
+    name: Issue wording (session ids, internal roles)
+    needs: window
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # A job holding a write token runs code from the default branch only.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/lib
+            .github/actions/upsert-pr-comment
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      # One loop over the window: the scan, the sticky comment and the label per issue.
+      - name: Scan the changed issue bodies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          CHANGED: ${{ needs.window.outputs.changed }}
+        run: |
+          set -uo pipefail
+          # An absent label (a human removed it) is the state DELETE wants; any other error is a failure.
+          delete_label() {
+            local err
+            if ! err=$(gh api --method DELETE "repos/$REPO/issues/$1/labels/$2" 2>&1); then
+              case "$err" in *404*|*"Not Found"*) return 0 ;; *) echo "$err"; return 1 ;; esac
+            fi
+          }
+          out() { sed -n "s/^$1=//p" "$RUNNER_TEMP/scan.out"; }
+          scan_one() {
+            local number=$1
+            gh api "repos/$REPO/issues/$number" | jq '{issue: .}' > "$RUNNER_TEMP/event.json" || return 1
+            if [ "$(jq '.issue.pull_request != null' "$RUNNER_TEMP/event.json")" = true ]; then return 0; fi
+            : > "$RUNNER_TEMP/scan.out"
+            GITHUB_OUTPUT="$RUNNER_TEMP/scan.out" python3 scripts/lib/outward_wording.py issue \
+              --event "$RUNNER_TEMP/event.json" --out "$RUNNER_TEMP/wording.md" || return 1
+            if [ "$(out comment)" = true ]; then
+              GITHUB_TOKEN="$GH_TOKEN" python3 .github/actions/upsert-pr-comment/upsert_pr_comment.py \
+                --marker "$(out marker)" --body-file "$RUNNER_TEMP/wording.md" \
+                --number "$number" --repo "$REPO" --api-url "$API_URL" || return 1
+            fi
+            # The REST add-labels call creates the label on first use; `gh issue edit
+            # --add-label` refuses a label the repository does not have yet.
+            case "$(out label)" in
+              add) gh api --method POST "repos/$REPO/issues/$number/labels" -f "labels[]=$(out label_name)" >/dev/null || return 1 ;;
+              remove) delete_label "$number" "$(out label_name)" || return 1 ;;
+            esac
+          }
+          failed=""
+          for number in $CHANGED; do
+            scan_one "$number" || failed="$failed #$number"
+          done
+          if [ -n "$failed" ]; then echo "wording failed for:$failed"; exit 1; fi
+
+  # #21854: the only place the window advances. It exists only when triage, structure and
+  # wording all succeeded, and its NAME carries the cursor the next run's window starts at
+  # (issue_structure.py last_success_cursor): the moment before the window was listed, or,
+  # when the changed set was capped, the last processed issue's updated_at.
+  cursor:
+    name: Window cursor ${{ needs.window.outputs.until }}
+    needs: [window, triage, structure, wording]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - run: echo "next window starts at ${{ needs.window.outputs.until }}"

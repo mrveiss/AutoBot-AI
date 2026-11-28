@@ -12,11 +12,14 @@
  * Author: mrveiss
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, reactive, watch, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
@@ -248,7 +251,7 @@ class GlobalWebSocketService {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.state.url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(this.state.url), subprotocols)
         this._setupEventHandlers(resolve, reject)
         this._setupConnectionTimeout(reject)
       } catch (error: unknown) {
@@ -265,15 +268,13 @@ class GlobalWebSocketService {
     const timeoutId = setTimeout(() => controller.abort(), 2000)
 
     try {
-      const response = await fetch(`${getApiBase()}/health`, {
+      const response = await fetchWithAuth(`${getApiBase()}/health`, {
         signal: controller.signal,
         cache: 'no-store'
       })
-      clearTimeout(timeoutId)
       return response.ok
-    } catch (error: unknown) {
+    } finally {
       clearTimeout(timeoutId)
-      throw error
     }
   }
 
@@ -541,12 +542,8 @@ class GlobalWebSocketService {
     this.reconnectAttempts++
     this.state.reconnectCount = this.reconnectAttempts
 
-    const backoffDelay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.maxDelay
-    )
-    const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 1000
-    const delay = backoffDelay + jitter
+    // Jitter (< 1s) spreads clients out; the cap includes it (#15402).
+    const delay = backoffDelay(this.reconnectAttempts - 1, { base: this.baseDelay, max: this.maxDelay, jitterMs: 1000 })
 
     logger.debug(
       `Reconnecting in ${Math.round(delay)}ms ` +
@@ -858,9 +855,8 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
-      // #6692: react to login (token appears) and logout (token cleared) so a
-      // user who lands on the app pre-auth gets a connection the moment they
-      // sign in, without waiting for reconnect-backoff to fire.
+      onCompanySwitch(() => globalWebSocketService.forceReconnect())
+      // #6692: react to login (token appears) and logout (token cleared) so a pre-auth user connects at sign-in.
       watch(
         () => userStore.authState.token,
         (token, previous) => {

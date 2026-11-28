@@ -192,7 +192,7 @@ const createRipple = (event: TouchEvent) => {
 .button-primary {
   @apply border border-transparent;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .button-primary:hover:not(.button-disabled):not(.button-loading) {
@@ -242,12 +242,12 @@ const createRipple = (event: TouchEvent) => {
 
 .button-error {
   @apply border border-transparent;
-  background: var(--color-error);
-  color: var(--text-inverse);
+  background: var(--color-error-solid);
+  color: var(--text-on-error);
 }
 
 .button-error:hover:not(.button-disabled):not(.button-loading) {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   filter: brightness(0.9);
 }
 

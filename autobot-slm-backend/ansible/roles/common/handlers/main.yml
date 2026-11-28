@@ -19,9 +19,8 @@
 # otherwise the hourly cadence does not apply until the next boot and the
 # maxsize cap stays unenforceable in the meantime.
 - name: Reload systemd and restart logrotate timer
-  ansible.builtin.systemd:
-    name: logrotate.timer
-    state: restarted
-    daemon_reload: true
-  become: true
-  failed_when: false
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: logrotate.timer
+    restart_unit_daemon_reload: true
+    restart_unit_tolerate_failure: true

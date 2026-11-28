@@ -20,10 +20,12 @@
     shell: /usr/sbin/nologin
     create_home: false
 
-- name: Check if Prometheus binary exists
-  ansible.builtin.stat:
-    path: "{{ prometheus_install_dir }}/prometheus"
-  register: _prometheus_binary
+# A version bump replaces the installed binary, not only a missing one (#18556 review).
+- name: Check whether the pinned Prometheus release is installed
+  ansible.builtin.include_tasks: release_binary.yml
+  vars:
+    release_binary: "{{ prometheus_install_dir }}/prometheus"
+    release_version: "{{ prometheus_version }}"
 
 - name: Create prometheus directories
   ansible.builtin.file:
@@ -42,7 +44,7 @@
     url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
     dest: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
     mode: "0644"
-  when: not _prometheus_binary.stat.exists
+  when: release_install_needed | bool
 
 - name: Extract Prometheus
   ansible.builtin.unarchive:
@@ -53,7 +55,13 @@
       - --strip-components=1
     owner: "{{ prometheus_user }}"
     group: "{{ prometheus_group }}"
-  when: not _prometheus_binary.stat.exists
+  when: release_install_needed | bool
+  notify: Restart prometheus
+
+- name: Remove the Prometheus tarball
+  ansible.builtin.file:
+    path: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
+    state: absent
 
 # Topology detection and the config render live in their own file so the same
 # tasks can run again after the fleet roles exist (#14337). In this play they
@@ -64,8 +72,10 @@
 
 # #12460: the alert rules live in the repo under autobot-monitoring/ and were
 # never installed, so `rule_files` had nothing to point at on a fleet host.
-# Copied from the deployed checkout rather than duplicated into the role, so the
-# repo stays the single source for every alert.
+# Copied from the repo clone (code_source_dir, as health_check_cron.yml reads
+# scripts) rather than duplicated into the role, so the repo stays the single
+# source for every alert. Not autobot_repo_dir: install.sh deploys only the
+# service trees there, so a fresh install has no autobot-monitoring/ in it (#18628).
 - name: Create Prometheus rules directory
   ansible.builtin.file:
     path: "{{ prometheus_config_dir }}/rules"
@@ -76,7 +86,7 @@
 
 - name: Find Prometheus alert rules in the repo
   ansible.builtin.find:
-    paths: "{{ autobot_repo_dir }}/autobot-monitoring"
+    paths: "{{ code_source_dir }}/autobot-monitoring"
     patterns: "alerts-*.yml"
   register: _prometheus_alert_rules
 
@@ -88,9 +98,9 @@
   ansible.builtin.assert:
     that: _prometheus_alert_rules.files | length > 0
     fail_msg: >-
-      No alerts-*.yml found under {{ autobot_repo_dir }}/autobot-monitoring.
+      No alerts-*.yml found under {{ code_source_dir }}/autobot-monitoring.
       Prometheus would start with rule_files pointing at an empty directory and
-      no alert would ever fire. Check autobot_repo_dir, or set
+      no alert would ever fire. Check code_source_dir, or set
       prometheus_alert_rules_required=false for a node that intentionally has none.
   when: prometheus_alert_rules_required | bool
 
@@ -105,6 +115,22 @@
   loop: "{{ _prometheus_alert_rules.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
+  notify: Restart prometheus
+
+# #18556: install-prometheus-stack.sh copied alertmanager_rules.yml next to the
+# Prometheus config. It is a Prometheus rule file (it routes to Alertmanager via
+# labels), so it goes in rules/ where `rule_files` actually loads it; the script
+# put it outside any glob. Only on a node that runs Alertmanager, so a host that
+# never ran the script keeps exactly the rules it has today.
+- name: Install Alertmanager-routed Prometheus rules (#18556)
+  ansible.builtin.copy:
+    src: "{{ alertmanager_rules_src }}"
+    dest: "{{ prometheus_config_dir }}/rules/alertmanager_rules.yml"
+    remote_src: true
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: "0644"
+  when: monitoring_install_alertmanager | bool
   notify: Restart prometheus
 
 - name: Create Prometheus systemd service
@@ -136,7 +162,7 @@
 
 - name: "Prometheus | Ask the running server which rules it loaded (#14531)"
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ prometheus_port }}/api/v1/rules"
+    url: "http://{{ monitoring_local_host }}:{{ prometheus_port }}/api/v1/rules"
     return_content: true
   register: _prometheus_loaded_rules
   retries: "{{ prometheus_rules_check_retries | default(12) }}"

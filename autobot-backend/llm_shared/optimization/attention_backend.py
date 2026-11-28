@@ -80,7 +80,7 @@ def _import_better_transformer() -> Any:
 # ---------------------------------------------------------------------------
 
 
-class AttentionBackend(str, Enum):
+class ModelAttentionBackend(str, Enum):
     """Available sequence-mixer backend tiers.
 
     Values reflect capability tiers from highest (fastest) to lowest (most
@@ -112,10 +112,10 @@ class AttentionBackend(str, Enum):
 # these (the kernel consumes tensors, not the model wrapper).  Issue #10724.
 _NON_ATTENTION_BACKENDS = frozenset(
     {
-        AttentionBackend.SSM_SCAN,
-        AttentionBackend.LINEAR_ATTN,
-        AttentionBackend.HYBRID,
-        AttentionBackend.NOT_APPLICABLE,
+        ModelAttentionBackend.SSM_SCAN,
+        ModelAttentionBackend.LINEAR_ATTN,
+        ModelAttentionBackend.HYBRID,
+        ModelAttentionBackend.NOT_APPLICABLE,
     }
 )
 
@@ -126,7 +126,7 @@ _NON_ATTENTION_BACKENDS = frozenset(
 
 
 @dataclass
-class ModelConfig:
+class AttentionModelConfig:
     """Minimal model description used for backend selection.
 
     Attributes:
@@ -194,8 +194,8 @@ class AttentionBackendSelector:
     _arch_dispatch: ClassVar[dict[ArchitectureFamily, str]] = ARCH_DISPATCH_TABLE
 
     # Model families known to be incompatible with BetterTransformer.
-    # Entries are matched case-insensitively against ModelConfig.model_type
-    # and ModelConfig.model_name.
+    # Entries are matched case-insensitively against AttentionModelConfig.model_type
+    # and AttentionModelConfig.model_name.
     _bt_blocklist: List[str] = [
         "mixtral",
         "mistral",
@@ -209,7 +209,7 @@ class AttentionBackendSelector:
         "yi",
     ]
 
-    def select_backend(self, model_config: ModelConfig) -> AttentionBackend:
+    def select_backend(self, model_config: AttentionModelConfig) -> ModelAttentionBackend:
         """Determine the highest available backend tier for *model_config*.
 
         Dispatches on ``model_config.architecture_family`` via
@@ -248,7 +248,7 @@ class AttentionBackendSelector:
         )
         return result
 
-    def apply_backend(self, model: Any, backend: AttentionBackend) -> Any:
+    def apply_backend(self, model: Any, backend: ModelAttentionBackend) -> Any:
         """Apply *backend* to *model*, falling through on any failure.
 
         Non-attention backends (``SSM_SCAN``, ``LINEAR_ATTN``, ``HYBRID``) and
@@ -272,67 +272,67 @@ class AttentionBackendSelector:
         if backend in _NON_ATTENTION_BACKENDS:
             return model
 
-        if backend == AttentionBackend.BETTER_TRANSFORMER:
+        if backend == ModelAttentionBackend.BETTER_TRANSFORMER:
             result = self._try_apply_better_transformer(model)
             if result is not None:
                 return result
             logger.warning("BetterTransformer application failed; falling back to SDPA")
 
-        if backend in (AttentionBackend.BETTER_TRANSFORMER, AttentionBackend.SDPA):
+        if backend in (ModelAttentionBackend.BETTER_TRANSFORMER, ModelAttentionBackend.SDPA):
             result = self._try_apply_sdpa(model)
             if result is not None:
                 return result
             logger.warning("SDPA application failed; falling back to vanilla")
 
-        logger.info("AttentionBackend: using vanilla (no transformation applied)")
+        logger.info("ModelAttentionBackend: using vanilla (no transformation applied)")
         return model
 
-    def get_available_backends(self) -> List[AttentionBackend]:
+    def get_available_backends(self) -> List[ModelAttentionBackend]:
         """Return all backends available on the current system.
 
         The list is ordered from highest capability to lowest.
 
         Returns:
-            List of :class:`AttentionBackend` values that can be used.
+            List of :class:`ModelAttentionBackend` values that can be used.
         """
-        available: List[AttentionBackend] = []
+        available: List[ModelAttentionBackend] = []
 
         if _import_better_transformer() is not None:
-            available.append(AttentionBackend.BETTER_TRANSFORMER)
+            available.append(ModelAttentionBackend.BETTER_TRANSFORMER)
 
         if self._can_use_sdpa():
-            available.append(AttentionBackend.SDPA)
+            available.append(ModelAttentionBackend.SDPA)
 
-        available.append(AttentionBackend.VANILLA)
+        available.append(ModelAttentionBackend.VANILLA)
         return available
 
     # ------------------------------------------------------------------
     # Architecture-family handlers  (Issue #7350)
     # ------------------------------------------------------------------
 
-    def _handle_transformer(self, model_config: ModelConfig) -> AttentionBackend:
+    def _handle_transformer(self, model_config: AttentionModelConfig) -> ModelAttentionBackend:
         """Transformer: tiered flash/sdpa/eager selection (unchanged from #1951)."""
         if self._can_use_better_transformer(model_config):
             logger.info(
-                "AttentionBackend: selected BetterTransformer for %s",
+                "ModelAttentionBackend: selected BetterTransformer for %s",
                 model_config.model_name or model_config.model_type,
             )
-            return AttentionBackend.BETTER_TRANSFORMER
+            return ModelAttentionBackend.BETTER_TRANSFORMER
 
         if self._can_use_sdpa():
             logger.info(
-                "AttentionBackend: selected SDPA for %s",
+                "ModelAttentionBackend: selected SDPA for %s",
                 model_config.model_name or model_config.model_type,
             )
-            return AttentionBackend.SDPA
+            return ModelAttentionBackend.SDPA
 
         logger.info(
-            "AttentionBackend: falling back to vanilla for %s",
+            "ModelAttentionBackend: falling back to vanilla for %s",
             model_config.model_name or model_config.model_type,
         )
-        return AttentionBackend.VANILLA
+        return ModelAttentionBackend.VANILLA
 
-    def _handle_ssm(self, model_config: ModelConfig) -> AttentionBackend:
+    def _handle_ssm(self, model_config: AttentionModelConfig) -> ModelAttentionBackend:
         """State-space / Mamba: route to the SSM selective-scan kernel.
 
         SSM models use a recurrent scan (``ssm_kernels.SSMScanKernel``), not
@@ -343,9 +343,9 @@ class AttentionBackendSelector:
             "SSM selective-scan kernel selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.SSM_SCAN
+        return ModelAttentionBackend.SSM_SCAN
 
-    def _handle_linear_attention(self, model_config: ModelConfig) -> AttentionBackend:
+    def _handle_linear_attention(self, model_config: AttentionModelConfig) -> ModelAttentionBackend:
         """Linear-attention: route to the O(L) feature-map linear-attn kernel.
 
         Selects ``ssm_kernels.LinearAttentionKernel``.  Issue #10724.
@@ -354,9 +354,9 @@ class AttentionBackendSelector:
             "Linear-attention kernel selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.LINEAR_ATTN
+        return ModelAttentionBackend.LINEAR_ATTN
 
-    def _handle_hybrid(self, model_config: ModelConfig) -> AttentionBackend:
+    def _handle_hybrid(self, model_config: AttentionModelConfig) -> ModelAttentionBackend:
         """Hybrid (Jamba-style): route to the per-layer hybrid dispatcher.
 
         Attention layers → transformer path; SSM layers → SSM scan kernel,
@@ -366,13 +366,13 @@ class AttentionBackendSelector:
             "Hybrid per-layer routing selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.HYBRID
+        return ModelAttentionBackend.HYBRID
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _is_blocklisted(self, model_config: ModelConfig) -> bool:
+    def _is_blocklisted(self, model_config: AttentionModelConfig) -> bool:
         """Return True if the model must not use BetterTransformer."""
         candidates = [
             (model_config.model_type or "").lower(),
@@ -390,7 +390,7 @@ class AttentionBackendSelector:
                     return True
         return False
 
-    def _can_use_better_transformer(self, model_config: ModelConfig) -> bool:
+    def _can_use_better_transformer(self, model_config: AttentionModelConfig) -> bool:
         """Return True when BetterTransformer is available and not blocklisted."""
         if self._is_blocklisted(model_config):
             return False
@@ -478,8 +478,8 @@ def get_attention_backend_selector() -> AttentionBackendSelector:
 
 __all__ = [
     "ARCH_DISPATCH_TABLE",
-    "AttentionBackend",
+    "ModelAttentionBackend",
     "AttentionBackendSelector",
-    "ModelConfig",
+    "AttentionModelConfig",
     "get_attention_backend_selector",
 ]

@@ -15,9 +15,10 @@ import uuid
 from collections import defaultdict
 from typing import Dict, List, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from sqlalchemy.exc import SQLAlchemyError
 
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket
@@ -303,8 +304,8 @@ async def _presence_message_loop(websocket: WebSocket, session_id: str, user_id:
             message = json.loads(data)
             if not await _handle_presence_message(websocket, session_id, user_id, message):
                 break
-        except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for user {user_id} in session {session_id}")
+        except PEER_CLOSED_ERRORS as disconnect:
+            log_client_disconnect(logger, disconnect, "_presence_message_loop")
             break
         except json.JSONDecodeError as e:
             logger.warning(f"Invalid JSON from client: {e}")

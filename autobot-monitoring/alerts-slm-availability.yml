@@ -1,0 +1,25 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# #20620: the SLM must always be running. The watchdog restarts it; this says when that isn't
+# enough. `for: 2m` lets a normal restart pass without firing. Prometheus can only alert while it
+# is itself running, so this says nothing if the SLM's whole machine is down.
+
+groups:
+  - name: slm_availability
+    interval: 30s
+    rules:
+      - alert: SLMDown
+        expr: up{job="slm-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: slm
+        annotations:
+          summary: "The SLM is down on {{ $labels.instance }}"
+          description: >
+            Prometheus has not been able to reach the SLM for 2 minutes. Its watchdog retries
+            every minute, so a longer outage means it can't start: read the journal for
+            autobot-slm-backend and autobot-slm-watchdog.
+          runbook_url: "https://github.com/mrveiss/AutoBot-AI/blob/main/docs/runbooks/EMERGENCY_RECOVERY.md"

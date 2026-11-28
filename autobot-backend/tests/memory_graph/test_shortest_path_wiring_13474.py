@@ -22,6 +22,7 @@ pass their own tests while the feature is unreachable again.
 """
 
 import json
+import uuid
 
 import pytest
 
@@ -29,8 +30,12 @@ pytest.importorskip("fastapi")
 
 from api.graph_rag import graph_rag_path  # noqa: E402
 from api.schemas_knowledge import GraphRAGPathRequest  # noqa: E402
+from autobot_shared.user_management.base_service import TenantContext  # noqa: E402
 from services.graph_rag_service import GraphRAGService  # noqa: E402
-from tests.memory_graph.graph_test_doubles import make_harness  # noqa: E402
+from tests.memory_graph._graph_test_doubles import HARNESS_OWNER_ID, make_harness  # noqa: E402
+
+#: The principal that owns every harness entity (#18825): the endpoint scopes reads to it.
+_TENANT = TenantContext(user_id=uuid.UUID(HARNESS_OWNER_ID))
 
 
 async def _real_chain() -> GraphRAGService:
@@ -51,7 +56,7 @@ async def _call_endpoint(service: GraphRAGService, **kwargs) -> dict:
     response = await graph_rag_path(
         path_request=GraphRAGPathRequest(**kwargs),
         service=service,
-        current_user={"id": "u1"},
+        tenant=_TENANT,
     )
     return _body(response)
 

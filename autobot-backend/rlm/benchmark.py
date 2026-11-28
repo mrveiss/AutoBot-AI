@@ -16,9 +16,9 @@ Usage (CLI):
     python -m rlm.benchmark --queries 5 --output results.json
 
 Usage (programmatic):
-    from rlm.benchmark import run_benchmark
+    from rlm.benchmark import run_rlm_benchmark
 from autobot_shared.logging_manager import get_logger
-    results = await run_benchmark()
+    results = await run_rlm_benchmark()
 """
 
 import json
@@ -162,6 +162,11 @@ async def _generate(
 # -----------------------------------------------------------------------
 
 
+def _score_or_zero(score: float | None) -> float:
+    """A benchmark needs a number: a pass the evaluator gave no reading for counts as 0, never as a pass (#21845)."""
+    return 0.0 if score is None else score
+
+
 async def _run_single_pass(query: str, category: str, model: str) -> SinglePassResult:
     """Run a single-pass LLM call and evaluate the response."""
     evaluator = ResponseQualityEvaluator()
@@ -177,7 +182,7 @@ async def _run_single_pass(query: str, category: str, model: str) -> SinglePassR
         query=query,
         category=category,
         response=response,
-        quality_score=result.quality_score,
+        quality_score=_score_or_zero(result.quality_score),
         latency_ms=latency,
         response_tokens=tokens,
     )
@@ -204,9 +209,9 @@ async def _run_rlm_pass(
         total_tokens += len(response.split())
 
         result = await evaluator.evaluate(query=query, response=response, iteration=i + 1)
-        scores.append(result.quality_score)
+        scores.append(_score_or_zero(result.quality_score))
 
-        if result.quality_score >= cfg.quality_threshold:
+        if scores[-1] >= cfg.quality_threshold:
             break
 
         if i < cfg.max_reflections:
@@ -232,7 +237,7 @@ async def _run_rlm_pass(
 # -----------------------------------------------------------------------
 
 
-async def run_benchmark(
+async def run_rlm_benchmark(
     queries: List[Dict[str, Any]] | None = None,
     model: str = DEFAULT_LLM_MODEL,
     rlm_config: RLMConfig | None = None,
@@ -349,7 +354,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     async def _main():
-        results = await run_benchmark(max_queries=args.queries, model=args.model)
+        results = await run_rlm_benchmark(max_queries=args.queries, model=args.model)
         output = json.dumps(results, indent=2)
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:

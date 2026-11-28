@@ -15,6 +15,7 @@ import ast
 import re
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.diagnostic import Diagnostic
 
@@ -44,8 +45,7 @@ def _docstring_constant_ids(tree: ast.AST) -> set[int]:
 
 def _is_test_file(file_path: Path) -> bool:
     """Test fixtures legitimately use mock localhost URLs (not SSOT-resolvable)."""
-    name = file_path.name
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in file_path.parts
+    return is_test_filename(file_path.name, include_js=False, include_conftest=False) or "tests" in file_path.parts
 
 
 def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:

@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.helpers._llm_service_double import make_llm_service_double
+
 _MODULE = "async_chat_workflow"
 _SVC_MODULE = "services.knowledge.service"
 
@@ -27,12 +29,20 @@ def _make_workflow_kb_result(content: str = "AutoBot fact", source: str = "doc-1
     return {"content": content, "source": source, "score": score, "metadata": {}}
 
 
+def _make_llm(content: str = "answer"):
+    """An LLMService double: a method LLMService lacks (e.g. chat_completion) raises (#19649)."""
+    llm = make_llm_service_double()
+    llm.chat.return_value = _make_llm_response(content)
+    return llm
+
+
 def _make_llm_response(content: str = "answer") -> MagicMock:
     resp = MagicMock()
     resp.content = content
     resp.model = "llama3"
     resp.tokens_used = 10
     resp.processing_time = 0.1
+    resp.error = None
     return resp
 
 
@@ -53,44 +63,41 @@ class TestGenerateLlmResponseGrounding:
     async def test_kb_context_reaches_llm_when_results_present(self, workflow):
         """(a) Non-empty kb_results + grounding enabled → LLM receives KB context."""
         kb_results = [_make_workflow_kb_result("grounding fact")]
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = _make_llm()
 
         await workflow._generate_llm_response("question", mock_llm, kb_results)
 
-        call_messages = mock_llm.chat_completion.call_args[0][0]
-        system_msg = next(m for m in call_messages if m.role == "system")
-        assert "[Source 1]" in system_msg.content
-        assert "grounding fact" in system_msg.content
+        call_messages = mock_llm.chat.call_args[0][0]
+        system_msg = next(m for m in call_messages if m["role"] == "system")
+        assert "[Source 1]" in system_msg["content"]
+        assert "grounding fact" in system_msg["content"]
 
     async def test_no_kb_context_when_results_empty(self, workflow):
         """(b) Empty kb_results → system prompt unchanged (no [Source N] blocks)."""
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = _make_llm()
 
         await workflow._generate_llm_response("question", mock_llm, [])
 
-        call_messages = mock_llm.chat_completion.call_args[0][0]
-        system_msg = next(m for m in call_messages if m.role == "system")
-        assert "[Source" not in system_msg.content
-        assert "KNOWLEDGE CONTEXT" not in system_msg.content
+        call_messages = mock_llm.chat.call_args[0][0]
+        system_msg = next(m for m in call_messages if m["role"] == "system")
+        assert "[Source" not in system_msg["content"]
+        assert "KNOWLEDGE CONTEXT" not in system_msg["content"]
 
     async def test_no_kb_context_when_grounding_disabled(self, workflow):
         """(c) Citation instruction disabled via config → instruction omitted."""
         kb_results = [_make_workflow_kb_result("grounding fact")]
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = _make_llm()
         mock_cfg = MagicMock()
         mock_cfg.chat_citation_instruction_enabled = False
 
         with patch(f"{_SVC_MODULE}.config", mock_cfg):
             await workflow._generate_llm_response("question", mock_llm, kb_results)
 
-        call_messages = mock_llm.chat_completion.call_args[0][0]
-        system_msg = next(m for m in call_messages if m.role == "system")
+        call_messages = mock_llm.chat.call_args[0][0]
+        system_msg = next(m for m in call_messages if m["role"] == "system")
         # [Source N] labels still present; grounding *instruction* is omitted
-        assert "Answer the user's question using the knowledge sources" not in system_msg.content
-        assert "[Source 1]" in system_msg.content
+        assert "Answer the user's question using the knowledge sources" not in system_msg["content"]
+        assert "[Source 1]" in system_msg["content"]
 
 
 # ---------------------------------------------------------------------------

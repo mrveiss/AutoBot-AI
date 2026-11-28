@@ -22,6 +22,7 @@ from api.user_management.dependencies import get_current_user_id, get_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import SecretType
+from llm_shared.credential_redaction import redact_api_key
 from models.secret import Secret, SecretScope
 from services.secrets_service import SecretsService
 
@@ -58,9 +59,7 @@ class ProviderCredentialsListResponse(BaseModel):
 
 def _redact_api_key(api_key: str) -> str:
     """Redact API key for logging/display."""
-    if len(api_key) <= 8:
-        return "***"
-    return f"{api_key[:4]}...{api_key[-4:]}"
+    return redact_api_key(api_key)
 
 
 @router.post(

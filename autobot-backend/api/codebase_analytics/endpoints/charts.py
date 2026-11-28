@@ -13,18 +13,19 @@ from typing import Dict
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection, get_redis_connection
+from ..type_coverage import problem_type_coverage
 
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Issue #380: Module-level tuple for severity ordering in charts
-_CHART_SEVERITY_ORDER = ("high", "medium", "low", "info", "hint")
 
 
 def _try_chromadb_aggregation(
@@ -48,15 +49,15 @@ def _try_chromadb_aggregation(
         return 0, False
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
+        # #17758: no unscoped branch. The else-arm queried problems across every
+        # indexed source, which the frontend never triggered only because it
+        # always sends source_id -- any other caller omitting it got the leak.
+        where_filter = {
+            "$and": [
+                {"type": "problem"},
+                {"source_id": require_source_id(source_id, "chart where-filter")},
+            ]
+        }
         results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
         total = 0
         for metadata in results.get("metadatas", []):
@@ -84,12 +85,12 @@ def _build_severity_chart_data(severity_counts: Dict[str, int]) -> list[dict]:
     """
     severity_data = []
     # Add severities in defined order
-    for sev in _CHART_SEVERITY_ORDER:
+    for sev in PROBLEM_SEVERITY_ORDER:
         if sev in severity_counts:
             severity_data.append({"severity": sev, "count": severity_counts[sev]})
     # Add any unlisted severities at the end
     for sev, count in severity_counts.items():
-        if sev not in _CHART_SEVERITY_ORDER:
+        if sev not in PROBLEM_SEVERITY_ORDER:
             severity_data.append({"severity": sev, "count": count})
     return severity_data
 
@@ -120,6 +121,8 @@ def _build_chart_response(
                 "unique_problem_types": len(problem_types),
                 "files_with_problems": len(file_problems),
                 "race_condition_count": sum(race_conditions.values()),
+                # #18067: which DECLARED types emitted nothing, as numbers.
+                "type_coverage": problem_type_coverage(problem_types).as_dict(),
             },
         },
         "storage_type": storage_type,
@@ -169,8 +172,9 @@ async def _aggregate_from_redis(
 
     def _scan_and_aggregate():
         # Issue #561: Collect all keys first, then batch fetch with pipeline
-        # Issue #1772: Scope to source_id when provided
-        key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+        # #17758: #1772 scoped this "when provided"; the else-arm read the
+        # unscoped keys, which every project's aggregation then shared.
+        key_prefix = f"codebase:{require_source_id(source_id, 'chart Redis key')}"
         keys = list(redis_client.scan_iter(match=f"{key_prefix}:problems:*"))
         if not keys:
             return 0
@@ -237,17 +241,15 @@ async def _get_redis_fallback_chart_data(
 
     Issue #1772: source_id scopes to per-project keys.
 
-    Returns (total_problems, storage_type) or a JSONResponse on error/no-data.
+    Returns (total_problems, storage_type), a no-data dict, or a JSONResponse on error.
     """
     redis_client = await get_redis_connection()
     if not redis_client:
-        return JSONResponse(
-            {
-                "status": "no_data",
-                "message": "No codebase data found. Run indexing first.",
-                "chart_data": None,
-            }
-        )
+        return {
+            "status": "no_data",
+            "message": "No codebase data found. Run indexing first.",
+            "chart_data": None,
+        }
     try:
         total_problems = await _aggregate_from_redis(
             redis_client,
@@ -276,8 +278,9 @@ async def _get_redis_fallback_chart_data(
     operation="get_chart_data",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_chart_data(
-    source_id: str | None = None,
+    source_id: SourceIdQuery,
 ):
     """
     Get aggregated data for analytics charts.
@@ -320,18 +323,16 @@ async def get_chart_data(
             file_problems,
             source_id=source_id,
         )
-        if isinstance(result, JSONResponse):
+        if isinstance(result, (dict, JSONResponse)):
             return result
         total_problems, storage_type = result
 
     # Build and return chart response (Issue #665: uses _build_chart_response helper)
-    return JSONResponse(
-        _build_chart_response(
-            problem_types,
-            severity_counts,
-            race_conditions,
-            file_problems,
-            total_problems,
-            storage_type,
-        )
+    return _build_chart_response(
+        problem_types,
+        severity_counts,
+        race_conditions,
+        file_problems,
+        total_problems,
+        storage_type,
     )

@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom'
 import { vi, afterAll, afterEach } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
+import { installMonotonicDateNow } from './utils/monotonicClock'
 
 // #14842/#14613: destroy every mounted component tree after the test that made
 // it. The `beforeEach` below resets `document.body.innerHTML`, which DETACHES a
@@ -24,12 +25,33 @@ import { enableAutoUnmount } from '@vue/test-utils'
 // because the `beforeEach` below already made that impossible.
 enableAutoUnmount(afterEach)
 
+// #21245: pre-transform the shared module graph once per worker, outside any test timer. Specs
+// that call `vi.resetModules()` and then `await import(...)` a composable inside a test or
+// `beforeEach` otherwise pay the FIRST fetch/transform of that composable's graph (the
+// `@autobot/ui` barrel, reached through `debugUtils`/`useAnnounce`/`saveTextFile`, plus
+// `vue-i18n`) inside the first test's 10s budget; under a loaded run that first import took 5-9s
+// and timed out. Done here it covers every spec, including ones written later.
+await import('@autobot/ui')
+await import('vue-i18n')
+// Drop the evaluated instances afterwards: a spec's own `vi.mock('reka-ui')` (or any other
+// dependency of the barrel) must still apply to its first import. The fetched and transformed
+// code stays cached, which is the cost being removed.
+vi.resetModules()
+
+// #18254: a wall clock that steps backwards (WSL2 time correction, under load)
+// makes Vue's event invoker drop clicks; see utils/monotonicClock.ts.
+installMonotonicDateNow()
+
 // Prevent cross-file pollution: some test files call vi.stubGlobal() (e.g. window,
 // navigator, EventSource) at module scope without restoring. Under parallel file
 // execution these leak into later files' worker context, causing flaky failures
 // (async DOM updates/emits break). Restore all stubbed globals after each file.
 afterAll(() => {
   vi.unstubAllGlobals()
+  // #18254: RumAgent is a singleton that starts 30s intervals on import; stop them before
+  // jsdom is torn down, or a late tick reads a localStorage that no longer exists.
+  // Only present when the file loaded it -- nothing is imported here to find it.
+  globalThis.window?.rum?.stop?.()
 })
 
 // Wrap global fetch to resolve relative URLs against document origin (jsdom 29+ compat)

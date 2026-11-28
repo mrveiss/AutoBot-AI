@@ -13,24 +13,25 @@ import ast
 import os
 from pathlib import Path
 
-from a2a.trust_score import Capability
+from a2a.trust_score import TrustCapability
+from autobot_shared.testfile_names import is_test_filename
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFINITION = _BACKEND / "a2a" / "trust_score.py"
 
 
 def _members_named(source: str) -> set:
-    """``Capability.<NAME>`` attribute references in *source*."""
+    """``TrustCapability.<NAME>`` attribute references in *source*."""
     return {
         node.attr
         for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "Capability"
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "TrustCapability"
     }
 
 
 def _is_test_file(name: str) -> bool:
     """pytest.ini's ``python_files`` naming, not a substring: ``"test" in name`` would skip ``attestation.py``."""
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(name, include_js=False)
 
 
 def test_a_production_module_whose_name_contains_test_is_still_scanned():
@@ -54,12 +55,12 @@ def test_every_capability_is_enforced_somewhere():
     for path in _production_modules():
         named |= _members_named(path.read_text(encoding="utf-8", errors="replace"))
 
-    unenforced = sorted(c.name for c in Capability if c.name not in named)
+    unenforced = sorted(c.name for c in TrustCapability if c.name not in named)
 
     assert not unenforced, f"capabilities no production code enforces -- enforce them or remove them: {unenforced}"
 
 
 def test_the_scan_sees_a_reference():
     """Negative control: the predicate must find the shape it guards, and nothing else."""
-    assert _members_named("require_capability(peer, Capability.SUBMIT_TASKS)") == {"SUBMIT_TASKS"}
+    assert _members_named("require_capability(peer, TrustCapability.SUBMIT_TASKS)") == {"SUBMIT_TASKS"}
     assert _members_named("x = Other.SUBMIT_TASKS") == set()

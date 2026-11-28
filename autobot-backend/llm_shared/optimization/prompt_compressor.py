@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
 
@@ -151,8 +152,7 @@ class PromptCompressor:
         """Count tokens in text."""
         if self._tokenizer:
             return self._tokenizer(text)
-        # Rough estimate: ~4 chars per token for English
-        return len(text) // 4
+        return estimate_fast(text)  # shared character-based estimate (#17855)
 
     def compress(
         self,

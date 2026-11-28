@@ -25,9 +25,20 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from security.upload_filename_policy import require_safe_upload
 
-from ._common import agent_context, agent_node_uuid, assert_item_in_company
+from ..deps import logged_server_error
+from ..services.work_item_own_task import InvalidTransition
+from ._common import (
+    agent_context,
+    agent_node_uuid,
+    assert_item_in_company,
+    parse_work_item_id,
+    refused_transition,
+)
+from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
 
@@ -48,11 +59,11 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
     "nothing to do" from "this route does nothing", which is exactly the
     distinction the stub response existed to make.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
+    from ..services.accessors import get_work_item_service
+    from ..services.run_checkouts import live_run_id
     from ..services.work_item_queue import checkout_next
-    from ..services.work_item_service import WorkItemService
 
     agent_id, company_id = agent_context(request)
 
@@ -69,8 +80,13 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
-        item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id)
+        # The run is the agent's own, found server-side from its credential: a claim is made inside a run or
+        # not at all, so the run can always release it (#19600).
+        run_id = await live_run_id(session, agent_id, company_id)
+        if run_id is None:
+            raise HTTPException(status_code=409, detail="No active run for this agent; work is claimed during a run")
+        svc = get_work_item_service()
+        item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id, run_id=str(run_id))
         await session.commit()
 
     if item is None:
@@ -94,8 +110,20 @@ class StatusUpdate(BaseModel):
     comment: Optional[str] = None
 
 
+async def _status_gate(agent_id: str, company_id: str) -> tuple:
+    """The review gate for this move and the agent's node (#21503, #21586).
+
+    The node UUID is the key the handoff names the agent by, the comment's author, and what the item's holder is
+    compared with: every move needs it, because an agent changes only an item it holds.
+    """
+    from ..services.accessors import done_gate_for
+
+    node = await agent_node_uuid(agent_id, company_id)
+    return done_gate_for(str(node) if node else None, is_agent=True), node
+
+
 @router.post("/work-items/{item_id}/status")
-async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, request: Request) -> Dict[str, Any]:
+async def update_work_item_status(item_id: str, body: StatusUpdate, request: Request) -> Dict[str, Any]:
     """Transition a work item, enforcing the state machine (#15859).
 
     This used to echo the requested status back with ``{"updated": True}``
@@ -105,12 +133,14 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
     The company check is not incidental: ``transition_status`` takes
     ``company_id`` and this route is reached with an agent's context, so an
     item belonging to another company must 404 rather than transition.
+
+    Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
+    item_id = str(parse_work_item_id(item_id))
     from user_management.database import get_async_session_factory
 
     from ..models.enums import WorkItemStatus
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     agent_id, company_id = agent_context(request)
     try:
@@ -118,17 +148,17 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
 
+    gate, author_uuid = await _status_gate(agent_id, company_id)
     factory = get_async_session_factory()
     async with factory() as session:
         try:
-            item = await lazy_singleton(WorkItemService)().transition_status(
-                session,
-                work_item_id=str(item_id),
-                new_status=new_status,
-                company_id=str(company_id),
+            item = await get_work_item_service().transition_status(
+                session, item_id, new_status, company_id=str(company_id), done_gate=gate
             )
+        except InvalidTransition as exc:  # a refused move, or a done the review gate cannot send to review
+            raise refused_transition(exc) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise http_refusal(404, exc, scope="agent_api.update_work_item_status") from None
 
         # #16017: `comment` was declared and read nowhere -- accepted, answered
         # 200, discarded. Wired not removed: the store already exists unreached
@@ -137,8 +167,7 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
         # failed to commit is a reason for something that did not happen.
         comment_id = None
         if body.comment and body.comment.strip():
-            author_uuid = await agent_node_uuid(agent_id, company_id)
-            comment = await lazy_singleton(WorkItemService)().add_comment(
+            comment = await get_work_item_service().add_comment(
                 session,
                 work_item_id=str(item_id),
                 company_id=str(company_id),
@@ -148,7 +177,7 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
             comment_id = str(comment.id)
 
         await session.commit()
-        resulting = str(item.status)
+        resulting = WorkItemStatus(item.status).value
 
     # `comment_id` separates a 200 that stored the comment from one with none
     # to store; the caller could not tell those apart (#16017).
@@ -180,30 +209,35 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
     point of ingesting the event is that exceeding the limit stops the agent.
     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
     computed, and charging zero is what #15860 was.
+
+    A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
+    charges nothing: a ``200`` means the cost landed on the item named (#16016).
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..exceptions import BudgetExhausted, UnpricedModel
-    from ..services.budget import BudgetService
+    from ..exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
+    from ..services.accessors import get_budget_service
 
     agent_id, company_id = agent_context(request)
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            cost = await lazy_singleton(BudgetService)().ingest_cost_event(
+            cost = await get_budget_service().ingest_cost_event(
                 session,
                 agent_id=agent_id,
                 company_id=company_id,
                 tokens_in=body.tokens_in,
                 tokens_out=body.tokens_out,
                 model=body.model,
+                work_item_id=body.work_item_id,
             )
             await session.commit()
+    except WorkItemNotInCompany as exc:
+        raise http_refusal(404, exc, scope="agent_api.ingest_cost_event") from None
     except BudgetExhausted as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
+        raise http_refusal(402, exc, scope="agent_api.ingest_cost_event") from None
     except UnpricedModel as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="agent_api.ingest_cost_event") from None
 
     return {"recorded": True, "cost": str(cost)}
 
@@ -223,10 +257,9 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
     be stored under its OWN company — readable by neither side and attached to
     an item its company does not own.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     agent_id, company_id = agent_context(request)
     await assert_item_in_company(body.work_item_id, company_id)
@@ -234,7 +267,7 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
+        svc = get_work_item_service()
         comment = await svc.add_comment(
             session,
             work_item_id=body.work_item_id,
@@ -261,11 +294,10 @@ class WorkProduct(BaseModel):
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
     agent_id, company_id = agent_context(request)
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..models.enums import WorkProductType
-    from ..services.work_product_service import WorkProductService
+    from ..services.accessors import get_work_product_service
 
     try:
         product_type = WorkProductType(body.type)
@@ -274,7 +306,7 @@ async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, 
 
         raise _HTTPException(status_code=422, detail=f"Unknown product type: {body.type!r}")
 
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     factory = get_async_session_factory()
     async with factory() as session:
         async with session.begin():
@@ -361,10 +393,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     if body.work_item_id is not None:
         item_uuid = await assert_item_in_company(body.work_item_id, company_id)
 
-    values: Dict[str, Any] = {
-        "status": status.value,
-        "finished_at": datetime.now(tz=timezone.utc),
-    }
+    values: Dict[str, Any] = {"status": status.value, "finished_at": datetime.now(tz=timezone.utc)}
     if item_uuid is not None:
         values["work_item_id"] = item_uuid
 
@@ -401,23 +430,22 @@ async def agent_upload_attachment(
 ) -> Dict[str, Any]:
     """Agent uploads a file attachment to a work item (GH#8253)."""
     agent_id, company_id = agent_context(request)
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.attachment_service import AttachmentService, AttachmentTooLarge
+    from ..services.accessors import get_attachment_service
+    from ..services.attachment_service import AttachmentTooLarge
 
-    content = await file.read()
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            svc = lazy_singleton(AttachmentService)()
+            svc = get_attachment_service()
             row = await svc.upload(
                 session,
                 company_id=company_id,
                 work_item_id=work_item_id,
-                filename=file.filename or "upload",
+                filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
                 content_type=file.content_type or "application/octet-stream",
-                content=content,
+                content=await file.read(),
                 uploaded_by_agent_id=agent_id,
             )
         return {
@@ -427,13 +455,13 @@ async def agent_upload_attachment(
             "text_extracted": row.text_extracted,
         }
     except AttachmentTooLarge as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=413, detail="Internal server error")
+        raise http_refusal(413, exc, scope="agent_api.agent_upload_attachment") from None
 
 
 @router.get("/context/{item_id}")
-async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
+async def get_item_context(item_id: str, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    item_id = str(parse_work_item_id(item_id))
     _, company_id = agent_context(request)  # GH#12148: authenticated agent context
     await assert_item_in_company(str(item_id), company_id)  # GH#12156: tenant scope
     from ..kb.work_item_kb import WorkItemKB
@@ -479,50 +507,23 @@ async def search_peer_agents(
     """
     agent_id, company_id = agent_context(request)
     try:
-        from autobot_shared.logging_manager import get_logger
-        from knowledge import get_knowledge_base
-
-        from ..kb import AgentCapabilityIndexer
-
-        logger_inner = get_logger(__name__)
-        indexer = AgentCapabilityIndexer()
-        kb = await get_knowledge_base()
-        collection_name = indexer._collection_name(company_id)
-
-        try:
-            collection = await kb._async_chroma_client.get_collection(collection_name)
-        except Exception:
+        rows = await fetch_peer_rows(company_id, q, limit)
+        if rows is None:
             return {"agents": [], "count": 0, "query": q}
-
-        results = await collection.query(
-            query_texts=[q],
-            n_results=min(limit, 50),
-            include=["documents", "metadatas"],
-        )
-
-        agents = []
-        if results.get("ids") and len(results["ids"]) > 0:
-            docs = results.get("documents", [[]])[0] if results.get("documents") else []
-            metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
-            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], metadatas)):
-                agents.append(
-                    PeerAgent(
-                        agent_id=metadata.get("agent_id", ""),
-                        agent_name=metadata.get("agent_name", ""),
-                        title=metadata.get("title", ""),
-                        role=metadata.get("role", ""),
-                        capabilities=docs[idx] if idx < len(docs) else "",
-                        manager_name=metadata.get("manager_name"),
-                    )
-                )
-
+        agents = [
+            PeerAgent(
+                agent_id=metadata.get("agent_id", ""),
+                agent_name=metadata.get("agent_name", ""),
+                title=metadata.get("title", ""),
+                role=metadata.get("role", ""),
+                capabilities=doc,
+                manager_name=metadata.get("manager_name"),
+            )
+            for metadata, doc in rows
+        ]
         return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
     except Exception as e:
-        from autobot_shared.logging_manager import get_logger
-
-        logger_inner = get_logger(__name__)
-        logger_inner.exception("Peer agent search failed for agent %s: %s", agent_id, str(e))
-        raise HTTPException(status_code=500, detail=f"Peer search failed: {str(e)}")
+        raise logged_server_error(logger, "Peer search failed", f"agent {agent_id}", e) from e
 
 
 # ── Agent-facing wiki routes (GH#9021) ─────────────────────────────────────
@@ -550,14 +551,13 @@ async def agent_list_wiki(namespace: Optional[str] = None, request: Request = No
     agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.agent_wiki_service import AgentWikiService
+    from ..services.accessors import get_agent_wiki_service
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(AgentWikiService)()
+        svc = get_agent_wiki_service()
         entries = await svc.list_entries(session, agent_id, _uuid.UUID(company_id), namespace)
     return {
         "entries": [
@@ -573,14 +573,13 @@ async def agent_create_wiki_entry(body: AgentWikiEntryIn, request: Request = Non
     agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.agent_wiki_service import AgentWikiService
+    from ..services.accessors import get_agent_wiki_service
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(AgentWikiService)()
+        svc = get_agent_wiki_service()
         entry = await svc.create_entry(
             session,
             agent_id=agent_id,

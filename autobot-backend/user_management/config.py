@@ -16,28 +16,24 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 
+from autobot_shared import postgres_identity
+from autobot_shared.postgres_dsn import build_postgres_dsn
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
 
 def _get_default_postgres_host() -> str:
-    """Get default PostgreSQL host from SSOT config.
+    """Default PostgreSQL host: the SSOT value (``AUTOBOT_POSTGRES_HOST``).
 
-    PostgreSQL runs on the Redis VM in AutoBot architecture.
-    Uses ConfigRegistry for consistent fallback chain (#639).
+    #19320: this used to return the Redis VM address -- a fourth host default
+    beside ssot_config, the env registry and Ansible. It now reads the one
+    home, so an unset environment resolves the same way everywhere.
     """
-    try:
-        from config.registry import ConfigRegistry
-
-        return ConfigRegistry.get("vm.redis")  # SSOT default via registry_defaults
-    except Exception:
-        from autobot_shared.ssot_config import get_config
-
-        return get_config().vm.redis
+    return config.postgres_host
 
 
-class DeploymentMode(str, Enum):
+class UserManagementMode(str, Enum):
     """Deployment mode enumeration."""
 
     SINGLE_COMPANY = "single_company"
@@ -46,7 +42,7 @@ class DeploymentMode(str, Enum):
 
 
 @dataclass
-class FeatureFlags:
+class UserModeFeatures:
     """Feature flags based on deployment mode."""
 
     user_management: bool = False
@@ -65,36 +61,44 @@ class FeatureFlags:
 class DeploymentConfig:
     """Configuration for the current deployment mode."""
 
-    mode: DeploymentMode
-    features: FeatureFlags
+    mode: UserManagementMode
+    features: UserModeFeatures
     postgres_enabled: bool = False
     postgres_host: str = field(default_factory=_get_default_postgres_host)
-    postgres_port: int = 5432
-    postgres_db: str = "autobot"
-    postgres_user: str = "autobot"
+    postgres_port: int = postgres_identity.DB_PORT
+    postgres_db: str = postgres_identity.USERS_DB_NAME
+    postgres_user: str = postgres_identity.USERS_DB_ROLE
     postgres_password: str = ""
     encryption_key: str | None = None
 
     @property
     def postgres_url(self) -> str:
         """Generate PostgreSQL connection URL."""
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return build_postgres_dsn(
+            "postgresql+asyncpg",
+            self.postgres_user,
+            self.postgres_password,
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
         )
 
     @property
     def postgres_sync_url(self) -> str:
         """Generate synchronous PostgreSQL connection URL (for Alembic)."""
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return build_postgres_dsn(
+            "postgresql",
+            self.postgres_user,
+            self.postgres_password,
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
         )
 
 
 # Feature flags for each deployment mode
-MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
-    DeploymentMode.SINGLE_COMPANY: FeatureFlags(
+MODE_FEATURES: dict[UserManagementMode, UserModeFeatures] = {
+    UserManagementMode.SINGLE_COMPANY: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=False,
@@ -106,7 +110,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
         quota_management=False,
         billing=False,
     ),
-    DeploymentMode.MULTI_COMPANY: FeatureFlags(
+    UserManagementMode.MULTI_COMPANY: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=True,
@@ -118,7 +122,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
         quota_management=True,
         billing=False,
     ),
-    DeploymentMode.PROVIDER: FeatureFlags(
+    UserManagementMode.PROVIDER: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=True,
@@ -155,7 +159,7 @@ def get_deployment_config() -> DeploymentConfig:
     mode_str = config.user_mode.lower()
 
     try:
-        mode = DeploymentMode(mode_str)
+        mode = UserManagementMode(mode_str)
     except ValueError:
         # AutoBot always runs full, Postgres-backed user management (#10636).
         # An unset/invalid AUTOBOT_USER_MODE defaults to single_company.
@@ -164,7 +168,7 @@ def get_deployment_config() -> DeploymentConfig:
                 "AUTOBOT_USER_MODE=%r is invalid; defaulting to single_company (full user management)",
                 mode_str,
             )
-        mode = DeploymentMode.SINGLE_COMPANY
+        mode = UserManagementMode.SINGLE_COMPANY
 
     # Get feature flags for this mode
     features = MODE_FEATURES[mode]
@@ -195,12 +199,6 @@ def get_deployment_config() -> DeploymentConfig:
     )
 
     return _deployment_config
-
-
-def is_feature_enabled(feature: str) -> bool:
-    """Check if a specific feature is enabled for the current deployment mode."""
-    config = get_deployment_config()
-    return getattr(config.features, feature, False)
 
 
 def requires_auth() -> bool:

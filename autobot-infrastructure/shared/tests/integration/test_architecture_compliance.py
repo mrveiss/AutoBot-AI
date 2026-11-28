@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # signature is the one the call site below already uses — the old path was a stale alias
 # of it, which is why the call needs no change.
 from autobot_shared.redis_client import get_redis_client
-from config import unified_config_manager
+from config import config_manager
 from constants.network_constants import NetworkConstants
 
 
@@ -41,7 +41,7 @@ class TestServiceDistribution:
 
     def test_redis_on_vm3_only(self):
         """Ensure Redis runs only on VM3 (Redis VM)"""
-        redis_config = unified_config_manager.get_redis_config()
+        redis_config = config_manager.get_redis_config()
         redis_host = redis_config.get("host")
 
         assert (
@@ -50,7 +50,7 @@ class TestServiceDistribution:
 
     def test_backend_on_main_machine(self):
         """Ensure backend runs on main machine"""
-        backend_config = unified_config_manager.get_backend_config()
+        backend_config = config_manager.get_backend_config()
         backend_host = backend_config.get("host")
 
         assert backend_host in [
@@ -60,7 +60,7 @@ class TestServiceDistribution:
 
     def test_frontend_on_vm1(self):
         """Ensure frontend runs on VM1 (Frontend VM)"""
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
         frontend_config = services_config.get("frontend", {})
         frontend_host = frontend_config.get("host")
 
@@ -70,7 +70,7 @@ class TestServiceDistribution:
 
     def test_npu_worker_on_vm2(self):
         """Ensure NPU worker runs on VM2 (NPU Worker VM)"""
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
         npu_config = services_config.get("npu_worker", {})
         npu_host = npu_config.get("host")
 
@@ -80,7 +80,7 @@ class TestServiceDistribution:
 
     def test_ai_stack_on_vm4(self):
         """Ensure AI stack runs on VM4 (AI Stack VM)"""
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
         ai_config = services_config.get("ai_stack", {})
         ai_host = ai_config.get("host")
 
@@ -105,7 +105,7 @@ class TestServiceDistribution:
         role-based and count-agnostic (ADR-010): a role's host can be a ``127.0.0.x``
         loopback alias (Docker/single-VM, see VM_ROLES.md), a dedicated VM, or one of
         several machines. What must hold in every deployment is that the value
-        ``unified_config_manager`` reports for a role is not an independent literal --
+        ``config_manager`` reports for a role is not an independent literal --
         it is the same value the canonical SSOT config
         (``autobot_shared.ssot_config.config.vm``) declares. Comparing against SSOT
         directly here -- rather than against ``NetworkConstants``, which is itself only
@@ -116,7 +116,7 @@ class TestServiceDistribution:
         """
         from autobot_shared.ssot_config import config as ssot_config
 
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
 
         for service_key, ssot_attr in self._ROLE_TO_SSOT_VM_ATTR.items():
             host = services_config.get(service_key, {}).get("host")
@@ -147,7 +147,7 @@ class TestNetworkConfiguration:
         """
         import ipaddress
 
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
 
         for service_name, service_config in services_config.items():
             if not isinstance(service_config, dict):
@@ -175,7 +175,7 @@ class TestNetworkConfiguration:
 
     def test_backend_binds_to_all_interfaces(self):
         """Ensure backend binds to 0.0.0.0 for network accessibility"""
-        backend_config = unified_config_manager.get_backend_config()
+        backend_config = config_manager.get_backend_config()
         backend_host = backend_config.get("host")
 
         # Backend should bind to 0.0.0.0 to be accessible from VMs
@@ -186,14 +186,14 @@ class TestNetworkConfiguration:
 
     def test_redis_uses_standard_port(self):
         """Ensure Redis uses standard port 6379"""
-        redis_config = unified_config_manager.get_redis_config()
+        redis_config = config_manager.get_redis_config()
         redis_port = redis_config.get("port")
 
         assert redis_port == 6379, f"Redis must use standard port 6379, currently configured for: {redis_port}"
 
 
 class TestConfigurationSource:
-    """Test that configuration comes from unified_config_manager"""
+    """Test that configuration comes from config_manager"""
 
     def test_no_hardcoded_ips_in_redis_helper(self):
         """Redis host resolution goes through configuration, not a hardcoded module constant.
@@ -227,20 +227,19 @@ class TestConfigurationSource:
 
         #13286 consolidated backend/redis/frontend host+port configuration onto
         `autobot_shared.ssot_config`, which declares no `service_discovery_defaults`
-        section -- `service_discovery.py:278` and `distributed_service_discovery.py`
-        both say so inline and read the section with `or {}`. This test used to
-        assert four keys inside it; there is no longer any source that would ever
-        populate them, so that shape was asserting a section nothing writes. What
-        still has to hold is the property those two callers actually depend on:
-        `get_config_section` returns `{}`, never `None`, for a section nobody
-        declared, so their `or {}` is defensive rather than covering a crash.
+        section. This test used to assert four keys inside it; there is no longer
+        any source that would ever populate them, so that shape was asserting a
+        section nothing writes. What still has to hold is the property callers
+        depend on: `get_config_section` returns `{}`, never `None`, for a section
+        nobody declared (the two modules that read it with `or {}` were retired
+        in #18639).
         """
-        defaults = unified_config_manager.get_config_section("service_discovery_defaults")
+        defaults = config_manager.get_config_section("service_discovery_defaults")
 
         assert defaults is not None, "get_config_section must return {} (not None) for an undeclared section"
         assert defaults == {}, (
-            "service_discovery_defaults gained content -- service_discovery.py and "
-            "distributed_service_discovery.py's `or {}` fallback should be revisited"
+            "service_discovery_defaults gained content -- callers of get_config_section "
+            "that rely on an empty section should be revisited"
         )
 
 
@@ -268,7 +267,7 @@ class TestRedisConnection:
            ``None`` when Redis is disabled or the connection fails inside the manager,
            and the old body would have raised ``AttributeError`` on that path rather
            than reporting it.
-        2. The pool's host and port are the ones ``unified_config_manager`` declares,
+        2. The pool's host and port are the ones ``config_manager`` declares,
            and its ``db`` is the number ``redis-databases.yaml`` allocates to the named
            database ``main`` — the same mapping ``test_redis_db_ssot.py`` guards
            (#15181). A client that connects to something other than the configured
@@ -287,7 +286,7 @@ class TestRedisConnection:
         """
         from autobot_shared.redis_management.types import DATABASE_MAPPING
 
-        expected = unified_config_manager.get_redis_config()
+        expected = config_manager.get_redis_config()
         expected_db = DATABASE_MAPPING["main"]
 
         try:
@@ -301,10 +300,10 @@ class TestRedisConnection:
             params = client.connection_pool.connection_kwargs
             assert params.get("host") == expected.get(
                 "host"
-            ), "Redis pool host is not the one unified_config_manager declares"
+            ), "Redis pool host is not the one config_manager declares"
             assert params.get("port") == expected.get(
                 "port"
-            ), "Redis pool port is not the one unified_config_manager declares"
+            ), "Redis pool port is not the one config_manager declares"
             assert params.get("db") == expected_db, (
                 f"Redis pool selected db {params.get('db')} for database='main'; "
                 f"redis-databases.yaml allocates db {expected_db}"
@@ -366,9 +365,9 @@ class TestPortConfiguration:
         """
         from autobot_shared.ssot_config import config as ssot_config
 
-        backend_config = unified_config_manager.get_backend_config()
-        redis_config = unified_config_manager.get_redis_config()
-        services_config = unified_config_manager.get_distributed_services_config()
+        backend_config = config_manager.get_backend_config()
+        redis_config = config_manager.get_redis_config()
+        services_config = config_manager.get_distributed_services_config()
 
         assert (
             backend_config.get("port") == ssot_config.port.backend
@@ -417,7 +416,7 @@ class TestSingleFrontendServer:
             f"found {len(frontend_entries)}"
         )
 
-        services_config = unified_config_manager.get_distributed_services_config()
+        services_config = config_manager.get_distributed_services_config()
         frontend_host = services_config.get("frontend", {}).get("host")
         assert frontend_host, "frontend role must resolve to a non-empty host"
 

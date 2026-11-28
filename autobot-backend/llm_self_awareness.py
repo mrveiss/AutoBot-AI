@@ -16,9 +16,12 @@ from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
+from llm_self_awareness_render import render_awareness_block
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
 from project_state_tracker import get_state_tracker
@@ -72,7 +75,7 @@ class LLMSelfAwareness:
         """
         return {
             "name": "AutoBot",
-            "version": "1.0.0",
+            "version": "unknown",  # the repo declares no version; never an invented number (#17821)
             "description": ("Advanced AI-powered automation and development assistant"),
             "current_phase": project_status["current_phase"],
             "system_maturity": capabilities["system_maturity"],
@@ -126,7 +129,7 @@ class LLMSelfAwareness:
         return {
             "system_identity": {
                 "name": "AutoBot",
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "error": "Failed to load complete context",
             },
             "current_capabilities": {"active": [], "error": str(error)},
@@ -468,45 +471,7 @@ class LLMSelfAwareness:
             )
             return prompt
 
-        # Build context injection
-        awareness_prompt = f"""[SYSTEM CONTEXT - AutoBot Self-Awareness]
-You are AutoBot, an advanced AI-powered automation and development assistant.
-
-Current System State:
-- Phase: {context['system_identity']['current_phase']}
-- System Maturity: {context['system_identity']['system_maturity']}%
-- Active Capabilities: {context['current_capabilities']['count']} capabilities across {len(context['current_capabilities']['categories'])} categories
-
-Your Current Capabilities by Category:
-"""
-
-        # Build capability lines using list append + join (O(n)) instead of += (O(n²))
-        capability_lines = []
-        for category, caps in context["current_capabilities"]["categories"].items():
-            if caps:
-                line = f"- {category.title()}: {', '.join(caps[:5])}"
-                if len(caps) > 5:
-                    line += f" (and {len(caps) - 5} more)"
-                capability_lines.append(line)
-        awareness_prompt += "\n".join(capability_lines) + "\n" if capability_lines else ""
-
-        awareness_prompt += f"""
-System Metrics:
-- Maturity Score: {context['system_metrics']['maturity_score']}%
-- Validation Score: {context['system_metrics']['validation_score']}%
-- Completed Phases: {context['phase_information']['completed_phases']}/{context['phase_information']['total_phases']}
-
-Operational Status:
-- Auto-progression: {'Enabled' if context['operational_status']['auto_progression_enabled'] else 'Disabled'}
-- Milestones Achieved: {context['operational_status']['milestones_achieved']}
-
-You should be aware of your current capabilities and limitations based on the system phase and maturity level.
-[END SYSTEM CONTEXT]
-
-"""
-
-        # Append original prompt
-        return awareness_prompt + prompt
+        return render_awareness_block(context) + prompt
 
     def create_capability_summary(self) -> str:
         """Create a human-readable capability summary"""
@@ -644,7 +609,7 @@ You should be aware of your current capabilities and limitations based on the sy
         export_data = {
             "export_metadata": {
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "type": "system_awareness_export",
             },
             "system_context": context,
@@ -666,11 +631,7 @@ You should be aware of your current capabilities and limitations based on the sy
         return output_path
 
 
-from autobot_shared.async_compat import run_or_schedule
-
 # Global instance (thread-safe)
-from autobot_shared.singleton_factory import lazy_singleton
-
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 
 

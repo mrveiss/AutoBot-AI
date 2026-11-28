@@ -1,0 +1,289 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Generated Types Freshness Gate (GH#10817, #12662)
+# autobot-frontend/src/types/generated/api.ts is generated from the backend
+# OpenAPI schema (`npm run gen:types`). Nothing gated its freshness, so it
+# silently drifted: #10746 hand-found 12 dead Enhanced* schemas, #10776
+# cleaned dead aliases, and #10829's route renames never reached it — all
+# because a stale api.ts still type-checks.
+#
+# This job regenerates api.ts from the authoritative backend schema
+# (app.openapi(), same recipe as the API wiring audit) using the pinned
+# openapi-typescript, then `git diff --exit-code`. If it drifts, the diff is
+# non-empty and this gate goes red — run `npm run gen:types` against a running
+# backend and commit the result.
+#
+# #12662: a second job (verify-generated-types-slm) applies the identical
+# recipe to autobot-slm-frontend/src/types/generated/api.ts, generated from
+# autobot-slm-backend's OpenAPI schema via scripts/dump_openapi.py (no live
+# server needed — it imports `main.app` directly). Before this job existed,
+# the SLM generated file had zero CI freshness guard and had already drifted
+# 283 diff lines from the live backend schema (schema renames + new fields)
+# despite zero consumers importing it — see #12662 for the cross-language
+# NodeStatus drift this closes.
+#
+# #14885: both filters also watch autobot_shared/**/*.py, and the per-product
+# split between them is preserved. Neither used to, while BOTH generated files
+# depend on that tree — measured, not assumed:
+#
+#   * autobot_shared/user_management/schemas/user.py is the sole definition of
+#     UserResponse, UserCreate, UserUpdate, UserListResponse, RoleResponse and
+#     PasswordChange. Each backend's user_management/schemas/user.py is a
+#     re-export shim over it (#12647), and both committed api.ts files carry
+#     those component schemas. Editing one field there changes both.
+#   * autobot_shared/openapi_schema.normalize_pattern_anchors is applied to the
+#     spec by scripts/audit_api_wiring.py (used by BOTH dump modes in this
+#     workflow) and by autobot-slm-backend/scripts/dump_openapi.py. It rewrites
+#     the published schema, so a change to it changes both outputs.
+#
+# So a change confined to autobot_shared/ could alter either generated api.ts
+# while this workflow computed "nothing to verify" and self-skipped — and
+# `verify-generated-types` is a REQUIRED context, so that reported green over a
+# check that never ran. 46 of the last 300 first-parent commits on main
+# touch only autobot_shared/**/*.py; that is the blind spot's size, and it is
+# also the added cost of closing it.
+#
+# The filter widens rather than the check becoming unskippable, because the
+# skip is already safe HERE and only here: the required context is the separate
+# `verify-generated-types` reporting job below (#13862), which always runs and
+# always states a verdict. Making the working job unconditional on a
+# path-filtered workflow is what deadlocks a pull request (#13388/#12934); the
+# defect was the filter's reach, not the existence of a skip.
+#
+# pipeline-scripts/check_workflow_path_filters.py now asserts that both filters
+# and the push trigger still name the shared tree, so this cannot quietly
+# shrink back.
+#
+# Runs on GitHub-hosted ubuntu-latest (not the self-hosted runner) so it adds
+# no load to the single self-hosted runner.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Verify Generated Types (reusable body)
+
+on:
+  workflow_call:
+    inputs:
+      run_types:
+        description: "'false' skips the autobot-frontend freshness job; anything else runs it"
+        type: string
+        default: 'true'
+      run_slm_types:
+        description: "'false' skips the SLM freshness job; anything else runs it"
+        type: string
+        default: 'true'
+    outputs:
+      ok:
+        description: "'true' only when every step of the autobot-frontend freshness job passed"
+        value: ${{ jobs.verify-types-run.outputs.ok }}
+      slm_ok:
+        description: "'true' only when every step of the SLM freshness job passed"
+        value: ${{ jobs.verify-generated-types-slm.outputs.ok }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify-types-run:
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # `!= 'false'` rather than `== 'true'`, matching migration-gate.yml: an
+    # unexpected or empty filter output then still RUNS the check instead of
+    # silently skipping it. With `== 'true'`, a paths-filter that succeeded but
+    # emitted nothing would skip this job and the verdict below would report a
+    # green "nothing to verify" — the fail-safe only bites when `changes` fails
+    # outright (#13862 review).
+    if: inputs.run_types != 'false'
+    name: verify-types-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
+      # #16568: workflow.ts is generated from Python sources (the Permission and
+      # Role enums, the workflow types, the notification and overseer enums) by
+      # gen_frontend_types.py. Its only guard was frontend-codegen-drift, which is
+      # not a required context, so a backend enum change could merge with stale
+      # frontend types. It runs BEFORE the OpenAPI dump on purpose: that dump needs
+      # the whole backend to import, and a stale workflow.ts should not wait on it
+      # or hide behind its failure.
+      - name: Regenerate workflow.ts from its Python sources
+        run: python autobot-infrastructure/shared/scripts/gen_frontend_types.py
+
+      - name: Fail if workflow.ts drifted (#16568)
+        run: |
+          if ! git diff --exit-code autobot-frontend/src/types/_generated/workflow.ts; then
+            echo "::error::autobot-frontend/src/types/_generated/workflow.ts is stale."
+            echo "A Python source of the generator (an enum or type it emits) changed but the committed file was not regenerated."
+            echo "Fix: run 'python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py' and commit the result."
+            exit 1
+          fi
+          echo "workflow.ts is fresh."
+
+      - name: Dump authoritative OpenAPI schema
+        run: |
+          set -o pipefail
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          mkdir -p data logs static config
+          # The schema the contract is generated from, without the audit-only x-websocket-paths extension,
+          # so it matches exactly what the live server serves to `npm run gen:types` (and what the offline
+          # `npm run gen:types:openapi` writes locally) (#12363).
+          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths; then
+            echo "::error::Backend app.openapi() build failed — cannot verify generated types."
+            echo "This usually means the backend does not import cleanly in CI (see startup-import-smoke)."
+            exit 1
+          fi
+
+      # #13572: reject absolute-path schema defaults here, where the contract has
+      # just been built, rather than paying for a second app.openapi().
+      #
+      # This runs BEFORE the diff below on purpose. An absolute-path default makes
+      # the contract host-dependent, so it surfaces as a spurious generated-types
+      # diff on whichever runner regenerated it — an unactionable failure that has
+      # already happened twice (#13357). Failing here names the offending field.
+      - name: Check no schema default is an absolute filesystem path (#13572)
+        run: |
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          python scripts/check_openapi_absolute_defaults.py --contract openapi.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: autobot-frontend
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+        # required check. Local dev `npm ci` is unaffected and still gets it.
+        env:
+          CYPRESS_INSTALL_BINARY: '0'
+        run: npm ci
+
+      - name: Regenerate api.ts from authoritative schema
+        working-directory: autobot-frontend
+        run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
+
+      - name: Fail if generated types drifted
+        run: |
+          if ! git diff --exit-code autobot-frontend/src/types/generated/api.ts; then
+            echo "::error::autobot-frontend/src/types/generated/api.ts is stale."
+            echo "The backend OpenAPI schema changed but the committed generated types were not updated."
+            echo "Fix: run 'npm run gen:types' against a running backend and commit src/types/generated/api.ts."
+            exit 1
+          fi
+          echo "autobot-frontend generated types (api.ts and workflow.ts) are fresh."
+
+      # Positive evidence for the `verify-generated-types` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+
+  verify-generated-types-slm:
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # `!= 'false'`, matching verify-types-run above and for the same reason
+    # (#14885). With `== 'true'` a paths-filter that succeeded but emitted
+    # nothing skips this job silently — the fail-safe has to point at running
+    # the check, not at skipping it.
+    if: inputs.run_slm_types != 'false'
+    name: verify-generated-types-slm
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-slm-backend/requirements*.txt
+
+      - name: Install SLM backend dependencies
+        # autobot-slm-backend/main.py needs its own requirements (croniter,
+        # authlib, ldap3, pysaml2, pyotp, ...) — see api-wiring.yml's identical
+        # note. dump_slm_openapi() imports `main.app` directly, same recipe as
+        # the API wiring audit's --dump-slm-openapi.
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary
+
+      - name: Dump authoritative SLM OpenAPI schema
+        run: |
+          set -o pipefail
+          mkdir -p data logs static config autobot-slm-backend/data
+          export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
+          if ! python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.raw.json; then
+            echo "::error::SLM backend app.openapi() build failed — cannot verify generated types."
+            echo "This usually means the SLM backend does not import cleanly in CI (see startup-import-smoke)."
+            exit 1
+          fi
+          # --dump-slm-openapi adds an audit-only x-websocket-paths extension
+          # (same as backend's --dump-openapi). Strip it so the schema matches
+          # exactly what `npm run gen:types:openapi` (dump_openapi.py, no
+          # websocket union) produces locally.
+          python -c "
+          import json
+          s = json.load(open('slm_openapi.raw.json'))
+          s.pop('x-websocket-paths', None)
+          with open('autobot-slm-frontend/openapi.json', 'w', encoding='utf-8') as f:
+              json.dump(s, f, indent=2, sort_keys=True, ensure_ascii=False)
+              f.write('\n')
+          "
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: autobot-slm-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: autobot-slm-frontend
+        run: npm ci
+
+      - name: Regenerate api.ts from authoritative schema
+        working-directory: autobot-slm-frontend
+        run: npx --no-install openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
+
+      - name: Fail if generated types drifted
+        run: |
+          if ! git diff --exit-code autobot-slm-frontend/openapi.json autobot-slm-frontend/src/types/generated/api.ts; then
+            echo "::error::autobot-slm-frontend generated types are stale."
+            echo "The SLM backend OpenAPI schema changed but the committed generated types were not updated."
+            echo "Fix: run 'npm run gen:types:openapi && npm run gen:types' in autobot-slm-frontend and commit the result."
+            exit 1
+          fi
+          echo "SLM generated types are fresh."
+
+      # Positive evidence for the `verify-generated-types` gate in ci.yml: reached only when every
+      # step above succeeded, so 'true' on a full pass and empty on a failure, cancel or timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

@@ -30,6 +30,7 @@ from typing import Any, Dict, List
 
 import httpx
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
@@ -179,10 +180,9 @@ class FREDSource(OSINTSource):
     async def sweep(self, client: httpx.AsyncClient) -> SourceResult:
         start = time.monotonic()
         try:
-            resp = await client.get(
-                "https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RL1Q225SBEA",
-                timeout=20.0,
-            )
+            url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RL1Q225SBEA"
+            await assert_egress_policy(url)
+            resp = await client.get(url, timeout=20.0, follow_redirects=False)
             resp.raise_for_status()
             lines = resp.text.strip().splitlines()
             # CSV: DATE,VALUE — take the last 4 rows (1 year of quarterly data)
@@ -217,7 +217,8 @@ class GDELTSource(OSINTSource):
     async def sweep(self, client: httpx.AsyncClient) -> SourceResult:
         start = time.monotonic()
         try:
-            resp = await client.get(self._URL, timeout=20.0)
+            await assert_egress_policy(self._URL)
+            resp = await client.get(self._URL, timeout=20.0, follow_redirects=False)
             resp.raise_for_status()
             # lastupdate.txt lines: "<bytes> <md5> <url>"
             lines = [line.strip() for line in resp.text.strip().splitlines() if line.strip()]
@@ -254,7 +255,8 @@ class NASAFIRMSSource(OSINTSource):
     async def sweep(self, client: httpx.AsyncClient) -> SourceResult:
         start = time.monotonic()
         try:
-            resp = await client.get(self._URL, timeout=25.0)
+            await assert_egress_policy(self._URL)
+            resp = await client.get(self._URL, timeout=25.0, follow_redirects=False)
             resp.raise_for_status()
             lines = resp.text.strip().splitlines()
             header = lines[0] if lines else ""
@@ -287,10 +289,12 @@ class NOAASource(OSINTSource):
     async def sweep(self, client: httpx.AsyncClient) -> SourceResult:
         start = time.monotonic()
         try:
+            await assert_egress_policy(self._URL)
             resp = await client.get(
                 self._URL,
                 headers={"Accept": "application/json", "User-Agent": "AutoBot/1.0"},
                 timeout=20.0,
+                follow_redirects=False,
             )
             resp.raise_for_status()
             payload = resp.json()

@@ -3,9 +3,10 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, PollingPausedAlert, createLogger, getEnvPositiveInt } from '@autobot/ui'
 
 const logger = createLogger('AgentsTool')
+const REFRESH_INTERVAL_MS = getEnvPositiveInt(import.meta.env, 'VITE_AGENTS_REFRESH_INTERVAL_MS', 30_000)
 /**
  * AgentsTool - Agent Registry Manager
  *
@@ -13,56 +14,42 @@ const logger = createLogger('AgentsTool')
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { useAgentsApi } from '@/composables/useAgentsApi'
+import type { AgentOrgStatusItem } from '@/types/agents'
+import { joinAgents, statusGroup, summarise, type Agent, type AgentStats } from '@/composables/agentsRoster'
 
 const api = useAutobotApi()
+const agentsApi = useAgentsApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-interface Agent {
-  id: string
-  name: string
-  type: string
-  status: 'active' | 'idle' | 'error' | 'stopped'
-  description: string
-  capabilities: string[]
-  last_activity: string
-  tasks_completed: number
-  success_rate: number
-}
-
-interface AgentStats {
-  total_agents: number
-  active_agents: number
-  total_tasks: number
-  avg_success_rate: number
-}
+const EMPTY_STATS: AgentStats = { total_agents: 0, active_agents: 0, total_tasks: null, avg_success_rate: null }
 
 const agents = ref<Agent[]>([])
-const stats = ref<AgentStats>({ total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 })
+const stats = ref<AgentStats>({ ...EMPTY_STATS })
 const selectedAgent = ref<Agent | null>(null)
 const filterStatus = ref<string>('all')
 const searchQuery = ref('')
-
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const filteredAgents = computed(() => {
   let result = agents.value
 
   if (filterStatus.value !== 'all') {
-    result = result.filter(a => a.status === filterStatus.value)
+    result = result.filter(a => statusGroup(a.status) === filterStatus.value)
   }
 
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(a =>
       a.name.toLowerCase().includes(query) ||
-      a.type.toLowerCase().includes(query) ||
       a.description.toLowerCase().includes(query)
     )
   }
@@ -71,28 +58,35 @@ const filteredAgents = computed(() => {
 })
 
 // Methods
-function getStatusClass(status: string): string {
-  switch (status) {
-    case 'active': return 'bg-green-100 text-green-800'
-    case 'idle': return 'bg-blue-100 text-blue-800'
-    case 'error': return 'bg-red-100 text-red-800'
-    case 'stopped': return 'bg-gray-100 text-gray-800'
-    default: return 'bg-gray-100 text-gray-800'
+function getStatusClass(status: string | null): string {
+  switch (statusGroup(status)) {
+    case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'idle': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'stopped': return 'bg-autobot-bg-tertiary text-autobot-text-primary'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
-function getStatusDot(status: string): string {
-  switch (status) {
-    case 'active': return 'bg-green-500'
-    case 'idle': return 'bg-blue-500'
-    case 'error': return 'bg-red-500'
-    case 'stopped': return 'bg-gray-500'
-    default: return 'bg-gray-500'
+function getStatusDot(status: string | null): string {
+  switch (statusGroup(status)) {
+    case 'active': return 'bg-autobot-dot-ok'
+    case 'idle': return 'bg-autobot-primary'
+    case 'error': return 'bg-autobot-dot-bad'
+    case 'stopped': return 'bg-autobot-text-tertiary'
+    default: return 'bg-autobot-text-tertiary'
   }
 }
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
+// The stats are supplementary: a failure there leaves them "not reported" instead of blanking the tab.
+async function loadSupplement(): Promise<{ org: AgentOrgStatusItem[]; types: Record<string, string> }> {
+  const [org, status] = await Promise.allSettled([agentsApi.getAgentOrgStatus(), agentsApi.getAgentsStatus()])
+  if (org.status === 'rejected') logger.error('Failed to load agent stats:', org.reason)
+  if (status.status === 'rejected') logger.error('Failed to load agent status:', status.reason)
+  const types = Object.fromEntries(
+    (status.status === 'fulfilled' ? status.value.available_agents : []).map(a => [a.name, a.type]),
+  )
+  return { org: org.status === 'fulfilled' ? org.value.agents : [], types }
 }
 
 async function loadAgents(): Promise<void> {
@@ -101,130 +95,107 @@ async function loadAgents(): Promise<void> {
 
   try {
     // Issue #835 - use named function from useAutobotApi
-    const data = await api.getAvailableAgents() as Record<string, unknown>[]
-    agents.value = (Array.isArray(data) ? data : []) as unknown as Agent[]
+    const [data, supplement] = await Promise.all([agentsApi.getAvailableAgents(), loadSupplement()])
+    agents.value = joinAgents(data.agents ?? [], supplement.org, supplement.types)
+    stats.value = summarise(agents.value, data.total_agents ?? agents.value.length)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load agents'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.loadFailed')
   } finally {
     loading.value = false
   }
 }
 
-async function loadStats(): Promise<void> {
-  try {
-    // Issue #835 - use named function from useAutobotApi
-    const data = await api.getAgentsStatus()
-    stats.value = (data as unknown as AgentStats) || { total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 }
-  } catch (e) {
-    logger.error('Failed to load stats:', e)
-  }
-}
-
 async function refreshData(): Promise<void> {
-  await Promise.all([loadAgents(), loadStats()])
+  await loadAgents()
 }
 
-async function startAgent(_agentId: string): Promise<void> {
+// The backend has global pause/resume only (#22175 tracks per-agent control), so these act on every agent.
+async function pauseAll(): Promise<void> {
   try {
-    // Issue #835 - backend has global pause/resume, not per-agent
-    await api.resumeAgent()
-    await loadAgents()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to start agent'
-  }
-}
-
-async function stopAgent(_agentId: string): Promise<void> {
-  try {
-    // Issue #835 - backend has global pause/resume, not per-agent
     await api.pauseAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to stop agent'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.pauseFailed')
   }
 }
 
-async function restartAgent(_agentId: string): Promise<void> {
+async function resumeAll(): Promise<void> {
   try {
-    // Issue #835 - pause then resume as restart
-    await api.pauseAgent()
     await api.resumeAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to restart agent'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.resumeFailed')
   }
+}
+
+function formatStat(value: number | null, suffix = ''): string {
+  return value === null ? t('tools.admin.agentsTool.notReported') : `${value}${suffix}`
 }
 
 function selectAgent(agent: Agent): void {
-  selectedAgent.value = selectedAgent.value?.id === agent.id ? null : agent
+  selectedAgent.value = selectedAgent.value?.name === agent.name ? null : agent
 }
 
-onMounted(() => {
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 30000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
   <div class="p-6">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.totalAgents') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ stats.total_agents }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.totalAgents') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ stats.total_agents }}</p>
           </div>
-          <div class="p-3 bg-blue-100 rounded-lg">
-            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-info-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.activeAgents') }}</p>
-            <p class="text-2xl font-bold text-green-600">{{ stats.active_agents }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.activeAgents') }}</p>
+            <p class="text-2xl font-bold text-autobot-success">{{ stats.active_agents }}</p>
           </div>
-          <div class="p-3 bg-green-100 rounded-lg">
-            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-ok-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ stats.total_tasks }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ formatStat(stats.total_tasks) }}</p>
           </div>
-          <div class="p-3 bg-purple-100 rounded-lg">
-            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-illus-2-tint rounded-lg">
+            <svg class="w-6 h-6 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ (stats.avg_success_rate * 100).toFixed(1) }}%</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ formatStat(stats.avg_success_rate, '%') }}</p>
           </div>
-          <div class="p-3 bg-amber-100 rounded-lg">
-            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-warn-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
@@ -233,19 +204,19 @@ onUnmounted(() => {
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center gap-4">
         <div class="flex-1">
           <input
             v-model="searchQuery"
             type="text"
             :placeholder="$t('tools.admin.agentsTool.searchAgents')"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
           />
         </div>
         <select
           v-model="filterStatus"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         >
           <option value="all">{{ $t('tools.admin.agentsTool.allStatus') }}</option>
           <option value="active">{{ $t('tools.admin.agentsTool.active') }}</option>
@@ -254,9 +225,23 @@ onUnmounted(() => {
           <option value="stopped">{{ $t('tools.admin.agentsTool.stopped') }}</option>
         </select>
         <button
-          @click="refreshData"
+          @click="pauseAll"
+          :title="$t('tools.admin.agentsTool.globalControls')"
+          class="px-3 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-primary rounded-lg hover:shadow-md"
+        >
+          {{ $t('tools.admin.agentsTool.pauseAll') }}
+        </button>
+        <button
+          @click="resumeAll"
+          :title="$t('tools.admin.agentsTool.globalControls')"
+          class="px-3 py-2 text-sm bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg"
+        >
+          {{ $t('tools.admin.agentsTool.resumeAll') }}
+        </button>
+        <button
+          @click="refreshPoller.start('')"
           :disabled="loading"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -266,114 +251,90 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
+
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Agents Grid -->
     <div v-if="loading && !agents.length" class="text-center py-12">
-      <svg class="animate-spin w-8 h-8 mx-auto text-primary-500" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 mx-auto text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.loadingAgents') }}</p>
+      <p class="mt-4 text-autobot-text-secondary">{{ $t('tools.admin.agentsTool.loadingAgents') }}</p>
     </div>
 
     <div v-else-if="filteredAgents.length === 0" class="text-center py-12">
-      <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
-      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.noAgentsFound') }}</p>
+      <p class="mt-4 text-autobot-text-secondary">{{ $t('tools.admin.agentsTool.noAgentsFound') }}</p>
     </div>
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div
         v-for="agent in filteredAgents"
-        :key="agent.id"
+        :key="agent.name"
         @click="selectAgent(agent)"
         :class="[
-          'bg-white rounded-lg shadow-xs border border-gray-200 p-6 cursor-pointer transition-all',
-          selectedAgent?.id === agent.id ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
+          'bg-white rounded-lg shadow-xs border border-autobot-border p-6 cursor-pointer transition-all',
+          selectedAgent?.name === agent.name ? 'ring-2 ring-autobot-primary' : 'hover:shadow-md'
         ]"
       >
         <!-- Agent Header -->
         <div class="flex items-start justify-between mb-4">
           <div class="flex items-center gap-3">
             <div class="relative">
-              <div class="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-10 h-10 bg-autobot-primary-bg rounded-lg flex items-center justify-center">
+                <svg class="w-6 h-6 text-autobot-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <div :class="['absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white', getStatusDot(agent.status)]"></div>
             </div>
             <div>
-              <h3 class="font-semibold text-gray-900">{{ agent.name }}</h3>
-              <p class="text-sm text-gray-500">{{ agent.type }}</p>
+              <h3 class="font-semibold text-autobot-text-primary">{{ agent.name }}</h3>
+              <p v-if="agent.type" class="text-sm text-autobot-text-tertiary">{{ agent.type }}</p>
             </div>
           </div>
           <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(agent.status)]">
-            {{ agent.status }}
+            {{ agent.status ?? $t('tools.admin.agentsTool.notReported') }}
           </span>
         </div>
 
         <!-- Description -->
-        <p class="text-sm text-gray-600 mb-4">{{ agent.description }}</p>
+        <p class="text-sm text-autobot-text-secondary mb-4">{{ agent.description }}</p>
 
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-lg font-bold text-gray-900">{{ agent.tasks_completed }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ formatStat(agent.tasksCompleted) }}</p>
           </div>
           <div>
-            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-lg font-bold text-gray-900">{{ (agent.success_rate * 100).toFixed(0) }}%</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ formatStat(agent.successRate, '%') }}</p>
           </div>
         </div>
 
         <!-- Capabilities -->
         <div class="mb-4">
-          <p class="text-xs text-gray-500 mb-2">{{ $t('tools.admin.agentsTool.capabilities') }}</p>
+          <p class="text-xs text-autobot-text-tertiary mb-2">{{ $t('tools.admin.agentsTool.capabilities') }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="cap in agent.capabilities"
               :key="cap"
-              class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm"
+              class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
             >
               {{ cap }}
             </span>
           </div>
         </div>
 
-        <!-- Last Activity -->
-        <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDate(agent.last_activity) }) }}</span>
-        </div>
-
-        <!-- Actions -->
-        <div v-if="selectedAgent?.id === agent.id" class="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-          <button
-            v-if="agent.status === 'stopped'"
-            @click.stop="startAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            {{ $t('tools.admin.agentsTool.start') }}
-          </button>
-          <button
-            v-if="agent.status === 'active' || agent.status === 'idle'"
-            @click.stop="stopAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            {{ $t('tools.admin.agentsTool.stop') }}
-          </button>
-          <button
-            @click.stop="restartAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-          >
-            {{ $t('tools.admin.agentsTool.restart') }}
-          </button>
+        <!-- Last Activity: no backend field yet (#22175) -->
+        <div class="flex items-center justify-between text-xs text-autobot-text-tertiary pt-4 border-t border-autobot-border">
+          <span>{{ $t('tools.admin.agentsTool.noLastActivity') }}</span>
         </div>
       </div>
     </div>

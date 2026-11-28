@@ -12,13 +12,13 @@ from typing import Any, Dict
 
 import aiohttp
 
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def create_chat_session() -> str:
     """Create a new chat session and return the chat ID."""
     async with aiohttp.ClientSession() as session:
-        async with session.post(get_test_backend_url() + "/api/chats/new") as response:
+        async with session.post(live_backend_url() + "/api/chats/new") as response:
             if response.status == 200:
                 data = await response.json()
                 return data.get("chat_id")
@@ -31,7 +31,7 @@ async def send_chat_message(chat_id: str, message: str) -> Dict[str, Any]:
     async with aiohttp.ClientSession() as session:
         chat_request = {"chatId": chat_id, "message": message}
 
-        async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
+        async with session.post(live_backend_url() + "/api/chat", json=chat_request) as response:
             if response.status == 200:
                 return await response.json()
             else:
@@ -44,7 +44,7 @@ async def execute_workflow(message: str, auto_approve: bool = True) -> Dict[str,
     async with aiohttp.ClientSession() as session:
         workflow_request = {"user_message": message, "auto_approve": auto_approve}
 
-        async with session.post(get_test_backend_url() + "/api/workflow/execute", json=workflow_request) as response:
+        async with session.post(live_backend_url() + "/api/workflow/execute", json=workflow_request) as response:
             if response.status == 200:
                 return await response.json()
             else:
@@ -58,7 +58,7 @@ async def monitor_workflow(workflow_id: str, timeout: int = 60):
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            async with session.get(get_test_backend_url() + f"/api/workflow/workflow/{workflow_id}/status") as response:
+            async with session.get(live_backend_url() + f"/api/workflow/workflow/{workflow_id}/status") as response:
                 if response.status == 200:
                     status = await response.json()
 
@@ -190,7 +190,7 @@ async def demo_workflow_management():
     try:
         # Check active workflows
         async with aiohttp.ClientSession() as session:
-            async with session.get(get_test_backend_url() + "/api/workflow/workflows") as response:
+            async with session.get(live_backend_url() + "/api/workflow/workflows") as response:
                 if response.status == 200:
                     data = await response.json()
                     active_count = data.get("active_workflows", 0)
@@ -223,7 +223,7 @@ async def main():
     try:
         async with aiohttp.ClientSession() as session:
             # Check backend health
-            async with session.get(get_test_backend_url() + "/api/system/health") as response:
+            async with session.get(live_backend_url() + "/api/system/health") as response:
                 if response.status == 200:
                     health = await response.json()
                     print(f"✅ Backend: {health.get('status')}")  # noqa: print

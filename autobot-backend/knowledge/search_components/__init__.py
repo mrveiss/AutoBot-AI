@@ -27,7 +27,7 @@ from .agentic_search import (
     get_agentic_search_tool,
     knowledge_search_tool,
 )
-from .analytics import SearchAnalytics, get_analytics
+from .analytics import SearchAnalyticsRecorder, get_analytics
 from .bm25 import BM25Scorer
 from .helpers import (
     build_search_result,
@@ -62,7 +62,7 @@ __all__ = [
     # Filtering
     "TagFilter",
     # Analytics
-    "SearchAnalytics",
+    "SearchAnalyticsRecorder",
     "get_analytics",
     # Response building
     "ResponseBuilder",

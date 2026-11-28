@@ -141,12 +141,25 @@ def test_the_health_probe_distinguishes_the_fallback(monkeypatch, source, expect
 
     catalog = ErrorCatalog()
     catalog.source = source
+    catalog._initialized = True  # already loaded: the probe must not reload over the injected source
     monkeypatch.setattr(api_module, "get_error_catalog_instance", lambda: catalog)
 
     deployed, data = api_module._error_catalog_state()
 
     assert deployed is expected_ok
     assert data["error_catalog_source"] == source
+
+
+def test_the_health_probe_loads_an_unloaded_catalog(monkeypatch):
+    """Import loads nothing (#20894), so the probe must load before reading ``source``."""
+    api_module = pytest.importorskip("api.error_resilience")
+    catalog = ErrorCatalog()
+    assert catalog.source == "unloaded"
+    monkeypatch.setattr(api_module, "get_error_catalog_instance", lambda: catalog)
+
+    _, data = api_module._error_catalog_state()
+
+    assert data["error_catalog_source"] in (SOURCE_YAML, SOURCE_BUILTIN_FALLBACK)
 
 
 def test_the_real_loader_path_finds_the_deployed_catalog():
@@ -169,3 +182,33 @@ def test_the_real_loader_path_finds_the_deployed_catalog():
     assert catalog.catalog_path.name == CATALOG_FILENAME
     assert catalog.catalog_path.exists()
     assert catalog.get_catalog_stats()["version"], "loaded the built-ins, which carry no version"
+
+
+def test_two_concurrent_first_uses_load_the_catalog_once():
+    """#20894: the first-use check and the load are one step, so racing readers do not both load."""
+    import threading
+    import time
+
+    catalog = ErrorCatalog()
+    loads: list[int] = []
+
+    def slow_load(catalog_path=None):
+        loads.append(1)
+        time.sleep(0.05)  # long enough for every other thread to reach the check
+        catalog._initialized = True
+        return True
+
+    catalog.load_catalog = slow_load  # type: ignore[method-assign]
+    barrier = threading.Barrier(4)
+
+    def first_use():
+        barrier.wait()
+        catalog.ensure_loaded()
+
+    threads = [threading.Thread(target=first_use) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(loads) == 1, f"the catalog was loaded {len(loads)} times by concurrent first uses"

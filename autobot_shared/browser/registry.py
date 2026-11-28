@@ -38,15 +38,15 @@ from autobot_shared.browser.base import (
     FORMAT_CAPABILITY,
     ActionRequest,
     BrowserBackend,
+    BrowserCapability,
     BrowserResult,
-    Capability,
     ExtractRequest,
     NavigateRequest,
     NoCapableBackendError,
     ScreenshotRequest,
     SessionHandle,
     UnsafeUrlError,
-    UnsupportedFormatError,
+    UnsupportedContentFormatError,
 )
 from autobot_shared.url_safety import is_public_url_async
 
@@ -94,7 +94,7 @@ async def _guard_url(url: str | None) -> None:
         raise UnsafeUrlError(f"URL is not a public address: {url!r}")
 
 
-async def resolve_backend(requires: set[Capability]) -> BrowserBackend:
+async def resolve_backend(requires: set[BrowserCapability]) -> BrowserBackend:
     """Return the first registered backend with *requires* that probes OK.
 
     Raises:
@@ -124,7 +124,7 @@ async def resolve_backend(requires: set[Capability]) -> BrowserBackend:
 
 
 class Browser:
-    """Capability-scoped facade over one resolved backend.
+    """BrowserCapability-scoped facade over one resolved backend.
 
     Obtained from :func:`get_browser`. Each entry point validates any URL it
     carries before dispatching, so the guard cannot be bypassed by reaching a
@@ -162,7 +162,7 @@ class Browser:
 
         needed = FORMAT_CAPABILITY[request.format]
         if needed not in self._backend.capabilities:
-            raise UnsupportedFormatError(
+            raise UnsupportedContentFormatError(
                 f"backend {self._backend.name!r} cannot produce "
                 f"{request.format.value!r} (needs {needed.value!r}); "
                 f"require it in get_browser() so dispatch picks a backend that can"
@@ -186,7 +186,7 @@ class Browser:
 
 async def get_browser(
     *,
-    requires: set[Capability],
+    requires: set[BrowserCapability],
     session_id: str | None = None,
 ) -> Browser:
     """Return a browser able to do *requires*.

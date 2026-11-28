@@ -19,8 +19,9 @@ from typing import Dict, List, Set
 from api.codebase_analytics.comment_blanking import blank_comments
 from autobot_shared.api_routing import router_prefixes as _routing
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.testfile_names import is_test_filename
 
-from .endpoints.shared import resolve_project_root
+from .endpoints.shared import resolve_git_repo_root
 from .models import (
     APIEndpointAnalysis,
     APIEndpointItem,
@@ -150,10 +151,9 @@ def _is_test_file(path: Path) -> bool:
     something that does not exist), and as a scanned path absent from
     ``app.openapi()``.
 
-    Matches the repo's two conventions (``x_test.py`` and ``test_x.py``) plus
-    anything under a ``tests`` directory.
+    Matches the canonical test-file names plus anything under a ``tests`` directory.
     """
-    return path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or "tests" in path.parts
 
 
 def find_backend_dir(project_root: Path) -> Path:
@@ -196,11 +196,11 @@ class BackendEndpointScanner:
         project_root: Path | None = None,
         cancel_token: threading.Event | None = None,
     ):
-        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # Issue #12404: Fall back to resolve_git_repo_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
-        self.project_root = project_root or Path(resolve_project_root())
+        self.project_root = project_root or Path(resolve_git_repo_root())
         # Issue #12853: the backend is not always directly under the scan root.
         # This repo keeps it in autobot-backend/, so `project_root / "api"` found
         # nothing and the scan reported 0 endpoints against a ~2000-route backend
@@ -963,11 +963,11 @@ class FrontendAPICallScanner:
         project_root: Path | None = None,
         cancel_token: threading.Event | None = None,
     ):
-        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # Issue #12404: Fall back to resolve_git_repo_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
-        self.project_root = project_root or Path(resolve_project_root())
+        self.project_root = project_root or Path(resolve_git_repo_root())
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
         # #14256: see BackendEndpointScanner._cancel_token.
         self._cancel_token = cancel_token
@@ -1006,7 +1006,7 @@ class FrontendAPICallScanner:
                 if file.name.endswith(".d.ts"):
                     continue
                 # Skip test files - they contain mock data, not real API calls
-                if "__tests__" in str(file) or ".test." in file.name or ".spec." in file.name:
+                if "__tests__" in str(file) or is_test_filename(file.name):
                     continue
 
                 try:
@@ -1395,11 +1395,11 @@ class APIEndpointChecker:
         project_root: Path | None = None,
         cancel_token: threading.Event | None = None,
     ):
-        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # Issue #12404: Fall back to resolve_git_repo_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
-        self.project_root = project_root or Path(resolve_project_root())
+        self.project_root = project_root or Path(resolve_git_repo_root())
         # #14256: run_full_analysis() dispatches straight to the analytics
         # executor with nothing checking whether the caller is still waiting --
         # the exact #12779 shape. Threaded into both scanners so cancellation

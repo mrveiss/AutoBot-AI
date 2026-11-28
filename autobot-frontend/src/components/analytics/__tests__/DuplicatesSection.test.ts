@@ -10,12 +10,16 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import DuplicatesSection from '../DuplicatesSection.vue'
+import { ref } from 'vue'
+import { clearDuplicateResults, duplicateSummary } from '@/composables/analytics/duplicatePayload'
 
 interface Duplicate {
   similarity: number
   lines: number
   file1: string
   file2: string
+  kind?: string
+  locations?: { file: string; start_line: number; end_line: number }[]
 }
 
 const i18n = createI18n({
@@ -24,17 +28,26 @@ const i18n = createI18n({
   messages: {
     en: {
       analytics: {
+        truncation: {
+          showingOf: 'Showing {shown} of {total}',
+          showMore: 'Show {count} more',
+          serverLimited: 'Showing the top {shown} of {total}. The server limits this list.',
+        },
         duplicates: {
           title: 'Duplicate Code',
-          pairs: 'pairs',
-          totalPairs: 'Total Pairs',
+          clusters: 'clusters',
+          totalClusters: 'Total Clusters',
+          exactClusters: '{count} exact',
+          structuralClusters: '{count} structural',
+          totalLocations: '{count} locations',
+          excluded: 'Excluded: {dirs}',
+          kind: { exact: 'exact', structural: 'structural', similar: 'similar' },
           highLabel: 'High',
           mediumLabel: 'Medium',
           lowLabel: 'Low',
           totalLines: 'Total Lines',
           similar: 'similar',
           lines: 'lines',
-          showingOf: 'Showing {shown} of {total}',
           emptyMessage: 'No duplicate code detected',
           similarityGroups: {
             high: 'High Similarity',
@@ -135,16 +148,64 @@ describe('DuplicatesSection (#5369)', () => {
     })
   })
 
-  describe('overflow footer', () => {
-    it('shows "Showing 20 of N" when a group has more than 20 items', async () => {
+  describe('show more (#12741)', () => {
+    it('is a button that reveals the next rows and keeps the count accurate', async () => {
       const items = Array.from({ length: 25 }, (_, i) =>
         makeDup({ similarity: 95, file1: `a${i}.ts`, file2: `b${i}.ts` }),
       )
       const w = mountSection(items)
       const header = w.find('.accordion-header')
       await header.trigger('click')
-      expect(w.find('.show-more').exists()).toBe(true)
-      expect(w.find('.show-more').text()).toContain('25')
+      const rows = () => w.findAll('.list-item')
+      expect(rows()).toHaveLength(20)
+      expect(w.find('[data-testid="truncation-count"]').text()).toBe('Showing 20 of 25')
+
+      const button = w.find('[data-testid="truncation-show-more"]')
+      expect(button.element.tagName).toBe('BUTTON')
+      await button.trigger('click')
+
+      expect(rows()).toHaveLength(25)
+      // Everything is visible now, so the notice (and its button) is gone.
+      expect(w.find('[data-testid="truncation-show-more"]').exists()).toBe(false)
+    })
+  })
+
+  describe('true total (#22157)', () => {
+    it('shows the scan total and truncated, never the number of returned rows', () => {
+      duplicateSummary.value = {
+        totalCount: 12345,
+        truncated: true,
+        totalLocations: 30000,
+        exactCount: 12000,
+        structuralCount: 345,
+        excludedDirs: ['external'],
+      }
+      try {
+        const w = mountSection([makeDup(), makeDup()])
+        expect(w.find('.summary-card.total .summary-value').text()).toBe((12345).toLocaleString())
+        expect(w.find('h3 .total-count').text()).toContain((12345).toLocaleString())
+        expect(w.find('[data-testid="truncation-server-limited"]').exists()).toBe(true)
+        expect(w.text()).toContain('Excluded: external')
+      } finally {
+        duplicateSummary.value = null
+      }
+    })
+
+    it('clears the rows and the summary together, so a cleared panel keeps no stale total', () => {
+      duplicateSummary.value = {
+        totalCount: 12345, truncated: true, totalLocations: 1, exactCount: 1, structuralCount: 0, excludedDirs: [],
+      }
+      const rows = ref([makeDup()])
+      clearDuplicateResults(rows)
+      expect(rows.value).toEqual([])
+      expect(duplicateSummary.value).toBeNull()
+    })
+
+    it('lists every location of a cluster', async () => {
+      const locations = [1, 2, 3].map(n => ({ file: `src/f${n}.ts`, start_line: n, end_line: n + 9 }))
+      const w = mountSection([makeDup({ kind: 'exact', locations } as Partial<Duplicate>)])
+      await w.find('.accordion-header').trigger('click')
+      expect(w.findAll('.item-file').map(n => n.text())).toEqual(['src/f1.ts:1-10', 'src/f2.ts:2-11', 'src/f3.ts:3-12'])
     })
   })
 })

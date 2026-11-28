@@ -4,7 +4,7 @@
 # Author: mrveiss
 """LLC heartbeat run model (GH#8225/GH#8228).
 
-Defines the schema shared by HeartbeatScheduler (GH#8225) and LivenessMonitor
+Defines the schema shared by LLCHeartbeatScheduler (GH#8225) and LivenessMonitor
 (GH#8228). Both issues read and write this table.
 """
 

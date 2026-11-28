@@ -78,6 +78,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.api_routing.mount_graph import MountGraph, RoutesRead, build_graph
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 
@@ -424,7 +425,7 @@ def test_the_scanner_reads_the_helper_as_safe(tmp_path: Path):
 def test_the_fixture_source_is_what_the_scanner_thinks_it_is(tmp_path: Path):
     """Guards the fixture itself: a typo'd fixture proves nothing either way."""
     root = _fixture_tree(tmp_path / "shape", include=True)
-    parent = ast.parse((root / "pkg" / "parent.py").read_text(encoding="utf-8"))
+    parent = parse_cache.parse((root / "pkg" / "parent.py").read_text(encoding="utf-8"))
     calls = [
         n for n in ast.walk(parent) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "include_router"
     ]

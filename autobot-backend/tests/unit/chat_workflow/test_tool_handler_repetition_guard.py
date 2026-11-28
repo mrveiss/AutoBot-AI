@@ -57,9 +57,11 @@ def test_the_guard_is_reached_from_the_dispatch_seam() -> None:
     """`_dispatch_tool_call` must actually call it — a guard nothing invokes is #13590 again."""
     import inspect
 
-    source = inspect.getsource(ToolHandlerMixin._dispatch_tool_call)
+    # #18430: the guards run from `_seam_guard_message`, which `_dispatch_tool_call` awaits first.
+    source = inspect.getsource(ToolHandlerMixin._seam_guard_message)
 
-    assert "_enforce_repetition(" in source
+    assert "_enforce_repetition" in source
+    assert "_seam_guard_message(" in inspect.getsource(ToolHandlerMixin._dispatch_tool_call)
 
 
 def test_repeated_identical_calls_with_an_unchanged_result_halt() -> None:

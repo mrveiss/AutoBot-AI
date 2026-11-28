@@ -60,6 +60,7 @@ from user_management.models.role import Role
 from ..models.activity import ActorType
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 
 
 class RoleService(LLCServiceBase):
@@ -75,15 +76,15 @@ class RoleService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> Role:
         if company_id is None:
-            raise ValueError("company_id is required to create a role")
+            raise CompanyOsError("company_id is required to create a role")
         await require_company_admin(session, company_id, actor_user_id)
         cleaned = (name or "").strip()
         if not cleaned:
             # A blank name would satisfy NOT NULL while naming nothing.
-            raise ValueError("role name is required")
+            raise CompanyOsError("role name is required")
 
         if await self._find_by_name(session, company_id, cleaned) is not None:
-            raise ValueError(f"a role named {cleaned!r} already exists in this company")
+            raise CompanyOsError(f"a role named {cleaned!r} already exists in this company")
 
         role = Role(org_id=company_id, name=cleaned, description=description, is_system=False)
         session.add(role)
@@ -103,9 +104,7 @@ class RoleService(LLCServiceBase):
         actor: Optional[str],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        """Emit one activity-log event, or nothing if the DI slot is unpopulated."""
-        if not self.activity_log:
-            return
+        """Emit one activity-log event in the caller's transaction."""
         await self.activity_log.record(
             session=session,
             company_id=str(role.org_id),
@@ -140,16 +139,16 @@ class RoleService(LLCServiceBase):
         if role is None:
             return None
         if role.is_system:
-            raise ValueError("a system role cannot be modified through a company-scoped path")
+            raise CompanyOsError("a system role cannot be modified through a company-scoped path")
 
         allowed: Dict[str, Any] = {k: v for k, v in fields.items() if k in {"name", "description"}}
         if "name" in allowed:
             cleaned = (allowed["name"] or "").strip()
             if not cleaned:
-                raise ValueError("role name is required")
+                raise CompanyOsError("role name is required")
             clash = await self._find_by_name(session, company_id, cleaned)
             if clash is not None and clash.id != role.id:
-                raise ValueError(f"a role named {cleaned!r} already exists in this company")
+                raise CompanyOsError(f"a role named {cleaned!r} already exists in this company")
             allowed["name"] = cleaned
 
         for key, value in allowed.items():
@@ -177,7 +176,7 @@ class RoleService(LLCServiceBase):
         if role is None:
             return False
         if role.is_system:
-            raise ValueError("a system role cannot be deleted through a company-scoped path")
+            raise CompanyOsError("a system role cannot be deleted through a company-scoped path")
 
         result = await session.execute(
             sa_delete(Role).where(

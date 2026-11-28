@@ -5,12 +5,12 @@
 """``PathsManager`` must reject a non-str config value, not turn it into a
 directory tree (#14217).
 
-``get_data_path``/``get_log_path`` handed whatever ``unified_config_manager``
-returned straight to ``Path()``. When ``unified_config_manager`` is an
+``get_data_path``/``get_log_path`` handed whatever ``config_manager``
+returned straight to ``Path()``. When ``config_manager`` is an
 unconfigured ``MagicMock`` (a broadly-mocked test double), every ``.get()``
 call returns another ``MagicMock`` rather than raising or returning the
 requested default — three levels deep for the exact evidence in the issue:
-``unified_config_manager.get().get().get()``. ``Path(MagicMock())`` never
+``config_manager.get().get().get()``. ``Path(MagicMock())`` never
 raises (a ``MagicMock``'s default ``__fspath__`` embeds ``/`` separators),
 so the mock's own repr was silently promoted into a real, creatable,
 nested directory tree the first time something called ``.mkdir()`` on it.
@@ -41,8 +41,8 @@ class TestGetDataPathRejectsNonStrConfig:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
-            MagicMock(name="mock.unified_config_manager"),
+            "config_manager",
+            MagicMock(name="mock.config_manager"),
         )
 
         with pytest.raises(TypeError):
@@ -54,7 +54,7 @@ class TestGetDataPathRejectsNonStrConfig:
         """Unchanged behaviour: a real config dict resolves normally."""
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
+            "config_manager",
             MagicMock(**{"get.return_value": {"data": {"directory": str(tmp_path)}}}),
         )
 
@@ -66,7 +66,7 @@ class TestGetDataPathRejectsNonStrConfig:
         """A specifically-configured (not just defaulted) entry is checked too."""
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
+            "config_manager",
             MagicMock(**{"get.return_value": {"data": {"file_manager_root": object()}}}),
         )
 
@@ -79,8 +79,8 @@ class TestGetLogPathRejectsNonStrConfig:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
-            MagicMock(name="mock.unified_config_manager"),
+            "config_manager",
+            MagicMock(name="mock.config_manager"),
         )
 
         with pytest.raises(TypeError):
@@ -91,7 +91,7 @@ class TestGetLogPathRejectsNonStrConfig:
     def test_configured_manager_with_dict_value_still_works(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
+            "config_manager",
             MagicMock(**{"get.return_value": {"logs": {"directory": str(tmp_path)}}}),
         )
 
@@ -109,7 +109,7 @@ class TestFallbackMethodsDegradeGracefullyInsteadOfBuildingATree:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
+            "config_manager",
             MagicMock(**{"get.return_value": {"chat_data_dir": MagicMock(name="mock.chat_data_dir")}}),
         )
 
@@ -145,7 +145,7 @@ class TestResolversAgreeAndHonourTheDataDirOverride:
 
         monkeypatch.setattr(
             paths_manager_module,
-            "unified_config_manager",
+            "config_manager",
             MagicMock(**{"get.return_value": {}}),
         )
         monkeypatch.setenv("AUTOBOT_DATA_DIR", str(target))

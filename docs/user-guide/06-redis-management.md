@@ -995,10 +995,10 @@ If issues persist after troubleshooting:
 ## Additional Resources
 
 **Documentation:**
-- [API Documentation](docs/api/REDIS_SERVICE_MANAGEMENT_API.md)
-- [Operational Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md)
-- [Architecture Document](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
-- [Troubleshooting Guide](docs/troubleshooting/comprehensive_troubleshooting_guide.md)
+- [API Documentation](../api/REDIS_SERVICE_MANAGEMENT_API.md)
+- [Operational Runbook](../operations/REDIS_SERVICE_RUNBOOK.md)
+- [Architecture Document](../architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
+- [Troubleshooting Guide](../troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md)
 
 **Support:**
 - Email: support@autobot.local

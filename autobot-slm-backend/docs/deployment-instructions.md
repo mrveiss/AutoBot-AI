@@ -265,14 +265,9 @@ ansible all -m shell -a "netstat -tuln | grep LISTEN"
 
 #### Service Recovery
 ```bash
-# Stop problematic services
-./deploy.sh --stop
-
-# Re-run specific deployment phase
-ansible-playbook -i inventory/production.yml playbooks/deploy-backend.yml
-
-# Start services again
-./deploy.sh --start
+# Redeploy the affected role through the builtin updater:
+# SLM Maintenance -> Updates -> Code Sync (runs playbooks/deploy_role.yml for the node's roles).
+# Don't run playbooks by hand against a deployed host.
 ```
 
 #### Data Recovery
@@ -281,13 +276,12 @@ ansible-playbook -i inventory/production.yml playbooks/deploy-backend.yml
 ./utils/restore.sh --from-backup=/opt/autobot/backups/full-20241205-143022
 
 # Re-run data migration
-ansible-playbook -i inventory/production.yml playbooks/data-migration.yml
+./deploy.sh --data-migration
 ```
 
 #### Complete Rollback
-```bash
-./deploy.sh --rollback
-```
+No rollback playbook exists, and `./deploy.sh --rollback` refuses rather than stopping services.
+Deploy a known-good commit through the builtin updater; a real deployment rollback is #17657.
 
 ## Performance Optimization
 
@@ -399,14 +393,10 @@ ansible all -m apt -a "update_cache=yes upgrade=yes" --become
 
 ### Monthly Tasks
 ```bash
-# Security audit
-ansible-playbook -i inventory/production.yml playbooks/security-audit.yml
-
 # Cleanup old backups
 ./utils/backup.sh --cleanup 30
 
-# System optimization
-ansible-playbook -i inventory/production.yml playbooks/optimize-system.yml
+# (No security-audit or optimize-system playbook exists; earlier versions of this page named both.)
 ```
 
 ## Migration Benefits

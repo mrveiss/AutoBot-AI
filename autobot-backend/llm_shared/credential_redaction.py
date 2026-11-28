@@ -8,6 +8,10 @@ Credential redaction for log/trace safety (GH#9037).
 Ensures API keys and sensitive credentials never appear in logs, traces,
 or audit records.
 
+#18205: ``redact_dict`` is a thin composition over ``secret_redaction.redact_nested`` and masks a
+credential value with the canonical fixed-width placeholder (it used to reveal ``value[:4]...value[-4:]``).
+``redact_api_key`` returns that placeholder too, so no path here reveals any part of a key.
+
 #13708: ``redact_string`` also runs the cross-service content scanner
 (``autobot_shared.secret_redaction``) after its own patterns, so a credential
 in free text this module's narrower ``API_KEY_PATTERNS`` never covered --
@@ -17,15 +21,21 @@ coverage for free, including ``llc/services/replay_service.py``'s read-time
 redaction, which previously had no content scanner at all in that path.
 
 
-Boundary: this module is one of seven that own a secret detector — see
+Boundary: this module is one of three that own a secret detector — see
 ``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+the problem, and add a new detector there rather than starting another (#16688).
 """
 
 import re
 from typing import Any, Dict
 
-from autobot_shared.secret_redaction import CREDENTIAL_SUFFIXES, redact_content
+from autobot_shared.secret_redaction import (
+    BROAD_FRAGMENTS,
+    REDACTED_PLACEHOLDER,
+    MatchPolicy,
+    redact_content,
+    redact_nested,
+)
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -35,27 +45,16 @@ API_KEY_PATTERNS = [
     re.compile(r"(Bearer\s+[a-zA-Z0-9\-._~+/]+=*)"),  # Bearer tokens
 ]
 
-# Keys in dicts that should be redacted. Entries MUST be in the normalized
-# form redact_dict compares against (lowercase, "_" and "-" stripped) —
-# un-normalized entries like "api_key" can never match a normalized key (#11762).
-#
-# #16688: the credential nouns are no longer hand-copied. They come from
-# ``secret_redaction.CREDENTIAL_SUFFIXES``, the shared-tier vocabulary this
-# module already delegates free-text scanning to, so a noun added there (the
-# census names it the owner of "is this name a credential") reaches this
-# module's dict/log redaction without anyone remembering to type it twice.
-#
-# The extras below are a UNION, not a replacement, and that is load-bearing.
-# CREDENTIAL_SUFFIXES is a *field-name suffix* vocabulary and carries no
-# authorization terms; dropping to it alone would stop redacting
-# ``Authorization``, ``auth_header`` and ``x_auth`` in logs — a silent
-# under-redaction, which is exactly the failure mode a redaction merge has to
-# refuse. Every entry here must therefore only ever widen the set.
-# Already covered by CREDENTIAL_SUFFIXES and deliberately not repeated:
-# apikey (via "key"), token, password, secret, credential.
-_AUTHORIZATION_KEYS = frozenset({"bearer", "auth", "authorization"})
-
-SENSITIVE_KEYS = frozenset(CREDENTIAL_SUFFIXES) | _AUTHORIZATION_KEYS
+# Keys in dicts that should be redacted (#16688, #17336). The vocabulary and the
+# matching rule are the canonical ones: ``redact_dict`` calls
+# ``is_credential_entry(key, value, MatchPolicy.BROAD)``, which normalizes the key
+# (lowercase, "_" and "-" stripped) before substring-matching it against
+# ``secret_redaction.BROAD_FRAGMENTS`` -- the credential nouns PLUS the
+# authorization terms (``Authorization``, ``auth_header``, ``x_auth``). Nothing
+# is hand-copied here, so a noun added to the shared vocabulary reaches this
+# module's dict/log redaction automatically. ``SENSITIVE_KEYS`` is kept as the
+# public name for that vocabulary.
+SENSITIVE_KEYS = frozenset(BROAD_FRAGMENTS)
 
 
 def redact_api_key(value: str) -> str:
@@ -65,11 +64,10 @@ def redact_api_key(value: str) -> str:
         value: The API key or token to redact.
 
     Returns:
-        Redacted string showing only first/last 4 chars.
+        The fixed-width placeholder. No part of the key is kept: eight
+        characters of a key are a disclosure (#18205).
     """
-    if not value or len(value) < 8:
-        return "***"
-    return f"{value[:4]}...{value[-4:]}"
+    return REDACTED_PLACEHOLDER
 
 
 def redact_string(text: str) -> str:
@@ -90,53 +88,22 @@ def redact_string(text: str) -> str:
 
 
 def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Redact sensitive values from a dictionary.
+    """Redact sensitive values from a dictionary, at any depth (dicts, lists, tuples, sets).
 
-    Recursively handles nested dicts and lists (M6 fix — lists were previously
-    left untraversed, leaking credentials embedded in list elements).
+    A thin composition over ``secret_redaction.redact_nested`` (#18205), the one recursive mapping
+    redactor; this function only picks the LLM layer's two deviations from its defaults:
 
-    Args:
-        data: Dictionary that may contain sensitive keys.
+    * ``exempt_counts=False``: this layer always masked a count of a credential noun
+      (``max_tokens: 4096``), and the #17336/#17337 rule is that no name leaves a caller's
+      masked set; only the template export and the API config readout unmask counts.
+    * ``extra_scan=redact_string``: every string left unmasked also goes through this module's
+      ``API_KEY_PATTERNS`` (the 32+ character generic key among them), which ``redact_content`` does not cover.
 
-    Returns:
-        New dictionary with sensitive values redacted.
+    A credential value is masked with the canonical fixed-width placeholder, never a fragment of it.
     """
-    redacted = {}
-    for key, value in data.items():
-        key_lower = key.lower().replace("_", "").replace("-", "")
-        if any(sensitive in key_lower for sensitive in SENSITIVE_KEYS):
-            # Redact this key's value
-            if isinstance(value, str):
-                redacted[key] = redact_api_key(value)
-            else:
-                redacted[key] = "***"
-        elif isinstance(value, dict):
-            # Recursively redact nested dicts
-            redacted[key] = redact_dict(value)
-        elif isinstance(value, list):
-            # Recurse into list elements (M6: previously unhandled)
-            redacted[key] = _redact_list(value)
-        elif isinstance(value, str):
-            # Redact any API keys in string values
-            redacted[key] = redact_string(value)
-        else:
-            redacted[key] = value
-    return redacted
-
-
-def _redact_list(items: list) -> list:
-    """Recursively redact list elements that are dicts or strings."""
-    result = []
-    for item in items:
-        if isinstance(item, dict):
-            result.append(redact_dict(item))
-        elif isinstance(item, list):
-            result.append(_redact_list(item))
-        elif isinstance(item, str):
-            result.append(redact_string(item))
-        else:
-            result.append(item)
-    return result
+    return redact_nested(
+        data, MatchPolicy.BROAD, exempt_counts=False, extra_scan=redact_string, mask_credential_urls=True
+    )
 
 
 def safe_repr(obj: Any, max_depth: int = 3) -> str:
@@ -199,7 +166,6 @@ __all__ = [
     "redact_api_key",
     "redact_string",
     "redact_dict",
-    "_redact_list",
     "safe_repr",
     "CredentialRedactionFilter",
 ]

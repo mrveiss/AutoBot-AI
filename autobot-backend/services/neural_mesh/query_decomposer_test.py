@@ -17,7 +17,7 @@ from services.neural_mesh.query_decomposer import (
     DecompositionPlan,
     DecompositionStep,
     QueryDecomposer,
-    StepResult,
+    RetrievalStepResult,
 )
 
 # =============================================================================
@@ -174,7 +174,7 @@ class TestExecute:
 
     @pytest.mark.asyncio
     async def test_step_result_contains_evidence(self) -> None:
-        """Each StepResult has a non-empty evidence list from the retrieval."""
+        """Each RetrievalStepResult has a non-empty evidence list from the retrieval."""
         chunks = [
             {"chunk_id": "a", "content": "alpha", "score": 0.9},
             {"chunk_id": "b", "content": "beta", "score": 0.7},
@@ -189,13 +189,13 @@ class TestExecute:
         results = await decomposer.execute(plan)
 
         assert len(results) == 1
-        assert isinstance(results[0], StepResult)
+        assert isinstance(results[0], RetrievalStepResult)
         assert len(results[0].evidence) == 2
         assert results[0].evidence[0]["chunk_id"] == "a"
 
     @pytest.mark.asyncio
     async def test_execute_returns_one_result_per_step(self) -> None:
-        """execute() returns a StepResult list of the same length as plan.steps."""
+        """execute() returns a RetrievalStepResult list of the same length as plan.steps."""
         decomposer = _make_decomposer()
         steps = [DecompositionStep(step=i, query=f"q{i}", depends_on=[]) for i in range(1, 5)]
         plan = DecompositionPlan(original_query="four step plan", steps=steps)

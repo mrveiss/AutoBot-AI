@@ -153,8 +153,8 @@ class TestTheLockOutlastsTheOrphan:
         monkeypatch.setattr(dup_mod, "DuplicateCodeDetector", _SlowDetector)
         monkeypatch.setattr(dup_mod.AnalyticsConfig, "DUPLICATE_DETECTION_TIMEOUT", 0.1)
 
-        result = await dup_mod._run_standard_analysis(str(tmp_path), 0.5)
-        assert result is None, "the scan should have timed out"
+        with pytest.raises(dup_mod.ScanTimedOut):
+            await dup_mod._run_standard_analysis(str(tmp_path), 0.5)
         assert started.is_set()
 
         # The orphan is still running: the guard must still be closed.
@@ -191,7 +191,8 @@ class TestTheLockOutlastsTheOrphan:
         monkeypatch.setattr(dup_mod, "DuplicateCodeDetector", _SlowDetector)
         monkeypatch.setattr(dup_mod.AnalyticsConfig, "DUPLICATE_DETECTION_TIMEOUT", 0.1)
 
-        await dup_mod._run_standard_analysis(str(tmp_path), 0.5)
+        with pytest.raises(dup_mod.ScanTimedOut):
+            await dup_mod._run_standard_analysis(str(tmp_path), 0.5)
         token = seen_token["token"]
         assert token is not None, "the scan must be given a cancel token"
         assert token.is_set(), "an abandoned scan must be signalled to stop"

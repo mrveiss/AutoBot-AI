@@ -62,6 +62,7 @@ async function generateThumbnail(request: ThumbnailRequest): Promise<ThumbnailRe
 
   try {
     // Fetch video
+    // eslint-disable-next-line no-restricted-syntax -- Web Worker context, cannot import the main-thread client
     const response = await fetch(request.videoUrl)
     if (!response.ok) {
       throw new Error(`Failed to fetch video: ${response.statusText}`)

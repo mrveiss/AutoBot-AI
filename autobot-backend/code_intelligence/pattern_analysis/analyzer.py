@@ -10,25 +10,31 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
+import functools
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.io_executor import get_analytics_executor
 
+from .cancellation import CancellableAnalysis
 from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternSeverity,
-    PatternType,
 )
 
 logger = get_logger(__name__)
@@ -43,7 +49,7 @@ except ImportError:
     logger.warning("Fingerprinting module not available")
 
 try:
-    from code_intelligence.anti_pattern_detection import AntiPatternDetector
+    from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer
 
     ANTI_PATTERN_AVAILABLE = True
 except ImportError:
@@ -52,6 +58,8 @@ except ImportError:
 
 
 # Embedding generation (uses existing infrastructure)
+from knowledge.index_embedding_space import index_embedding_space
+
 try:
     from knowledge.embedding_cache import EmbeddingCache
 
@@ -59,14 +67,11 @@ try:
 except ImportError:
     EMBEDDING_CACHE_AVAILABLE = False
 
-# Issue #12407: Real embedding model used by the canonical
-# ``services.npu_client.generate_embedding_with_fallback`` helper. Mirrors
-# ``DEFAULT_EMBEDDING_MODEL`` in analytics_infrastructure.py / the
-# ``embedding_model`` default in cross_language_patterns/detector.py.
-EMBEDDING_MODEL = "nomic-embed-text"
+# #18143: ``code_patterns`` holds stored vectors: embed in the model its index was built with, never the active one.
+PATTERN_INDEX = "code_patterns"
 
 
-class CodePatternAnalyzer:
+class CodePatternAnalyzer(CancellableAnalysis):
     """Main orchestrator for code pattern detection and optimization.
 
     This analyzer combines:
@@ -87,22 +92,6 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Default exclusions
-    DEFAULT_EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-        }
-    )
-
     def _init_feature_flags(
         self,
         enable_clone_detection: bool,
@@ -120,15 +109,17 @@ class CodePatternAnalyzer:
         self.enable_complexity_analysis = enable_complexity_analysis
         self.enable_embedding_storage = enable_embedding_storage
         self.similarity_threshold = similarity_threshold
-        self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
 
-    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
-        """Initialize sub-analyzer instances based on feature flags. Issue #620."""
+    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float, cancel_token: threading.Event | None) -> None:
+        """Initialize sub-analyzer instances based on feature flags (Issue #620) and keep the caller's cancel token."""
+        # Set by the caller when it stops waiting (#22094); checked per file and per report.
+        self.cancel_token = cancel_token
         self._clone_detector = (
             CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
         self._anti_pattern_detector = (
-            AntiPatternDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_anti_pattern_detection else None
+            AntiPatternSuiteAnalyzer(exclude_dirs=[*self.exclude_dirs]) if self.enable_anti_pattern_detection else None
         )
         self._regex_detector = (
             RegexPatternDetector(exclude_dirs=self.exclude_dirs) if self.enable_regex_detection else None
@@ -156,6 +147,7 @@ class CodePatternAnalyzer:
         cc_threshold: int = 10,
         mi_threshold: float = 50,
         source_id: str | None = None,
+        cancel_token: threading.Event | None = None,
     ):
         """Initialize the code pattern analyzer. Issue #620.
 
@@ -176,14 +168,10 @@ class CodePatternAnalyzer:
             similarity_threshold,
             exclude_dirs,
         )
-        self._init_sub_analyzers(cc_threshold, mi_threshold)
-        # Issue #12384: scope tag for chroma metadata written by this instance.
-        self.source_id = source_id
-        self._source_tag = source_id or "default"
-        # Issue #12407: single reused EmbeddingCache instance (mirrors
-        # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
-        # calls to ``_generate_embedding`` actually benefit from the cache
-        # instead of instantiating a throwaway cache every call.
+        self._init_sub_analyzers(cc_threshold, mi_threshold, cancel_token)
+        self.source_id = self._source_tag = None if source_id is None else require_source_id(source_id, "analysis")
+        # Issue #12407: single reused EmbeddingCache (mirrors SemanticAnalysisMixin / CrossLanguagePatternDetector)
+        # so repeated ``_generate_embedding`` calls benefit from the cache instead of a throwaway one per call.
         self._embedding_cache = EmbeddingCache(maxsize=500, ttl_seconds=3600) if EMBEDDING_CACHE_AVAILABLE else None
 
     # Batch size for per-file analysis (tunable)
@@ -216,30 +204,17 @@ class CodePatternAnalyzer:
             self._merge_results(report, result)
 
     def collect_python_files(self, directory: str) -> List[str]:
-        """Collect all Python files excluding configured directories.
-
-        Returns:
-            Sorted list of absolute file paths.
-        """
-        files = []
-        dir_path = Path(directory)
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-            files.append(str(py_file))
-        return sorted(files)
+        """Sorted Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _run_batch_regex(self, file_paths: List[str]) -> List:
         """Run regex detection on a batch of files."""
         if not self._regex_detector:
             return []
-        executor = get_analytics_executor()
         results = []
         for fp in file_paths:
             try:
-                opps = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._regex_detector.detect_in_file, fp
-                )
+                opps = await self._run_file(self._regex_detector.detect_in_file, fp)
                 results.extend(opps)
             except Exception as e:
                 logger.debug("Regex detection failed for %s: %s", fp, e)
@@ -249,13 +224,10 @@ class CodePatternAnalyzer:
         """Run complexity analysis on a batch of files."""
         if not self._complexity_analyzer:
             return []
-        executor = get_analytics_executor()
         modules = []
         for fp in file_paths:
             try:
-                module = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._complexity_analyzer.analyze_file, fp
-                )
+                module = await self._run_file(self._complexity_analyzer.analyze_file, fp)
                 modules.append(module)
             except Exception as e:
                 logger.debug("Complexity analysis failed for %s: %s", fp, e)
@@ -265,16 +237,11 @@ class CodePatternAnalyzer:
         """Run anti-pattern detection on a batch of files."""
         if not self._anti_pattern_detector:
             return {"modularization": [], "other_patterns": []}
-        executor = get_analytics_executor()
         modularization: List = []
         other_patterns: List = []
         for fp in file_paths:
             try:
-                file_result = await asyncio.get_running_loop().run_in_executor(
-                    executor,
-                    self._anti_pattern_detector.analyze_file,
-                    fp,
-                )
+                file_result = await self._run_file(self._anti_pattern_detector.analyze_file, fp)
                 for pattern in file_result.get("anti_patterns", []):
                     if self._is_modularization_candidate(pattern):
                         mod = self._to_modularization_suggestion(pattern)
@@ -315,6 +282,7 @@ class CodePatternAnalyzer:
         start_time = time.time()
 
         async def _report(step: str, pct: float) -> None:
+            self._check_cancelled()  # every phase and batch reports first, so this is the per-phase and per-batch check
             if progress_callback:
                 await progress_callback(step, pct)
 
@@ -343,14 +311,7 @@ class CodePatternAnalyzer:
         start_batch = self._apply_resume_checkpoint(report, resume_from, total_batches)
 
         # Phase 2: Per-file analysis in batches (5% → 75%)
-        await self._process_file_batches(
-            batches,
-            start_batch,
-            report,
-            _report,
-            checkpoint_callback,
-            file_count,
-        )
+        await self._process_file_batches(batches, start_batch, report, _report, checkpoint_callback, file_count)
 
         # Phase 3: Clone detection (75% → 85%) — full directory, with timeout
         if self.enable_clone_detection:
@@ -551,10 +512,7 @@ class CodePatternAnalyzer:
         line_count = 0
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             try:
                 with open(py_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
@@ -567,35 +525,23 @@ class CodePatternAnalyzer:
         return file_count, line_count
 
     async def _run_clone_detection(self, directory: str) -> Dict[str, Any]:
-        """Run clone detection analysis.
-
-        Args:
-            directory: Path to directory
-
-        Returns:
-            Dictionary with clone detection results
-        """
+        """Clone detection over *directory* on the analytics executor (Issue #1233), as a result dict."""
         if not self._clone_detector:
             return {"type": "clone_detection", "patterns": []}
 
         try:
-            # Issue #1233: Use dedicated analytics executor
-            report = await asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                self._clone_detector.detect_clones,
-                directory,
+            # #22094: the thread checks both tokens per file; run_cancellable sets its own when this await is
+            # abandoned (this phase's timeout or the whole analysis's), the analysis token covers any other cancel.
+            phase_token = new_cancel_token()
+            tokens = (self.cancel_token, phase_token)
+            detect = functools.partial(self._clone_detector.detect_clones, directory, tokens)
+            report = await run_cancellable(
+                get_analytics_executor(), detect, operation="clone_detection", cancel_token=phase_token
             )
-
-            # Convert to our types
-            duplicate_patterns = []
-            for group in report.clone_groups:
-                duplicate = self._clone_group_to_duplicate(group)
-                if duplicate:
-                    duplicate_patterns.append(duplicate)
-
+            duplicates = [self._clone_group_to_duplicate(group) for group in report.clone_groups]
             return {
                 "type": "clone_detection",
-                "patterns": duplicate_patterns,
+                "patterns": [duplicate for duplicate in duplicates if duplicate],
                 "raw_report": report,
             }
 
@@ -706,7 +652,7 @@ class CodePatternAnalyzer:
                     if mod_suggestion:
                         modularization.append(mod_suggestion)
                 else:
-                    # Convert to generic CodePattern
+                    # Convert to generic DetectedCodePattern
                     code_pattern = self._anti_pattern_to_code_pattern(pattern)
                     if code_pattern:
                         other_patterns.append(code_pattern)
@@ -787,7 +733,7 @@ class CodePatternAnalyzer:
             canonical = group.instances[0].fragment.source_code or ""
 
         return DuplicatePattern(
-            pattern_type=PatternType.DUPLICATE_CODE,
+            pattern_type=CodePatternType.DUPLICATE_CODE,
             severity=severity,
             description=f"{group.clone_type.value} clone: {len(group.instances)} occurrences",
             locations=locations,
@@ -841,7 +787,7 @@ class CodePatternAnalyzer:
         )
 
         return ModularizationSuggestion(
-            pattern_type=PatternType.MODULARIZATION,
+            pattern_type=CodePatternType.MODULARIZATION,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
@@ -857,14 +803,14 @@ class CodePatternAnalyzer:
             ],
         )
 
-    def _anti_pattern_to_code_pattern(self, pattern) -> CodePattern | None:
-        """Convert anti-pattern to generic CodePattern.
+    def _anti_pattern_to_code_pattern(self, pattern) -> DetectedCodePattern | None:
+        """Convert anti-pattern to generic DetectedCodePattern.
 
         Args:
             pattern: AntiPatternResult
 
         Returns:
-            CodePattern or None
+            DetectedCodePattern or None
         """
         severity_map = {
             "critical": PatternSeverity.CRITICAL,
@@ -876,12 +822,12 @@ class CodePatternAnalyzer:
 
         # Map anti-pattern types to our pattern types
         type_map = {
-            "dead_code": PatternType.DEAD_CODE,
-            "circular_dependency": PatternType.COUPLING_ISSUE,
-            "message_chain": PatternType.COUPLING_ISSUE,
+            "dead_code": CodePatternType.DEAD_CODE,
+            "circular_dependency": CodePatternType.COUPLING_ISSUE,
+            "message_chain": CodePatternType.COUPLING_ISSUE,
         }
 
-        pattern_type = type_map.get(pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE)
+        pattern_type = type_map.get(pattern.pattern_type.value.lower(), CodePatternType.COUPLING_ISSUE)
 
         location = CodeLocation(
             file_path=pattern.file_path,
@@ -890,7 +836,7 @@ class CodePatternAnalyzer:
             function_name=pattern.entity_name,
         )
 
-        return CodePattern(
+        return DetectedCodePattern(
             pattern_type=pattern_type,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
@@ -963,7 +909,7 @@ class CodePatternAnalyzer:
         Args:
             report: Report with patterns to store
         """
-        if not self.enable_embedding_storage:
+        if not (self.enable_embedding_storage and self.source_id):  # #20513: no source, no partition to write
             return
 
         try:
@@ -1009,8 +955,9 @@ class CodePatternAnalyzer:
             pseudo-embedding only as a last-resort fallback).
         """
         if EMBEDDING_CACHE_AVAILABLE and self._embedding_cache is not None:
+            space = index_embedding_space(PATTERN_INDEX)
             try:
-                cached = await self._embedding_cache.get(code, model=EMBEDDING_MODEL)
+                cached = await self._embedding_cache.get(code, model=space.space_id)
                 if cached:
                     return cached
             except Exception as e:
@@ -1026,13 +973,13 @@ class CodePatternAnalyzer:
             try:
                 from services.npu_client import generate_embedding_with_fallback
 
-                embedding = await generate_embedding_with_fallback(code, model_name=EMBEDDING_MODEL)
+                embedding = await generate_embedding_with_fallback(code, model_name=space.model_id)
             except Exception as e:
                 logger.warning("Embedding generation failed, using hash fallback: %s", e)
 
             if embedding:
                 try:
-                    await self._embedding_cache.put(code, embedding, model=EMBEDDING_MODEL)
+                    await self._embedding_cache.put(code, embedding, model=space.space_id)
                 except Exception as e:
                     logger.warning("Embedding cache write failed, returning the embedding anyway: %s", e)
                 return embedding
@@ -1052,9 +999,9 @@ class CodePatternAnalyzer:
         callers get a well-shaped vector when embedding infrastructure is
         unavailable, never as a substitute for one (#12407, #13437).
         """
-        import hashlib
+        from autobot_shared.content_digest import content_digest
 
-        hash_bytes = hashlib.sha256(code.encode()).digest()
+        hash_bytes = bytes.fromhex(content_digest(code))
         # 768 dimensions to match nomic-embed-text.
         return [(hash_bytes[i % 32] - 128) / 128.0 for i in range(768)]
 

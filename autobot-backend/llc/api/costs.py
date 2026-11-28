@@ -43,13 +43,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import assert_company_access
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
 from llc.services.step_rollup import StepRollupService
 from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
@@ -207,7 +206,7 @@ def _company_uuid(company_id: str):
 @router.get("/by-agent-model", response_model=List[AgentModelCost])
 async def costs_by_agent_model(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCost]:
@@ -338,10 +337,19 @@ async def quota_windows(
 # ---------------------------------------------------------------------------
 
 
+class CurrencyAmountOut(BaseModel):
+    """A monthly amount in exactly one currency."""
+
+    currency: str
+    per_month: Decimal
+
+
 class RollupBucketOut(BaseModel):
     """One grouping's monthly total, with the coverage behind it.
 
-    ``per_month`` is the sum of the steps that could be costed. It is reported
+    ``per_month`` is the sum of the steps that could be costed, or ``None``
+    when the bucket spans currencies (``per_currency`` then has the amounts).
+    It is reported
     beside ``costed`` / ``not_costable`` rather than alone, because a partial
     total presented as a complete one is indistinguishable from a complete one
     by looking at it — the arithmetic form of the failure #14064, #13617 and
@@ -350,7 +358,12 @@ class RollupBucketOut(BaseModel):
 
     key: str
     label: str
-    per_month: Decimal
+    #: ``None`` when ``is_mixed_currency`` — different currencies are never
+    #: added together and no exchange rate is invented (#14670).
+    per_month: Optional[Decimal]
+    #: One entry per currency, always present; the figures to show when mixed.
+    per_currency: List[CurrencyAmountOut]
+    is_mixed_currency: bool
     costed: int
     not_costable: int
     total_steps: int
@@ -368,18 +381,20 @@ def _bucket_out(bucket) -> RollupBucketOut:  # noqa: ANN001
         key=bucket.key,
         label=bucket.label,
         per_month=bucket.per_month,
+        per_currency=[CurrencyAmountOut(currency=c, per_month=bucket.amounts[c]) for c in bucket.currencies],
+        is_mixed_currency=bucket.is_mixed_currency,
         costed=bucket.costed,
         not_costable=bucket.not_costable,
         total_steps=bucket.total_steps,
         is_complete=bucket.is_complete,
-        currencies=sorted(bucket.currencies),
+        currencies=bucket.currencies,
     )
 
 
 @router.get("/step-rollup", response_model=StepRollupResponse)
 async def step_rollup(
     company_id: str = Query(..., description="Company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> StepRollupResponse:

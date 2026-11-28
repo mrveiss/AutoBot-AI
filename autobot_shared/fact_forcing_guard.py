@@ -21,6 +21,7 @@ import os
 
 from autobot_shared.env_utils import env_flag
 from autobot_shared.tool_args import path_from_tool_args
+from autobot_shared.tool_catalogue import ToolEffect, tools_with
 
 # Tools that count as investigating a path.
 INVESTIGATION_TOOLS: frozenset[str] = frozenset(
@@ -41,15 +42,7 @@ INVESTIGATION_TOOLS: frozenset[str] = frozenset(
 
 # Mutating edits to an existing file that the gate guards. Pure creators
 # (create_file / write-new) are handled by the exists check, not by name.
-EDIT_TOOLS: frozenset[str] = frozenset(
-    {
-        "edit_file",
-        "write_file",
-        "multi_edit",
-        "apply_patch",
-        "delete_file",
-    }
-)
+EDIT_TOOLS: frozenset[str] = tools_with(ToolEffect.IN_PLACE_EDIT)
 
 
 def _norm(path: str) -> str:

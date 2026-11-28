@@ -39,6 +39,8 @@ from functools import lru_cache
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _PACKAGES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 
@@ -117,7 +119,7 @@ def _scan_source(source: str, label: str) -> tuple[int, int, list[str]]:
     """Return (routes, form routes, mixed findings) for one module's source text."""
     routes = form_routes = 0
     findings: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         paths = _route_paths(node)
@@ -176,20 +178,21 @@ def test_the_sweep_still_resolves_a_population_worth_asserting_on() -> None:
 def test_the_extractor_sees_form_in_the_source_it_reads() -> None:
     """The token matched is one the subject actually emits.
 
-    ``pause_agent_api`` and ``resume_agent_api`` in ``autobot-backend/api/agent.py``
-    declare ``user_role: str = Form("user")`` and nothing else form-like, so a
+    ``voice_create_api`` and ``voice_transcribe_api`` in ``autobot-backend/api/voice.py``
+    each declare one ``Form`` field (``name`` and ``language``) and nothing else form-like, so a
     matcher that has drifted off the real spelling loses them by name here
-    rather than silently reporting zero mixtures everywhere.
+    rather than silently reporting zero mixtures everywhere. (The agent routes that used to
+    be the example lost their ``user_role`` Form field in #22143.)
     """
-    source = (_REPO_ROOT / "autobot-backend" / "api" / "agent.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    source = (_REPO_ROOT / "autobot-backend" / "api" / "voice.py").read_text(encoding="utf-8")
+    tree = parse_cache.parse(source)
     seen = {
         node.name: _classify(node, _route_paths(node) or [])[0]
         for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _route_paths(node) is not None
     }
-    assert seen.get("pause_agent_api") == ["user_role"], seen.get("pause_agent_api")
-    assert seen.get("resume_agent_api") == ["user_role"], seen.get("resume_agent_api")
+    assert seen.get("voice_create_api") == ["name"], seen.get("voice_create_api")
+    assert seen.get("voice_transcribe_api") == ["language"], seen.get("voice_transcribe_api")
 
 
 def test_no_route_mixes_a_form_field_with_a_json_body_parameter() -> None:

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.knowledge_rag_loop import router as _loop_router
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.rag import (
@@ -36,6 +37,7 @@ from knowledge.schemas.rag import (
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
+    kb_principal,
 )
 from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
@@ -81,12 +83,12 @@ async def get_rag_service_dependency(request: Request) -> RAGService:
 
 def _convert_results_to_dicts(results: list) -> list:
     """
-    Convert SearchResult objects to dictionaries.
+    Convert RankedResult objects to dictionaries.
 
     Issue #620: Extracted from advanced_search.
 
     Args:
-        results: List of SearchResult objects
+        results: List of RankedResult objects
 
     Returns:
         List of result dictionaries
@@ -174,24 +176,27 @@ async def advanced_search(
         request.enable_reranking,
     )
 
-    # Perform advanced search
+    # Perform advanced search; the service filters every leg for the caller (#16664)
+    principal = kb_principal(current_user)
     results, metrics = await rag_service.advanced_search(
         query=request.query,
         max_results=request.max_results,
         enable_reranking=request.enable_reranking,
         timeout=request.timeout,
+        principal=principal,
     )
 
     # Build response (Issue #620: uses helpers)
     results_dicts = _convert_results_to_dicts(results)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    results_dicts = await filter_search_results_by_permission(
-        results_dicts,
-        user_id,
-        user_org_id,
-        user_group_ids,
-        ownership_manager=getattr(rag_service.kb_adapter.kb, "ownership_manager", None),
-    )
+    if not principal.is_superadmin:  # a root read was filtered AND audited by the service's root view (#19860)
+        results_dicts = await filter_search_results_by_permission(
+            results_dicts,
+            user_id,
+            user_org_id,
+            user_group_ids,
+            ownership_manager=getattr(rag_service.kb_adapter.kb, "ownership_manager", None),
+        )
     response = {
         "results": results_dicts,
         "total_results": len(results_dicts),
@@ -202,7 +207,7 @@ async def advanced_search(
 
     # Optionally include optimized context
     if request.return_context:
-        context, _ = await rag_service.get_optimized_context(query=request.query)
+        context, _ = await rag_service.get_optimized_context(query=request.query, principal=principal)
         response["context"] = context
         response["context_length"] = len(context)
 
@@ -563,6 +568,10 @@ async def retrieval_context(
     from services.retrieval_dispatcher import get_context
 
     cag_service = CAGService(rag_service)
+    try:
+        owner = OwnerScope.from_auth_user(current_user)  # #18825: KAG's graph expansion is owner-scoped
+    except OwnerScopeRequired:
+        raise HTTPException(status_code=403, detail="Authenticated user required")
     # GraphRAGService is initialized in the app lifespan; absent → kag falls back to rag.
     graph_rag_service = getattr(http_request.app.state, "graph_rag_service", None)
     context, metrics = await get_context(
@@ -573,6 +582,8 @@ async def retrieval_context(
         mode=request.mode,
         collection=request.collection_id,
         model=request.model,
+        principal=kb_principal(current_user),
+        owner=owner,
     )
     strategy = getattr(metrics, "strategy", "rag")
     return {

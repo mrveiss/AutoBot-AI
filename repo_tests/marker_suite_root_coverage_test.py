@@ -41,6 +41,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "marker-tests.yml"
@@ -91,7 +92,7 @@ def _decorator_markers(tree: ast.Module) -> set[str]:
 
 def markers_in(source: str) -> set[str]:
     """Every ``pytest.mark`` name a module applies, at any of the three levels."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return _module_level_markers(tree) | _decorator_markers(tree)
 
 

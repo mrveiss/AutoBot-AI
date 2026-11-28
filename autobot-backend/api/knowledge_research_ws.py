@@ -26,10 +26,11 @@ Server streams:
 import json
 from typing import Any, Callable, Dict
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketState
 
 from api.ws_security import open_authenticated_ws
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -171,8 +172,8 @@ async def knowledge_research_ws(websocket: WebSocket) -> None:
             store_quality = bool(msg.get("store", True))
             await _run_research(websocket, query, store_quality)
 
-    except WebSocketDisconnect:
-        logger.info("Knowledge research WS client disconnected")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "knowledge_research_ws")
     except Exception as exc:
         logger.error("Unexpected knowledge research WS error: %s", exc)
         await _send_event(

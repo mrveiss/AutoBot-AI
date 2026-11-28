@@ -4,7 +4,7 @@
 
 ## Mission
 
-Establish comprehensive performance baseline BEFORE async conversions (Tasks 2.1-2.4), then validate 10-50x improvements AFTER senior-backend-engineer completes async implementation.
+Establish comprehensive performance baseline BEFORE async conversions (Tasks 2.1-2.4), then validate 10-50x improvements AFTER senior backend engineer completes async implementation.
 
 ## Test Framework
 
@@ -197,7 +197,7 @@ python tests/performance/test_async_baseline.py
 
 ### Post-Async Validation (After Tasks 2.1-2.4)
 ```bash
-# After senior-backend-engineer completes async conversions:
+# After senior backend engineer completes async conversions:
 python tests/performance/test_async_baseline.py
 
 # Compare results
@@ -300,7 +300,7 @@ ulimit -n  # Should be >1024 for high concurrency
 
 1. **Run Baseline Tests NOW** (before async conversions)
 2. **Store baseline results** for comparison
-3. **Wait for Tasks 2.1-2.4 completion** (senior-backend-engineer)
+3. **Wait for Tasks 2.1-2.4 completion** (senior backend engineer)
 4. **Re-run tests** after async conversions
 5. **Validate 10-50x improvements**
 6. **Document findings** in Memory MCP

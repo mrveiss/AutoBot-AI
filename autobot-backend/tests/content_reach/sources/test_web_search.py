@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 # ---------------------------------------------------------------------------
 # DdgsBackend — probe()
@@ -51,7 +51,7 @@ async def test_ddgs_probe_false_when_absent(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ddgs_fetch_maps_results(monkeypatch):
-    """fetch() maps two DDGS results into ContentResult correctly."""
+    """fetch() maps two DDGS results into ContentReachResult correctly."""
     from content_reach.sources import web_search as ws_mod
 
     fake_results = [
@@ -74,7 +74,7 @@ async def test_ddgs_fetch_maps_results(monkeypatch):
 
     assert result.success is True
     assert result.backend_used == "ddgs"
-    assert result.source_type is SourceType.WEB_SEARCH
+    assert result.source_type is SourceKind.WEB_SEARCH
     assert len(result.structured["results"]) == 2
     assert result.structured["results"][0]["title"] == "Alpha"
     assert "Alpha" in result.text
@@ -107,7 +107,7 @@ async def test_ddgs_fetch_empty_raises(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_jina_search_fetch():
-    """fetch() maps a 200 response into a successful ContentResult."""
+    """fetch() maps a 200 response into a successful ContentReachResult."""
     from content_reach.sources.web_search import JinaSearchBackend
 
     mock_response = MagicMock()
@@ -126,7 +126,7 @@ async def test_jina_search_fetch():
 
     assert result.success is True
     assert result.backend_used == "jina_search"
-    assert result.source_type is SourceType.WEB_SEARCH
+    assert result.source_type is SourceKind.WEB_SEARCH
     assert "Result text from Jina" in result.text
 
 
@@ -220,5 +220,5 @@ def test_build_web_search_chain_order():
 
     chain = build_web_search_chain()
     assert chain.backend_names() == ["ddgs", "jina_search", "browser_search"]
-    assert chain.source_type is SourceType.WEB_SEARCH
+    assert chain.source_type is SourceKind.WEB_SEARCH
     assert chain.source == "web_search"

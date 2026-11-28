@@ -751,7 +751,7 @@ async def optimized_todowrite(todos: List[Dict[str, Any]]) -> bool:
 
 
 # Example usage and integration patterns
-async def example_usage():
+async def example_todowrite_optimizer_usage():
     """Example of how to use the TodoWrite optimizer"""
 
     # Get optimizer instance
@@ -803,4 +803,4 @@ async def example_usage():
 
 if __name__ == "__main__":
     # Run example
-    run_or_schedule(example_usage())
+    run_or_schedule(example_todowrite_optimizer_usage())

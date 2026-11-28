@@ -385,7 +385,7 @@ class TestSTTProtocolConformance:
 
 
 class _FakeSpeechRegistry:
-    """Minimal stand-in for ``voice_processing.providers.ProviderRegistry``.
+    """Minimal stand-in for ``voice_processing.providers.SpeechProviderRegistry``.
 
     Mirrors the real registry's ``_providers`` dict structure
     (``{lang: [(provider, priority), ...]}``) and ``get_provider`` API.
@@ -403,7 +403,7 @@ class _FakeSpeechRegistry:
         return entries[0][0]
 
     def languages(self):
-        """Match the real ProviderRegistry.languages() public accessor (#11617)."""
+        """Match the real SpeechProviderRegistry.languages() public accessor (#11617)."""
         return list(self._providers.keys())
 
 

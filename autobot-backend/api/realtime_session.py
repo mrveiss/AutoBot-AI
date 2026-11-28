@@ -19,10 +19,15 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api.schemas_realtime_session import RealtimeSessionSummary
+from api.user_management.dependencies import get_current_user
+from api.voice_bundle_helpers import voice_bundle_user_id
+from auth_middleware import check_admin_permission
+from autobot_shared.auth.permissions import Role, is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from voice_processing.realtime.base import RealtimeProviderError
@@ -34,7 +39,12 @@ from voice_processing.realtime.registry import (
 )
 
 logger = get_logger(__name__)
-router = APIRouter()
+
+# #16375: every route here spends something on the caller's behalf — an upstream
+# realtime negotiation, a billed token budget, or an MCP tool invocation — so the
+# router authenticates. The browser already sends credentials (useRealtimeVoice.ts
+# calls fetchWithAuth), so this gate adds no client change.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # ── Telemetry endpoint models (Issue #7421) ───────────────────────────────────
@@ -57,22 +67,6 @@ class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     session_id: str | None = None
-
-
-class SessionSummary(BaseModel):
-    session_id: str
-    user_id: str | None
-    model: str
-    started_at: str
-    ended_at: str | None
-    duration_s: float
-    audio_in_s: float
-    audio_out_s: float
-    input_tokens: int
-    output_tokens: int
-    tool_calls: int
-    estimated_cost_usd: float
-    disconnect_reason: str
 
 
 # ── Provider selection models (Issue #9025) ───────────────────────────────────
@@ -162,7 +156,13 @@ async def list_providers() -> dict:
     return {"selected": get_active_provider_id(), "providers": list_realtime_providers()}
 
 
-@router.patch("/providers", response_model=RealtimeProvidersResponse)
+# Admin, not just authenticated: set_active_provider mutates the in-process
+# selection for every session, not the caller's own.
+@router.patch(
+    "/providers",
+    response_model=RealtimeProvidersResponse,
+    dependencies=[Depends(check_admin_permission)],
+)
 async def set_provider(body: SetRealtimeProviderRequest) -> dict:
     """Set the active realtime provider (in-process; doc'd restart limitation).
 
@@ -181,35 +181,51 @@ async def set_provider(body: SetRealtimeProviderRequest) -> dict:
 
 @router.post("/session/{session_id}/end")
 async def end_realtime_session(session_id: str, body: SessionEndRequest) -> dict:
-    """Finalise telemetry for a Realtime session."""
+    """Finalise telemetry for a Realtime session; a telemetry failure is logged, never a 500."""
     from services.voice_realtime_telemetry import DisconnectReason, get_voice_realtime_telemetry
 
     try:
         reason = DisconnectReason(body.reason)
     except ValueError:
         reason = DisconnectReason.NORMAL
-    await get_voice_realtime_telemetry().session_end(session_id=session_id, reason=reason)
+    await _telemetry_call(
+        "end", session_id, get_voice_realtime_telemetry().session_end(session_id=session_id, reason=reason)
+    )
     return {"status": "ok", "session_id": session_id}
+
+
+async def _telemetry_call(what: str, session_id: str, call) -> None:
+    """Await a telemetry write; log a failure at warning with the session id and carry on (#21678)."""
+    try:
+        await call
+    except Exception as exc:
+        logger.warning("voice_realtime telemetry %s failed session_id=%s: %s", what, session_id, exc)
 
 
 @router.post("/session/{session_id}/response_done")
 async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> dict:
-    """Ingest a response.done payload and enforce soft-caps."""
+    """Ingest a response.done payload and enforce soft-caps, even when the usage write fails."""
     from services.voice_realtime_telemetry import CapBreachError, get_voice_realtime_telemetry
 
     telemetry = get_voice_realtime_telemetry()
-    await telemetry.record_response_done(
-        session_id=session_id,
-        input_tokens=body.input_tokens,
-        output_tokens=body.output_tokens,
-        cached_input_tokens=body.cached_input_tokens,
-        audio_in_s=body.audio_in_s,
-        audio_out_s=body.audio_out_s,
+    await _telemetry_call(
+        "response_done",
+        session_id,
+        telemetry.record_response_done(
+            session_id=session_id,
+            input_tokens=body.input_tokens,
+            output_tokens=body.output_tokens,
+            cached_input_tokens=body.cached_input_tokens,
+            audio_in_s=body.audio_in_s,
+            audio_out_s=body.audio_out_s,
+        ),
     )
     try:
         await telemetry.check_caps(session_id)
     except CapBreachError as exc:
-        await telemetry.session_end(session_id=session_id, reason=exc.reason)
+        await _telemetry_call(
+            "cap_breach end", session_id, telemetry.session_end(session_id=session_id, reason=exc.reason)
+        )
         # CapBreachError carries an intentional, hardcoded
         # client-facing cap-breach notice (e.g. "session ended: N minute limit reached"), not a stack trace.
         return {"status": "cap_breach", "reason": exc.reason.value, "message": str(exc)}
@@ -217,24 +233,42 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 
 @router.post("/tools/call")
-async def call_realtime_tool(body: ToolCallRequest) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343)."""
+async def call_realtime_tool(
+    body: ToolCallRequest, request: Request, current_user: dict = Depends(get_current_user)
+) -> dict:
+    """The one handler for ``POST /api/voice/realtime/tools/call`` (#7343, #18721).
+
+    Only a tool in the caller's active voice bundle may run (403 otherwise), and the call carries the
+    authenticated session, user and company, never the model's (#18430). ``X-Session-Id`` stands in when the
+    body names no session.
+    """
     from services.realtime_mcp_bridge import get_realtime_bridge
 
-    bridge = await get_realtime_bridge()
-    result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
+    role = current_user.get("role") or Role.USER.value
+    user_id = voice_bundle_user_id(current_user)  # the same key the listing endpoint resolves the bundle by
+    bridge = await get_realtime_bridge(is_admin=is_admin_role(role))  # #12717
+    allowed = {t.name for t in await bridge.list_realtime_tools(user_id=user_id, role=role)}
+    if body.name not in allowed:
+        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
+    result = await bridge.call_tool(
+        name=body.name,
+        arguments=body.arguments,
+        session_id=body.session_id or request.headers.get("X-Session-Id"),
+        user_id=user_id,
+        company_id=current_user.get("org_id"),
+    )
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
 
 
-@router.get("/sessions", response_model=list[SessionSummary])
-async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[SessionSummary]:
+@router.get("/sessions", response_model=list[RealtimeSessionSummary])
+async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[RealtimeSessionSummary]:
     """Return recent Realtime sessions for the UsageView (#7421)."""
     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
 
     telemetry = get_voice_realtime_telemetry()
     records = await telemetry.list_recent_sessions(user_id=user_id, limit=limit)
     return [
-        SessionSummary(
+        RealtimeSessionSummary(
             session_id=r.session_id,
             user_id=r.user_id,
             model=r.model,

@@ -1,0 +1,25 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE place update-all-nodes.yml links autobot_shared into a component dir (#21035,
+# #9225, #9565, #2651). Imported (not included) so the caller's tags and `when` apply to both
+# tasks. Takes `shared_link_component` (e.g. autobot-slm-agent). A node whose component is not
+# deployed yet (freshly enrolled) has no parent dir for the link, so the link is skipped
+# rather than failing the whole fleet update with ENOENT.
+- name: "Check {{ shared_link_component }} is deployed before linking autobot_shared (#21035)"
+  ansible.builtin.stat:
+    path: "{{ autobot.base_dir }}/{{ shared_link_component }}"
+  register: shared_link_component_stat
+
+- name: "Link autobot_shared into {{ shared_link_component }} (#21035)"
+  ansible.builtin.file:
+    src: ../autobot_shared
+    dest: "{{ autobot.base_dir }}/{{ shared_link_component }}/autobot_shared"
+    state: link
+    force: true
+    owner: autobot
+    group: autobot
+  become: true
+  when: shared_link_component_stat.stat.exists

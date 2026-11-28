@@ -4,11 +4,10 @@
 # Author: mrveiss
 """Base sync interface for skill repositories (Phase 3)."""
 
-import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
-import yaml
+from autobot_shared.frontmatter import parse_frontmatter_mapping
 
 
 class BaseRepoSync(ABC):
@@ -21,10 +20,4 @@ class BaseRepoSync(ABC):
     @staticmethod
     def _parse_skill_md(content: str) -> Dict[str, Any]:
         """Parse YAML frontmatter from SKILL.md content into manifest dict."""
-        match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-        if not match:
-            return {}
-        try:
-            return yaml.safe_load(match.group(1)) or {}
-        except yaml.YAMLError:
-            return {}
+        return parse_frontmatter_mapping(content)

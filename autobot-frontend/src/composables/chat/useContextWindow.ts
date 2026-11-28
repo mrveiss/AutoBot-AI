@@ -18,16 +18,14 @@ export interface ContextWindowState {
   isWarning: ComputedRef<boolean>
   isCritical: ComputedRef<boolean>
   hasData: ComputedRef<boolean>
+  /** Why the selected model has no window: the model-list request failed. Null when it succeeded (an unlisted model is just unknown). */
+  loadError: ComputedRef<string | null>
 }
 
-// Known context windows for common models when live data is unavailable
+// Known context windows for common non-Claude models when live data is unavailable. Claude windows are
+// never written here: the backend model list carries them (from its context-window table), and a Claude
+// model missing from that list is unknown (0), not a guessed number.
 const FALLBACK_CONTEXT_WINDOWS: Record<string, number> = {
-  'claude-3-opus': 200_000,
-  'claude-3-sonnet': 200_000,
-  'claude-3-haiku': 200_000,
-  'claude-3-5-sonnet': 200_000,
-  'claude-sonnet': 200_000,
-  'claude-opus': 200_000,
   'gpt-4o': 128_000,
   'gpt-4': 128_000,
   'gpt-4-turbo': 128_000,
@@ -57,7 +55,7 @@ export function useContextWindow(
   messages: Ref<ChatMessage[]> | ComputedRef<ChatMessage[]>,
   modelName: Ref<string> | ComputedRef<string>,
 ): ContextWindowState {
-  const { models, fetchModels } = useAvailableModels()
+  const { models, fetchModels, error } = useAvailableModels()
 
   // Fetch model list once if empty
   fetchModels().catch((err) => logger.warn('Failed to fetch models for context window:', err))
@@ -88,5 +86,10 @@ export function useContextWindow(
 
   const hasData = computed<boolean>(() => tokensUsed.value > 0 && contextWindow.value > 0)
 
-  return { tokensUsed, contextWindow, usagePercent, isWarning, isCritical, hasData }
+  // A failed request stays distinguishable from a model the list legitimately lacks (#20884).
+  const loadError = computed<string | null>(() =>
+    modelName.value && contextWindow.value === 0 ? (error?.value ?? null) : null,
+  )
+
+  return { tokensUsed, contextWindow, usagePercent, isWarning, isCritical, hasData, loadError }
 }

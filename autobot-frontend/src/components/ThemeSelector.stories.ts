@@ -34,7 +34,7 @@ const meta = {
         availableAccents,
         themeLabels,
         accentLabels,
-        accentDescriptions,
+        accentDescriptionKeys,
         isDark,
       } = useTheme()
 
@@ -47,7 +47,7 @@ const meta = {
         availableAccents,
         themeLabels,
         accentLabels,
-        accentDescriptions,
+        accentDescriptionKeys,
         isDark,
       }
     },
@@ -119,7 +119,7 @@ const meta = {
             </button>
           </div>
           <p style="margin-top: 0.75rem; color: var(--text-tertiary); font-size: 0.875rem; font-style: italic;">
-            {{ accentDescriptions[accentColor] }}
+            {{ $t(accentDescriptionKeys[accentColor]) }}
           </p>
         </div>
 

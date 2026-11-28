@@ -27,7 +27,7 @@ from __future__ import annotations
 from fnmatch import fnmatch
 
 from services.deploy_artifacts import HOST_STATE_EXCLUDES, HOST_STATE_REINCLUDES
-from services.git_subprocess import run_git
+from services.git_subprocess import run_git_capture
 
 
 def _pattern_matches(rel_path: str, pattern: str) -> bool:
@@ -58,7 +58,7 @@ def host_state_pattern(rel_path: str) -> str | None:
 async def is_git_ignored(repo_root: str, pathspec: str) -> bool:
     """True when *pathspec* is ignored by the ``.gitignore`` rules checked
     out in *repo_root* right now -- the commit the deletion diff runs against."""
-    _, rc = await run_git(repo_root, "check-ignore", "-q", "--", pathspec)
+    _, rc = await run_git_capture(repo_root, "check-ignore", "-q", "--", pathspec)
     return rc == 0
 
 

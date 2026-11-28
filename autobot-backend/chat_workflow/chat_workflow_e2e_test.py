@@ -10,7 +10,7 @@ import asyncio
 
 import aiohttp
 
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_chat_workflow():
@@ -24,7 +24,7 @@ async def test_chat_workflow():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.post(get_test_backend_url() + "/api/chats/new") as response:
+            async with session.post(live_backend_url() + "/api/chats/new") as response:
                 if response.status == 200:
                     chat_data = await response.json()
                     chat_id = chat_data.get("chat_id")
@@ -69,7 +69,7 @@ async def test_chat_workflow():
             chat_request = {"chatId": chat_id, "message": test["message"]}
 
             try:
-                async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
+                async with session.post(live_backend_url() + "/api/chat", json=chat_request) as response:
                     if response.status == 200:
                         result = await response.json()
                         response_text = result.get("response", "")
@@ -116,7 +116,7 @@ async def test_chat_workflow():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.get(get_test_backend_url() + "/api/workflow/workflows") as response:
+            async with session.get(live_backend_url() + "/api/workflow/workflows") as response:
                 if response.status == 200:
                     workflows_data = await response.json()
                     active_count = workflows_data.get("active_workflows", 0)
@@ -154,9 +154,7 @@ async def test_direct_workflow_execution():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.post(
-                get_test_backend_url() + "/api/workflow/execute", json=workflow_request
-            ) as response:
+            async with session.post(live_backend_url() + "/api/workflow/execute", json=workflow_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflow executed successfully")  # noqa: print

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
+import os
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any, List, Tuple, Type
 
@@ -61,6 +62,9 @@ _MAX_WORKERS = env_int_clamped("AUTOBOT_CODE_ANALYSIS_POOL_WORKERS", 2, min_v=1)
 # requests. The scans are seconds long, so the respawn cost is noise.
 _MAX_TASKS_PER_CHILD = env_int_clamped("AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS", 8, min_v=1)
 
+#: The same lowered priority the indexing worker takes (#1303), so a scan cannot starve the API (#20483).
+_WORKER_NICE = 10
+
 _pool: ProcessPoolExecutor | None = None
 _pool_lock = asyncio.Lock()
 
@@ -70,6 +74,14 @@ _pool_lock = asyncio.Lock()
 #: scan runs in-thread instead. Logged at WARNING once, never silent — a host in
 #: this state still has the #12866 stalls and the log is how that is known.
 _pool_unavailable_reason: str | None = None
+
+
+def _lower_worker_priority() -> None:
+    """Runs once in each pool worker, so it lowers that worker and never the backend."""
+    try:
+        os.nice(_WORKER_NICE)
+    except OSError as exc:
+        logger.debug("Could not lower the code-analysis worker's priority: %s", exc)
 
 
 def _scan_in_child(
@@ -117,6 +129,7 @@ async def _get_pool() -> ProcessPoolExecutor | None:
                 # that never runs them, which deadlocks on any lock held at the
                 # moment of the fork.
                 "mp_context": multiprocessing.get_context("spawn"),
+                "initializer": _lower_worker_priority,
             }
             if "max_tasks_per_child" in ProcessPoolExecutor.__init__.__code__.co_varnames:
                 kwargs["max_tasks_per_child"] = _MAX_TASKS_PER_CHILD

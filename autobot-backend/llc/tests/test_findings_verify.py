@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.status_enums import Severity
-from llc.services.findings_verify import Verdict, combine_verdicts, select_verifier_provider, verify_finding
+from llc.services.findings_verify import FindingVerdict, combine_verdicts, select_verifier_provider, verify_finding
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -83,11 +83,11 @@ def clone_dir(tmp_path: Path) -> Path:
 
 @pytest.mark.asyncio
 async def test_verify_finding_success(clone_dir: Path) -> None:
-    """Happy path: chat returns valid JSON → Verdict.is_real is True."""
+    """Happy path: chat returns valid JSON → FindingVerdict.is_real is True."""
     svc = _mock_service(chat_return=_make_response(_GOOD_VERDICT_JSON))
     with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
         verdict = await verify_finding(_FINDING, str(clone_dir))
-    assert isinstance(verdict, Verdict)
+    assert isinstance(verdict, FindingVerdict)
     assert verdict.is_real is True
     assert verdict.confidence == pytest.approx(0.9)
     assert "real bug" in verdict.rationale
@@ -95,7 +95,7 @@ async def test_verify_finding_success(clone_dir: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_verify_finding_false_positive(clone_dir: Path) -> None:
-    """Chat returns JSON with is_real=False → Verdict.is_real is False."""
+    """Chat returns JSON with is_real=False → FindingVerdict.is_real is False."""
     svc = _mock_service(chat_return=_make_response(_FALSE_VERDICT_JSON))
     with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
         verdict = await verify_finding(_FINDING, str(clone_dir))
@@ -105,7 +105,7 @@ async def test_verify_finding_false_positive(clone_dir: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_verify_finding_chat_raises_fails_closed(clone_dir: Path) -> None:
-    """If chat() raises → fail-closed Verdict(is_real=False, confidence=0.0)."""
+    """If chat() raises → fail-closed FindingVerdict(is_real=False, confidence=0.0)."""
     svc = _mock_service(chat_side_effect=RuntimeError("engine down"))
     with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
         verdict = await verify_finding(_FINDING, str(clone_dir))
@@ -148,13 +148,13 @@ async def test_verify_finding_out_of_range_confidence_fails_closed(clone_dir: Pa
 
 @pytest.mark.asyncio
 async def test_verify_finding_missing_file_does_not_raise(tmp_path: Path) -> None:
-    """Finding pointing at a nonexistent file → still returns a Verdict, never raises."""
+    """Finding pointing at a nonexistent file → still returns a FindingVerdict, never raises."""
     svc = _mock_service(chat_return=_make_response(_GOOD_VERDICT_JSON))
     finding_no_file = dict(_FINDING, file_path="does/not/exist.py")
     with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
         verdict = await verify_finding(finding_no_file, str(tmp_path))
     # Even with missing file it should not raise; may be real or unverifiable
-    assert isinstance(verdict, Verdict)
+    assert isinstance(verdict, FindingVerdict)
     assert isinstance(verdict.is_real, bool)
 
 
@@ -208,8 +208,8 @@ def test_select_verifier_provider_falls_back_to_registration_order_without_prefe
 
 
 def test_combine_verdicts_agree_high_confidence_auto_resolves() -> None:
-    a = Verdict(is_real=True, confidence=0.9, rationale="a says real")
-    b = Verdict(is_real=True, confidence=0.8, rationale="b says real")
+    a = FindingVerdict(is_real=True, confidence=0.9, rationale="a says real")
+    b = FindingVerdict(is_real=True, confidence=0.8, rationale="b says real")
 
     combined = combine_verdicts(a, b, "openai", "anthropic")
 
@@ -221,8 +221,8 @@ def test_combine_verdicts_agree_high_confidence_auto_resolves() -> None:
 
 def test_combine_verdicts_agree_low_confidence_escalates() -> None:
     """Design failure-mode row: 'both verdicts low-confidence → escalate to human gate'."""
-    a = Verdict(is_real=False, confidence=0.3, rationale="a unsure")
-    b = Verdict(is_real=False, confidence=0.2, rationale="b unsure")
+    a = FindingVerdict(is_real=False, confidence=0.3, rationale="a unsure")
+    b = FindingVerdict(is_real=False, confidence=0.2, rationale="b unsure")
 
     combined = combine_verdicts(a, b, "openai", "anthropic")
 
@@ -231,8 +231,8 @@ def test_combine_verdicts_agree_low_confidence_escalates() -> None:
 
 
 def test_combine_verdicts_disagree_never_auto_passes() -> None:
-    a = Verdict(is_real=True, confidence=0.9, rationale="real bug")
-    b = Verdict(is_real=False, confidence=0.4, rationale="false positive")
+    a = FindingVerdict(is_real=True, confidence=0.9, rationale="real bug")
+    b = FindingVerdict(is_real=False, confidence=0.4, rationale="false positive")
 
     combined = combine_verdicts(a, b, "openai", "anthropic")
 

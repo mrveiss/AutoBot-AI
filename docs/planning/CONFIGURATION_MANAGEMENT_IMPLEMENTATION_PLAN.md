@@ -59,7 +59,7 @@ This document provides a comprehensive implementation plan for adding 4 integrat
 **Startup Sequence:**
 ```python
 # Line 471-487: Configuration loads at 10% progress
-config = UnifiedConfigManager()
+config = ConfigManager()
 app.state.config = config
 # OPPORTUNITY: Add validation here (after line 487)
 ```
@@ -67,7 +67,7 @@ app.state.config = config
 **Dependency Injection:**
 ```python
 # backend/dependencies.py line 14-24
-def get_config() -> UnifiedConfigManager:
+def get_config() -> ConfigManager:
     return global_config_manager
 ```
 
@@ -336,14 +336,14 @@ def _validate_configuration_consistency(self) -> ValidationReport:
 ```python
 # BEFORE (current)
 logger.info("✅ [ 10%] Config: Loading unified configuration...")
-config = UnifiedConfigManager()
+config = ConfigManager()
 app.state.config = config
 app_state["config"] = config
 logger.info("✅ [ 10%] Config: Configuration loaded successfully")
 
 # AFTER (with validation)
 logger.info("✅ [ 10%] Config: Loading unified configuration...")
-config = UnifiedConfigManager()
+config = ConfigManager()
 app.state.config = config
 app_state["config"] = config
 logger.info("✅ [ 10%] Config: Configuration loaded successfully")
@@ -379,12 +379,12 @@ logger.info(f"✅ [ 12%] Config: Validation complete ({validation_report.total_i
 ```python
 from fastapi import APIRouter, Depends
 from backend.dependencies import get_config
-from src.unified_config_manager import UnifiedConfigManager
+from config.manager import ConfigManager
 
 router = APIRouter()
 
 @router.get("/api/config/validate")
-async def validate_configuration(config: UnifiedConfigManager = Depends(get_config)):
+async def validate_configuration(config: ConfigManager = Depends(get_config)):
     """
     Validate current configuration and return detailed report.
 
@@ -604,7 +604,7 @@ def sync_settings_to_base(self) -> Dict[str, Any]:
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from backend.dependencies import get_config
-from src.unified_config_manager import UnifiedConfigManager
+from config.manager import ConfigManager
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -639,7 +639,7 @@ def check_rate_limit(request: Request) -> bool:
 @router.post("/api/settings/sync-to-base")
 async def sync_settings_to_base(
     request: Request,
-    config: UnifiedConfigManager = Depends(get_config)
+    config: ConfigManager = Depends(get_config)
 ):
     """
     Sync current settings.json to config.yaml as new baseline.
@@ -666,7 +666,7 @@ async def sync_settings_to_base(
 
 
 @router.get("/api/settings/sync-status")
-async def get_sync_status(config: UnifiedConfigManager = Depends(get_config)):
+async def get_sync_status(config: ConfigManager = Depends(get_config)):
     """
     Get information about sync-to-base operation readiness.
 

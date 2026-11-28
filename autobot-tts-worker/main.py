@@ -4,7 +4,11 @@
 # Author: mrveiss
 """AutoBot TTS Worker - Pocket TTS text-to-speech service.
 
-Deploys to: 10.0.0.3 (NPU VM) on port 8082
+Deploys to the NPU node on port 8083 (#3431: 8082 is WSL2/Hyper-V reserved on
+that host class, which is why the port moved -- see #3464 for the incident).
+The authoritative value is ``tts_port`` in
+``autobot-slm-backend/ansible/roles/tts-worker/defaults/main.yml``; this file is
+a signpost and must not become a second place to read a port from (#17782).
 
 The actual service implementation is in the Ansible template:
   autobot-slm-backend/ansible/roles/tts-worker/templates/tts-worker.py.j2

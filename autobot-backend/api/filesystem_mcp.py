@@ -112,51 +112,12 @@ from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
-
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-from services.mcp_bridge_manifest import MCPBridgeManifest
-from type_defs.common import Metadata
-from utils.io_executor import run_in_file_executor
-
-MANIFEST = MCPBridgeManifest(
-    name="filesystem_mcp",
-    version="1.0.0",
-    description="Filesystem Operations - Secure File & Directory Access",
-    features=["read_files", "write_files", "directory_management", "search", "metadata"],
-    endpoint="/api/filesystem/mcp/tools",
-)
-
-# Issue #514: Per-file locking to prevent concurrent write corruption
-_file_locks: Dict[str, asyncio.Lock] = {}
-_file_locks_lock = asyncio.Lock()
-
-
-async def _get_file_lock(filepath: str) -> asyncio.Lock:
-    """
-    Get or create a lock for a specific file path (Issue #514).
-
-    Uses per-file locking to allow concurrent writes to different files
-    while preventing corruption from concurrent writes to the same file.
-
-    Args:
-        filepath: Absolute path to the file
-
-    Returns:
-        asyncio.Lock for the specified file
-    """
-    async with _file_locks_lock:
-        if filepath not in _file_locks:
-            _file_locks[filepath] = asyncio.Lock()
-        return _file_locks[filepath]
-
-
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.filesystem_edit import apply_edits_off_loop
 from api.schemas_code import (
     CreateDirectoryRequest,
     DirectoryTreeRequest,
-    EditFileRequest,
     FilesystemCreateDirectoryResponse,
     FilesystemDirectoryTreeResponse,
     FilesystemEditFileResponse,
@@ -191,11 +152,49 @@ from api.schemas_code import (
     UnsubscribeResourceResponse,
     WriteFileRequest,
 )
+from api.schemas_filesystem_edit import EditFileRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH as LEGACY_DATA_ROOT
+from services.mcp_bridge_manifest import MCPBridgeManifest
+from type_defs.common import Metadata
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from utils.io_executor import run_in_file_executor
+
+MANIFEST = MCPBridgeManifest(
+    name="filesystem_mcp",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
+    description="Filesystem Operations - Secure File & Directory Access",
+    features=["read_files", "write_files", "directory_management", "search", "metadata"],
+    endpoint="/api/filesystem/mcp/tools",
+)
+
+# Issue #514: Per-file locking to prevent concurrent write corruption
+_file_locks: Dict[str, asyncio.Lock] = {}
+_file_locks_lock = asyncio.Lock()
+
+
+async def _get_file_lock(filepath: str) -> asyncio.Lock:
+    """
+    Get or create a lock for a specific file path (Issue #514).
+
+    Uses per-file locking to allow concurrent writes to different files
+    while preventing corruption from concurrent writes to the same file.
+
+    Args:
+        filepath: Absolute path to the file
+
+    Returns:
+        asyncio.Lock for the specified file
+    """
+    async with _file_locks_lock:
+        if filepath not in _file_locks:
+            _file_locks[filepath] = asyncio.Lock()
+        return _file_locks[filepath]
+
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
@@ -216,9 +215,9 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 #
 # Since #14050, an unset AUTOBOT_BASE_DIR (every dev checkout and CI runner)
 # resolves ALLOWED_DIRECTORIES to the whole git checkout, and the only gate on
-# this bridge is admin role or the shared X-Internal-API-Key header. Without
-# an exclusion, either credential grants read *and write* access to VCS
-# history and any local secrets.
+# this bridge is admin role (the internal service key is not an admin since
+# #16333). Without an exclusion, that credential grants read *and write* access
+# to VCS history and any local secrets.
 #
 # Enforced in _resolve_allowed_path (the single seam every path goes through,
 # shared by is_path_allowed and _validated_path) rather than by curating
@@ -499,7 +498,10 @@ def _create_edit_file_tool() -> MCPTool:
     """
     return MCPTool(
         name="edit_file",
-        description=("Selectively modify file contents using pattern-based find-and-replace" "edits"),
+        description=(
+            "Exact find-and-replace edits; a miss or occurrence-count mismatch fails with the"
+            " closest span and nothing is written"
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -516,6 +518,12 @@ def _create_edit_file_tool() -> MCPTool:
                             "new_text": {
                                 "type": "string",
                                 "description": "Replacement text",
+                            },
+                            "expected_replacements": {
+                                "type": "integer",
+                                "description": "Exact number of occurrences of old_text (Issue #19463)",
+                                "default": 1,
+                                "minimum": 1,
                             },
                         },
                         "required": ["old_text", "new_text"],
@@ -1075,31 +1083,6 @@ async def _validate_file_path(path: str) -> str:
     return safe
 
 
-def _apply_edits_to_content(content: str, edits: list) -> tuple:
-    """
-    Apply find-and-replace edits to content.
-
-    Issue #620.
-
-    Args:
-        content: Original file content
-        edits: List of edit dictionaries with old_text/new_text
-
-    Returns:
-        Tuple of (modified_content, list_of_applied_edits)
-    """
-    edits_applied = []
-    for edit in edits:
-        old_text = edit.get("old_text", edit.get("oldText"))
-        new_text = edit.get("new_text", edit.get("newText"))
-
-        if old_text in content:
-            content = content.replace(old_text, new_text)
-            edits_applied.append({"old": old_text[:50], "new": new_text[:50]})
-
-    return content, edits_applied
-
-
 @router.post("/mcp/edit_file", response_model=FilesystemEditFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1122,13 +1105,14 @@ async def edit_file_mcp(
         # Issue #514: Use per-file locking
         file_lock = await _get_file_lock(safe_path)
         async with file_lock:
-            async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
+            # Issue #19463: newline="" keeps CRLF intact; edits are all-or-nothing.
+            async with aiofiles.open(safe_path, "r", encoding="utf-8", newline="") as f:
                 original_content = await f.read()
 
-            content, edits_applied = _apply_edits_to_content(original_content, request.edits)
+            content, edits_applied = await apply_edits_off_loop(original_content, request.edits, safe_path)
 
             if not request.dry_run:
-                async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:
+                async with aiofiles.open(safe_path, "w", encoding="utf-8", newline="") as f:
                     await f.write(content)
 
         return {

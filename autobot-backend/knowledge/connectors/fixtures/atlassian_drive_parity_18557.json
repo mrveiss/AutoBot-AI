@@ -1,0 +1,918 @@
+{
+ "atlassian": {
+  "confluence_calls": [
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/content?spaceKey=S&type=page&limit=25&start=0&expand=version"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/content/111?expand=body.storage,space,version"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/content?spaceKey=S&type=page&limit=25&start=0&expand=version"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/content?spaceKey=S&type=page&limit=25&start=0&expand=version"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/wiki/rest/api/content/111?expand=version"
+   }
+  ],
+  "confluence_flows": {
+   "changes_none": [
+    {
+     "change_type": "added",
+     "details": {
+      "page_id": "111"
+     },
+     "source_id": "confluence:cid:page:111"
+    }
+   ],
+   "changes_since": [
+    {
+     "change_type": "modified",
+     "details": {
+      "page_id": "111",
+      "version_when": "2026-03-01T00:00:00.000+00:00"
+     },
+     "source_id": "confluence:cid:page:111"
+    }
+   ],
+   "discover": [
+    {
+     "content_type": "text/plain",
+     "last_modified": "2026-01-01 00:00:00+00:00",
+     "metadata": {
+      "page_id": "111",
+      "space_key": "S",
+      "version_when": "2026-01-01T00:00:00.000+00:00"
+     },
+     "name": "Runbook",
+     "path": "",
+     "size_bytes": 0,
+     "source_id": "confluence:cid:page:111"
+    }
+   ],
+   "fetch": {
+    "chunks": [],
+    "content": "Runbook\n\nHello wiki",
+    "content_type": "text/plain",
+    "metadata": {
+     "confluence_page_id": "111",
+     "confluence_space_key": "S",
+     "confluence_title": "Runbook",
+     "confluence_url": "https://x.atlassian.net/wiki/spaces/S/pages/111",
+     "connector_type": "confluence",
+     "version_when": "2026-02-01T00:00:00.000+00:00"
+    },
+    "source_id": "confluence:cid:page:111"
+   },
+   "fetch_malformed": null,
+   "stored_ts": [
+    [
+     "111",
+     "2026-02-01T00:00:00.000+00:00"
+    ],
+    [
+     "111",
+     "2026-03-01T00:00:00.000+00:00"
+    ]
+   ],
+   "test_connection": true
+  },
+  "confluence_init": [
+   "bot@example.com",
+   "fake-token-not-real",
+   "https://x.atlassian.net/wiki",
+   2,
+   4,
+   "confluence"
+  ],
+  "confluence_transport": {
+   "404": {
+    "body": {
+     "e": 1
+    },
+    "status_code": 404
+   },
+   "404_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+    }
+   ],
+   "429": {
+    "retryable": "Confluence rate-limited",
+    "status": 429
+   },
+   "429_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+    }
+   ],
+   "503": {
+    "retryable": "Confluence server error 503",
+    "status": 503
+   },
+   "503_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+    }
+   ],
+   "conn": {
+    "error": "boom",
+    "status_code": 0
+   },
+   "conn_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+    }
+   ],
+   "ok": {
+    "body": {
+     "ok": true
+    },
+    "status_code": 200
+   },
+   "ok_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/wiki/rest/api/space?limit=1"
+    }
+   ]
+  },
+  "ids": [
+   "confluence:c:page:9",
+   "jira:c:issue:A-1",
+   "9",
+   null,
+   null,
+   null,
+   "A-1",
+   null,
+   null,
+   null
+  ],
+  "jira_calls": [
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/rest/api/3/myself"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": {
+     "fields": [
+      "summary",
+      "status",
+      "project",
+      "updated",
+      "comment"
+     ],
+     "jql": "project in (ABC)",
+     "maxResults": 50,
+     "startAt": 0
+    },
+    "method": "POST",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/rest/api/3/search"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": null,
+    "method": "GET",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/rest/api/3/issue/ABC-1"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": {
+     "fields": [
+      "summary",
+      "status",
+      "project",
+      "updated",
+      "comment"
+     ],
+     "jql": "project in (ABC)",
+     "maxResults": 50,
+     "startAt": 0
+    },
+    "method": "POST",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/rest/api/3/search"
+   },
+   {
+    "auth": [
+     "bot@example.com",
+     "fake-token-not-real"
+    ],
+    "egress_is_instance_host": true,
+    "extra": {
+     "suppress_error_log": true
+    },
+    "json": {
+     "fields": [
+      "summary",
+      "status",
+      "project",
+      "updated",
+      "comment"
+     ],
+     "jql": "project in (ABC) AND updated >= \"2026-01-01 00:00\"",
+     "maxResults": 50,
+     "startAt": 0
+    },
+    "method": "POST",
+    "timeout_total": 30.0,
+    "url": "https://x.atlassian.net/rest/api/3/search"
+   }
+  ],
+  "jira_flows": {
+   "changes_none": [
+    {
+     "change_type": "added",
+     "details": {
+      "issue_key": "ABC-1",
+      "updated": "2026-02-01T00:00:00.000+00:00"
+     },
+     "source_id": "jira:cid:issue:ABC-1"
+    }
+   ],
+   "changes_since": [
+    {
+     "change_type": "modified",
+     "details": {
+      "issue_key": "ABC-1",
+      "updated": "2026-02-01T00:00:00.000+00:00"
+     },
+     "source_id": "jira:cid:issue:ABC-1"
+    }
+   ],
+   "discover": [
+    {
+     "content_type": "text/plain",
+     "last_modified": "2026-02-01 00:00:00+00:00",
+     "metadata": {
+      "issue_key": "ABC-1",
+      "project_key": "ABC",
+      "updated": "2026-02-01T00:00:00.000+00:00"
+     },
+     "name": "Broken",
+     "path": "",
+     "size_bytes": 0,
+     "source_id": "jira:cid:issue:ABC-1"
+    }
+   ],
+   "fetch": {
+    "chunks": [],
+    "content": "Issue ABC-1: Broken\nStatus: Open\nProject: ABC\nUpdated: 2026-02-01T00:00:00.000+00:00\n\ndetails\n\nComment by Ann: looks bad",
+    "content_type": "text/plain",
+    "metadata": {
+     "comment_count": 1,
+     "connector_type": "jira",
+     "jira_issue_key": "ABC-1",
+     "jira_project_key": "ABC",
+     "jira_status": "Open",
+     "jira_summary": "Broken",
+     "jira_url": "https://x.atlassian.net/browse/ABC-1",
+     "updated": "2026-02-01T00:00:00.000+00:00"
+    },
+    "source_id": "jira:cid:issue:ABC-1"
+   },
+   "fetch_malformed": null,
+   "stored_ts": [
+    [
+     "ABC-1",
+     "2026-02-01T00:00:00.000+00:00"
+    ],
+    [
+     "ABC-1",
+     "2026-02-01T00:00:00.000+00:00"
+    ]
+   ],
+   "test_connection": true
+  },
+  "jira_init": [
+   "bot@example.com",
+   "fake-token-not-real",
+   "https://x.atlassian.net",
+   2,
+   4,
+   "jira"
+  ],
+  "jira_transport": {
+   "404": {
+    "body": {
+     "e": 1
+    },
+    "status_code": 404
+   },
+   "404_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/myself"
+    }
+   ],
+   "429": {
+    "retryable": "Jira rate-limited",
+    "status": 429
+   },
+   "429_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/myself"
+    }
+   ],
+   "503": {
+    "retryable": "Jira server error 503",
+    "status": 503
+   },
+   "503_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/myself"
+    }
+   ],
+   "conn": {
+    "error": "boom",
+    "status_code": 0
+   },
+   "conn_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/myself"
+    }
+   ],
+   "ok": {
+    "body": {
+     "ok": true
+    },
+    "status_code": 200
+   },
+   "ok_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": null,
+     "method": "GET",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/myself"
+    }
+   ],
+   "post": {
+    "body": {
+     "ok": 2
+    },
+    "status_code": 200
+   },
+   "post_calls": [
+    {
+     "auth": [
+      "bot@example.com",
+      "fake-token-not-real"
+     ],
+     "egress_is_instance_host": true,
+     "extra": {
+      "suppress_error_log": true
+     },
+     "json": {
+      "jql": "x"
+     },
+     "method": "POST",
+     "timeout_total": 30.0,
+     "url": "https://x.atlassian.net/rest/api/3/search"
+    }
+   ]
+  }
+ },
+ "drive": {
+  "gdrive": {
+   "auth": "BearerAuth",
+   "conc": [
+    4,
+    9
+   ],
+   "custom": {
+    "_drive_id": "d",
+    "_max_file_size": 5242880,
+    "_source_type": "mydrive",
+    "_supported_extensions": [
+     ".pdf",
+     ".md",
+     ".docx"
+    ],
+    "_sync_subfolders": false,
+    "_token": "t"
+   },
+   "default": {
+    "_drive_id": null,
+    "_max_file_size": 104857600,
+    "_source_type": "mydrive",
+    "_supported_extensions": [
+     ".gdoc",
+     ".gsheet",
+     ".pdf",
+     ".docx",
+     ".md",
+     ".txt"
+    ],
+    "_sync_subfolders": true,
+    "_token": ""
+   },
+   "flows": {
+    "changes_none": [
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-02-01T00:00:00+00:00"
+      },
+      "source_id": "gdrive:cid:file:f1"
+     },
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-02-01T00:00:00+00:00"
+      },
+      "source_id": "gdrive:cid:file:f2"
+     },
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-03-01T00:00:00+00:00"
+      },
+      "source_id": "gdrive:cid:file:f3"
+     }
+    ],
+    "changes_since": [
+     {
+      "change_type": "modified",
+      "details": {
+       "last_modified": "2026-03-01T00:00:00+00:00"
+      },
+      "source_id": "gdrive:cid:file:f3"
+     }
+    ],
+    "discover": [
+     {
+      "content_type": "application/pdf",
+      "last_modified": "2026-02-01 00:00:00+00:00",
+      "metadata": {
+       "drive_id": "",
+       "file_extension": ".pdf",
+       "file_id": "f1",
+       "file_name": "a.pdf",
+       "mime_type": "application/pdf",
+       "web_url": ""
+      },
+      "name": "a.pdf",
+      "path": "/a.pdf",
+      "size_bytes": 10,
+      "source_id": "gdrive:cid:file:f1"
+     },
+     {
+      "content_type": "text/markdown",
+      "last_modified": "2026-03-01 00:00:00+00:00",
+      "metadata": {
+       "drive_id": "",
+       "file_extension": ".md",
+       "file_id": "f3",
+       "file_name": "c.md",
+       "mime_type": "text/markdown",
+       "web_url": ""
+      },
+      "name": "c.md",
+      "path": "/c.md",
+      "size_bytes": 3,
+      "source_id": "gdrive:cid:file:f3"
+     }
+    ]
+   },
+   "schema": {
+    "properties": {
+     "drive_id": {
+      "description": "Drive ID",
+      "type": "string"
+     },
+     "file_extension": {
+      "description": "File extension (e.g., .docx)",
+      "type": "string"
+     },
+     "file_id": {
+      "description": "Google Drive file ID",
+      "type": "string"
+     },
+     "file_name": {
+      "description": "File name with extension",
+      "type": "string"
+     },
+     "file_path": {
+      "description": "Full path in drive",
+      "type": "string"
+     },
+     "file_size": {
+      "description": "File size in bytes",
+      "type": "integer"
+     },
+     "last_modified": {
+      "description": "ISO-8601 last modified datetime",
+      "type": "string"
+     },
+     "mime_type": {
+      "description": "MIME type",
+      "type": "string"
+     },
+     "web_url": {
+      "description": "Web URL to view file",
+      "type": "string"
+     }
+    },
+    "required": [
+     "file_id",
+     "file_name",
+     "file_extension",
+     "last_modified"
+    ],
+    "type": "object"
+   },
+   "schema_key_order": [
+    "file_id",
+    "file_name",
+    "file_extension",
+    "file_path",
+    "file_size",
+    "last_modified",
+    "web_url",
+    "drive_id",
+    "mime_type"
+   ],
+   "tier_type": [
+    2,
+    "gdrive",
+    4
+   ]
+  },
+  "onedrive": {
+   "auth": "BearerAuth",
+   "conc": [
+    4,
+    9
+   ],
+   "custom": {
+    "_drive_id": "d",
+    "_max_file_size": 5242880,
+    "_source_type": "onedrive",
+    "_supported_extensions": [
+     ".pdf",
+     ".md",
+     ".docx"
+    ],
+    "_sync_subfolders": false,
+    "_token": "t"
+   },
+   "default": {
+    "_drive_id": null,
+    "_max_file_size": 104857600,
+    "_source_type": "onedrive",
+    "_supported_extensions": [
+     ".docx",
+     ".xlsx",
+     ".pdf",
+     ".pptx",
+     ".md",
+     ".txt"
+    ],
+    "_sync_subfolders": true,
+    "_token": ""
+   },
+   "flows": {
+    "changes_none": [
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-02-01T00:00:00+00:00"
+      },
+      "source_id": "onedrive:cid:file:o1"
+     },
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-02-01T00:00:00+00:00"
+      },
+      "source_id": "onedrive:cid:file:o2"
+     },
+     {
+      "change_type": "added",
+      "details": {
+       "last_modified": "2026-03-01T00:00:00+00:00"
+      },
+      "source_id": "onedrive:cid:file:o3"
+     }
+    ],
+    "changes_since": [
+     {
+      "change_type": "modified",
+      "details": {
+       "last_modified": "2026-03-01T00:00:00+00:00"
+      },
+      "source_id": "onedrive:cid:file:o3"
+     }
+    ],
+    "discover": [
+     {
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "last_modified": "2026-02-01 00:00:00+00:00",
+      "metadata": {
+       "drive_id": "",
+       "file_extension": ".docx",
+       "file_id": "o1",
+       "file_name": "a.docx",
+       "site_id": "s",
+       "web_url": "u1"
+      },
+      "name": "a.docx",
+      "path": "/a.docx",
+      "size_bytes": 10,
+      "source_id": "onedrive:cid:file:o1"
+     },
+     {
+      "content_type": "text/markdown",
+      "last_modified": "2026-03-01 00:00:00+00:00",
+      "metadata": {
+       "drive_id": "",
+       "file_extension": ".md",
+       "file_id": "o3",
+       "file_name": "c.md",
+       "site_id": "s",
+       "web_url": ""
+      },
+      "name": "c.md",
+      "path": "/c.md",
+      "size_bytes": 3,
+      "source_id": "onedrive:cid:file:o3"
+     }
+    ]
+   },
+   "schema": {
+    "properties": {
+     "drive_id": {
+      "description": "Drive ID",
+      "type": "string"
+     },
+     "file_extension": {
+      "description": "File extension (e.g., .docx)",
+      "type": "string"
+     },
+     "file_id": {
+      "description": "OneDrive file ID",
+      "type": "string"
+     },
+     "file_name": {
+      "description": "File name with extension",
+      "type": "string"
+     },
+     "file_path": {
+      "description": "Full path in drive",
+      "type": "string"
+     },
+     "file_size": {
+      "description": "File size in bytes",
+      "type": "integer"
+     },
+     "last_modified": {
+      "description": "ISO-8601 last modified datetime",
+      "type": "string"
+     },
+     "site_id": {
+      "description": "SharePoint site ID (if applicable)",
+      "type": "string"
+     },
+     "web_url": {
+      "description": "Web URL to view file",
+      "type": "string"
+     }
+    },
+    "required": [
+     "file_id",
+     "file_name",
+     "file_extension",
+     "last_modified"
+    ],
+    "type": "object"
+   },
+   "schema_key_order": [
+    "file_id",
+    "file_name",
+    "file_extension",
+    "file_path",
+    "file_size",
+    "last_modified",
+    "web_url",
+    "drive_id",
+    "site_id"
+   ],
+   "tier_type": [
+    2,
+    "onedrive",
+    4
+   ]
+  }
+ }
+}

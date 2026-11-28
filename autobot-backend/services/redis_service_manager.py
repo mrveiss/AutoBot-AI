@@ -17,72 +17,33 @@ Features:
 """
 
 import asyncio
-import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Tuple
 
-from autobot_shared.http_client import get_http_client
+import aiohttp
+
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
+from services.redis_service_audit import audit_event, record_refusal
+from services.redis_service_errors import (  # noqa: F401  (re-exported: callers import the errors from here)
+    SLM_REFUSALS,
+    RedisConnectionError,
+    RedisNodeUnresolvedError,
+    RedisPermissionError,
+    RedisServiceException,
+    RedisSlmAccessError,
+    access_error,
+    clear_resolved_node,
+    resolve_redis_node_id,
+)
+from services.redis_service_models import ManagedServiceStatus, ServiceHealthReport, ServiceOperationResult
+from services.slm_client import SLMClient, get_slm_client
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 
-_DEFAULT_SLM_URL = config.slm_url
 _DEFAULT_REDIS_NODE_ID = config.redis_node_id
-
-
-# Custom exceptions for Redis Stack service operations
-class RedisServiceException(Exception):
-    """Base exception for Redis Stack service operations"""
-
-
-class RedisConnectionError(RedisServiceException):
-    """Raised when cannot connect to Redis VM"""
-
-
-class RedisPermissionError(RedisServiceException):
-    """Raised when user lacks permissions for operation"""
-
-
-@dataclass
-class ServiceOperationResult:
-    """Result of a service operation"""
-
-    success: bool
-    operation: str  # "start", "stop", "restart", "status"
-    message: str
-    duration_seconds: float
-    timestamp: datetime
-    new_status: str  # "running", "stopped", "failed", "unknown"
-    error: str | None = None
-
-
-@dataclass
-class ServiceStatus:
-    """Current service status"""
-
-    status: str  # "running", "stopped", "failed", "unknown"
-    pid: int | None = None
-    uptime_seconds: float | None = None
-    memory_mb: float | None = None
-    last_check: datetime = None
-
-
-@dataclass
-class HealthStatus:
-    """Detailed health status"""
-
-    overall_status: str  # "healthy", "degraded", "critical"
-    service_running: bool
-    connectivity: bool
-    response_time_ms: float
-    last_successful_command: datetime | None = None
-    error_count_last_hour: int = 0
-    recommendations: list = None
 
 
 class RedisServiceManager:
@@ -98,7 +59,6 @@ class RedisServiceManager:
 
     def __init__(
         self,
-        slm_url: str | None = None,
         slm_node_id: str | None = None,
         service_name: str = "redis-stack-server",
         enable_audit_logging: bool = True,
@@ -109,18 +69,17 @@ class RedisServiceManager:
         Routes all service operations through the SLM API (Issue #933).
 
         Args:
-            slm_url: Base URL of SLM server (default: SLM_URL env var)
-            slm_node_id: SLM node_id of the Redis VM (default: REDIS_NODE_ID env var)
+            slm_node_id: SLM node_id of the Redis VM; when unset the node is resolved from the SLM's
+                ``redis`` role owner (#16346)
             service_name: Systemd service name (default: 'redis-stack-server')
             enable_audit_logging: Enable audit logging (default: True)
         """
-        self.slm_url = (slm_url if slm_url is not None else _DEFAULT_SLM_URL).rstrip("/")
         self.slm_node_id = slm_node_id or _DEFAULT_REDIS_NODE_ID
         self.service_name = service_name
         self.enable_audit_logging = enable_audit_logging
 
         # Status cache
-        self._status_cache: ServiceStatus | None = None
+        self._status_cache: ManagedServiceStatus | None = None
         self._status_cache_time: datetime | None = None
         self._cache_ttl_seconds = 10
 
@@ -156,7 +115,7 @@ class RedisServiceManager:
 
     async def start(self) -> None:
         """Start Redis Service Manager (no-op — SLM API is stateless)."""
-        logger.info("Redis Service Manager ready (SLM URL: %s)", self.slm_url)
+        logger.info("Redis Service Manager ready")
 
     async def stop(self) -> None:
         """Stop Redis Service Manager (no-op — SLM API is stateless)."""
@@ -164,19 +123,14 @@ class RedisServiceManager:
 
     def _audit_log(self, event_type: str, data: Metadata, user_id: str | None = None) -> None:
         """Log audit event"""
-        if not self.enable_audit_logging:
-            return
+        audit_event(self.enable_audit_logging, event_type, data, user_id)
 
-        try:
-            audit_entry = {
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "event_type": event_type,
-                "user_id": user_id,
-                "data": data,
-            }
-            logger.info("AUDIT: %s", json.dumps(audit_entry))
-        except Exception as e:
-            logger.error("Audit logging failed: %s", e)
+    def _slm_client(self) -> SLMClient:
+        """The credentialed SLM client (bearer, egress guard and URL decision live there, #16346)."""
+        client = get_slm_client()
+        if client is None:
+            raise RedisConnectionError("SLM client is not initialised")
+        return client
 
     async def _slm_service_action(self, action: str) -> Tuple[bool, str]:
         """Call SLM API to start/stop/restart the Redis service.
@@ -191,18 +145,23 @@ class RedisServiceManager:
 
         Raises:
             RedisConnectionError: If SLM API is unreachable
+            RedisNodeUnresolvedError: If no node can be named as the Redis host
+            RedisSlmAccessError: If the SLM refuses the backend's credential
         """
-        if not self.slm_url:
-            raise RedisConnectionError("SLM_URL not configured")
-        url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services/{self.service_name}/{action}")
+        client = self._slm_client()
+        node_id = await resolve_redis_node_id(client, self.slm_node_id)
         try:
-            async with get_http_client().tracked_request("POST", url, ssl=False) as resp:
-                data = await resp.json()
-                success = data.get("success", resp.status < 300)
-                message = data.get("message", "")
-                return success, message
+            data = await client.node_service_action(node_id, self.service_name, action)
+            return data.get("success", True), data.get("message", "")
+        except aiohttp.ClientResponseError as exc:
+            clear_resolved_node()
+            await self._record_error()
+            raise access_error(exc) or RedisConnectionError(
+                f"SLM service action '{action}' failed: HTTP {exc.status}"
+            ) from exc
         except Exception as exc:
             logger.error("SLM service action '%s' failed: %s", action, exc)
+            clear_resolved_node()
             await self._record_error()
             raise RedisConnectionError(f"Cannot reach SLM API for service action '{action}': {exc}") from exc
 
@@ -213,24 +172,24 @@ class RedisServiceManager:
         Issue #933: Replaces direct SSH systemctl status call.
 
         Returns:
-            One of: "running", "stopped", "failed", "unknown"
+            One of: "running", "stopped", "failed", "unknown" ("unknown" only when the SLM answered and does not
+            track the service; an unresolved node or a refused credential raises, #16346)
         """
-        if not self.slm_url:
-            return "unknown"
-        url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services")
+        client = self._slm_client()
+        node_id = await resolve_redis_node_id(client, self.slm_node_id)
         try:
-            params = {"search": self.service_name, "per_page": "1"}
-            async with get_http_client().tracked_request("GET", url, params=params, ssl=False) as resp:
-                if resp.status != 200:
-                    return "unknown"
-                data = await resp.json()
-                services = data.get("services", [])
-                if services:
-                    return services[0].get("status", "unknown")
-                return "unknown"
-        except Exception as exc:
-            logger.warning("SLM service status query failed: %s", exc)
-            return "unknown"
+            data = await client.list_node_services(node_id, search=self.service_name)
+        except aiohttp.ClientResponseError as exc:
+            clear_resolved_node()
+            raise access_error(exc) or RedisConnectionError(f"SLM status query failed: HTTP {exc.status}") from exc
+        except Exception:
+            clear_resolved_node()  # a timeout or connection error may mean the node moved; ask again next time
+            raise
+        # ``search`` is a substring match (``backup-redis-stack-server`` also hits): take the exact name only.
+        for row in data.get("services", []):
+            if row.get("service_name") == self.service_name:
+                return row.get("status", "unknown")
+        return "unknown"
 
     def _already_in_state_result(self, operation: str, target_status: str, duration: float) -> ServiceOperationResult:
         """
@@ -310,7 +269,6 @@ class RedisServiceManager:
         self._audit_log("redis_service_start_attempt", {"user_id": user_id}, user_id=user_id)
 
         try:
-            # Check if already running (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "running":
                 duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
@@ -344,6 +302,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await record_refusal(self, "start", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Start service failed: %s", e)
@@ -408,6 +369,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await record_refusal(self, "stop", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Stop service failed: %s", e)
@@ -463,6 +427,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await record_refusal(self, "restart", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Restart service failed: %s", e)
@@ -474,7 +441,7 @@ class RedisServiceManager:
             )
             return self._operation_failure_result("restart", "Service restart failed", duration)
 
-    async def get_service_status(self, use_cache: bool = True) -> ServiceStatus:
+    async def get_service_status(self, use_cache: bool = True) -> ManagedServiceStatus:
         """
         Get current service status
 
@@ -482,9 +449,8 @@ class RedisServiceManager:
             use_cache: Use cached status if available and fresh
 
         Returns:
-            ServiceStatus with current status information
+            ManagedServiceStatus with current status information
         """
-        # Check cache
         if (
             use_cache
             and self._status_cache
@@ -495,18 +461,20 @@ class RedisServiceManager:
 
         try:
             status_str = await self._slm_get_service_status()
-            service_status = ServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
+            service_status = ManagedServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
 
-            # Update cache
             self._status_cache = service_status
             self._status_cache_time = datetime.now(tz=timezone.utc)
 
             return service_status
 
+        except SLM_REFUSALS as e:
+            await record_refusal(self, "status", e)  # #16346: a failure to ask, not "the state is unknown"
+            raise
         except Exception as e:
             logger.error("Failed to get service status: %s", e)
             await self._record_error()
-            return ServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
+            return ManagedServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
 
     async def _check_redis_connectivity(self) -> Tuple[bool, float]:
         """
@@ -581,17 +549,20 @@ class RedisServiceManager:
             recommendations.append(f"High response time ({response_time_ms:.1f}ms) - check system load")
         return recommendations
 
-    async def get_health(self) -> HealthStatus:
+    async def get_health(self) -> ServiceHealthReport:
         """
         Get detailed health status.
 
         (Issue #398: refactored to use extracted helpers)
 
         Returns:
-            HealthStatus with comprehensive health information
+            ServiceHealthReport with comprehensive health information
         """
         try:
-            status = await self.get_service_status(use_cache=False)
+            try:
+                status = await self.get_service_status(use_cache=False)
+            except SLM_REFUSALS:  # refusal already recorded; the PING still says whether Redis is up
+                status = ManagedServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
             service_running = status.status == "running"
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
@@ -600,7 +571,7 @@ class RedisServiceManager:
                 service_running, connectivity, response_time_ms, status.status
             )
 
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status=overall_status,
                 service_running=service_running,
                 connectivity=connectivity,
@@ -613,7 +584,7 @@ class RedisServiceManager:
         except Exception as e:
             logger.error("Health check failed: %s", e)
             await self._record_error()
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status="critical",
                 service_running=False,
                 connectivity=False,

@@ -22,7 +22,6 @@ in ``check_field_defaults_test.py``.
 from __future__ import annotations
 
 import ast
-import logging
 import sys
 from pathlib import Path
 
@@ -30,11 +29,7 @@ from pathlib import Path
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import enforce_reach  # noqa: E402
-
-# Plain stdlib logging (#1082): a bare guard script must not drag config
-# loading in -- same trade as ``scripts/check_python_file_size.py``.
-logger = logging.getLogger(__name__)
+from _check_harness import VacuousScan, run_anchored  # noqa: E402
 
 #: Name this guard reports under.
 HOOK_ID = "field-defaults"
@@ -101,32 +96,39 @@ def field_call_count(source: str) -> int:
     return sum(1 for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call) and _call_name(n) == "Field")
 
 
+_TARGET = "autobot_shared/ssot_config.py"
+
+
+def _summary(n: int) -> str:
+    return (
+        f"[{HOOK_ID}] {n} Field default(s) freeze the live install path. Resolve it at "
+        "read time via autobot_shared.paths instead (#13149)."
+    )
+
+
+def _collect(argv: list[str], repo_root: Path) -> tuple[int, list[str]]:
+    """``(Field calls reached, finding lines)`` for ``ssot_config.py``; *argv* is unused."""
+    del argv  # one fixed target file; there is nothing to select
+    target = repo_root / _TARGET
+    if not target.is_file():
+        raise VacuousScan(f"{_TARGET} is not in {repo_root} -- there is nothing to sweep")
+    source = target.read_text(encoding="utf-8")
+    findings = [f"[{HOOK_ID}] {_TARGET} {offender}" for offender in live_install_field_defaults(source)]
+    return field_call_count(source), findings
+
+
 def main(argv: list[str] | None = None) -> int:
     """Check ``ssot_config.py``'s ``Field`` defaults, floor first.
 
     Until #14896 this module was a library with :data:`FIELD_CALL_FLOOR`
-    asserted only from its own tests: the floor guarded the test's sweep and
-    nothing else, so nothing in the hook path could fail on it. This is where
-    it now earns its keep -- the offender list below is only meaningful once
-    the sweep is known to have reached the population it claims to cover.
+    asserted only from its own tests, then a hand-rolled ``enforce_reach``
+    call that exited 1. It now runs on the shared harness: a sweep that
+    reached fewer ``Field(...)`` calls than the floor, or a root that is not a
+    git toplevel, exits 2 -- distinct from the 1 that means a finding. The
+    scan is always whole-file, so *argv* is ignored and the floor always applies.
     """
-    del argv  # one fixed target file; there is nothing to select
-    repo_root = Path(__file__).resolve().parents[2]
-    source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
-    if enforce_reach(field_call_count(source), FIELD_CALL_FLOOR, hook=HOOK_ID, full_repo=True):
-        return 1
-    offenders = live_install_field_defaults(source)
-    for offender in offenders:
-        logger.error("[%s] autobot_shared/ssot_config.py %s", HOOK_ID, offender)
-    if offenders:
-        logger.error(
-            "[%s] %d Field default(s) freeze the live install path. Resolve it at "
-            "read time via autobot_shared.paths instead (#13149).",
-            HOOK_ID,
-            len(offenders),
-        )
-        return 1
-    return 0
+    del argv
+    return run_anchored(HOOK_ID, _collect, [], anchor=Path(__file__), floor=FIELD_CALL_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

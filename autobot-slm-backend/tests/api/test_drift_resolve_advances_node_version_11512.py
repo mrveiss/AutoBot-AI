@@ -46,6 +46,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 for _p in (str(_BACKEND_ROOT), str(_BACKEND_ROOT.parent)):
     if _p not in sys.path:
@@ -166,25 +168,8 @@ def _make_db_service_mock(row):
     """db_service mock whose session().execute() always resolves to *row*."""
     db_service_mock = MagicMock()
 
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, _stmt):
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = row
-            return result
-
-        async def commit(self):
-            pass
-
-        def add(self, _obj):
-            pass
-
-    db_service_mock.session.return_value = _FakeSession()
+    session = FakeAsyncSession(default_result=[] if row is None else [row])
+    db_service_mock.session.return_value = session
     return db_service_mock
 
 
@@ -203,6 +188,18 @@ def test_advances_when_fully_synced():
         _run(_CS._advance_node_version_if_fully_synced("autobot-slm-backend"))
 
     update_mock.assert_awaited_once_with("slm-node-1")
+
+
+def test_does_not_advance_when_the_scan_gave_no_answer():
+    """#20250: a scan past its limit is unknown, and a node must not be recorded as current on it."""
+    with (
+        patch.object(_CS, "_compute_stale_components", AsyncMock(side_effect=RuntimeError("no answer"))),
+        patch.object(_CS, "_get_local_slm_node_id", AsyncMock(return_value="slm-node-1")),
+        patch.object(_CS, "_update_fleet_node_version", AsyncMock()) as update_mock,
+    ):
+        _run(_CS._advance_node_version_if_fully_synced("autobot-slm-backend"))
+
+    update_mock.assert_not_awaited()
 
 
 def test_does_not_advance_when_sibling_component_still_stale():

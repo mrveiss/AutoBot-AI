@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Two non-shipping manifests must track their shipped fastapi/uvicorn floor (#15661).
+"""fastapi left this guard for constraints/shared.txt (#18060); only uvicorn is compared.
+
+Two non-shipping manifests must track their shipped fastapi/uvicorn floor (#15661).
 
 `docs/guides/requirements-local.txt` and
 `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` both fell
@@ -13,10 +15,9 @@ undetected because the per-site ansible/requirements parity guard
 guard (`scripts/check_constraint_drift.py`) both only ever compare an ansible
 site or a `constraints/shared.txt` package, and neither of these two files is
 either. This is the general-case guard AC3 asks for: a direct, narrow
-comparison of just these two known-risky pairs, not a repo-wide migration of
-fastapi/uvicorn onto `constraints/shared.txt` (which would force every
-shipped manifest -- a dozen-plus files -- to stop stating its own floor, a
-much larger change than this issue's actual defect warrants).
+comparison of the known-risky pairs. fastapi has since moved onto
+`constraints/shared.txt` (#18060), so its floor has one home and only the
+uvicorn pair is compared here.
 
 Only the version constraint is compared, not the full declaration line:
 `docs/guides/requirements-local.txt` legitimately carries `uvicorn[standard]`
@@ -37,12 +38,12 @@ _PAIRS = (
     (
         "docs/guides/requirements-local.txt",
         "autobot-backend/requirements.txt",
-        ("fastapi", "uvicorn"),
+        ("uvicorn",),
     ),
     (
         "autobot-npu-worker/resources/windows-npu-worker/requirements.txt",
         "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt",
-        ("fastapi", "uvicorn"),
+        ("uvicorn",),
     ),
 )
 

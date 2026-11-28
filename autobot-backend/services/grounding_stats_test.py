@@ -15,9 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.grounded_agent import GroundedAgent
-from services.grounded_agent_models import Claim, ClaimStatus, VerifiedClaim
 from services.grounding_stats import record_conflict_resolved, record_grounding_stats
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod, VerifiedClaim
 from tests.fixtures import make_async_redis, make_redis_pipeline
 
 _KEY = "grounding:stats"

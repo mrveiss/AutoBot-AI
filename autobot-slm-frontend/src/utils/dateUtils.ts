@@ -10,25 +10,18 @@
  * ErrorMonitor, and SecurityView to eliminate duplication (Issue #3314).
  */
 
-/**
- * Formats a timestamp as a human-readable relative time string.
- *
- * @param ts - ISO 8601 timestamp, or null/undefined if unknown.
- * @returns A relative string such as `5s ago`, `3m ago`, `2h ago`, `4d ago`,
- *          or `'—'` when the value is absent or unparseable.
- */
-export function formatRelativeTime(ts: string | null | undefined): string {
-  if (!ts) return '—'
-  const date = new Date(ts)
-  if (isNaN(date.getTime())) return '—'
+import { formatRelativeTime, type DateInput } from '@autobot/ui'
+import i18n from '@/i18n'
 
-  const diffMs = Date.now() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  const diffDay = Math.floor(diffHr / 24)
-  return `${diffDay}d ago`
-}
+// The kit's formatter is the one home of relative time (#19606); this is its public name here.
+export { formatRelativeTime }
+
+/**
+ * The compact relative time the SLM tables show (`5s ago`, `3m ago`, `2h ago`, `4d ago`),
+ * localised by `Intl.RelativeTimeFormat` in the app's current locale.
+ *
+ * @param ts - ISO 8601 timestamp (or a Date / epoch ms), or null/undefined if unknown.
+ * @returns The relative text, or `'—'` when the value is absent or unparseable.
+ */
+export const formatCompactRelativeTime = (ts: DateInput): string =>
+  formatRelativeTime(ts, { locale: i18n.global.locale, style: 'narrow', maxUnit: 'day' })

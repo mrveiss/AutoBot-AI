@@ -35,7 +35,42 @@ def _detect_communities(graph: Any) -> dict[Any, int]:
     from networkx.algorithms.community import louvain_communities
 
     communities = louvain_communities(graph, weight="weight", seed=_LOUVAIN_SEED)
-    return {node: comm_id for comm_id, nodes in enumerate(communities) for node in nodes}
+    # #13473: ids follow (-size, sorted members), never the partitioner's
+    # enumeration order, so an unchanged grouping keeps its id.
+    ordered = sorted(communities, key=lambda nodes: (-len(nodes), tuple(sorted(map(str, nodes)))))
+    # `louvain_communities` hands back *sets*, so iterating one directly would
+    # seed this dict in hash order and every list built from it downstream would
+    # vary per process. Ordering the members as well as the communities is what
+    # makes the whole return value reproducible, not just the ids.
+    return {node: comm_id for comm_id, nodes in enumerate(ordered) for node in sorted(nodes, key=str)}
+
+
+def _edge_order(edge: dict) -> tuple:
+    """A total order over edges that ignores which endpoint is listed first.
+
+    Within one node pair, higher weights sort first, so the last one added -- the
+    weight that is kept -- is the lowest, as under fetch_edges' ``weight DESC``.
+    """
+    a, b = str(edge["from_node"]), str(edge["to_node"])
+    return (min(a, b), max(a, b), -float(edge["weight"]), a, b)
+
+
+def _build_graph(edges: list[dict]) -> Any:
+    """Build the undirected graph in an order that depends only on its content.
+
+    #13473: Louvain is seeded, but it visits nodes in adjacency order, so the same
+    edges inserted in a different order give a different *membership*, not just
+    different ids. fetch_edges orders by weight alone, and PostgreSQL returns
+    equal weights in no guaranteed order, so an unchanged mesh arrived in a new
+    order on each run. Sorting nodes and edges first removes that input.
+    """
+    import networkx as nx  # lazy import — avoids startup cost when clustering unused
+
+    graph = nx.Graph()
+    graph.add_nodes_from(sorted({e[k] for e in edges for k in ("from_node", "to_node")}, key=str))
+    for e in sorted(edges, key=_edge_order):
+        graph.add_edge(e["from_node"], e["to_node"], weight=float(e["weight"]))
+    return graph
 
 
 def cluster_graph(edges: list[dict]) -> list[str]:
@@ -50,11 +85,7 @@ def cluster_graph(edges: list[dict]) -> list[str]:
     if not edges:
         return []
 
-    import networkx as nx  # lazy import — avoids startup cost when clustering unused
-
-    G = nx.Graph()
-    for e in edges:
-        G.add_edge(e["from_node"], e["to_node"], weight=float(e["weight"]))
+    G = _build_graph(edges)
 
     if G.number_of_nodes() == 0:
         return []
@@ -72,7 +103,8 @@ def cluster_graph(edges: list[dict]) -> list[str]:
     total_nodes = G.number_of_nodes()
     centroids: list[str] = []
 
-    for comm_nodes in communities.values():
+    for comm_id in sorted(communities):
+        comm_nodes = communities[comm_id]
         if len(comm_nodes) / total_nodes > _MAX_COMMUNITY_FRACTION and len(comm_nodes) >= _MIN_SPLIT_SIZE:
             centroids.extend(_split_community(G.subgraph(comm_nodes)))
         else:
@@ -89,8 +121,17 @@ def cluster_graph(edges: list[dict]) -> list[str]:
 
 
 def _pick_centroid(subgraph, nodes: list[str]) -> str:
-    """Return the highest-degree node in nodes within subgraph."""
-    return max(nodes, key=lambda n: subgraph.degree(n))
+    """The highest-degree node in *nodes*, ties broken by name.
+
+    #13473: `max(nodes, key=degree)` returns the *first* maximal element, so on a
+    degree tie the answer was whatever order `nodes` happened to arrive in. Ties
+    are the common case rather than an edge case -- every node of a triangle has
+    degree 2 -- so the anchors promoted for an unchanged mesh differed between
+    processes even after community ids were made stable. Ordering the members
+    upstream fixes the observed symptom; a total order here is what makes it a
+    property of the function instead of a property of its caller.
+    """
+    return min(nodes, key=lambda n: (-subgraph.degree(n), str(n)))
 
 
 def _split_community(subgraph) -> list[str]:
@@ -113,7 +154,7 @@ def _split_community(subgraph) -> list[str]:
         nodes = list(subgraph.nodes)
         return [_pick_centroid(subgraph, nodes)]
 
-    return [_pick_centroid(subgraph.subgraph(sub_nodes), sub_nodes) for sub_nodes in sub_communities.values()]
+    return [_pick_centroid(subgraph.subgraph(nodes), nodes) for _, nodes in sorted(sub_communities.items())]
 
 
 class CommunityClusterer:

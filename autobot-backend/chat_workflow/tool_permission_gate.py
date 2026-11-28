@@ -41,6 +41,11 @@ is readable in one place. Each handler carries a one-line pointer back.
     or a cross-session read — a different risk class, which RBAC would not
     address either, and the thing to re-check here.
 
+``command_manual``
+    Reads a manual page from the knowledge base, through the one ``CommandManualManager``; it executes nothing and
+    returns a bounded synopsis (#22253). The same text is already put in the prompt for a failed step, so a
+    permission would only gate what the model is shown anyway.
+
 ``respond``
     Loop-control, not an external effect: builds a ``WorkflowMessage`` from
     LLM-supplied text and returns ``(break_loop, respond_content)``. No dispatch,
@@ -53,10 +58,21 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.llm_handler import _emit_before_tool_execute
 
 logger = get_logger(__name__)
+
+
+def caller_identity(ctx: Any, session_id: str = "") -> dict[str, str | None]:
+    """The AUTHENTICATED caller of this chat turn, as ``dispatch()`` keyword arguments (#20709).
+
+    ``user_id`` is read from the server-verified context key only -- never from tool arguments or the
+    request's own ``user_id`` claim, so the model cannot choose who an action is attributed to.
+    """
+    user_id = (getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY) or None
+    return {"session_id": session_id or None, "user_id": user_id}
 
 
 async def permission_denial(

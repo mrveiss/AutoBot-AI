@@ -17,6 +17,7 @@ from typing import Any, Dict, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
 from ..types import ProviderType
@@ -24,7 +25,7 @@ from ..types import ProviderType
 logger = get_logger(__name__)
 
 
-class OptimizationCategory(Enum):
+class LLMServingOptimizationCategory(Enum):
     """Categories of optimization strategies."""
 
     # GPU/Local-only optimizations
@@ -75,7 +76,7 @@ class OptimizationConfig:
 
     # Response caching
     cache_enabled: bool = True
-    cache_l1_size: int = 100
+    cache_l1_size: int = config.misc.cache_l1_size  # #19730
     cache_l2_ttl: int = TTL_5_MINUTES
 
 
@@ -89,30 +90,30 @@ class OptimizationRouter:
     """
 
     # Optimizations that only apply to local/GPU-based inference
-    LOCAL_ONLY_OPTIMIZATIONS: Set[OptimizationCategory] = {
-        OptimizationCategory.SPECULATIVE_DECODING,
-        OptimizationCategory.FLASH_ATTENTION,
-        OptimizationCategory.CUDA_GRAPHS,
-        OptimizationCategory.MEDUSA_HEADS,
-        OptimizationCategory.QUANTIZATION,
-        OptimizationCategory.KV_CACHE_OPTIMIZATION,
-        OptimizationCategory.CONTINUOUS_BATCHING,
-        OptimizationCategory.PREFIX_CACHING,
+    LOCAL_ONLY_OPTIMIZATIONS: Set[LLMServingOptimizationCategory] = {
+        LLMServingOptimizationCategory.SPECULATIVE_DECODING,
+        LLMServingOptimizationCategory.FLASH_ATTENTION,
+        LLMServingOptimizationCategory.CUDA_GRAPHS,
+        LLMServingOptimizationCategory.MEDUSA_HEADS,
+        LLMServingOptimizationCategory.QUANTIZATION,
+        LLMServingOptimizationCategory.KV_CACHE_OPTIMIZATION,
+        LLMServingOptimizationCategory.CONTINUOUS_BATCHING,
+        LLMServingOptimizationCategory.PREFIX_CACHING,
     }
 
     # Optimizations that only apply to cloud API providers
-    CLOUD_ONLY_OPTIMIZATIONS: Set[OptimizationCategory] = {
-        OptimizationCategory.CONNECTION_POOLING,
-        OptimizationCategory.API_REQUEST_BATCHING,
-        OptimizationCategory.RETRY_WITH_BACKOFF,
-        OptimizationCategory.RATE_LIMIT_HANDLING,
+    CLOUD_ONLY_OPTIMIZATIONS: Set[LLMServingOptimizationCategory] = {
+        LLMServingOptimizationCategory.CONNECTION_POOLING,
+        LLMServingOptimizationCategory.API_REQUEST_BATCHING,
+        LLMServingOptimizationCategory.RETRY_WITH_BACKOFF,
+        LLMServingOptimizationCategory.RATE_LIMIT_HANDLING,
     }
 
     # Optimizations that apply to all providers
-    UNIVERSAL_OPTIMIZATIONS: Set[OptimizationCategory] = {
-        OptimizationCategory.RESPONSE_CACHING,
-        OptimizationCategory.PROMPT_COMPRESSION,
-        OptimizationCategory.REQUEST_DEDUPLICATION,
+    UNIVERSAL_OPTIMIZATIONS: Set[LLMServingOptimizationCategory] = {
+        LLMServingOptimizationCategory.RESPONSE_CACHING,
+        LLMServingOptimizationCategory.PROMPT_COMPRESSION,
+        LLMServingOptimizationCategory.REQUEST_DEDUPLICATION,
     }
 
     # Provider classification
@@ -137,7 +138,7 @@ class OptimizationRouter:
             config: Optimization configuration (uses defaults if None)
         """
         self.config = config or OptimizationConfig()
-        self._enabled_optimizations: Dict[ProviderType, Set[OptimizationCategory]] = {}
+        self._enabled_optimizations: Dict[ProviderType, Set[LLMServingOptimizationCategory]] = {}
         self._initialize_provider_optimizations()
 
     def _initialize_provider_optimizations(self) -> None:
@@ -145,7 +146,7 @@ class OptimizationRouter:
         for provider in ProviderType:
             self._enabled_optimizations[provider] = self._get_applicable_optimizations(provider)
 
-    def _get_applicable_optimizations(self, provider: ProviderType) -> Set[OptimizationCategory]:
+    def _get_applicable_optimizations(self, provider: ProviderType) -> Set[LLMServingOptimizationCategory]:
         """
         Get applicable optimizations for a provider type.
 
@@ -172,7 +173,7 @@ class OptimizationRouter:
         """Check if provider is a cloud API provider."""
         return provider in self.CLOUD_PROVIDERS
 
-    def should_apply(self, optimization: OptimizationCategory, provider: ProviderType) -> bool:
+    def should_apply(self, optimization: LLMServingOptimizationCategory, provider: ProviderType) -> bool:
         """
         Check if an optimization should be applied for a provider.
 
@@ -191,18 +192,18 @@ class OptimizationRouter:
 
         return applicable
 
-    def _is_optimization_enabled(self, optimization: OptimizationCategory) -> bool:
+    def _is_optimization_enabled(self, optimization: LLMServingOptimizationCategory) -> bool:
         """Check if optimization is enabled in config."""
         config_mapping = {
-            OptimizationCategory.SPECULATIVE_DECODING: self.config.speculation_enabled,
-            OptimizationCategory.QUANTIZATION: self.config.quantization_enabled,
-            OptimizationCategory.PROMPT_COMPRESSION: self.config.prompt_compression_enabled,
-            OptimizationCategory.RESPONSE_CACHING: self.config.cache_enabled,
+            LLMServingOptimizationCategory.SPECULATIVE_DECODING: self.config.speculation_enabled,
+            LLMServingOptimizationCategory.QUANTIZATION: self.config.quantization_enabled,
+            LLMServingOptimizationCategory.PROMPT_COMPRESSION: self.config.prompt_compression_enabled,
+            LLMServingOptimizationCategory.RESPONSE_CACHING: self.config.cache_enabled,
         }
         # Default to True for optimizations not in mapping
         return config_mapping.get(optimization, True)
 
-    def get_optimizations(self, provider: ProviderType) -> Set[OptimizationCategory]:
+    def get_optimizations(self, provider: ProviderType) -> Set[LLMServingOptimizationCategory]:
         """
         Get all applicable optimizations for a provider.
 
@@ -214,7 +215,7 @@ class OptimizationRouter:
         """
         return self._enabled_optimizations.get(provider, set())
 
-    def get_enabled_optimizations(self, provider: ProviderType) -> Set[OptimizationCategory]:
+    def get_enabled_optimizations(self, provider: ProviderType) -> Set[LLMServingOptimizationCategory]:
         """
         Get all enabled optimizations for a provider (respects config).
 
@@ -238,7 +239,7 @@ class OptimizationRouter:
             Dict mapping optimization name to enabled status
         """
         summary = {}
-        for opt in OptimizationCategory:
+        for opt in LLMServingOptimizationCategory:
             applicable = opt in self._enabled_optimizations.get(provider, set())
             enabled = applicable and self._is_optimization_enabled(opt)
             summary[opt.value] = enabled
@@ -312,7 +313,7 @@ get_optimization_router = lazy_singleton(OptimizationRouter)
 
 
 __all__ = [
-    "OptimizationCategory",
+    "LLMServingOptimizationCategory",
     "OptimizationConfig",
     "OptimizationRouter",
     "get_optimization_router",

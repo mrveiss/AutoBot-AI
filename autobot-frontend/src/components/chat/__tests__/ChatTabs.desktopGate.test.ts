@@ -10,12 +10,9 @@
  * so the two cannot disagree.
  *
  * WHY `holdsPermission` AND NOT `hasPermission`. `hasPermission` short-circuits
- * on `isAdmin`, and `isAdmin` admits `superadmin` -- whose `ROLE_PERMISSIONS`
- * entry is EMPTY by #13854's ruling, so the socket refuses it. Gating on
- * `hasPermission` would show a superadmin a desktop the handshake then closes
- * with 1008. The superadmin case below is the one that fails if anyone swaps
- * the two functions, and it is the reason this file exists rather than a single
- * admin/non-admin pair.
+ * on `isAdmin`, which is not what the socket asks. Since #19125 (owner decision
+ * 2026-10-21) `superadmin`'s `ROLE_PERMISSIONS` entry is derived from admin's,
+ * so the socket admits it and the tab must be offered to it too.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -72,12 +69,10 @@ describe('ChatTabs desktop gate (#17370)', () => {
     expect(labels).toContain(en.chat.tabs.chat)
   })
 
-  it('withholds it from superadmin, agreeing with the socket that refuses it', () => {
-    // THE DISCRIMINATING CASE. `isAdmin` is true for superadmin, so
-    // `hasPermission('mcp.desktop.control')` returns true, while
-    // ROLE_PERMISSIONS[superadmin] is empty and the socket closes with 1008.
-    // This is the only assertion here that distinguishes the two functions.
-    expect(tabLabels(mountTabs('superadmin'))).not.toContain(DESKTOP)
+  it('offers it to superadmin, agreeing with the socket that admits it (#19125)', () => {
+    // Superadmin's table entry is derived from admin's, so it holds
+    // `mcp.desktop.control` and the socket admits it.
+    expect(tabLabels(mountTabs('superadmin'))).toContain(DESKTOP)
   })
 
   it('keeps every non-desktop tab for a refused role', () => {

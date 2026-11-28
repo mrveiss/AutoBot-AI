@@ -32,6 +32,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from autobot_shared.coordination.shared_runtime_bag import ChangeEvent, SharedRuntimeBag
+from llc.models.budget import token_limit_blocks
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class AgentBudgetState(BaseModel):
     def is_over_limit(self) -> bool:
         """Check if budget is exceeded in the active mode."""
         if self.budget_mode == "tokens" and self.token_limit is not None:
-            return self.tokens_spent > self.token_limit
+            return token_limit_blocks(self.tokens_spent, self.token_limit)
         return self.budget_spent > self.budget_limit
 
     @property

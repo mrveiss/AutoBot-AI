@@ -39,8 +39,8 @@ from enum import Enum
 from typing import Callable, Optional, Sequence
 
 from agents.ac_criteria import (
-    Citation,
     Criterion,
+    CriterionCitation,
     code_searcher,
     criteria_after_the_section,
     criterion_terms,
@@ -92,7 +92,7 @@ class CriterionResult:
 
     criterion: Criterion
     verdict: Verdict
-    citations: tuple[Citation, ...] = ()
+    citations: tuple[CriterionCitation, ...] = ()
     rejected_citations: tuple[str, ...] = ()
     reasoning: str = ""
     probability: Optional[float] = None
@@ -147,12 +147,12 @@ def _state(criterion: Criterion, evidence: str) -> str:
     )
 
 
-def _quoted_in(citation: Citation, evidence: str) -> bool:
+def _quoted_in(citation: CriterionCitation, evidence: str) -> bool:
     """Whether *evidence* quotes this exact `path:line`.
 
     A blob-wide ``str(citation) not in evidence`` was the wrong test, and it
     passed a fabricated citation routinely rather than at an edge.
-    ``Citation.__str__`` is ``path:line`` with no terminator, so ``:1`` is a
+    ``CriterionCitation.__str__`` is ``path:line`` with no terminator, so ``:1`` is a
     substring of ``:12``, ``:100`` and ``:1002``, and ``a.py:1`` is a substring
     of ``ba.py:12``. The lower the line number the likelier the collision,
     which made line 1 the cheapest citation to invent -- inside the check whose

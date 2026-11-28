@@ -199,8 +199,8 @@ class TestGetEdge:
 # =============================================================================
 
 
-class TestGetNeighbors:
-    """MeshDB.get_neighbors returns list of dicts."""
+class TestFetchNeighborRows:
+    """MeshDB.fetch_neighbor_rows returns list of dicts."""
 
     @pytest.mark.asyncio
     async def test_returns_correct_structure(self) -> None:
@@ -216,7 +216,7 @@ class TestGetNeighbors:
         engine, _ = _make_engine(mappings=rows)
         db = MeshDB(engine)
 
-        result = await db.get_neighbors(_NODE_UUID, min_weight=0.5)
+        result = await db.fetch_neighbor_rows(_NODE_UUID, min_weight=0.5)
 
         assert len(result) == 1
         assert result[0]["neighbor_id"] == _OTHER_UUID
@@ -227,7 +227,7 @@ class TestGetNeighbors:
         engine, _ = _make_engine(mappings=[])
         db = MeshDB(engine)
 
-        result = await db.get_neighbors(_NODE_UUID, min_weight=0.5)
+        result = await db.fetch_neighbor_rows(_NODE_UUID, min_weight=0.5)
 
         assert result == []
 

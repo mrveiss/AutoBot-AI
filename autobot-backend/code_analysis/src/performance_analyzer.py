@@ -7,7 +7,7 @@ This module used to contain a full, independent regex/AST scanning engine
 that duplicated (and had diverged from) the canonical implementation at
 ``code_intelligence.performance_analysis``. It is kept as an import-
 compatible shim — per the "never delete code" policy — for any caller that
-still imports ``PerformanceAnalyzer``/``PerformanceIssue`` from this path.
+still imports ``LegacyPerformanceAnalyzer``/``LegacyPerformanceIssue`` from this path.
 
 The detection engine is now delegated entirely to the canonical
 ``code_intelligence.performance_analysis.PerformanceAnalyzer``. This class
@@ -36,14 +36,14 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class PerformanceIssue:
+class LegacyPerformanceIssue:
     """Represents a performance issue in the codebase (legacy shape).
 
     Issue #12362: Preserved verbatim for backward compatibility. Field names
     (``line_number``, ``issue_type: str``) intentionally differ from the
     canonical ``code_intelligence.performance_analysis.types.PerformanceIssue``
     (``line_start``/``line_end``, ``PerformanceIssueType`` enum) — see
-    ``PerformanceAnalyzer._adapt_issue`` below for the field mapping.
+    ``LegacyPerformanceAnalyzer._adapt_issue`` below for the field mapping.
     """
 
     file_path: str
@@ -71,7 +71,7 @@ class PerformanceRecommendation:
 
 # Issue #12362: Maps a canonical PerformanceIssueType to the legacy 6-bucket
 # taxonomy (memory_leaks, blocking_calls, inefficient_loops, database_issues,
-# concurrency_issues, resource_waste) that PerformanceIssue.issue_type /
+# concurrency_issues, resource_waste) that LegacyPerformanceIssue.issue_type /
 # PerformanceRecommendation.category used pre-consolidation. Explicit at the
 # consumer boundary per the type-divergence-handling requirement — every
 # member of the modern enum is listed so a new addition to the canonical
@@ -118,7 +118,7 @@ _LEGACY_BUCKET_BY_ISSUE_TYPE: Dict[_ModernIssueType, str] = {
 }
 
 
-class PerformanceAnalyzer:
+class LegacyPerformanceAnalyzer:
     """Analyzes code for performance issues and memory leaks.
 
     Issue #12362: Legacy-shaped facade. Detection is delegated to the
@@ -199,10 +199,10 @@ class PerformanceAnalyzer:
         analyzer = _ModernPerformanceAnalyzer(project_root=root_path)
         return analyzer.analyze_directory()
 
-    def _adapt_issue(self, issue: _ModernPerformanceIssue) -> PerformanceIssue:
+    def _adapt_issue(self, issue: _ModernPerformanceIssue) -> LegacyPerformanceIssue:
         """Map a canonical PerformanceIssue onto the legacy dataclass shape."""
         legacy_bucket = _LEGACY_BUCKET_BY_ISSUE_TYPE.get(issue.issue_type, "resource_waste")
-        return PerformanceIssue(
+        return LegacyPerformanceIssue(
             file_path=issue.file_path,
             line_number=issue.line_start,
             function_name=None,  # Not tracked by the canonical analyzer either
@@ -214,10 +214,12 @@ class PerformanceAnalyzer:
             estimated_impact=issue.estimated_impact,
         )
 
-    async def _categorize_issues(self, performance_issues: List[PerformanceIssue]) -> Dict[str, List[PerformanceIssue]]:
+    async def _categorize_issues(
+        self, performance_issues: List[LegacyPerformanceIssue]
+    ) -> Dict[str, List[LegacyPerformanceIssue]]:
         """Categorize performance issues"""
 
-        categories: Dict[str, List[PerformanceIssue]] = {}
+        categories: Dict[str, List[LegacyPerformanceIssue]] = {}
         for issue in performance_issues:
             if issue.issue_type not in categories:
                 categories[issue.issue_type] = []
@@ -226,7 +228,7 @@ class PerformanceAnalyzer:
         return categories
 
     async def _generate_optimization_recommendations(
-        self, categorized: Dict[str, List[PerformanceIssue]]
+        self, categorized: Dict[str, List[LegacyPerformanceIssue]]
     ) -> List[PerformanceRecommendation]:
         """Generate optimization recommendations"""
 
@@ -252,7 +254,7 @@ class PerformanceAnalyzer:
 
         return recommendations
 
-    def _generate_code_examples(self, category: str, issues: List[PerformanceIssue]) -> List[Dict[str, str]]:
+    def _generate_code_examples(self, category: str, issues: List[LegacyPerformanceIssue]) -> List[Dict[str, str]]:
         """Generate before/after code examples"""
 
         examples = []
@@ -287,7 +289,7 @@ class PerformanceAnalyzer:
 
     def _calculate_performance_metrics(
         self,
-        issues: List[PerformanceIssue],
+        issues: List[LegacyPerformanceIssue],
         recommendations: List[PerformanceRecommendation],
     ) -> Dict[str, Any]:
         """Calculate performance analysis metrics"""
@@ -320,7 +322,7 @@ class PerformanceAnalyzer:
         weights = {"critical": 10, "high": 5, "medium": 2, "low": 1}
         return sum(count * weights[severity] for severity, count in severity_counts.items())
 
-    def _serialize_performance_issue(self, issue: PerformanceIssue) -> Dict[str, Any]:
+    def _serialize_performance_issue(self, issue: LegacyPerformanceIssue) -> Dict[str, Any]:
         """Serialize performance issue for output"""
         return {
             "file": issue.file_path,

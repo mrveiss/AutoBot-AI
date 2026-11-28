@@ -37,7 +37,7 @@ export const Default: Story = {
     },
     codeQuality: {
       overall_score: 84,
-      test_coverage: 67,
+      testability: 67,
       code_duplicates: 12,
       technical_debt: 8,
     },
@@ -72,7 +72,7 @@ export const StaticData: Story = {
     communicationPatterns: null,
     codeQuality: {
       overall_score: 55,
-      test_coverage: 30,
+      testability: 30,
       code_duplicates: 45,
       technical_debt: 40,
     },

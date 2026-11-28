@@ -57,6 +57,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from unittest.mock import MagicMock
@@ -95,6 +96,8 @@ class StubSet:
         self._detached: Dict[str, types.ModuleType] = {}
         # name -> (module we mutated, its previous __path__ or _MISSING)
         self._paths: List[Tuple[Any, Any]] = []
+        # names evicted by :meth:`evict`; restored alongside the owned ones.
+        self._evicted: List[str] = []
 
     # -- construction ----------------------------------------------------
 
@@ -213,6 +216,46 @@ class StubSet:
         self._bind_on_parent(name, module)
         return module
 
+    def evict(self, name: str, descendants: bool = True, only_stubs: bool = False) -> None:
+        """Remove *name* (and by default everything under it) from ``sys.modules``.
+
+        For a conftest that must let the normal import machinery load a real
+        package over a stub left by an ancestor conftest. What is removed is
+        recorded, together with the parent's attribute for it, so :meth:`restore`
+        puts the stub back exactly as it was (#13596). A bare ``del`` here is how
+        the previous hand-rolled copies came to restore nothing.
+
+        With *only_stubs*, genuine file-backed modules are left in place (rule 2):
+        evicting one and re-importing it mints a second copy while every earlier
+        importer keeps the first, and the leak guard reports the swapped key.
+        """
+        prefix = name + "."
+        for key in [k for k in sys.modules if k == name or (descendants and k.startswith(prefix))]:
+            if only_stubs and _is_real_module(sys.modules[key]):
+                continue
+            parent_name, _, leaf = key.rpartition(".")
+            parent = sys.modules.get(parent_name) if parent_name else None
+            if parent is not None:
+                self._binds.append((parent, leaf, getattr(parent, leaf, _MISSING)))
+            self._displaced.setdefault(key, sys.modules[key])
+            self._evicted.append(key)
+            del sys.modules[key]
+
+    def import_real(self, name: str) -> types.ModuleType:
+        """Import *name* through the normal machinery and own the keys it adds.
+
+        Pair with :meth:`evict`. Only newly added keys inside *name*'s top-level
+        package become owned: transitive third-party imports are real modules
+        nobody stubbed and are left alone.
+        """
+        before = set(sys.modules)
+        module = importlib.import_module(name)
+        root = name.partition(".")[0]
+        for key in [k for k in sys.modules if k not in before and (k == root or k.startswith(root + "."))]:
+            self._displaced.setdefault(key, _MISSING)
+            self._owned[key] = sys.modules[key]
+        return module
+
     def _bind_on_parent(self, name: str, module: types.ModuleType) -> None:
         """Rule 3 — make ``getattr(parent, leaf)`` work, so patch() can resolve."""
         parent_name, _, leaf = name.rpartition(".")
@@ -286,8 +329,12 @@ class StubSet:
         """
         for name in reversed(list(self._owned)):
             self._put_back(name)
+        for name in reversed(self._evicted):
+            if name not in self._owned:
+                self._put_back(name)
         self._restore_binds()
         self._restore_paths()
+        self._evicted.clear()
         self._owned.clear()
         self._displaced.clear()
         self._detached.clear()
@@ -374,7 +421,7 @@ class StubSet:
         return _reattach_stubs
 
 
-def make_pkg_stub(name: str) -> types.ModuleType:
+def make_pkg_stub(name: str, real_dir: Path | None = None) -> types.ModuleType:
     """Create a minimal package stub that Python's import machinery accepts.
 
     A bare MagicMock() cannot serve as a package because the importer
@@ -383,13 +430,21 @@ def make_pkg_stub(name: str) -> types.ModuleType:
     create a real ModuleType with ``__path__ = []`` so the dotted import chain
     succeeds while leaving every attribute access as a MagicMock via
     ``__getattr__``.
+
+    With *real_dir* the stub fronts a real package directory: ``__path__`` points
+    at it and an attribute naming a real submodule there (``from models import
+    settings``) imports that module instead of answering with the mock, so the
+    result does not depend on whether the real package happened to be imported
+    before the stub was installed (#17850).
     """
     mod = types.ModuleType(name)
-    mod.__path__ = []  # marks this as a package to the import system
+    mod.__path__ = [] if real_dir is None else [str(real_dir)]  # marks this as a package to the import system
     mod.__package__ = name
     mock_attr = MagicMock()
 
     def _getattr(attr: str) -> MagicMock:  # noqa: ANN001
+        if real_dir is not None and not attr.startswith("__") and (real_dir / f"{attr}.py").is_file():
+            return importlib.import_module(f"{name}.{attr}")
         return mock_attr
 
     mod.__getattr__ = _getattr  # type: ignore[attr-defined]
@@ -445,3 +500,26 @@ def real_load_and_bind(name: str, path: Path) -> None:
     parent, _, child = name.rpartition(".")
     if parent and parent in sys.modules:
         setattr(sys.modules[parent], child, mod)
+
+
+def install_error_boundaries_stub() -> None:
+    """Install a minimal ``autobot_shared.error_boundaries`` unless one is already loaded (#22157).
+
+    Moved unchanged from ``api/batch_jobs_schedules_test.py`` and
+    ``tests/test_health_probe_data_contract.py``, which each carried a copy.
+    """
+    if "autobot_shared.error_boundaries" in sys.modules:
+        return
+
+    class _ErrorCategory(Enum):
+        # #14881: CLIENT_ERROR removed -- production's ErrorCategory
+        # (utils/error_boundaries/types.py) has 18 members and that is not one
+        # of them; nothing referenced it. A minimal stub is fine, an invented
+        # member is not.
+        SERVER_ERROR = "server_error"
+
+    _eb = types.ModuleType("autobot_shared.error_boundaries")
+    _eb.__package__ = "autobot_shared"
+    _eb.ErrorCategory = _ErrorCategory  # type: ignore[attr-defined]
+    _eb.with_error_handling = lambda *a, **k: (lambda f: f)  # type: ignore[attr-defined]
+    sys.modules["autobot_shared.error_boundaries"] = _eb

@@ -47,7 +47,7 @@ for _entry in (_REPO_ROOT, _BACKEND_DIR):
     if str(_entry) not in sys.path:
         sys.path.insert(0, str(_entry))
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 from autobot_shared.ssot_config import config  # noqa: E402
 
 logger = get_logger(__name__)
@@ -257,6 +257,7 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     try:
         sys.exit(asyncio.run(run_checks(parse_args().host)))
     except KeyboardInterrupt:

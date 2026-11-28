@@ -12,10 +12,14 @@ Route group: /llc/secrets/{company_id}
 
 Access control: the caller must present a valid authenticated session whose
 tenant (`TenantContext.org_id`) matches the {company_id} path parameter
-(GH#12147); platform admins are exempt. Values are NEVER returned in list
-responses.
+(GH#12147); platform admins are exempt. Listing names is open to any member of
+the company; setting, reading a value and revoking need an owner or admin
+membership of that company (``llc.services.authz.require_company_admin``),
+since a plain member could otherwise read, overwrite or revoke every company
+secret. Values are NEVER returned in list responses.
 """
 
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -25,10 +29,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
+from llc.deps import SESSION_DEP
 from llc.models.secret import LLCSecret
+from llc.services.authz import NotAuthorisedError, require_company_admin
 from llc.services.secret import SecretNotFound, SecretService
-from user_management.database import get_async_session
 from user_management.services import TenantContext
+
+from ._common import actor_id
 
 router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 
@@ -41,7 +49,6 @@ router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 class SecretSetRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     value: str = Field(..., min_length=1)
-    actor: str = Field(..., description="Agent ID performing the operation")
 
 
 class SecretSummary(BaseModel):
@@ -95,6 +102,27 @@ def _check_company_access(
     return company_id
 
 
+async def _require_secret_admin(
+    company_id: str = Depends(_check_company_access),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+    session: AsyncSession = SESSION_DEP,
+) -> str:
+    """Owner or admin of this company, or a platform admin; else 403.
+
+    A tenant match alone let any member read, overwrite or revoke every company
+    secret. The membership check is the company-wide gate (``require_company_admin``),
+    with the actor taken from the session, never from the request.
+    """
+    if ctx.is_platform_admin:
+        return company_id
+    try:
+        await require_company_admin(session, uuid.UUID(str(company_id)), actor_id(current_user))
+    except NotAuthorisedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company owner or admin required") from exc
+    return company_id
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -103,7 +131,7 @@ def _check_company_access(
 @router.get("/{company_id}", response_model=List[SecretSummary])
 async def list_secrets(
     company_id: str = Depends(_check_company_access),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> List[SecretSummary]:
     """List secret names and versions.  Values are never included."""
@@ -118,9 +146,10 @@ async def list_secrets(
 )
 async def set_secret(
     body: SecretSetRequest,
-    company_id: str = Depends(_check_company_access),
-    session: AsyncSession = Depends(get_async_session),
+    company_id: str = Depends(_require_secret_admin),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
 ) -> SecretSetResponse:
     """Create or update a secret.  Version increments on update."""
     secret = await svc.set(
@@ -128,7 +157,7 @@ async def set_secret(
         company_id=company_id,
         name=body.name,
         value=body.value,
-        actor=body.actor,
+        actor=str(actor_id(current_user)),
     )
     await session.commit()
     return SecretSetResponse(
@@ -141,15 +170,15 @@ async def set_secret(
 @router.get("/{company_id}/{name}", response_model=SecretValueResponse)
 async def get_secret(
     name: str,
-    company_id: str = Depends(_check_company_access),
-    session: AsyncSession = Depends(get_async_session),
+    company_id: str = Depends(_require_secret_admin),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> SecretValueResponse:
     """Return the decrypted plaintext value for a named secret."""
     try:
         plaintext = await svc.get(session=session, company_id=company_id, name=name)
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
 
     result = await session.execute(
         select(LLCSecret).where(
@@ -164,14 +193,14 @@ async def get_secret(
 @router.delete("/{company_id}/{name}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_secret(
     name: str,
-    actor: str,
-    company_id: str = Depends(_check_company_access),
-    session: AsyncSession = Depends(get_async_session),
+    company_id: str = Depends(_require_secret_admin),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
 ) -> None:
     """Revoke a secret.  The value becomes permanently inaccessible."""
     try:
-        await svc.revoke(session=session, company_id=company_id, name=name, actor=actor)
+        await svc.revoke(session=session, company_id=company_id, name=name, actor=str(actor_id(current_user)))
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
     await session.commit()

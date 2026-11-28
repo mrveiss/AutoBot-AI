@@ -28,7 +28,7 @@ class Fallback:
     is_async: bool = False
 
 
-class FallbackChain:
+class ServiceFallbackChain:
     """Chain of fallbacks to try in sequence."""
 
     def __init__(self, name: str, fallbacks: List[Fallback] | None = None) -> None:
@@ -144,19 +144,19 @@ class FallbackManager:
 
     def __init__(self) -> None:
         """Initialize fallback manager."""
-        self.chains: Dict[str, FallbackChain] = {}
+        self.chains: Dict[str, ServiceFallbackChain] = {}
         self._lock = Lock()
 
-    def create_chain(self, name: str) -> FallbackChain:
+    def create_chain(self, name: str) -> ServiceFallbackChain:
         """Create new fallback chain."""
         with self._lock:
             if name in self.chains:
                 raise ValueError(f"Chain {name} already exists")
-            chain = FallbackChain(name)
+            chain = ServiceFallbackChain(name)
             self.chains[name] = chain
             return chain
 
-    def get_chain(self, name: str) -> FallbackChain | None:
+    def get_chain(self, name: str) -> ServiceFallbackChain | None:
         """Get existing fallback chain."""
         with self._lock:
             return self.chains.get(name)

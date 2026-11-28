@@ -58,7 +58,7 @@ Issue GH#4459: Web push notifications for async task completion
           </span>
           <span class="toggle-text">
             <template v-if="loading">
-              <Icon name="spinner" class="spin" />
+              <BaseSpinner size="sm" />
               {{ subscribed ? 'Disabling…' : 'Enabling…' }}
             </template>
             <template v-else>
@@ -88,6 +88,7 @@ Issue GH#4459: Web push notifications for async task completion
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { usePushNotifications } from '@/composables/usePushNotifications'
 import { createLogger } from '@/utils/debugUtils'
@@ -221,7 +222,7 @@ async function handleToggle() {
 .toggle-btn.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--text-on-primary, #fff);
+  color: var(--text-on-primary);
 }
 
 .toggle-btn:disabled {
@@ -257,7 +258,7 @@ async function handleToggle() {
 
 .toggle-btn.active .toggle-thumb {
   transform: translateX(14px);
-  background: #fff;
+  background: var(--text-on-primary);
 }
 
 .toggle-text {
@@ -265,16 +266,6 @@ async function handleToggle() {
   align-items: center;
   gap: var(--spacing-1);
   min-width: 56px;
-}
-
-.spin {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .status-line {

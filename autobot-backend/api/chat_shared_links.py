@@ -38,8 +38,7 @@ from api.schemas_chat import (
     SharedMessageItem,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_auth_middleware, get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user, resolve_human_user
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -48,6 +47,7 @@ from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
 from chat_history.message_schema import message_role, message_text
 from models.chat_shared_link import ChatSharedLink
+from security.session_company import require_session_company
 from security.session_ownership import SessionOwnershipValidator
 from user_management.services.user_service import UserService
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
@@ -55,7 +55,9 @@ from utils.response_helpers import create_success_response
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["chat-shared-links"])
+# #21997: the owner routes (create, revoke, list) name a chat session, so another company's chat is refused. The public
+# token routes name none and are exempt: a link holder acts as no company member, and the owner chose to share it.
+router = APIRouter(tags=["chat-shared-links"], dependencies=[Depends(require_session_company)])
 
 _DEFAULT_TTL_ENV = "AUTOBOT_SHARED_LINK_DEFAULT_TTL"
 _DEFAULT_TTL_SECONDS: int = env_int(_DEFAULT_TTL_ENV, 0)
@@ -277,7 +279,7 @@ async def list_shared_links(
 )
 async def list_all_shared_links_admin(
     request: Request,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """Return every active (non-expired) shared link with its owner (GH#8996, AC4)."""
@@ -332,11 +334,11 @@ async def _resolve_link(token: str, db: AsyncSession) -> ChatSharedLink:
     return link
 
 
-def _enforce_require_login(link: ChatSharedLink, request: Request) -> None:
-    """Reject an unauthenticated visitor on a login-required link (#16861)."""
+async def _enforce_require_login(link: ChatSharedLink, request: Request) -> None:
+    """Reject an unauthenticated visitor on a login-required link (#16861); a revoked JWT is 401 (#18688)."""
     if not link.require_login:
         return
-    if get_auth_middleware().get_user_from_request(request):
+    if await resolve_human_user(request):
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -368,7 +370,7 @@ async def get_shared_session(
 ) -> Dict[str, Any]:
     """Return shared conversation content.  Password-protected links return metadata only (GH#8996)."""
     link = await _resolve_link(token, db)
-    _enforce_require_login(link, request)
+    await _enforce_require_login(link, request)
 
     if link.has_password:
         return create_success_response(
@@ -413,7 +415,7 @@ async def access_shared_session(
         )
 
     link = await _resolve_link(token, db)
-    _enforce_require_login(link, request)
+    await _enforce_require_login(link, request)
 
     if link.has_password:
         if not body.password:

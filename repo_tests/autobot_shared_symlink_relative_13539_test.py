@@ -58,6 +58,32 @@ _HISTORICAL_ABSOLUTE_SRC = {
 }
 
 
+_SHARED_LINK_TASKS = _ANSIBLE_ROOT / "roles" / "_shared" / "tasks" / "link_autobot_shared.yml"
+_SHARED_LINK_TASK_NAME = "Link autobot_shared into {{ shared_link_component }} (#21035)"
+#: The importing sites in update-all-nodes.yml, in document order.
+_UPDATE_ALL_NODES_SITE_IDS = [
+    "update-all-nodes-slm-agent-play1",
+    "update-all-nodes-slm-backend-play1",
+    "update-all-nodes-backend-play2",
+    "update-all-nodes-slm-agent-play2",
+    "update-all-nodes-slm-backend-play2",
+]
+
+
+def _shared_link_importers(playbook: Any) -> list[tuple[str, str]]:
+    """(site id, component) for every task importing the shared link file, found by module."""
+    sites: list[tuple[str, str]] = []
+    plays = [p for p in playbook if isinstance(p, dict)]
+    for play in plays:
+        for task in play.get("tasks") or []:
+            target = str(task.get("ansible.builtin.import_tasks", ""))
+            if target.endswith("roles/_shared/tasks/link_autobot_shared.yml"):
+                component = task["vars"]["shared_link_component"]
+                kind = component.removeprefix("autobot-")
+                sites.append((f"update-all-nodes-{kind}-play{1 if 'PLAY 1' in task['name'] else 2}", component))
+    return sites
+
+
 def _load_yaml(path: Path) -> Any:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
@@ -154,23 +180,19 @@ def _site_specs() -> list[tuple[str, Path, str, str]]:
 
     specs = []
 
-    for site_id, task_name in (
-        ("update-all-nodes-slm-agent-play1", "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"),
-        (
-            "update-all-nodes-slm-backend-play1",
-            "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports",
-        ),
-        ("update-all-nodes-backend-play2", "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"),
-        ("update-all-nodes-slm-agent-play2", "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"),
-        (
-            "update-all-nodes-slm-backend-play2",
-            "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports",
-        ),
-    ):
-        task = _find_task(update_all_nodes, task_name)
-        assert task is not None, f"{task_name!r} moved or was renamed in update-all-nodes.yml"
-        args = _file_module_args(task)
-        specs.append((site_id, _UPDATE_ALL_NODES, task_name, args["dest"], args["src"]))
+    # #21035: update-all-nodes.yml no longer carries the link inline; every site imports ONE
+    # shared task file. The link is checked once, rendered for each importing site's component.
+    link_task = _find_task(_load_yaml(_SHARED_LINK_TASKS), _SHARED_LINK_TASK_NAME)
+    assert link_task is not None, f"{_SHARED_LINK_TASK_NAME!r} moved or was renamed in {_SHARED_LINK_TASKS.name}"
+    link_args = _file_module_args(link_task)
+    importers = _shared_link_importers(update_all_nodes)
+    assert [site for site, _ in importers] == _UPDATE_ALL_NODES_SITE_IDS, (
+        "update-all-nodes.yml must import link_autobot_shared.yml at exactly these sites, in order; "
+        f"found {[site for site, _ in importers]} (#21035)"
+    )
+    for site_id, component in importers:
+        dest = _render(link_args["dest"], {"autobot": {"base_dir": "/opt/autobot"}, "shared_link_component": component})
+        specs.append((site_id, _SHARED_LINK_TASKS, _SHARED_LINK_TASK_NAME, dest, link_args["src"]))
 
     deploy_backend_env = _load_yaml(_DEPLOY_BACKEND_ENV)
     task = _find_task(deploy_backend_env, "Ensure autobot_shared symlink exists")

@@ -14,7 +14,7 @@ from typing import Dict, List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
@@ -110,7 +110,7 @@ def create_reddit_monitor_reply_template() -> WorkflowTemplate:
         description=(
             "Search subreddits for relevant posts, draft replies with the local LLM, " "and post after human approval."
         ),
-        category=TemplateCategory.COMMUNITY,
+        category=WorkflowTemplateCategory.COMMUNITY,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=15,
         agents_involved=["community_growth", "orchestrator"],
@@ -263,7 +263,7 @@ def create_release_announcement_blast_template() -> WorkflowTemplate:
             "Fetch the latest GitHub release, draft announcements for Reddit, Twitter, "
             "and Discord, then post after human approval."
         ),
-        category=TemplateCategory.COMMUNITY,
+        category=WorkflowTemplateCategory.COMMUNITY,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=10,
         agents_involved=["community_growth", "orchestrator"],
@@ -416,7 +416,7 @@ def create_community_digest_post_template() -> WorkflowTemplate:
             "Gather recent GitHub releases and Reddit mentions, draft a community digest, "
             "then post to Reddit after human approval."
         ),
-        category=TemplateCategory.COMMUNITY,
+        category=WorkflowTemplateCategory.COMMUNITY,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=20,
         agents_involved=["community_growth", "orchestrator"],

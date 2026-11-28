@@ -11,10 +11,10 @@
   become: true
 
 - name: Restart SLM agent
-  systemd:
-    name: slm-agent
-    state: restarted
-  become: true
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: slm-agent
 
 - name: Stop SLM agent
   systemd:
@@ -29,7 +29,7 @@
   become: true
 
 - name: Restart node_exporter
-  ansible.builtin.systemd:
-    name: node_exporter
-    state: restarted
-  become: true
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: node_exporter

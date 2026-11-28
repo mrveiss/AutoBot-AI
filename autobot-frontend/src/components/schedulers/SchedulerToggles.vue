@@ -5,9 +5,9 @@
         <h3><Icon name="clock" /> {{ $t('schedulers.title') }}</h3>
         <p class="description">{{ $t('schedulers.description') }}</p>
       </div>
-      <button @click="load" class="btn-refresh" :disabled="loading">
+      <BaseButton variant="outline" size="xs" @click="load" :disabled="loading">
         <Icon name="refresh" /> {{ $t('schedulers.refresh') }}
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="loading" class="state-message">{{ $t('schedulers.loading') }}</div>
@@ -51,14 +51,13 @@
             />
             <span class="toggle-slider"></span>
           </label>
-          <button
+          <BaseButton variant="outline" size="xs"
             v-if="job.override_active"
-            class="btn-reset"
             :disabled="busy === job.name"
             @click="onReset(job)"
           >
             {{ $t('schedulers.revertToDefault') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -66,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, onMounted } from 'vue';
 import Icon from '@/components/ui/Icon.vue';
 import { createLogger } from '@/utils/debugUtils';
@@ -275,22 +275,6 @@ onMounted(load);
 }
 
 .toggle input:disabled + .toggle-slider {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-refresh,
-.btn-reset {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.78rem;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.btn-refresh:disabled,
-.btn-reset:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

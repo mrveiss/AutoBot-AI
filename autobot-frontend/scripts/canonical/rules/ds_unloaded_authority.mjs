@@ -54,7 +54,13 @@ const SPECIFIER = /(@import\s+(?:url\()?|from\s+|import\s+)['"]([^'"]+)['"]/g;
 
 export const isImportedForTest = (t, r) => isImportedAnywhere(t, r);
 
-async function isImportedAnywhere(targetAbs, root) {
+/**
+ * Every resolved import in both source trees: target path -> the set of files
+ * that import it. Walks the trees once, so a caller asking about many
+ * stylesheets does not walk them once per stylesheet.
+ */
+export async function importEdges(root) {
+  const edges = new Map();
   const roots = ["autobot-frontend/src", "autobot-slm-frontend/src"];
   const stack = roots.map((r) => [r, true]);
   while (stack.length) {
@@ -79,7 +85,6 @@ async function isImportedAnywhere(targetAbs, root) {
       }
       if (!/\.(css|ts|mjs|js|vue)$/.test(e.name)) continue;
       const abs = join(root, child);
-      if (abs === targetAbs) continue;
       let text;
       try {
         text = await readFile(abs, "utf-8");
@@ -93,11 +98,21 @@ async function isImportedAnywhere(targetAbs, root) {
         const from = spec.startsWith("@/")
           ? join(root, "autobot-frontend/src", spec.slice(2))
           : resolve(dirname(abs), spec);
-        if (from === targetAbs) return true;
+        if (!edges.has(from)) edges.set(from, new Set());
+        edges.get(from).add(abs);
       }
     }
   }
-  return false;
+  return edges;
+}
+
+/** Whether any OTHER file imports `targetAbs`. */
+export async function isImportedAnywhere(targetAbs, root) {
+  return importedBy(await importEdges(root), targetAbs);
+}
+
+export function importedBy(edges, targetAbs) {
+  return [...(edges.get(targetAbs) ?? [])].some((importer) => importer !== targetAbs);
 }
 
 export async function check(filePath) {

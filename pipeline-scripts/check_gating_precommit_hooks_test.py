@@ -163,9 +163,7 @@ def test_the_workflow_runs_one_hook_id_per_precommit_invocation():
     reported as "no hook ran". The break was latent from the day the list
     was made plural.
     """
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "enforce-precommit.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "_gate-precommit.yml").read_text(encoding="utf-8")
     assert 'pre-commit run --all-files "${id}"' in workflow, (
         "the gating step must run ONE hook id per invocation -- `pre-commit run` "
         "rejects a second id with a usage error and writes no result line"

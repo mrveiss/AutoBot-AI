@@ -52,7 +52,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.workflow_state import ACTIVE_SET, KEY_PREFIX
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.redis_client import get_async_redis_client
 from llc.models.enums import WorkflowStatus
 from models.workflow import SOURCE_LEGACY_REDIS, Workflow
@@ -207,6 +207,7 @@ async def _main(dry_run: bool) -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     parser = argparse.ArgumentParser(
         description="Backfill Redis-persisted workflows into the workflows table (#14210)."
     )

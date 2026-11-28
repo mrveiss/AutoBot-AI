@@ -71,7 +71,6 @@ Workflows is needed because the release-sync push carries changes under
 ### Applies to
 
 - `.github/workflows/auto-fix-generated-types.yml`
-- `.github/workflows/auto-update-pr-branches.yml`
 - `.github/workflows/sync-main-to-release.yml` — pushes the `release-sync-release` branch
   and opens the release-sync PR from it, or, where GitHub refuses the PR, keeps
   the tracking issue described below (#16246).

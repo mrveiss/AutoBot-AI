@@ -40,18 +40,20 @@ stopped matching otherwise passes having asserted nothing.
 from __future__ import annotations
 
 import argparse
-import configparser
+import functools
 import logging
 import pathlib
-import re
 import sys
 
 # tools/lint/ is not a Python package; make the sibling helper importable
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _scan_helpers import tracked_paths  # noqa: E402
+import _exclude_anchoring as _shared
 import _scan_helpers
+from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside
 # a lint job, and `autobot_shared.logging_manager` would drag config loading
@@ -93,83 +95,38 @@ ARTIFACT_DIR_NAMES = frozenset(
 #: must not read as "no bare entry covers any source".
 TRACKED_PY_FLOOR = _scan_helpers.TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
-#: Mirror of ``flake8.utils.COMMA_SEPARATED_LIST_RE``. Reimplemented rather than
-#: imported so this runs wherever Python does — a guard that skips itself when a
-#: dependency is missing reports clean. The test pins the mirror to the real
-#: parser wherever flake8 is importable.
-_SPLIT_RE = re.compile(r"[,\s]")
+#: Mirror of ``flake8.utils.COMMA_SEPARATED_LIST_RE`` (defined once, in ``_exclude_anchoring``);
+#: the test pins it to the real parser wherever flake8 is importable.
+_SPLIT_RE = _shared._SPLIT_RE
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd.
+split_exclude_value = _shared.split_exclude_value
+read_exclude_entries = _shared.read_flake8_exclude
+load_entries = functools.partial(_shared.load_entries, default_name=".flake8", reader=read_exclude_entries)
+tracked_py_files = _shared.tracked_py_files
 
-    A cwd-relative walk answers confidently and wrongly when run from a
-    subdirectory.
-    """
-    return pathlib.Path(__file__).resolve().parents[2]
+#: Entries flake8 matches against a basename, i.e. at any depth.
+bare_entries = functools.partial(_shared.bare_entries, separators="/\\", skip_globs=False)
 
-
-def split_exclude_value(value: str) -> list[str]:
-    """Split an ``exclude`` option exactly as flake8 does."""
-    return [item for item in (piece.strip() for piece in _SPLIT_RE.split(value)) if item]
-
-
-def read_exclude_entries(config_text: str) -> list[str]:
-    """Parsed ``exclude`` entries of a flake8 config given as text.
-
-    ``RawConfigParser`` because that is what ``flake8.options.config.load_config``
-    uses; interpolation would change what a ``%`` in the value means, and this
-    must read what flake8 reads.
-    """
-    parser = configparser.RawConfigParser()
-    parser.read_string(config_text)
-    return split_exclude_value(parser["flake8"]["exclude"])
+#: Bare entries that are not a sanctioned artifact name (shared decision, #14896).
+unanchored_source_entries = functools.partial(
+    _shared.unanchored_source_entries, bare_entries=bare_entries, artifact_names=ARTIFACT_DIR_NAMES
+)
 
 
-def load_entries(config_path: pathlib.Path | None = None) -> list[str]:
-    """Exclude entries of the repo's ``.flake8`` (or a given config)."""
-    path = config_path if config_path is not None else repo_root() / ".flake8"
-    return read_exclude_entries(path.read_text(encoding="utf-8"))
-
-
-def bare_entries(entries: list[str]) -> list[str]:
-    """Entries flake8 matches against a basename, i.e. at any depth."""
-    return [entry for entry in entries if "/" not in entry and "\\" not in entry]
-
-
-def unanchored_source_entries(entries: list[str]) -> list[str]:
-    """Bare entries that are not a sanctioned artifact name.
-
-    The decision the guard turns on, kept separate so callers can put a
-    synthetic list through it instead of asserting on the config's text.
-    """
-    return [entry for entry in bare_entries(entries) if entry not in ARTIFACT_DIR_NAMES]
-
-
-def tracked_py_files(root: pathlib.Path | None = None) -> list[str]:
-    """Every tracked ``*.py`` path, enumerated by git rather than by flake8.
-
-    Through the shared enumerator (#14896) so the ``env=scrubbed_git_env()``
-    this needs -- an inherited ``GIT_DIR`` outranks ``cwd=`` and would list
-    another checkout's index -- is not a per-hook repeat, and so a failed or
-    empty listing raises instead of reading as "flake8 excludes nothing".
-    """
-    return tracked_paths(root if root is not None else repo_root(), "*.py")
-
-
-def entries_covering_tracked_python(entries: list[str], tracked: list[str]) -> dict[str, int]:
-    """Bare entries that prune tracked Python, mapped to how many files.
+def _component_hits(entry: str, path: str) -> int:
+    """How many directory components of *path* equal *entry*.
 
     ``fnmatch`` is not needed: flake8 compares a bare entry to a directory's
     basename, so a path component equal to the entry is exactly a hit.
     """
-    counts: dict[str, int] = {}
-    wanted = set(bare_entries(entries))
-    for path in tracked:
-        for component in path.split("/")[:-1]:
-            if component in wanted:
-                counts[component] = counts.get(component, 0) + 1
-    return counts
+    return path.split("/")[:-1].count(entry)
+
+
+#: Bare entries that prune tracked Python, mapped to how many files.
+entries_covering_tracked_python = functools.partial(
+    _shared.entries_covering_tracked_python, bare=bare_entries, hits_in_path=_component_hits
+)
 
 
 def missing_anchored_targets(entries: list[str], root: pathlib.Path | None = None) -> list[str]:
@@ -179,90 +136,57 @@ def missing_anchored_targets(entries: list[str], root: pathlib.Path | None = Non
     return [entry for entry in anchored if not (base / entry.rstrip("/")).is_dir()]
 
 
-def audit_excludes(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
-    """Apply the invariant to every entry in ``.flake8``.
-
-    Returns ``(entries_reached, problems)``. ``entries_reached`` is counted from
-    the parsed list so a config whose ``exclude`` has gone missing or empty
-    cannot report a clean scan of nothing.
-    """
-    base = root if root is not None else repo_root()
-    problems: list[str] = []
-
-    entries = load_entries(base / ".flake8")
-    if not entries:
-        return 0, [f"{base / '.flake8'} parsed to zero exclude entries — the guard checked nothing."]
-
+def _unanchored_finding(entries: list[str], _root: pathlib.Path) -> str | None:
     unanchored = unanchored_source_entries(entries)
-    if unanchored:
-        problems.append(
-            f"unanchored exclude entries {sorted(unanchored)}: flake8 matches a "
-            "separator-free entry against the basename, so each prunes every "
-            "directory of that name at ANY depth. Write the path the entry was "
-            "meant for (`autobot-backend/tests/`, not `tests`). A trailing `# "
-            "comment` inside the value also lands here, one entry per word."
-        )
+    if not unanchored:
+        return None
+    return (
+        f"unanchored exclude entries {sorted(unanchored)}: flake8 matches a "
+        "separator-free entry against the basename, so each prunes every "
+        "directory of that name at ANY depth. Write the path the entry was "
+        "meant for (`autobot-backend/tests/`, not `tests`). A trailing `# "
+        "comment` inside the value also lands here, one entry per word."
+    )
 
-    try:
-        tracked = tracked_py_files(base)
-    except RuntimeError as exc:
-        # The shared enumerator refuses an empty or failed listing rather than
-        # returning one (#14896). Recorded as a problem here instead of
-        # propagating: the anchoring findings above are still worth printing,
-        # and this path is already a nonzero exit.
-        tracked = []
-        problems.append(str(exc))
-    if len(tracked) < TRACKED_PY_FLOOR:
-        problems.append(
-            f"git ls-files returned only {len(tracked)} Python files (floor "
-            f"{TRACKED_PY_FLOOR}) — the enumeration broke, so the coverage "
-            "check below asserted nothing."
-        )
-    else:
-        covered = entries_covering_tracked_python(entries, tracked)
-        if covered:
-            problems.append(
-                f"bare exclude entries cover tracked Python: {covered}. Those "
-                f"files are silently unlinted. Either the entry is not an "
-                f"artifact directory and must be anchored, or it does not "
-                f"belong in ARTIFACT_DIR_NAMES in {SELF_REL}."
-            )
 
+def _describe_covered(covered: dict[str, int]) -> str:
+    return (
+        f"bare exclude entries cover tracked Python: {covered}. Those "
+        f"files are silently unlinted. Either the entry is not an "
+        f"artifact directory and must be anchored, or it does not "
+        f"belong in ARTIFACT_DIR_NAMES in {SELF_REL}."
+    )
+
+
+def _missing_target_finding(entries: list[str], base: pathlib.Path) -> str | None:
     missing = missing_anchored_targets(entries, base)
-    if missing:
-        problems.append(
-            f"exclude entries naming no directory: {sorted(missing)}. Remove "
-            "them or fix the path — a dead entry cannot exclude and cannot warn."
-        )
-
-    return len(entries), problems
-
-
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    last-resort path drops anything below WARNING.
-    """
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    if not missing:
+        return None
+    return (
+        f"exclude entries naming no directory: {sorted(missing)}. Remove "
+        "them or fix the path — a dead entry cannot exclude and cannot warn."
+    )
 
 
-def run_audit() -> int:
-    reached, problems = audit_excludes()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\n.flake8 exclude audit FAILED over %d entries (#14419).", reached)
-        return 1
-    logger.info(".flake8 exclude audit clean over %d entries (#14419).", reached)
-    return 0
+#: Apply the invariant to every entry in ``.flake8``; returns ``(entries_reached, problems)``.
+audit_excludes = functools.partial(
+    _shared.audit_excludes,
+    config_name=".flake8",
+    load=load_entries,
+    key="exclude",
+    before=(_unanchored_finding,),
+    coverage=functools.partial(
+        _shared.coverage_problem,
+        covering=entries_covering_tracked_python,
+        describe=_describe_covered,
+        floor=TRACKED_PY_FLOOR,
+    ),
+    after=(_missing_target_finding,),
+)
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit-excludes",
@@ -272,7 +196,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit_excludes:
         parser.error("nothing to do — pass --audit-excludes")
-    return run_audit()
+    reached, problems = audit_excludes()
+    return report_audit(
+        logger,
+        problems,
+        "\n.flake8 exclude audit FAILED over %d entries (#14419).",
+        ".flake8 exclude audit clean over %d entries (#14419).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

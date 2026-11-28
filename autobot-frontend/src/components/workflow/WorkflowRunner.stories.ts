@@ -7,6 +7,11 @@ const meta = {
   title: 'Components/Workflow/WorkflowRunner',
   component: WorkflowRunner,
   tags: ['autodocs'],
+  // The approval card answers through these (#17677); the stories only need them to resolve.
+  args: {
+    approveStep: async () => true,
+    skipStep: async () => true,
+  },
   argTypes: {
     workflows: {
       control: 'object',

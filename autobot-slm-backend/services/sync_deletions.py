@@ -50,18 +50,15 @@ now-unshallowed history, before it is upgraded to the versioned format.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
-from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git
+from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git_capture
 from services.host_state_filter import kept_reason
 
-# Plain stdlib logging, deliberately -- see services/git_subprocess.py's
-# comment: get_logger() crashes at creation time under a MagicMock `config`,
-# the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -90,11 +87,11 @@ async def _commit_known(repo_root: str, commit: str) -> bool:
     tree" failure a `git diff`/`git log` against an unknown commit would
     otherwise surface as an indistinguishable, permanent planner error.
     """
-    _output, rc = await run_git(repo_root, "cat-file", "-e", f"{commit}^{{commit}}")
+    _output, rc = await run_git_capture(repo_root, "cat-file", "-e", f"{commit}^{{commit}}")
     return rc == 0
 
 
-def _is_lexically_contained(rel_path: str) -> bool:
+def is_lexically_contained(rel_path: str) -> bool:
     """False for a path that could escape the deployed dir once joined (#16310 MEDIUM 3).
 
     The planner runs on the controller and cannot resolve symlinks on a
@@ -136,7 +133,7 @@ async def _partition(candidates: list[str], repo_root: str, pathspec_prefix: str
     kept: list[str] = []
     for rel in candidates:
         full_pathspec = f"{pathspec_prefix}/{rel}" if pathspec_prefix else rel
-        if not _is_lexically_contained(rel):
+        if not is_lexically_contained(rel):
             logger.warning("sync_deletions: refusing lexically unsafe candidate %s", rel)
             kept.append(rel)
             continue
@@ -166,7 +163,7 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
         return DeletionPlan(bootstrap_required=True)
 
     pathspec = component_pathspec(repo_root, source_dir)
-    diff_output, rc = await run_git(
+    diff_output, rc = await run_git_capture(
         repo_root, "diff", "-M", "--name-status", "--diff-filter=DR", f"{previous_commit}..{new_commit}", "--", pathspec
     )
     if rc != 0:
@@ -177,17 +174,17 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
     return DeletionPlan(delete=to_delete, kept=kept)
 
 
-def _strip_prefix(paths: list[str], pathspec: str) -> set[str]:
+def strip_prefix(paths: list[str], pathspec: str) -> set[str]:
     prefix = f"{pathspec}/" if pathspec else ""
     return {p[len(prefix) :] if prefix else p for p in paths if not prefix or p.startswith(prefix)}
 
 
-async def _tracked_paths_at_commit(repo_root: str, commit: str, pathspec: str) -> set[str] | None:
+async def tracked_paths_at_commit(repo_root: str, commit: str, pathspec: str) -> set[str] | None:
     """Every component-relative path git tracks at *commit*. None on git error."""
-    output, rc = await run_git(repo_root, "ls-tree", "-r", "--name-only", commit, "--", pathspec)
+    output, rc = await run_git_capture(repo_root, "ls-tree", "-r", "--name-only", commit, "--", pathspec)
     if rc != 0:
         return None
-    return _strip_prefix(output.splitlines(), pathspec)
+    return strip_prefix(output.splitlines(), pathspec)
 
 
 async def _ever_added_paths(repo_root: str, pathspec: str) -> set[str] | None:
@@ -202,13 +199,15 @@ async def _ever_added_paths(repo_root: str, pathspec: str) -> set[str] | None:
     would otherwise never appear in "ever tracked", and its stale copy would
     survive on every host forever, exactly what AC5 is about.
     """
-    output, rc = await run_git(repo_root, "log", "-M", "--name-status", "--diff-filter=AR", "--format=", "--", pathspec)
+    output, rc = await run_git_capture(
+        repo_root, "log", "-M", "--name-status", "--diff-filter=AR", "--format=", "--", pathspec
+    )
     if rc != 0:
         return None
     return set(_name_status_paths(output, pathspec, take_new=True))
 
 
-def _is_artifact_path(rel_path: str) -> bool:
+def is_artifact_path(rel_path: str) -> bool:
     """True when any path segment is a build/deploy artifact (venv, node_modules, ...).
 
     Planner-side defence in depth (#16310 review): the ansible ``find`` that
@@ -230,7 +229,7 @@ def _bootstrap_candidates(present_paths: list[str], ever_added: set[str], tracke
     ``scripts/sync_deletion_planner.py``'s ``--help`` and
     ``ansible/roles/_shared/tasks/sync_deletions.yml``'s comment.
     """
-    return [rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now]
+    return [rel for rel in present_paths if not is_artifact_path(rel) and rel in ever_added and rel not in tracked_now]
 
 
 async def compute_bootstrap_plan(
@@ -272,7 +271,7 @@ async def compute_bootstrap_plan(
         )
 
     pathspec_prefix = component_pathspec(repo_root, source_dir)
-    tracked_now = await _tracked_paths_at_commit(repo_root, new_commit, pathspec_prefix)
+    tracked_now = await tracked_paths_at_commit(repo_root, new_commit, pathspec_prefix)
     if tracked_now is None:
         return DeletionPlan(error=f"git ls-tree at {new_commit[:12]} failed")
     ever_added = await _ever_added_paths(repo_root, pathspec_prefix)

@@ -36,7 +36,7 @@
 - name: xrdp | Deploy xrdp.ini config
   ansible.builtin.template:
     src: xrdp.ini.j2
-    dest: /etc/xrdp/xrdp.ini
+    dest: "{{ xrdp_config_dir }}/xrdp.ini"
     mode: "0644"
     owner: root
     group: root
@@ -56,7 +56,7 @@
     rule: allow
     port: "{{ xrdp_port | string }}"
     proto: tcp
-    src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+    src: "{{ network_subnet }}"
     comment: "xrdp RDP server - internal only (GH#1525)"
   become: true
 

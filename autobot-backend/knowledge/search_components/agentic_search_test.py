@@ -24,6 +24,7 @@ from knowledge.search_components.agentic_search import (
     get_agentic_search_tool,
     knowledge_search_tool,
 )
+from knowledge.search_filters import SYSTEM_SCOPE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -114,7 +115,7 @@ class TestIterativeSearch:
             evaluator.evaluate = AsyncMock(return_value=mock_check)
             mock_eval_factory.return_value = evaluator
 
-            final_results, metrics = await tool.iterative_search("query")
+            final_results, metrics = await tool.iterative_search("query", principal=SYSTEM_SCOPE)
 
         assert metrics["iterations_run"] == 1
         assert metrics["final_sufficient"] is True
@@ -139,7 +140,7 @@ class TestIterativeSearch:
             mock_eval_factory.return_value = evaluator
 
             with patch.object(tool, "_refine_query", AsyncMock(return_value="refined")):
-                _, metrics = await tool.iterative_search("query")
+                _, metrics = await tool.iterative_search("query", principal=SYSTEM_SCOPE)
 
         assert metrics["iterations_run"] == 2
         assert metrics["final_sufficient"] is False
@@ -160,7 +161,7 @@ class TestIterativeSearch:
             evaluator.evaluate = AsyncMock(return_value=mock_check)
             mock_eval_factory.return_value = evaluator
 
-            results, metrics = await tool.iterative_search("query")
+            results, metrics = await tool.iterative_search("query", principal=SYSTEM_SCOPE)
 
         assert results == []
 
@@ -179,9 +180,9 @@ class TestKnowledgeSearch:
         cfg = AgenticSearchConfig(enable_agentic_search=False)
         tool = AgenticSearchTool(svc, cfg)
 
-        context = await tool.knowledge_search("query")
+        context = await tool.knowledge_search("query", principal=SYSTEM_SCOPE)
 
-        svc.advanced_search.assert_called_once_with("query", max_results=5, categories=None)
+        svc.advanced_search.assert_called_once_with("query", max_results=5, categories=None, principal=SYSTEM_SCOPE)
         assert "direct result" in context
 
     @pytest.mark.asyncio
@@ -203,7 +204,7 @@ class TestKnowledgeSearch:
                 evaluator.evaluate = AsyncMock(return_value=mock_check)
                 mock_factory.return_value = evaluator
 
-                context = await tool.knowledge_search("original query")
+                context = await tool.knowledge_search("original query", principal=SYSTEM_SCOPE)
 
         assert "rich content" in context
 
@@ -218,6 +219,24 @@ class TestKnowledgeSearch:
 
         assert "docs/guide.md" in formatted
         assert "body text" in formatted
+
+    @pytest.mark.asyncio
+    async def test_format_results_label_is_unchanged_where_source_is_written(self):
+        """#17618: an upload still cites `x.pdf`, not the accessor's `file:x.pdf` URN."""
+        tool = AgenticSearchTool(_make_rag_service())
+        result = _make_result("body", source="")
+        result.metadata = {"type": "file", "filename": "x.pdf", "source": "x.pdf"}
+
+        assert tool._format_results([result]).startswith("[1] [x.pdf]\n")
+
+    @pytest.mark.asyncio
+    async def test_format_results_names_a_connector_fact_that_wrote_no_source(self):
+        """A connector fact has no `source` key; the accessor fills the blank label."""
+        tool = AgenticSearchTool(_make_rag_service())
+        result = _make_result("body", source="")
+        result.metadata = {"source_type": "connector", "connector_type": "gdrive", "source_id": "42"}
+
+        assert tool._format_results([result]).startswith("[1] [connector:gdrive:42]\n")
 
     @pytest.mark.asyncio
     async def test_format_results_empty_list(self):
@@ -239,7 +258,7 @@ class TestKnowledgeSearchTool:
         svc = _make_rag_service(results)
         cfg = AgenticSearchConfig(enable_agentic_search=False)
 
-        ctx = await knowledge_search_tool("test", svc, config=cfg)
+        ctx = await knowledge_search_tool("test", svc, config=cfg, principal=SYSTEM_SCOPE)
         assert "module result" in ctx
 
 

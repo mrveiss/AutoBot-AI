@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from autobot_shared.ssot_config import (
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
@@ -274,11 +275,10 @@ class TestRateLimiting:
         assert events[0].kwargs["enabled"] is False
 
     def test_disabled_rate_limiting_is_logged_not_silent(self):
-        _sae_mod._rate_limit_disabled_logged = False
+        reset_log_once(_sae_mod.__name__)
         with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=0):
             with patch.object(_sae_mod.logger, "warning") as warn:
-                _is_rate_limited("203.0.113.13")
-                _is_rate_limited("203.0.113.14")
+                [_is_rate_limited(ip) for ip in ("203.0.113.13", "203.0.113.14")]
         assert warn.call_count == 1, "warn exactly once, not per request"
 
 

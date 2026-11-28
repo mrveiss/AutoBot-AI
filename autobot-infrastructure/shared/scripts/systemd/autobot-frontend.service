@@ -3,7 +3,7 @@
 # Author: mrveiss
 #
 # AutoBot Frontend Service (Vue/Vite Dev Server)
-# Deployed on: 172.16.168.21 (Frontend VM)
+# Dev-server unit. The backend address comes from the deployed env file, never from this file (#19828).
 # Port: 5173
 
 [Unit]
@@ -11,6 +11,11 @@ Description=AutoBot Frontend (Vue/Vite)
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network.target
 Wants=network-online.target
+# #20620, #4090: a restarting unit must be able to reach `failed`. The window has to exceed
+# RestartSec * StartLimitBurst, or the limit is never hit and the unit loops forever while
+# showing `activating`. Same values as the role-rendered units.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -18,9 +23,8 @@ User=autobot
 Group=autobot
 WorkingDirectory=/home/autobot/autobot-vue
 Environment=NODE_ENV=development
-Environment=VITE_BACKEND_HOST=172.16.168.20
-Environment=VITE_BACKEND_PORT=8001
-ExecStart=/snap/bin/npm run dev -- --host 0.0.0.0 --port 5173
+EnvironmentFile=-/etc/autobot/autobot-frontend.env
+ExecStart=/snap/bin/npm run dev -- --host --port 5173
 Restart=always
 RestartSec=5
 StandardOutput=journal

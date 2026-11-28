@@ -26,7 +26,8 @@
 #   role_names    (optional) Comma-separated roles to deploy.  Defaults to all
 #                 roles found under slm_cache_dir for this node.
 #   slm_admin_url (optional) SLM API base URL. Default: derived from inventory
-#   slm_admin_password (optional) SLM admin password. Default: admin
+#   slm_admin_password (optional) SLM admin password. Default: none -- resolved by
+#                 _shared/tasks/read_slm_admin_password.yml, which fails when unset (#19318)
 
 # ---------------------------------------------------------------------------
 # Play 1 – Authenticate with SLM API
@@ -38,6 +39,9 @@
     slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ (slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1'))) ~ '/slm', true) }}"
 
   tasks:
+    - name: "Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks: ../_shared/tasks/read_slm_admin_password.yml
+
     - name: "Login to SLM API"
       ansible.builtin.uri:
         url: "{{ slm_admin_url }}/api/auth/login"
@@ -45,7 +49,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: 200
       register: slm_auth
@@ -64,7 +68,7 @@
       block:
         - name: "List cached roles on SLM server"
           ansible.builtin.find:
-            paths: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
+            paths: "{{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
             file_type: directory
             depth: 1
             patterns: "autobot-*"
@@ -90,7 +94,7 @@
           - ""
           - "Target node : {{ node_id }}"
           - "Roles       : {{ resolved_role_names | join(', ') }}"
-          - "Cache dir   : {{ slm_cache_dir | default('/opt/autobot/cache') }}"
+          - "Cache dir   : {{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
           - ""
 
     # #15557: this playbook deploys from the SLM's cache to a node that has no
@@ -113,8 +117,8 @@
   hosts: "{{ node_id }}"
   gather_facts: false
   vars:
-    cache_base: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
-    install_base: "/opt/autobot"
+    cache_base: "{{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
+    install_base: "{{ autobot.base_dir }}"
     # Role → systemd service mapping.  Empty string = no service restart.
     role_service_map:
       autobot-backend: autobot-backend
@@ -153,6 +157,7 @@
         dest: "{{ install_base }}/{{ item.item }}/"
         delete: false
         rsync_opts:
+          - "--chmod=o-w"  # #19503
           - "--exclude=.git"
           - "--exclude=__pycache__"
           - "--exclude=*.pyc"
@@ -312,6 +317,7 @@
         status_code: [200, 404]
       register: mark_result
       ignore_errors: true
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Update NodeCodeVersion rows to UP_TO_DATE"
       ansible.builtin.uri:
@@ -324,6 +330,7 @@
         status_code: 200
       register: version_check
       ignore_errors: true
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Display update summary"
       ansible.builtin.debug:

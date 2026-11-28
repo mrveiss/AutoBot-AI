@@ -25,7 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 from .complexity_scorer import TaskComplexityScorer
-from .tier_config import ComplexityResult, TierConfig, TierMetrics
+from .tier_config import ComplexityResult, TierConfig, TierMetrics, disabled_route
 
 logger = get_logger(__name__)
 
@@ -61,6 +61,8 @@ class LatencyRouter:
         messages: List[Dict],
         requested_model: str | None = None,
     ) -> Tuple[str, ComplexityResult]:
+        if not self.config.enabled:
+            return disabled_route(self.config)
         complexity = self._scorer.score(messages)
         candidates = self._candidates(complexity)
         selected = self._lowest_latency(candidates)
@@ -80,6 +82,10 @@ class LatencyRouter:
         base = self._metrics.to_dict()
         base["p95_cache"] = {k: round(v, 1) for k, v in self._p95_cache.items()}
         return base
+
+    def reset_metrics(self) -> None:
+        """Zero routing counters; the p95 cache is live data, not a metric."""
+        self._metrics = TierMetrics()
 
     # ------------------------------------------------------------------ #
     # Latency recording (called by LLM caller after each response)         #

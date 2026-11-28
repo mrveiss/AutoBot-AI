@@ -60,7 +60,6 @@ class OrganizationCore(Base):
         name: Display name of the organization
         slug: URL-friendly unique identifier
         settings: JSON settings (branding, policies, etc.)
-        subscription_tier: For provider mode - free, pro, enterprise
         max_users: Maximum allowed users (-1 for unlimited)
         is_active: Whether the organization is active
     """
@@ -97,12 +96,7 @@ class OrganizationCore(Base):
         nullable=False,
     )
 
-    # Provider mode: subscription management
-    subscription_tier: Mapped[str | None] = mapped_column(
-        String(50),
-        nullable=True,
-        default="free",
-    )
+    # #19984: the organizations.subscription_tier column stays until its drop is approved; the code ignores it.
 
     max_users: Mapped[int] = mapped_column(
         Integer,

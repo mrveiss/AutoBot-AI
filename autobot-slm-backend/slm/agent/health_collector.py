@@ -112,13 +112,17 @@ class HealthCollector:
         # every heartbeat (#9086)
         self._service_cache: List[Dict] = []
         self._service_cache_ts: float = 0.0
+        # #19292: prime psutil's CPU baseline once, so every collect() reads
+        # the average since the previous beat rather than a 100 ms window
+        # that turns a momentary burst into the whole heartbeat's figure.
+        psutil.cpu_percent(interval=None)
 
     def collect(self) -> Dict:
         """Collect all health metrics."""
         health = {
             "timestamp": utc_timestamp(),
             "hostname": self.hostname,
-            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "cpu_percent": psutil.cpu_percent(interval=None),  # since last beat (#19292)
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
             "load_avg": (list(os.getloadavg()) if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0]),

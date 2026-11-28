@@ -21,6 +21,7 @@ import apiClient from '@/utils/ApiClient'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { isAlreadyDecided, NO_PENDING_APPROVAL } from '@/utils/approvalResult'
 
 const logger = createLogger('useCommandPermissions')
 
@@ -51,12 +52,18 @@ export function useCommandPermissions() {
   ): Promise<ApproveResult> => {
     errorApprove.value = null
     return wrapApprove(async () => {
-      const result = await apiClient.post<ApproveResult>(
-        `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
-        { approved }
-      )
-      logger.debug('approveOrDeny response:', { approved, status: result.status })
-      return result
+      try {
+        const result = await apiClient.post<ApproveResult>(
+          `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
+          { approved }
+        )
+        logger.debug('approveOrDeny response:', { approved, status: result.status })
+        return result
+      } catch (err) {
+        // #19951: a 409 means already decided: the same stale answer the dialog already handles.
+        if (isAlreadyDecided(err)) return { status: 'error', error: NO_PENDING_APPROVAL }
+        throw err
+      }
     })
   }
 

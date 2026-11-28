@@ -19,8 +19,8 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_pull_url, ollama_tags_url
 from autobot_shared.ssot_config import get_ollama_url
-from constants.api_constants import PATH_OLLAMA_PULL, PATH_OLLAMA_TAGS
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -73,7 +73,7 @@ class OllamaAdapter(AdapterBase):
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
-            async with await http_client.get(f"{ollama_url}{PATH_OLLAMA_TAGS}", timeout=timeout) as resp:
+            async with await http_client.get(ollama_tags_url(ollama_url), timeout=timeout) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     models = [m["name"] for m in data.get("models", [])]
@@ -126,7 +126,7 @@ class OllamaAdapter(AdapterBase):
         payload = {"model": model, "stream": True}
         try:
             async with await http_client.post(
-                f"{ollama_url}{PATH_OLLAMA_PULL}",
+                ollama_pull_url(ollama_url),
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=None),
             ) as resp:

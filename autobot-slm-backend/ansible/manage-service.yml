@@ -30,6 +30,16 @@
           ╚════════════════════════════════════════════════════════════╝
       run_once: false
 
+    # #20767: a unit parked by its start limit (#4090, #20764) refuses start and restart until
+    # StartLimitIntervalSec passes, so the reconciler's limited attempts could all be refused. Clear
+    # it first, as the SLM watchdog does. A unit that isn't failed is unaffected. argv form (#15879).
+    - name: "SVC | Clear a start-limit park before starting {{ service_name }} (#20767)"
+      ansible.builtin.command:
+        argv: [systemctl, reset-failed, --, "{{ service_name }}"]
+      when: service_action in ['started', 'restarted']
+      changed_when: false
+      failed_when: false
+
     # #15879: systemd's failure message names its own evidence and withholds
     # it -- "See `systemctl status` and `journalctl -xeu` for details" points at
     # a journal on the MANAGED NODE, while the operator is reading the

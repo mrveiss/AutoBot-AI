@@ -49,7 +49,7 @@ from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
-from .sprint_planning import SprintNotFound
+from .sprint_planning import load_sprint
 
 logger = get_logger(__name__)
 
@@ -187,11 +187,7 @@ class AgentScorecardService(LLCServiceBase):
     # ------------------------------------------------------------------
 
     async def _load_sprint(self, session: AsyncSession, sprint_id: uuid.UUID) -> LLCSprint:
-        result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
-        sprint = result.scalar_one_or_none()
-        if sprint is None:
-            raise SprintNotFound(f"Sprint {sprint_id} not found")
-        return sprint
+        return await load_sprint(session, sprint_id)
 
     async def _enumerate_sprint_agents(
         self, session: AsyncSession, sprint_id: uuid.UUID

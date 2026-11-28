@@ -343,6 +343,34 @@ class TestAllowedRoles:
         assert allowed.success is True
 
     @pytest.mark.asyncio
+    async def test_superadmin_is_admitted_by_the_default_admin_entry(self):
+        """#19125: an "admin" entry (every server's default) admits the admin family."""
+        from services.mcp_external_servers import MCPServerConfig
+
+        default = MCPServerConfig.__dataclass_fields__["allowed_roles"].default_factory()
+        assert default == ["admin"]
+        bridge = MCPExternalBridge()
+        bridge._registry = {"search": self._entry(default)}
+
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(return_value="ok")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: mock_client):
+            result = await bridge.call_tool("search", {}, role="superadmin")
+
+        assert result.success is True
+
+    def test_role_allowed_family_rule(self):
+        from services.mcp_external_bridge import _role_allowed
+
+        assert _role_allowed("superadmin", ["admin"]) is True
+        assert _role_allowed("superadmin", ["user"]) is False
+        assert _role_allowed("user", ["admin"]) is False
+        assert _role_allowed("operator", ["admin"]) is False
+
+    @pytest.mark.asyncio
     async def test_default_role_is_user_when_unspecified(self):
         """call_tool()'s role default (\"user\") is refused against an admin-only server."""
         bridge = MCPExternalBridge()

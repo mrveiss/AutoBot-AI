@@ -10,10 +10,9 @@ and prevent N+1 query issues.
 Pool sizes are coordinated via SSOT config (#2860).
 """
 
-import asyncio
 import sqlite3
 import threading
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
@@ -225,48 +224,6 @@ class SQLiteConnectionPool:
             "total_connections_created": created,
             "average_wait_time": avg_wait,
         }
-
-
-class AsyncSQLiteConnectionPool:
-    """Async version of SQLite connection pool using asyncio."""
-
-    def __init__(self, db_path: str, pool_size: int | None = None):
-        """Initialize async SQLite connection pool."""
-        self.db_path = db_path
-        self.pool_size = pool_size if pool_size is not None else _get_sqlite_pool_size()
-        self._pool = asyncio.Queue(maxsize=self.pool_size)
-        self._created_connections = 0
-        self._sync_pool = SQLiteConnectionPool(db_path, self.pool_size)
-        self._executor = None
-
-    async def initialize(self):
-        """Initialize the async pool."""
-        self._executor = asyncio.get_running_loop().run_in_executor
-
-    @asynccontextmanager
-    async def get_connection(self):
-        """Get a connection from the async pool."""
-        if not self._executor:
-            await self.initialize()
-
-        # Use sync pool in executor
-        def _get_conn():
-            """Get connection from sync pool within executor context."""
-            with self._sync_pool.get_connection() as conn:
-                return conn
-
-        # This is a simplified version - in production you'd want
-        # a proper async SQLite library like aiosqlite
-        conn = await self._executor(None, _get_conn)
-        try:
-            yield conn
-        finally:
-            # Return connection to pool handled by sync pool
-            pass
-
-    async def close_all(self):
-        """Close all connections."""
-        await self._executor(None, self._sync_pool.close_all)
 
 
 # Global connection pools per database

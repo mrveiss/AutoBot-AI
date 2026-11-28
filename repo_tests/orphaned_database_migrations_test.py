@@ -35,6 +35,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _ORPHANED_DIR = _REPO_ROOT / "autobot-backend" / "database" / "migrations"
 _CANONICAL_DIR = _REPO_ROOT / "autobot-backend" / "migrations" / "versions"
@@ -60,7 +62,7 @@ def _created_table_names(path: Path) -> set[str]:
     """Table names from every ``op.create_table("name", ...)`` or
     ``x = Table("name", ...)`` call in *path*. Both shapes appear in this
     repo's migrations (Alembic-op style and raw SQLAlchemy Core style)."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not node.args:

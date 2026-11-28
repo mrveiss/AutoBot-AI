@@ -42,8 +42,9 @@ import ast
 import re
 
 import pytest
-
 from repo_tests._paths import repo_root
+
+from tools.lint import _parse_cache as parse_cache
 
 _BACKEND = repo_root() / "autobot-backend"
 _FRONTEND = repo_root() / "autobot-frontend" / "src"
@@ -79,7 +80,7 @@ def bus_publish_names(source: str) -> set[str]:
     that made three earlier readings of this area wrong.
     """
     names: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -100,7 +101,7 @@ def ws_send_types(source: str) -> set[str]:
     without one contributes nothing.
     """
     names: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Dict):
             continue
         for key, value in zip(node.keys, node.values):

@@ -18,13 +18,17 @@ import uuid
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from tools.code_interpreter import execute_code
+from tools.kb_read_tools import KnowledgeReadToolsMixin
+from tools.kb_write_tools import KnowledgeWriteToolsMixin
+from tools.self_model_tools import SelfModelToolsMixin
+from tools.system_read_tools import SystemReadToolsMixin
+from tools.tool_records import prompt_tool_names
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
 from autobot_shared.auth.permissions import Role
 from autobot_shared.logging_manager import get_logger
-from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 logger = get_logger(__name__)
 
@@ -37,11 +41,8 @@ GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
 TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
 
 
-class ToolRegistry:
-    """
-    Unified tool registry that provides standardized tool implementations
-    for both orchestrator types, eliminating code duplication.
-    """
+class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelToolsMixin, SystemReadToolsMixin):
+    """Unified tool implementations for both orchestrator types (no duplication)."""
 
     def __init__(
         self,
@@ -52,7 +53,8 @@ class ToolRegistry:
         Initialize the tool registry with required dependencies.
 
         Args:
-            worker_node: Worker node for task execution
+            worker_node: Worker node for task execution; optional - the read-only
+                system tools fall back to SystemIntegration without it (#22267)
             knowledge_base: Knowledge base for information retrieval
         """
         self.worker_node = worker_node
@@ -153,30 +155,6 @@ class ToolRegistry:
             "tool_args": {"anchor": anchor, "offset": offset, "limit": limit},
             "result": window,
             "status": "success" if window.get("found") else "not_found",
-        }
-
-    async def query_system_information(self) -> Dict[str, Any]:
-        """Query system information."""
-        task = self._create_base_task("system_query_info")
-
-        result = await self._execute_worker_task(task)
-        return {
-            "tool_name": "query_system_information",
-            "tool_args": {},
-            "result": result.get("output", result.get("message", "System info retrieved")),
-            "status": result.get("status", "success"),
-        }
-
-    async def list_system_services(self) -> Dict[str, Any]:
-        """List system services."""
-        task = self._create_base_task("system_list_services")
-
-        result = await self._execute_worker_task(task)
-        return {
-            "tool_name": "list_system_services",
-            "tool_args": {},
-            "result": result.get("output", result.get("message", "Services listed")),
-            "status": result.get("status", "success"),
         }
 
     async def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
@@ -396,167 +374,7 @@ class ToolRegistry:
                 "status": "error",
             }
 
-    # Knowledge Base Tools
-
-    async def search_knowledge_base(self, query: str, n_results: int = 5) -> Dict[str, Any]:
-        """Search the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "search_knowledge_base",
-                "tool_args": {"query": query, "n_results": n_results},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            # Issue #13024/#13027: canonical search() has no n_results kwarg.
-            # Issue #13009: exclude quarantined research facts (#12622).
-            results = await kb.search(query, top_k=n_results, filters=RESEARCH_QUARANTINE_FILTER)
-
-            if results:
-                formatted_results = []
-                for result in results:
-                    content_preview = (
-                        result["content"][:200] + "..." if len(result["content"]) > 200 else result["content"]
-                    )
-                    metadata = result.get("metadata", {})
-                    filename = metadata.get("filename", "N/A")
-                    chunk_index = metadata.get("chunk_index", "N/A")
-                    formatted_results.append(f"[{filename} - Chunk {chunk_index}]: " f"{content_preview}")
-
-                result_text = f"Found {len(results)} relevant results:\n" + "\n".join(formatted_results)
-            else:
-                result_text = "No relevant information found in knowledge base"
-
-            return {
-                "tool_name": "search_knowledge_base",
-                "tool_args": {"query": query, "n_results": n_results},
-                "result": result_text,
-                "status": "success",
-            }
-        except Exception as e:
-            self.logger.error("Error searching knowledge base: %s", e)
-            return {
-                "tool_name": "search_knowledge_base",
-                "tool_args": {"query": query, "n_results": n_results},
-                "result": f"Error searching knowledge base: {e}",
-                "status": "error",
-            }
-
-    async def add_file_to_knowledge_base(
-        self, file_path: str, file_type: str, metadata: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
-        """Add a file to the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {"file_path": file_path, "file_type": file_type},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            result = await kb.add_file(file_path, file_type, metadata or {})
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {
-                    "file_path": file_path,
-                    "file_type": file_type,
-                    "metadata": metadata,
-                },
-                "result": result.get("message", f"File {file_path} added to knowledge base"),
-                "status": result.get("status", "success"),
-            }
-        except Exception as e:
-            self.logger.error("Error adding file to knowledge base: %s", e)
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {
-                    "file_path": file_path,
-                    "file_type": file_type,
-                    "metadata": metadata,
-                },
-                "result": f"Error adding file to knowledge base: {e}",
-                "status": "error",
-            }
-
-    async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        """Store a fact in the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            result = await kb.store_fact(content, {**(metadata or {}), "ingest_route": "agent_tool"})
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": result.get("message", "Fact stored successfully"),
-                "status": result.get("status", "success"),
-            }
-        except Exception as e:
-            self.logger.error("Error storing fact: %s", e)
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": f"Error storing fact: {e}",
-                "status": "error",
-            }
-
-    async def get_fact(self, fact_id: int | None = None, query: str | None = None) -> Dict[str, Any]:
-        """Get facts from the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "get_fact",
-                "tool_args": {"fact_id": fact_id, "query": query},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            # Issue #788: get_fact() only accepts fact_id, use search() for queries
-            if fact_id is not None:
-                result = kb.get_fact(str(fact_id))
-                results = [result] if result else []
-            elif query:
-                # Issue #13009: exclude quarantined research facts (#12622).
-                results = await kb.search(query, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
-            else:
-                results = []
-
-            if results:
-                formatted_results = []
-                for result in results:
-                    rid = result.get("id", "N/A")
-                    content = result.get("content", "No content")
-                    formatted_results.append(f"Fact {rid}: {content}")
-
-                result_text = "\n".join(formatted_results)
-            else:
-                result_text = "No facts found"
-
-            return {
-                "tool_name": "get_fact",
-                "tool_args": {"fact_id": fact_id, "query": query},
-                "result": result_text,
-                "status": "success",
-            }
-        except Exception as e:
-            self.logger.error("Error getting facts: %s", e)
-            return {
-                "tool_name": "get_fact",
-                "tool_args": {"fact_id": fact_id, "query": query},
-                "result": f"Error getting facts: {e}",
-                "status": "error",
-            }
+    # Knowledge Base write tools: tools/kb_write_tools.py (#19517)
 
     # GUI Automation Tools
 
@@ -686,9 +504,8 @@ class ToolRegistry:
 
     # Tool Name Mapping for Compatibility (Issue #315 - Dispatch Table Pattern)
 
-    def _get_tool_handler(self, tool_name: str):
-        """Get tool handler function for normalized tool name (Issue #315)."""
-        # Check system tool variants first (O(1) lookup)
+    def _get_system_tool_handler(self, tool_name: str):
+        """Handler for a system-tool name variant, or None (helper of :meth:`_get_tool_handler`, Issue #326)."""
         if tool_name in EXECUTE_COMMAND_VARIANTS:
             return lambda args: self.execute_system_command(args.get("command", ""))
         if tool_name in QUERY_SYSTEM_INFO_VARIANTS:
@@ -701,6 +518,13 @@ class ToolRegistry:
             return lambda args: self.get_process_info(args.get("process_name"), args.get("pid"))
         if tool_name in TERMINATE_PROCESS_VARIANTS:
             return lambda args: self.terminate_process(args.get("pid", ""))
+        return None
+
+    def _get_tool_handler(self, tool_name: str, user_id: str | None = None):
+        """Get tool handler function for normalized tool name (Issue #315)."""
+        system_handler = self._get_system_tool_handler(tool_name)  # O(1) variant lookup first
+        if system_handler:
+            return system_handler
 
         # Single-name tools dispatch table
         dispatch = {
@@ -713,7 +537,7 @@ class ToolRegistry:
             ),
             "webfetch": lambda args: self.web_fetch(args.get("url", "")),
             "searchknowledgebase": lambda args: self.search_knowledge_base(
-                args.get("query", ""), args.get("n_results", 5)
+                args.get("query", ""), args.get("n_results", 5), user_id
             ),
             "addfiletoknowledgebase": lambda args: self.add_file_to_knowledge_base(
                 args.get("file_path", ""),
@@ -721,7 +545,8 @@ class ToolRegistry:
                 args.get("metadata"),
             ),
             "storefact": lambda args: self.store_fact(args.get("content", ""), args.get("metadata")),
-            "getfact": lambda args: self.get_fact(args.get("fact_id"), args.get("query")),
+            "getfact": lambda args: self.get_fact(args.get("fact_id"), args.get("query"), user_id),
+            "queryselfmodel": lambda args: self.query_self_model(args, user_id),
             "typetext": lambda args: self.type_text(args.get("text", "")),
             "clickelement": lambda args: self.click_element(args.get("image_path", "")),
             "bringwindowtofront": lambda args: self.bring_window_to_front(args.get("window_title", "")),
@@ -814,13 +639,16 @@ class ToolRegistry:
             self.logger.error("SDK tool dispatch failed for '%s': %s", tool_name, exc, exc_info=True)
             return None
 
-    async def execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_tool(
+        self, tool_name: str, tool_args: Dict[str, Any], user_id: str | None = None
+    ) -> Dict[str, Any]:
         """Execute a tool by name with arguments.
 
         Checks ToolSDKRegistry first for schema-validated tools registered via
         the Tool SDK (#3009), then falls back to the legacy dispatch table.
         This method provides a unified interface for both orchestrators to call
-        tools using string names and arguments.
+        tools using string names and arguments. ``user_id`` is the user the tool runs for (#16665);
+        KB tools read only what that user may see, and none without one.
         """
         # Try SDK-registered tools first (#3009)
         sdk_result = await self._try_sdk_dispatch(tool_name, tool_args)
@@ -831,7 +659,7 @@ class ToolRegistry:
         normalized_name = tool_name.lower().replace("_", "").replace("-", "")
 
         # Get handler from dispatch table (Issue #315 - depth 16 -> 1)
-        handler = self._get_tool_handler(normalized_name)
+        handler = self._get_tool_handler(normalized_name, user_id)
 
         if handler:
             return await handler(tool_args)
@@ -893,65 +721,11 @@ class ToolRegistry:
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
 
-        Browser tool names are derived from BROWSER_TOOL_NAMES in
-        chat_workflow.tool_handler (Issue #2609) so both layers share a single
-        source of truth. Issue #2594: also includes web_search (Issue #2306).
+        Derived from the one tool catalogue, ``tools.tool_records`` (#22276): registry
+        tools (each with its execution location), the spill read tool when its flag is
+        on, and the browser tools from BROWSER_TOOL_NAMES (Issue #2609).
         """
-        # Registry-owned tools (system, knowledge-base, GUI, conversation)
-        registry_tools = [
-            "execute_system_command",
-            "query_system_information",
-            "list_system_services",
-            "manage_service",
-            "get_process_info",
-            "terminate_process",
-            "web_fetch",
-            "web_search",
-            "search_knowledge_base",
-            "add_file_to_knowledge_base",
-            "store_fact",
-            "get_fact",
-            "type_text",
-            "click_element",
-            "bring_window_to_front",
-            # Issue #12070: previously had handlers but no task-creation wiring
-            "read_text_from_region",
-            "move_mouse",
-            "ask_user_for_manual",
-            "respond_conversationally",
-            "code_interpreter",
-            # Issue #7509: Web research tools
-            "scrape_url",
-            "crawl_site",
-            "map_site",
-            "extract_structured_data",
-            # #10932: Unified content_reach gateway
-            "content_reach",
-        ]
-        # #13754: the spill excerpt names this tool, so the model must be
-        # offered it. Gated on the spill flag (#13865): this list reaches the
-        # system prompt of every modality agent via llm_service.chat_optimized,
-        # and an off-by-default feature must not change live prompt content.
-        #
-        # Guarded: importing the leaf module pulls in the whole `agent_loop`
-        # package (its __init__ imports AgentLoop). This method is on the
-        # prompt-building path, where it could not previously fail, so an
-        # import error must not propagate out of it.
-        try:
-            from agent_loop.tool_output_spill import SPILL_ENABLED
-
-            if SPILL_ENABLED:
-                registry_tools.append("read_spilled_output")
-        except Exception:  # pragma: no cover - never break prompt building
-            logger.warning("Could not resolve the tool-output spill flag; omitting its read tool", exc_info=True)
-        # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
-        # and imported here so the two lists cannot drift independently.
-        # Lazy import breaks the circular dependency:
-        #   chat_workflow -> tool_handler -> tools -> tool_registry -> chat_workflow
-        # (#4557)
-        from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
-
-        return registry_tools + sorted(BROWSER_TOOL_NAMES)
+        return prompt_tool_names()
 
 
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402

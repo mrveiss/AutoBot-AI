@@ -25,7 +25,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tests.fixtures import make_async_redis
+from knowledge.search_filters import SYSTEM_SCOPE
+from tests.fixtures import make_async_redis, write_text_async
 
 
 def _bind_real_rag_service() -> None:
@@ -49,24 +50,22 @@ _bind_real_rag_service()
 def isolate_hash_cache(tmp_path, monkeypatch):
     """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
 
-    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    ``knowledge.stale_filter`` reads ``doc_indexer.HASH_CACHE_FILE``
     through a module-level TTL memo. Without isolation the suite picks up the
     real ``data/.doc_index_hashes.json`` that exists on any machine where the
     indexer has run, so the provenance filter drops every test-double chunk.
     Point the cache at an absent tmp path and reset the memo around each test;
     classes needing a populated cache patch ``HASH_CACHE_FILE`` themselves.
     """
-    import services.rag_service as rag_mod
+    from knowledge.stale_filter import reset_hash_cache
 
     monkeypatch.setattr(
         "services.knowledge.doc_indexer.HASH_CACHE_FILE",
         tmp_path / "absent_doc_index_hashes.json",
     )
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
     yield
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
 
 
 # =============================================================================
@@ -506,10 +505,10 @@ class TestRetrievedVsRankedIdsSeparation:
         return svc
 
     def _make_result(self, chunk_id: str, hybrid_score: float, rerank_score: float):
-        """Construct a SearchResult with controlled scores."""
-        from advanced_rag_optimizer import SearchResult
+        """Construct a RankedResult with controlled scores."""
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="content",
             metadata={"chunk_id": chunk_id},
             semantic_score=hybrid_score,
@@ -567,7 +566,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a", "chunk_c"]
@@ -619,7 +618,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b", "chunk_c"]
@@ -671,7 +670,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] != kwargs["ranked_ids"]
@@ -723,7 +722,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] == kwargs["ranked_ids"] == ["chunk_a", "chunk_b"]
@@ -772,7 +771,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_store.call_args
         assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b"]
@@ -799,11 +798,11 @@ class TestFilterStaleChunks:
         return svc
 
     def _make_chunk(self, source_path: str):
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="text",
-            metadata={"relative_path": source_path},
+            metadata={"source": "autobot_docs", "file_path": source_path},
             semantic_score=0.9,
             keyword_score=0.0,
             hybrid_score=0.9,
@@ -816,7 +815,7 @@ class TestFilterStaleChunks:
     async def test_valid_chunk_passes_through(self, tmp_path):
         """Chunk whose source_path IS in the hash cache is kept."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc123"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
@@ -830,7 +829,7 @@ class TestFilterStaleChunks:
     async def test_stale_chunk_is_filtered(self, tmp_path):
         """Chunk whose source_path is ABSENT from the hash cache is dropped."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc123"}')
 
         svc = self._make_service()
         stale = self._make_chunk("docs/removed.md")
@@ -845,13 +844,13 @@ class TestFilterStaleChunks:
     async def test_warning_logged_for_stale_chunks(self, tmp_path):
         """A warning is emitted when stale chunks are dropped."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc123"}')
 
         svc = self._make_service()
         stale = self._make_chunk("docs/gone.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.logger") as mock_logger:
+            with patch("knowledge.stale_filter.logger") as mock_logger:
                 await svc._filter_stale_chunks([stale])
 
         mock_logger.warning.assert_called_once()
@@ -873,7 +872,7 @@ class TestFilterStaleChunks:
     async def test_empty_cache_skips_filter(self, tmp_path):
         """An empty hash cache (indexer hasn't run) passes all chunks through."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text("{}", encoding="utf-8")
+        await write_text_async(cache_file, "{}")
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/anything.md")
@@ -903,17 +902,16 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_first_call_loads_from_disk(self, tmp_path):
         """First call triggers a disk read via asyncio.to_thread."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
 
         # Reset module-level state so we always start cold.
-        rag_mod._hash_cache_loaded_at = 0.0
-        rag_mod._hash_cache_memo = {}
+        stale_mod.reset_hash_cache()
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -924,7 +922,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 1
@@ -932,17 +930,16 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_second_call_within_ttl_skips_disk(self, tmp_path):
         """Second call within TTL window uses the in-process memo — no disk read."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
 
         # Seed memo as if we already loaded recently.
-        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
-        rag_mod._hash_cache_loaded_at = time.monotonic()  # just now — within TTL
+        stale_mod._cache.update(paths={"docs/guide.md": "abc"}, loaded_at=time.monotonic())  # within TTL
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -953,7 +950,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 result = await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 0, "Should not re-read disk within TTL"
@@ -962,17 +959,17 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_call_after_ttl_expiry_reloads(self, tmp_path):
         """A call made after the TTL expires triggers a fresh disk read."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
 
         # Simulate an expired memo: loaded_at is older than TTL.
-        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
-        rag_mod._hash_cache_loaded_at = time.monotonic() - rag_mod._HASH_CACHE_TTL - 1.0
+        expired_at = time.monotonic() - stale_mod.HASH_CACHE_TTL_SECONDS - 1.0
+        stale_mod._cache.update(paths={"docs/guide.md": "abc"}, loaded_at=expired_at)
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -983,7 +980,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 result = await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 1, "Should reload disk after TTL expiry"
@@ -1010,23 +1007,31 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         return svc
 
     def _make_kb_result(self, source: str, score: float = 0.8):
-        return {"content": f"content from {source}", "metadata": {"source": source}, "score": score}
+        # visibility: system -- the SYSTEM_SCOPE principal these tests search as reads non-private facts only
+        return {
+            "content": f"content from {source}",
+            "metadata": {"source": "autobot_docs", "file_path": source, "visibility": "system"},
+            "score": score,
+        }
+
+    def _service_over(self, *sources: str):
+        """A service whose knowledge base returns one system-visible fact per source."""
+        svc = self._make_service()
+        svc.kb_adapter = AsyncMock()
+        svc.kb_adapter.search = AsyncMock(return_value=[self._make_kb_result(src) for src in sources])
+        return svc
 
     @pytest.mark.asyncio
     async def test_filter_stale_chunks_is_called_on_fallback_path(self):
         """_filter_stale_chunks is awaited once during _fallback_basic_search."""
-        svc = self._make_service()
-
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(return_value=[self._make_kb_result("docs/a.md")])
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/a.md")
 
         with patch(
             "services.rag_service.RAGService._filter_stale_chunks",
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_filter:
-            await svc._fallback_basic_search(query="test query", max_results=5)
+            await svc._fallback_basic_search(query="test query", max_results=5, principal=SYSTEM_SCOPE)
 
         mock_filter.assert_awaited_once()
 
@@ -1034,22 +1039,14 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     async def test_stale_chunks_removed_in_fallback_results(self, tmp_path):
         """Stale chunks are absent from the returned results on the fallback path."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/present.md"),
-                self._make_kb_result("docs/removed.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/present.md", "docs/removed.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
-        source_paths = [r.source_path for r in results]
+        source_paths = [r.metadata["file_path"] for r in results]
         assert "docs/present.md" in source_paths
         assert "docs/removed.md" not in source_paths
 
@@ -1057,20 +1054,12 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     async def test_valid_chunks_preserved_in_fallback_results(self, tmp_path):
         """Non-stale chunks are kept in the returned results on the fallback path."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/guide.md"),
-                self._make_kb_result("docs/ref.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/guide.md", "docs/ref.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
         assert len(results) == 2
         assert metrics.final_results_count == 2
@@ -1080,20 +1069,12 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         """metrics.final_results_count matches the count after stale filtering."""
         cache_file = tmp_path / ".doc_index_hashes.json"
         # Only one of two source paths is present in the cache
-        cache_file.write_text('{"docs/kept.md": "hash"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/kept.md": "hash"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/kept.md"),
-                self._make_kb_result("docs/gone.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/kept.md", "docs/gone.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
         assert len(results) == 1
         assert metrics.final_results_count == 1

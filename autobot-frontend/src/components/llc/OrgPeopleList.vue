@@ -53,6 +53,8 @@ const props = defineProps<{
    * different row that has since been opened for editing.
    */
   contactSaveError?: { contactId: string; message: string } | null
+  /** Whether the viewer may delete a contact: the server refuses all but a company owner/admin (#21001). */
+  canDeleteContacts?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -126,9 +128,17 @@ function cancelDelete(): void {
 }
 
 function submitDelete(person: OrgPerson): void {
-  emit('delete-contact', contactIdOfKey(person.key))
+  // Standing can be lost while the confirmation is open (the server would answer 403): check again.
+  if (props.canDeleteContacts) emit('delete-contact', contactIdOfKey(person.key))
   confirmingDeleteKey.value = null
 }
+
+watch(
+  () => props.canDeleteContacts,
+  (allowed) => {
+    if (!allowed) confirmingDeleteKey.value = null
+  },
+)
 
 function isEditingContact(person: { key: string; kind: string }): boolean {
   return person.kind === 'contact' && editingKey.value === person.key
@@ -450,7 +460,7 @@ function groupLabel(group: OrgPeopleGroup): string {
                  steps, because a contact deleted by mis-click cannot be undone
                  from this screen. -->
             <button
-              v-if="!isEditingContact(person) && person.kind === 'contact' && confirmingDeleteKey !== person.key"
+              v-if="canDeleteContacts && !isEditingContact(person) && person.kind === 'contact' && confirmingDeleteKey !== person.key"
               type="button"
               class="shrink-0 rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted hover:text-autobot-text-primary"
               :data-testid="`org-person-delete-${person.key}`"
@@ -459,7 +469,7 @@ function groupLabel(group: OrgPeopleGroup): string {
             >
               {{ t('common.delete') }}
             </button>
-            <span v-if="confirmingDeleteKey === person.key" class="flex shrink-0 items-center gap-2">
+            <span v-if="canDeleteContacts && confirmingDeleteKey === person.key" class="flex shrink-0 items-center gap-2">
               <span class="text-xs text-autobot-text-muted" data-testid="org-person-delete-confirm">{{
                 t('llc.orgPeople.deleteConfirm')
               }}</span>

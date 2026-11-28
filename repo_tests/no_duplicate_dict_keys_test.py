@@ -34,6 +34,7 @@ from typing import Dict, List, Set, Tuple
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -75,7 +76,7 @@ def duplicate_keys_in(source: str) -> List[Tuple[int, str]]:
     key and are skipped — two spreads in one literal are not a duplicate key.
     """
     found: List[Tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Dict):
             continue
         seen: set[str] = set()
@@ -146,7 +147,7 @@ def _sweep() -> Tuple[List[Duplicate], int, int, Dict[str, int]]:
     for name in _tracked_python_files():
         path = REPO_ROOT / name
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         files_parsed += 1

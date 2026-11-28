@@ -44,7 +44,9 @@ logger = get_logger(__name__)
 
 # GH#11568: compose tool tuning constants — moved here from tool_handler.py
 # (#14491) along with the functions that are their only readers.
-CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
+CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag(
+    "AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True, on_invalid="false"
+)
 # #13481: this is how long THIS TURN waits, not how long the approval lives —
 # see tool_handler.py's CODEEXEC_ENABLED block for the full rationale (kept
 # there since it also documents the deliberate absence of an expiry knob).

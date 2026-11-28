@@ -226,3 +226,13 @@ class TestFlushEndToEnd:
         await buf.flush_now()
         # Nothing to flush — flush_fn not called
         flush_fn.assert_not_called()
+
+    async def test_a_stopped_buffer_refuses_writes(self):
+        """#19379: a buffer swapped out by a rebind must not accept writes nobody will flush."""
+        flush_fn = AsyncMock()
+        buf = VectorWriteBuffer(flush_fn=flush_fn, flush_size=100)
+        await buf.stop()
+        assert buf.stopped is True
+        assert await buf.write("late", [0.1], "doc") is False
+        await buf.flush_now()
+        flush_fn.assert_not_called()

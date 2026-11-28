@@ -14,10 +14,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
-import { createLogger } from '@/utils/debugUtils'
+import { formatFleetDateTime } from '@/composables/useTimezone'
+import { errorText } from '@/utils/errorText'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
-
+import { BaseAlert, BaseModal, useToast, createLogger } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
@@ -141,43 +144,43 @@ const roleCategories = computed(() => {
     roles: Array<{ name: string; description: string; dependencies: string[] }>
   }> = {
     core: {
-      label: 'Core Infrastructure',
-      description: 'Required base components for all nodes',
+      label: t('deploymentsView.categoryCoreLabel'),
+      description: t('deploymentsView.categoryCoreDescription'),
       roles: [],
     },
     data: {
-      label: 'Data Layer',
-      description: 'Database and caching services',
+      label: t('deploymentsView.categoryDataLabel'),
+      description: t('deploymentsView.categoryDataDescription'),
       roles: [],
     },
     application: {
-      label: 'Application Layer',
-      description: 'Backend API and frontend web servers',
+      label: t('deploymentsView.categoryApplicationLabel'),
+      description: t('deploymentsView.categoryApplicationDescription'),
       roles: [],
     },
     ai: {
-      label: 'AI/ML Services',
-      description: 'LLM inference and AI processing',
+      label: t('deploymentsView.categoryAiLabel'),
+      description: t('deploymentsView.categoryAiDescription'),
       roles: [],
     },
     automation: {
-      label: 'Automation',
-      description: 'Browser automation and scripting',
+      label: t('deploymentsView.categoryAutomationLabel'),
+      description: t('deploymentsView.categoryAutomationDescription'),
       roles: [],
     },
     observability: {
-      label: 'Observability',
-      description: 'Monitoring and logging stack',
+      label: t('deploymentsView.categoryObservabilityLabel'),
+      description: t('deploymentsView.categoryObservabilityDescription'),
       roles: [],
     },
     'remote-access': {
-      label: 'Remote Access',
-      description: 'VNC and remote desktop services',
+      label: t('deploymentsView.categoryRemoteAccessLabel'),
+      description: t('deploymentsView.categoryRemoteAccessDescription'),
       roles: [],
     },
     infrastructure: {
-      label: 'Infrastructure',
-      description: 'Shared libraries and agents deployed to all nodes',
+      label: t('deploymentsView.categoryInfrastructureLabel'),
+      description: t('deploymentsView.categoryInfrastructureDescription'),
       roles: [],
     },
   }
@@ -257,7 +260,7 @@ onMounted(async () => {
       nodeId,
       deploymentId: data.deployment_id,
       success: data.success ?? false,
-      message: data.message ?? 'Rollback completed',
+      message: data.message ?? t('deploymentsView.rollbackCompletedMessage'),
     }
 
     setTimeout(() => {
@@ -290,14 +293,14 @@ async function handleRetry(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert('Failed to retry deployment')
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetrying.value = null
   }
 }
 
 async function handleCancel(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to cancel this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToCancel'))) {
     return
   }
 
@@ -307,14 +310,14 @@ async function handleCancel(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert('Failed to cancel deployment')
+    showToast(t('deploymentsView.failedToCancelDeployment'), 'error')
   } finally {
     isCancelling.value = null
   }
 }
 
 async function handleRollback(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to rollback this deployment? This will revert the node to its previous state.')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToRollback'))) {
     return
   }
 
@@ -325,7 +328,7 @@ async function handleRollback(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to rollback deployment:', err)
-    alert('Failed to rollback deployment')
+    showToast(t('deploymentsView.failedToRollbackDeployment'), 'error')
   } finally {
     isRollingBack.value = null
   }
@@ -374,15 +377,15 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 
 async function handleCreateBgDeployment(): Promise<void> {
   if (!newBgDeployment.value.blue_node_id) {
-    alert('Please select a blue (source) node')
+    showToast(t('deploymentsView.pleaseSelectABlueSourceNode'), 'warning')
     return
   }
   if (!newBgDeployment.value.green_node_id) {
-    alert('Please select a green (target) node')
+    showToast(t('deploymentsView.pleaseSelectAGreenTargetNode'), 'warning')
     return
   }
   if (newBgDeployment.value.roles.length === 0) {
-    alert('Please select at least one role to migrate')
+    showToast(t('deploymentsView.pleaseSelectRoleToMigrate'), 'warning')
     return
   }
 
@@ -395,14 +398,13 @@ async function handleCreateBgDeployment(): Promise<void> {
     await fetchBgDeployments()
   } catch (err: unknown) {
     logger.error('Failed to create blue-green deployment:', err)
-    const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string }; status?: number } }
-    const detail = axiosError?.response?.data?.detail || errorMessage
+    const detail = axiosError?.response?.data?.detail || errorText(err)
     const status = axiosError?.response?.status
     if (status === 403) {
-      alert('Access denied: Blue-green deployments require admin privileges')
+      showToast(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'), 'error')
     } else {
-      alert(`Failed to create blue-green deployment: ${detail}`)
+      showToast(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }), 'error')
     }
   } finally {
     isCreatingBg.value = false
@@ -410,7 +412,7 @@ async function handleCreateBgDeployment(): Promise<void> {
 }
 
 async function handleBgSwitch(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to switch traffic to the green node?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToSwitch'))) {
     return
   }
 
@@ -419,12 +421,12 @@ async function handleBgSwitch(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to switch traffic:', err)
-    alert('Failed to switch traffic')
+    showToast(t('deploymentsView.failedToSwitchTraffic'), 'error')
   }
 }
 
 async function handleBgRollback(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to rollback to the blue node?')) {
+  if (!confirm(t('deploymentsView.confirmRollbackToBlue'))) {
     return
   }
 
@@ -433,12 +435,12 @@ async function handleBgRollback(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to rollback:', err)
-    alert('Failed to rollback')
+    showToast(t('deploymentsView.failedToRollback'), 'error')
   }
 }
 
 async function handleBgCancel(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to cancel this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToCancel'))) {
     return
   }
 
@@ -447,12 +449,12 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert('Failed to cancel')
+    showToast(t('deploymentsView.failedToCancel'), 'error')
   }
 }
 
 async function handleBgRetry(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to retry this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToRetry'))) {
     return
   }
 
@@ -462,7 +464,7 @@ async function handleBgRetry(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert('Failed to retry deployment')
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetryingBg.value = null
   }
@@ -504,11 +506,11 @@ function toggleRole(role: NodeRole): void {
 // ===== STANDARD DEPLOYMENT CREATE METHODS =====
 async function handleCreateDeployment(): Promise<void> {
   if (!newDeployment.value.node_id) {
-    alert('Please select a target node')
+    showToast(t('deploymentsView.pleaseSelectATargetNode'), 'warning')
     return
   }
   if (newDeployment.value.roles.length === 0) {
-    alert('Please select at least one role to deploy')
+    showToast(t('deploymentsView.pleaseSelectRoleToDeploy'), 'warning')
     return
   }
 
@@ -530,10 +532,9 @@ async function handleCreateDeployment(): Promise<void> {
     fetchRoleOwners()
   } catch (err: unknown) {
     logger.error('Failed to create deployment:', err)
-    const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string } } }
-    const detail = axiosError?.response?.data?.detail || errorMessage
-    alert(`Failed to create deployment: ${detail}`)
+    const detail = axiosError?.response?.data?.detail || errorText(err)
+    showToast(t('deploymentsView.failedToCreateDeployment', { detail }), 'error')
   } finally {
     isCreatingDeployment.value = false
   }
@@ -559,20 +560,20 @@ function toggleDeploymentRole(role: string): void {
 // ===== SHARED HELPERS =====
 function getStatusClass(status: string): string {
   switch (status) {
-    case 'completed': return 'bg-green-100 text-green-800'
-    case 'active': return 'bg-green-100 text-green-800'
+    case 'completed': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'in_progress':
     case 'borrowing':
     case 'deploying':
     case 'verifying':
     case 'monitoring':
-    case 'switching': return 'bg-blue-100 text-blue-800'
-    case 'pending': return 'bg-yellow-100 text-yellow-800'
-    case 'failed': return 'bg-red-100 text-red-800'
+    case 'switching': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    case 'pending': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'failed': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     case 'rolling_back':
-    case 'rolled_back': return 'bg-orange-100 text-orange-800'
-    case 'cancelled': return 'bg-gray-100 text-gray-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'rolled_back': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'cancelled': return 'bg-autobot-bg-tertiary text-autobot-text-primary'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -585,13 +586,6 @@ function getStatusIcon(status: string): string {
     case 'rolled_back': return 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6'
     default: return 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
   }
-}
-
-// #13138: the blue-green timestamps are optional AND nullable in the contract,
-// so an absent value arrives as `undefined`.
-function formatDateTime(isoString: string | null | undefined): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -615,55 +609,22 @@ function getNodeHostname(nodeId: string): string {
         v-if="rollbackNotification.show"
         class="fixed top-4 right-4 z-50 max-w-md"
       >
-        <div
-          :class="[
-            'rounded-lg shadow-lg p-4 flex items-start gap-3',
-            rollbackNotification.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-          ]"
-        >
-          <div :class="['shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-            rollbackNotification.success ? 'bg-green-100' : 'bg-red-100'
-          ]">
-            <svg
-              class="w-5 h-5"
-              :class="rollbackNotification.success ? 'text-green-600' : 'text-red-600'"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-              />
-            </svg>
-          </div>
-          <div class="flex-1">
-            <h4 :class="['font-medium', rollbackNotification.success ? 'text-green-800' : 'text-red-800']">
-              {{ rollbackNotification.success ? $t('deploymentsView.rollbackCompleted') : $t('deploymentsView.rollbackFailed') }}
-            </h4>
-            <p :class="['text-sm', rollbackNotification.success ? 'text-green-600' : 'text-red-600']">
-              {{ rollbackNotification.message }}
-            </p>
-          </div>
-          <button
-            @click="rollbackNotification.show = false"
-            class="text-gray-400 hover:text-gray-600"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <BaseAlert
+          :variant="rollbackNotification.success ? 'success' : 'error'"
+          :title="rollbackNotification.success ? $t('deploymentsView.rollbackCompleted') : $t('deploymentsView.rollbackFailed')"
+          :message="rollbackNotification.message"
+          dismissible
+          :dismiss-label="$t('deploymentsView.close')"
+          @dismiss="rollbackNotification.show = false"
+        />
       </div>
     </Transition>
 
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('deploymentsView.deployments') }}</h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('deploymentsView.deployments') }}</h1>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('deploymentsView.deployAndManageRoles') }}
         </p>
       </div>
@@ -713,19 +674,19 @@ function getNodeHostname(nodeId: string): string {
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-autobot-border mb-6">
       <nav class="flex gap-8">
         <button
           @click="navigateToTab('standard')"
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'standard'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           {{ $t('deploymentsView.standardDeployments') }}
-          <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+          <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-autobot-bg-tertiary text-autobot-text-secondary">
             {{ standardStats.total }}
           </span>
         </button>
@@ -734,12 +695,12 @@ function getNodeHostname(nodeId: string): string {
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'blue-green'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ? 'border-autobot-primary text-autobot-primary'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           {{ $t('deploymentsView.blueGreenDeployments') }}
-          <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+          <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-autobot-bg-tertiary text-autobot-text-secondary">
             {{ bgStats.total }}
           </span>
         </button>
@@ -753,11 +714,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.total') }}</p>
-              <p class="text-2xl font-bold text-gray-900">{{ standardStats.total }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.total') }}</p>
+              <p class="text-2xl font-bold text-autobot-text-primary">{{ standardStats.total }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
@@ -767,11 +728,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.completed') }}</p>
-              <p class="text-2xl font-bold text-green-600">{{ standardStats.completed }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.completed') }}</p>
+              <p class="text-2xl font-bold text-autobot-success">{{ standardStats.completed }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-ok-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -781,11 +742,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.inProgress') }}</p>
-              <p class="text-2xl font-bold text-blue-600">{{ standardStats.inProgress }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.inProgress') }}</p>
+              <p class="text-2xl font-bold text-autobot-text-link">{{ standardStats.inProgress }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-info-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -795,11 +756,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.failed') }}</p>
-              <p class="text-2xl font-bold text-red-600">{{ standardStats.failed }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.failed') }}</p>
+              <p class="text-2xl font-bold text-autobot-error">{{ standardStats.failed }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-bad-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -809,11 +770,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.rolledBack') }}</p>
-              <p class="text-2xl font-bold text-orange-600">{{ standardStats.rolledBack }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.rolledBack') }}</p>
+              <p class="text-2xl font-bold text-autobot-warning">{{ standardStats.rolledBack }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-warn-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
             </div>
@@ -823,33 +784,32 @@ function getNodeHostname(nodeId: string): string {
 
       <!-- Standard Deployments Table -->
       <div class="card overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200">
+        <div class="px-6 py-4 border-b border-autobot-border">
           <h2 class="text-lg font-semibold">{{ $t('deploymentsView.recentDeployments') }}</h2>
         </div>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+          <table class="min-w-full divide-y divide-autobot-border">
+            <thead class="bg-autobot-bg-secondary">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.status') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.node') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.roles') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.started') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.completed') }}</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.actions') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.status') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.node') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.roles') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.started') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.completed') }}</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.actions') }}</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="deployment in deployments" :key="deployment.deployment_id" class="hover:bg-gray-50">
+            <tbody class="bg-white divide-y divide-autobot-border">
+              <tr v-for="deployment in deployments" :key="deployment.deployment_id" class="hover:bg-autobot-bg-hover">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-2">
                     <svg
                       class="w-5 h-5"
                       :class="{
-                        'text-green-600': deployment.status === 'completed',
-                        'text-blue-600': deployment.status === 'in_progress',
-                        'text-yellow-600': deployment.status === 'pending',
-                        'text-red-600': deployment.status === 'failed',
-                        'text-orange-600': deployment.status === 'rolled_back',
+                        'text-autobot-success': deployment.status === 'completed',
+                        'text-autobot-text-link': deployment.status === 'in_progress',
+                        'text-autobot-warning': deployment.status === 'pending' || deployment.status === 'rolled_back',
+                        'text-autobot-error': deployment.status === 'failed',
                       }"
                       fill="none"
                       stroke="currentColor"
@@ -862,7 +822,7 @@ function getNodeHostname(nodeId: string): string {
                     </span>
                   </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-autobot-text-primary">
                   {{ deployment.node_id }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -870,23 +830,23 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
+                      class="px-2 py-0.5 text-xs font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-sm"
                     >
                       {{ role }}
                     </span>
                   </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.completed_at) }}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
+                  {{ formatFleetDateTime(deployment.completed_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div class="flex items-center justify-end gap-2">
                     <button
                       @click="showDetails(deployment)"
-                      class="text-gray-600 hover:text-gray-800"
+                      class="text-autobot-text-secondary hover:text-autobot-text-primary"
                       :title="$t('deploymentsView.viewDetails')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -899,7 +859,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'in_progress'"
                       @click="handleCancel(deployment.deployment_id)"
                       :disabled="isCancelling === deployment.deployment_id"
-                      class="text-red-600 hover:text-red-800 disabled:opacity-50"
+                      class="text-autobot-error hover:text-autobot-pill-bad-fg disabled:opacity-50"
                       :title="$t('deploymentsView.cancelDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -911,7 +871,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleRetry(deployment.deployment_id)"
                       :disabled="isRetrying === deployment.deployment_id"
-                      class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -923,7 +883,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'completed'"
                       @click="handleRollback(deployment.deployment_id)"
                       :disabled="isRollingBack === deployment.deployment_id"
-                      class="text-orange-600 hover:text-orange-800 disabled:opacity-50"
+                      class="text-autobot-warning hover:text-autobot-pill-warn-fg disabled:opacity-50"
                       :title="$t('deploymentsView.rollbackDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -934,8 +894,8 @@ function getNodeHostname(nodeId: string): string {
                 </td>
               </tr>
               <tr v-if="deployments.length === 0 && !isLoading">
-                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                  <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <td colspan="6" class="px-6 py-12 text-center text-autobot-text-tertiary">
+                  <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                   <p>{{ $t('deploymentsView.noDeploymentsYetClick') }}</p>
@@ -947,7 +907,7 @@ function getNodeHostname(nodeId: string): string {
       </div>
 
       <div v-if="isLoading" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
     </div>
 
@@ -958,11 +918,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.total') }}</p>
-              <p class="text-2xl font-bold text-gray-900">{{ bgStats.total }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.total') }}</p>
+              <p class="text-2xl font-bold text-autobot-text-primary">{{ bgStats.total }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
@@ -972,11 +932,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.active') }}</p>
-              <p class="text-2xl font-bold text-blue-600">{{ bgStats.active }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.active') }}</p>
+              <p class="text-2xl font-bold text-autobot-text-link">{{ bgStats.active }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-info-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -986,11 +946,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.completed') }}</p>
-              <p class="text-2xl font-bold text-green-600">{{ bgStats.completed }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.completed') }}</p>
+              <p class="text-2xl font-bold text-autobot-success">{{ bgStats.completed }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-ok-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -1000,11 +960,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.failed') }}</p>
-              <p class="text-2xl font-bold text-red-600">{{ bgStats.failed }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.failed') }}</p>
+              <p class="text-2xl font-bold text-autobot-error">{{ bgStats.failed }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-bad-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -1014,11 +974,11 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">{{ $t('deploymentsView.rolledBack') }}</p>
-              <p class="text-2xl font-bold text-orange-600">{{ bgStats.rolledBack }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.rolledBack') }}</p>
+              <p class="text-2xl font-bold text-autobot-warning">{{ bgStats.rolledBack }}</p>
             </div>
-            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-              <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 rounded-full bg-autobot-pill-warn-bg flex items-center justify-center">
+              <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
             </div>
@@ -1028,24 +988,24 @@ function getNodeHostname(nodeId: string): string {
 
       <!-- Blue-Green Deployments Table -->
       <div class="card overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200">
+        <div class="px-6 py-4 border-b border-autobot-border">
           <h2 class="text-lg font-semibold">{{ $t('deploymentsView.blueGreenDeployments') }}</h2>
         </div>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+          <table class="min-w-full divide-y divide-autobot-border">
+            <thead class="bg-autobot-bg-secondary">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.status') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.blueNode') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.greenNode') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.roles') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.progress') }}</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.started') }}</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.actions') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.status') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.blueNode') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.greenNode') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.roles') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.progress') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.started') }}</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('deploymentsView.actions') }}</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="deployment in bgDeployments" :key="deployment.bg_deployment_id" class="hover:bg-gray-50">
+            <tbody class="bg-white divide-y divide-autobot-border">
+              <tr v-for="deployment in bgDeployments" :key="deployment.bg_deployment_id" class="hover:bg-autobot-bg-hover">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(deployment.status)]">
                     {{ deployment.status.replaceAll('_', ' ') }}
@@ -1053,14 +1013,14 @@ function getNodeHostname(nodeId: string): string {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(deployment.blue_node_id) }}</span>
+                    <div class="w-3 h-3 rounded-full bg-autobot-primary"></div>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ getNodeHostname(deployment.blue_node_id) }}</span>
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(deployment.green_node_id) }}</span>
+                    <div class="w-3 h-3 rounded-full bg-autobot-dot-ok"></div>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ getNodeHostname(deployment.green_node_id) }}</span>
                   </div>
                 </td>
                 <td class="px-6 py-4">
@@ -1068,7 +1028,7 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.blue_roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
+                      class="px-2 py-0.5 text-xs font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-sm"
                     >
                       {{ role }}
                     </span>
@@ -1076,23 +1036,23 @@ function getNodeHostname(nodeId: string): string {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-2">
-                    <div class="w-24 bg-gray-200 rounded-full h-2">
+                    <div class="w-24 bg-autobot-bg-active rounded-full h-2">
                       <div
-                        class="bg-primary-600 h-2 rounded-full transition-all"
+                        class="bg-autobot-primary h-2 rounded-full transition-all"
                         :style="{ width: `${deployment.progress_percent}%` }"
                       ></div>
                     </div>
-                    <span class="text-xs text-gray-500">{{ deployment.progress_percent }}%</span>
+                    <span class="text-xs text-autobot-text-tertiary">{{ deployment.progress_percent }}%</span>
                   </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right">
                   <div class="flex items-center justify-end gap-2">
                     <button
                       @click="showBgDetails(deployment)"
-                      class="text-gray-600 hover:text-gray-800"
+                      class="text-autobot-text-secondary hover:text-autobot-text-primary"
                       :title="$t('deploymentsView.viewDetails')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1104,7 +1064,7 @@ function getNodeHostname(nodeId: string): string {
                     <button
                       v-if="deployment.status === 'verifying'"
                       @click="handleBgSwitch(deployment.bg_deployment_id)"
-                      class="text-green-600 hover:text-green-800"
+                      class="text-autobot-success hover:text-autobot-pill-ok-fg"
                       :title="$t('deploymentsView.switchToGreen2')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1115,7 +1075,7 @@ function getNodeHostname(nodeId: string): string {
                     <button
                       v-if="deployment.status === 'active'"
                       @click="handleBgRollback(deployment.bg_deployment_id)"
-                      class="text-orange-600 hover:text-orange-800"
+                      class="text-autobot-warning hover:text-autobot-pill-warn-fg"
                       :title="$t('deploymentsView.rollbackToBlue')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1126,7 +1086,7 @@ function getNodeHostname(nodeId: string): string {
                     <button
                       v-if="['pending', 'borrowing', 'deploying'].includes(deployment.status)"
                       @click="handleBgCancel(deployment.bg_deployment_id)"
-                      class="text-red-600 hover:text-red-800"
+                      class="text-autobot-error hover:text-autobot-pill-bad-fg"
                       :title="$t('deploymentsView.cancel')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1138,7 +1098,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleBgRetry(deployment.bg_deployment_id)"
                       :disabled="isRetryingBg === deployment.bg_deployment_id"
-                      class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1149,8 +1109,8 @@ function getNodeHostname(nodeId: string): string {
                 </td>
               </tr>
               <tr v-if="bgDeployments.length === 0 && !isLoadingBg">
-                <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                  <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <td colspan="7" class="px-6 py-12 text-center text-autobot-text-tertiary">
+                  <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
                   <p>{{ $t('deploymentsView.noBlueGreenDeployments') }}</p>
@@ -1162,542 +1122,490 @@ function getNodeHostname(nodeId: string): string {
       </div>
 
       <div v-if="isLoadingBg" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
     </div>
 
     <!-- Standard Deployment Wizard Dialog -->
-    <div
-      v-if="showWizard"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="showWizard = false"
+    <BaseModal
+      :close-on-esc="!isCreatingDeployment"
+      v-model="showWizard"
+      :title="$t('deploymentsView.newDeployment')"
+      width="32rem"
+      :close-label="$t('deploymentsView.close')"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentsView.newDeployment') }}</h3>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ $t('deploymentsView.deployRolesToA') }}
-          </p>
+      <template #subtitle>
+        {{ $t('deploymentsView.deployRolesToA') }}
+      </template>
+      <div class="space-y-4">
+        <!-- Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('deploymentsView.targetNode') }}</label>
+          <select
+            v-model="newDeployment.node_id"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
+          >
+            <option value="">{{ $t('deploymentsView.selectANode') }}</option>
+            <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
-        <div class="px-6 py-4 space-y-4">
-          <!-- Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('deploymentsView.targetNode') }}</label>
-            <select
-              v-model="newDeployment.node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+
+        <!-- Node Info (if selected) -->
+        <div v-if="newDeployment.node_id" class="bg-autobot-bg-secondary rounded-lg p-3">
+          <p class="text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('deploymentsView.currentRoles') }}</p>
+          <div class="flex flex-wrap gap-1">
+            <span
+              v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
+              :key="role"
+              class="px-2 py-0.5 text-xs font-medium bg-autobot-bg-active text-autobot-text-secondary rounded-sm"
             >
-              <option value="">{{ $t('deploymentsView.selectANode') }}</option>
-              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
+              {{ role }}
+            </span>
+            <span v-if="(nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || []).length === 0" class="text-xs text-autobot-text-tertiary">
+              {{ $t('deploymentsView.noRolesAssigned') }}
+            </span>
           </div>
+        </div>
 
-          <!-- Node Info (if selected) -->
-          <div v-if="newDeployment.node_id" class="bg-gray-50 rounded-lg p-3">
-            <p class="text-sm font-medium text-gray-700 mb-1">{{ $t('deploymentsView.currentRoles') }}</p>
-            <div class="flex flex-wrap gap-1">
-              <span
-                v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
-                :key="role"
-                class="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded-sm"
-              >
-                {{ role }}
-              </span>
-              <span v-if="(nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || []).length === 0" class="text-xs text-gray-500">
-                {{ $t('deploymentsView.noRolesAssigned') }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Roles Selection by Category -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('deploymentsView.rolesToDeploy') }}</label>
-            <p v-if="availableRoles.length === 0" class="text-sm text-gray-500">
-              {{ $t('deploymentsView.loadingAvailableRoles') }}
-            </p>
-            <div v-else class="space-y-3">
-              <template v-for="(category, _catKey) in roleCategories" :key="_catKey">
-                <div v-if="category.roles.length > 0" class="border border-gray-200 rounded-lg overflow-hidden">
-                  <!-- Category Header -->
-                  <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                    <div class="flex items-center justify-between">
-                      <span class="text-sm font-medium text-gray-800">{{ category.label }}</span>
-                      <span class="text-xs text-gray-500">{{ category.description }}</span>
-                    </div>
+        <!-- Roles Selection by Category -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('deploymentsView.rolesToDeploy') }}</label>
+          <p v-if="availableRoles.length === 0" class="text-sm text-autobot-text-tertiary">
+            {{ $t('deploymentsView.loadingAvailableRoles') }}
+          </p>
+          <div v-else class="space-y-3">
+            <template v-for="(category, _catKey) in roleCategories" :key="_catKey">
+              <div v-if="category.roles.length > 0" class="border border-autobot-border rounded-lg overflow-hidden">
+                <!-- Category Header -->
+                <div class="bg-autobot-bg-secondary px-3 py-2 border-b border-autobot-border">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ category.label }}</span>
+                    <span class="text-xs text-autobot-text-tertiary">{{ category.description }}</span>
                   </div>
-                  <!-- Category Roles -->
-                  <div class="p-3 space-y-2">
-                    <div
-                      v-for="role in category.roles"
-                      :key="role.name"
-                      @click="toggleDeploymentRole(role.name)"
-                      :class="[
-                        'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
-                        newDeployment.roles.includes(role.name)
-                          ? 'bg-primary-50 border border-primary-200'
-                          : 'hover:bg-gray-50 border border-transparent'
-                      ]"
-                    >
-                      <!-- Checkbox -->
-                      <div :class="[
-                        'w-5 h-5 rounded-sm shrink-0 flex items-center justify-center mt-0.5',
-                        newDeployment.roles.includes(role.name)
-                          ? 'bg-primary-600'
-                          : 'border-2 border-gray-300'
-                      ]">
-                        <svg
-                          v-if="newDeployment.roles.includes(role.name)"
-                          class="w-3 h-3 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                </div>
+                <!-- Category Roles -->
+                <div class="p-3 space-y-2">
+                  <div
+                    v-for="role in category.roles"
+                    :key="role.name"
+                    @click="toggleDeploymentRole(role.name)"
+                    :class="[
+                      'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
+                      newDeployment.roles.includes(role.name)
+                        ? 'bg-autobot-primary-bg border border-autobot-primary-light'
+                        : 'hover:bg-autobot-bg-hover border border-transparent'
+                    ]"
+                  >
+                    <!-- Checkbox -->
+                    <div :class="[
+                      'w-5 h-5 rounded-sm shrink-0 flex items-center justify-center mt-0.5',
+                      newDeployment.roles.includes(role.name)
+                        ? 'bg-autobot-primary'
+                        : 'border-2 border-autobot-border-strong'
+                    ]">
+                      <svg
+                        v-if="newDeployment.roles.includes(role.name)"
+                        class="w-3 h-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <!-- Role Info -->
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span :class="[
+                          'text-sm font-medium',
+                          newDeployment.roles.includes(role.name) ? 'text-autobot-primary-hover' : 'text-autobot-text-primary'
+                        ]">
+                          {{ role.name }}
+                        </span>
+                        <!-- Dependencies Badge -->
+                        <span
+                          v-if="role.dependencies.length > 0"
+                          class="px-1.5 py-0.5 text-xs bg-autobot-pill-warn-bg text-autobot-pill-warn-fg rounded-sm"
+                          :title="'Requires: ' + role.dependencies.join(', ')"
+                        >{{ $t('deploymentsView.needsValue0', { value0: role.dependencies.join(', ') }) }}</span>
+                        <!-- Current Owner Badge (#1389) -->
+                        <span
+                          v-if="getRoleOwnerHostname(role.name) && roleOwners[role.name] !== newDeployment.node_id"
+                          class="px-1.5 py-0.5 text-xs bg-autobot-pill-warn-bg text-autobot-pill-warn-fg rounded-sm"
+                          :title="'Currently deployed on ' + getRoleOwnerHostname(role.name)"
                         >
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                        </svg>
+                          on {{ getRoleOwnerHostname(role.name) }}
+                        </span>
                       </div>
-                      <!-- Role Info -->
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                          <span :class="[
-                            'text-sm font-medium',
-                            newDeployment.roles.includes(role.name) ? 'text-primary-700' : 'text-gray-900'
-                          ]">
-                            {{ role.name }}
-                          </span>
-                          <!-- Dependencies Badge -->
-                          <span
-                            v-if="role.dependencies.length > 0"
-                            class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-sm"
-                            :title="'Requires: ' + role.dependencies.join(', ')"
-                          >{{ $t('deploymentsView.needsValue0', { value0: role.dependencies.join(', ') }) }}</span>
-                          <!-- Current Owner Badge (#1389) -->
-                          <span
-                            v-if="getRoleOwnerHostname(role.name) && roleOwners[role.name] !== newDeployment.node_id"
-                            class="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-sm"
-                            :title="'Currently deployed on ' + getRoleOwnerHostname(role.name)"
-                          >
-                            on {{ getRoleOwnerHostname(role.name) }}
-                          </span>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-0.5">{{ role.description }}</p>
-                      </div>
+                      <p class="text-xs text-autobot-text-tertiary mt-0.5">{{ role.description }}</p>
                     </div>
                   </div>
                 </div>
-              </template>
-            </div>
-          </div>
-
-          <!-- Selected Roles Summary -->
-          <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
-            <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
-            <div class="flex flex-wrap gap-1">
-              <span
-                v-for="role in newDeployment.roles"
-                :key="role"
-                class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-sm"
-              >
-                {{ role }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Force Option -->
-          <div class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="force-deploy"
-              v-model="newDeployment.force"
-              class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-            />
-            <label for="force-deploy" class="text-sm text-gray-700">{{ $t('deploymentsView.forceDeploymentSkipChecksAndRedeploy') }}</label>
-          </div>
-
-          <!-- Info Box -->
-          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p class="text-sm text-blue-700">{{ $t('deploymentsView.thisWillDeployTheSelectedRoles') }}</p>
+              </div>
+            </template>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            @click="showWizard = false; resetDeploymentForm()"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >{{ $t('deploymentsView.cancel') }}</button>
-          <button
-            @click="handleCreateDeployment"
-            :disabled="!newDeployment.node_id || newDeployment.roles.length === 0 || isCreatingDeployment"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <div v-if="isCreatingDeployment" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
+
+        <!-- Selected Roles Summary -->
+        <BaseAlert v-if="newDeployment.roles.length > 0" variant="success" size="compact" :icon="false">
+          <p class="text-sm font-medium mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
+          <div class="flex flex-wrap gap-1">
+            <span
+              v-for="role in newDeployment.roles"
+              :key="role"
+              class="px-2 py-0.5 text-xs font-medium bg-autobot-pill-ok-bg text-autobot-pill-ok-fg rounded-sm"
+            >
+              {{ role }}
+            </span>
+          </div>
+        </BaseAlert>
+
+        <!-- Force Option -->
+        <div class="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="force-deploy"
+            v-model="newDeployment.force"
+            class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
+          />
+          <label for="force-deploy" class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.forceDeploymentSkipChecksAndRedeploy') }}</label>
         </div>
+
+        <!-- Info Box -->
+        <BaseAlert variant="info" size="compact" :message="$t('deploymentsView.thisWillDeployTheSelectedRoles')" />
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showWizard = false; resetDeploymentForm()"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-tertiary rounded-md hover:bg-autobot-bg-active"
+        >{{ $t('deploymentsView.cancel') }}</button>
+        <button
+          @click="handleCreateDeployment"
+          :disabled="!newDeployment.node_id || newDeployment.roles.length === 0 || isCreatingDeployment"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <div v-if="isCreatingDeployment" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- Blue-Green Create Dialog -->
-    <div
-      v-if="showBgCreateDialog"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="showBgCreateDialog = false"
+    <BaseModal
+      :close-on-esc="!isCreatingBg"
+      v-model="showBgCreateDialog"
+      :title="$t('deploymentsView.newBlueGreenDeployment')"
+      width="32rem"
+      :close-label="$t('deploymentsView.close')"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentsView.newBlueGreenDeployment') }}</h3>
-          <p class="text-sm text-gray-500 mt-1">{{ $t('deploymentsView.deployRolesFromBlueSourceTo') }}</p>
+      <template #subtitle>
+        {{ $t('deploymentsView.deployRolesFromBlueSourceTo') }}
+      </template>
+      <div class="space-y-4">
+        <!-- Blue Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
+            <span class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-autobot-primary"></div>{{ $t('deploymentsView.blueNodeSource') }}</span>
+          </label>
+          <select
+            v-model="newBgDeployment.blue_node_id"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
+          >
+            <option value="">{{ $t('deploymentsView.selectSourceNode') }}</option>
+            <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
-        <div class="px-6 py-4 space-y-4">
-          <!-- Blue Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              <span class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-blue-500"></div>{{ $t('deploymentsView.blueNodeSource') }}</span>
-            </label>
-            <select
-              v-model="newBgDeployment.blue_node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+
+        <!-- Roles Selection -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('deploymentsView.rolesToMigrate') }}</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="role in availableRoles"
+              :key="role"
+              @click="toggleRole(role)"
+              :class="[
+                'px-3 py-1 text-sm font-medium rounded-full border transition-colors',
+                (newBgDeployment.roles as string[]).includes(role)
+                  ? 'bg-autobot-primary-bg text-autobot-primary-hover border-autobot-primary-light'
+                  : 'bg-autobot-bg-secondary text-autobot-text-secondary border-autobot-border hover:bg-autobot-bg-hover'
+              ]"
             >
-              <option value="">{{ $t('deploymentsView.selectSourceNode') }}</option>
-              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+              {{ role }}
+              <span
+                v-if="getRoleOwnerHostname(role)"
+                class="text-xs opacity-75 ml-1"
+              >({{ getRoleOwnerHostname(role) }})</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Green Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
+            <span class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-autobot-dot-ok"></div>{{ $t('deploymentsView.greenNodeTarget') }}</span>
+          </label>
+          <div v-if="isLoadingEligible" class="text-sm text-autobot-text-tertiary py-2">{{ $t('deploymentsView.findingEligibleNodes') }}</div>
+          <div v-else-if="eligibleNodes.length > 0">
+            <select
+              v-model="newBgDeployment.green_node_id"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
+            >
+              <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
+              <option
+                v-for="node in eligibleNodes"
+                :key="node.node_id"
+                :value="node.node_id"
+                :disabled="node.node_id === newBgDeployment.blue_node_id"
+              >{{ $t('deploymentsView.hostnameValue1Capacity', { hostname: node.hostname, value1: node.available_capacity.toFixed(0) }) }}</option>
+            </select>
+          </div>
+          <div v-else-if="newBgDeployment.roles.length > 0" class="text-sm text-autobot-warning py-2">{{ $t('deploymentsView.noEligibleNodesFoundForThese') }}</div>
+          <div v-else>
+            <select
+              v-model="newBgDeployment.green_node_id"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
+            >
+              <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
+              <option
+                v-for="opt in nodeOptions"
+                :key="opt.value"
+                :value="opt.value"
+                :disabled="opt.value === newBgDeployment.blue_node_id"
+              >
                 {{ opt.label }}
               </option>
             </select>
           </div>
-
-          <!-- Roles Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('deploymentsView.rolesToMigrate') }}</label>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="role in availableRoles"
-                :key="role"
-                @click="toggleRole(role)"
-                :class="[
-                  'px-3 py-1 text-sm font-medium rounded-full border transition-colors',
-                  (newBgDeployment.roles as string[]).includes(role)
-                    ? 'bg-primary-100 text-primary-700 border-primary-300'
-                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                ]"
-              >
-                {{ role }}
-                <span
-                  v-if="getRoleOwnerHostname(role)"
-                  class="text-xs opacity-75 ml-1"
-                >({{ getRoleOwnerHostname(role) }})</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Green Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              <span class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-green-500"></div>{{ $t('deploymentsView.greenNodeTarget') }}</span>
-            </label>
-            <div v-if="isLoadingEligible" class="text-sm text-gray-500 py-2">{{ $t('deploymentsView.findingEligibleNodes') }}</div>
-            <div v-else-if="eligibleNodes.length > 0">
-              <select
-                v-model="newBgDeployment.green_node_id"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
-                <option
-                  v-for="node in eligibleNodes"
-                  :key="node.node_id"
-                  :value="node.node_id"
-                  :disabled="node.node_id === newBgDeployment.blue_node_id"
-                >{{ $t('deploymentsView.hostnameValue1Capacity', { hostname: node.hostname, value1: node.available_capacity.toFixed(0) }) }}</option>
-              </select>
-            </div>
-            <div v-else-if="newBgDeployment.roles.length > 0" class="text-sm text-yellow-600 py-2">{{ $t('deploymentsView.noEligibleNodesFoundForThese') }}</div>
-            <div v-else>
-              <select
-                v-model="newBgDeployment.green_node_id"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
-                <option
-                  v-for="opt in nodeOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                  :disabled="opt.value === newBgDeployment.blue_node_id"
-                >
-                  {{ opt.label }}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Deployment Type -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('deploymentsView.deploymentType') }}</label>
-            <select
-              v-model="newBgDeployment.deployment_type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="upgrade">{{ $t('deploymentsView.upgrade') }}</option>
-              <option value="migration">{{ $t('deploymentsView.migration') }}</option>
-              <option value="failover">{{ $t('deploymentsView.failover') }}</option>
-            </select>
-          </div>
-
-          <!-- Options -->
-          <div class="flex items-center gap-6">
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                v-model="newBgDeployment.auto_rollback"
-                class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-              />
-              <span class="text-sm text-gray-700">{{ $t('deploymentsView.autoRollbackOnFailure') }}</span>
-            </label>
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                v-model="newBgDeployment.purge_on_complete"
-                class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-              />
-              <span class="text-sm text-gray-700">{{ $t('deploymentsView.purgeBlueRolesAfterCompletion') }}</span>
-            </label>
-          </div>
-
-          <!-- Info Box -->
-          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p class="text-sm text-blue-700">{{ $t('deploymentsView.theGreenNodeWillTemporarilyBorrow') }}</p>
-          </div>
         </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            @click="showBgCreateDialog = false; resetBgForm()"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >{{ $t('deploymentsView.cancel') }}</button>
-          <button
-            @click="handleCreateBgDeployment"
-            :disabled="!newBgDeployment.blue_node_id || !newBgDeployment.green_node_id || newBgDeployment.roles.length === 0 || isCreatingBg"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+
+        <!-- Deployment Type -->
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('deploymentsView.deploymentType') }}</label>
+          <select
+            v-model="newBgDeployment.deployment_type"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
-            <div v-if="isCreatingBg" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
+            <option value="upgrade">{{ $t('deploymentsView.upgrade') }}</option>
+            <option value="migration">{{ $t('deploymentsView.migration') }}</option>
+            <option value="failover">{{ $t('deploymentsView.failover') }}</option>
+          </select>
         </div>
+
+        <!-- Options -->
+        <div class="flex items-center gap-6">
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="newBgDeployment.auto_rollback"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
+            />
+            <span class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.autoRollbackOnFailure') }}</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              v-model="newBgDeployment.purge_on_complete"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
+            />
+            <span class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.purgeBlueRolesAfterCompletion') }}</span>
+          </label>
+        </div>
+
+        <!-- Info Box -->
+        <BaseAlert variant="info" size="compact" :message="$t('deploymentsView.theGreenNodeWillTemporarilyBorrow')" />
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showBgCreateDialog = false; resetBgForm()"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-tertiary rounded-md hover:bg-autobot-bg-active"
+        >{{ $t('deploymentsView.cancel') }}</button>
+        <button
+          @click="handleCreateBgDeployment"
+          :disabled="!newBgDeployment.blue_node_id || !newBgDeployment.green_node_id || newBgDeployment.roles.length === 0 || isCreatingBg"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <div v-if="isCreatingBg" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- Standard Deployment Details Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDetailsModal && selectedDeployment"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeDetails"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div class="flex items-center gap-3">
-                <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentsView.deploymentDetails') }}</h3>
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedDeployment.status)]">
-                  {{ selectedDeployment.status.replaceAll('_', ' ') }}
-                </span>
-              </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" :aria-label="$t('deploymentsView.close')">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="p-6 overflow-y-auto max-h-[calc(80vh-8rem)]">
-              <div class="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.deploymentID') }}</p>
-                  <p class="font-mono text-sm">{{ selectedDeployment.deployment_id }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.nodeID') }}</p>
-                  <p class="font-mono text-sm">{{ selectedDeployment.node_id }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.startedAt') }}</p>
-                  <p class="text-sm">{{ formatDateTime(selectedDeployment.started_at) }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.completedAt') }}</p>
-                  <p class="text-sm">{{ formatDateTime(selectedDeployment.completed_at) }}</p>
-                </div>
-              </div>
-
-              <div class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.roles') }}</p>
-                <div class="flex flex-wrap gap-2">
-                  <span
-                    v-for="role in selectedDeployment.roles"
-                    :key="role"
-                    class="px-3 py-1 text-sm font-medium bg-primary-100 text-primary-700 rounded-full"
-                  >
-                    {{ role }}
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="selectedDeployment.error" class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedDeployment.error }}</p>
-                </div>
-              </div>
-
-              <div v-if="selectedDeployment.playbook_output">
-                <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.playbookOutput') }}</p>
-                <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <pre class="text-sm text-gray-100 font-mono whitespace-pre-wrap">{{ selectedDeployment.playbook_output }}</pre>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-              <button
-                v-if="selectedDeployment.status === 'completed'"
-                @click="handleRollback(selectedDeployment.deployment_id); closeDetails()"
-                :disabled="isRollingBack === selectedDeployment.deployment_id"
-                class="btn bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
-              >
-                {{ isRollingBack === selectedDeployment.deployment_id ? $t('deploymentsView.rollingBack') : $t('deploymentsView.rollback') }}
-              </button>
-              <button
-                v-if="selectedDeployment.status === 'failed'"
-                @click="handleRetry(selectedDeployment.deployment_id); closeDetails()"
-                :disabled="isRetrying === selectedDeployment.deployment_id"
-                class="btn btn-primary disabled:opacity-50"
-              >
-                {{ isRetrying === selectedDeployment.deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
-              </button>
-              <button @click="closeDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
-            </div>
-          </div>
+    <BaseModal
+      v-if="selectedDeployment"
+      :model-value="showDetailsModal"
+      :title="$t('deploymentsView.deploymentDetails')"
+      width="42rem"
+      :close-label="$t('deploymentsView.close')"
+      @close="closeDetails"
+    >
+      <template #subtitle>
+        <span v-if="selectedDeployment" :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedDeployment.status)]">
+          {{ selectedDeployment.status.replaceAll('_', ' ') }}
+        </span>
+      </template>
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.deploymentID') }}</p>
+          <p class="font-mono text-sm">{{ selectedDeployment.deployment_id }}</p>
         </div>
-      </Transition>
-    </Teleport>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.nodeID') }}</p>
+          <p class="font-mono text-sm">{{ selectedDeployment.node_id }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.startedAt') }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.started_at, '-') }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.completedAt') }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.completed_at, '-') }}</p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <p class="text-sm text-autobot-text-tertiary mb-2">{{ $t('deploymentsView.roles') }}</p>
+        <div class="flex flex-wrap gap-2">
+          <span
+            v-for="role in selectedDeployment.roles"
+            :key="role"
+            class="px-3 py-1 text-sm font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-full"
+          >
+            {{ role }}
+          </span>
+        </div>
+      </div>
+
+      <div v-if="selectedDeployment.error" class="mb-6">
+        <p class="text-sm text-autobot-text-tertiary mb-2">{{ $t('deploymentsView.error') }}</p>
+        <BaseAlert variant="error">
+          <p class="text-sm font-mono whitespace-pre-wrap">{{ selectedDeployment.error }}</p>
+        </BaseAlert>
+      </div>
+
+      <div v-if="selectedDeployment.playbook_output">
+        <p class="text-sm text-autobot-text-tertiary mb-2">{{ $t('deploymentsView.playbookOutput') }}</p>
+        <div class="bg-autobot-bg-tertiary rounded-lg p-4 overflow-x-auto">
+          <pre class="text-sm text-autobot-text-primary font-mono whitespace-pre-wrap">{{ selectedDeployment.playbook_output }}</pre>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          v-if="selectedDeployment.status === 'completed'"
+          @click="handleRollback(selectedDeployment.deployment_id); closeDetails()"
+          :disabled="isRollingBack === selectedDeployment.deployment_id"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover disabled:opacity-50"
+        >
+          {{ isRollingBack === selectedDeployment.deployment_id ? $t('deploymentsView.rollingBack') : $t('deploymentsView.rollback') }}
+        </button>
+        <button
+          v-if="selectedDeployment.status === 'failed'"
+          @click="handleRetry(selectedDeployment.deployment_id); closeDetails()"
+          :disabled="isRetrying === selectedDeployment.deployment_id"
+          class="btn btn-primary disabled:opacity-50"
+        >
+          {{ isRetrying === selectedDeployment.deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
+        </button>
+        <button @click="closeDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- Blue-Green Details Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showBgDetailsModal && selectedBgDeployment"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeBgDetails"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div class="flex items-center gap-3">
-                <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentsView.blueGreenDeploymentDetails') }}</h3>
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedBgDeployment.status)]">
-                  {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
-                </span>
-              </div>
-              <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600" :aria-label="$t('deploymentsView.close')">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="p-6 overflow-y-auto max-h-[calc(80vh-8rem)]">
-              <!-- Node Info -->
-              <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="p-4 bg-blue-50 rounded-lg">
-                  <p class="text-sm font-medium text-blue-800 mb-1">{{ $t('deploymentsView.blueNodeSource') }}</p>
-                  <p class="text-lg font-semibold text-blue-900">{{ getNodeHostname(selectedBgDeployment.blue_node_id) }}</p>
-                  <p class="text-xs text-blue-600 mt-1">{{ $t('deploymentsView.rolesValue0', { value0: selectedBgDeployment.blue_roles.join(', ') }) }}</p>
-                </div>
-                <div class="p-4 bg-green-50 rounded-lg">
-                  <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.greenNodeTarget') }}</p>
-                  <p class="text-lg font-semibold text-green-900">{{ getNodeHostname(selectedBgDeployment.green_node_id) }}</p>
-                  <p class="text-xs text-green-600 mt-1">{{ $t('deploymentsView.borrowedValue0', { value0: selectedBgDeployment.borrowed_roles.join(', ') || $t('deploymentsView.noneYet') }) }}</p>
-                </div>
-              </div>
-
-              <!-- Progress -->
-              <div class="mb-6">
-                <div class="flex items-center justify-between mb-2">
-                  <p class="text-sm font-medium text-gray-700">{{ $t('deploymentsView.progress') }}</p>
-                  <p class="text-sm text-gray-500">{{ selectedBgDeployment.progress_percent }}%</p>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    class="bg-primary-600 h-3 rounded-full transition-all"
-                    :style="{ width: `${selectedBgDeployment.progress_percent}%` }"
-                  ></div>
-                </div>
-                <p v-if="selectedBgDeployment.current_step" class="text-sm text-gray-500 mt-2">
-                  {{ selectedBgDeployment.current_step }}
-                </p>
-              </div>
-
-              <!-- Error -->
-              <div v-if="selectedBgDeployment.error" class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedBgDeployment.error }}</p>
-                </div>
-              </div>
-
-              <!-- Configuration -->
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.deploymentType') }}</p>
-                  <p class="text-sm font-medium capitalize">{{ selectedBgDeployment.deployment_type }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.autoRollback') }}</p>
-                  <p class="text-sm font-medium">{{ selectedBgDeployment.auto_rollback ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.purgeOnComplete') }}</p>
-                  <p class="text-sm font-medium">{{ selectedBgDeployment.purge_on_complete ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('deploymentsView.started') }}</p>
-                  <p class="text-sm font-medium">{{ formatDateTime(selectedBgDeployment.started_at) }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-              <button
-                v-if="selectedBgDeployment.status === 'verifying'"
-                @click="handleBgSwitch(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
-                class="btn bg-green-600 text-white hover:bg-green-700"
-              >{{ $t('deploymentsView.switchToGreen') }}</button>
-              <button
-                v-if="selectedBgDeployment.status === 'active'"
-                @click="handleBgRollback(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
-                class="btn bg-orange-600 text-white hover:bg-orange-700"
-              >{{ $t('deploymentsView.rollback') }}</button>
-              <button
-                v-if="selectedBgDeployment.status === 'failed'"
-                @click="handleBgRetry(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
-                :disabled="isRetryingBg === selectedBgDeployment.bg_deployment_id"
-                class="btn bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
-              </button>
-              <button @click="closeBgDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
-            </div>
-          </div>
+    <BaseModal
+      v-if="selectedBgDeployment"
+      :model-value="showBgDetailsModal"
+      :title="$t('deploymentsView.blueGreenDeploymentDetails')"
+      width="42rem"
+      :close-label="$t('deploymentsView.close')"
+      @close="closeBgDetails"
+    >
+      <template #subtitle>
+        <span v-if="selectedBgDeployment" :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedBgDeployment.status)]">
+          {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
+        </span>
+      </template>
+      <!-- Node Info -->
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="p-4 bg-autobot-info-bg rounded-lg">
+          <p class="text-sm font-medium text-autobot-pill-info-fg mb-1">{{ $t('deploymentsView.blueNodeSource') }}</p>
+          <p class="text-lg font-semibold text-autobot-pill-info-fg">{{ getNodeHostname(selectedBgDeployment.blue_node_id) }}</p>
+          <p class="text-xs text-autobot-text-link mt-1">{{ $t('deploymentsView.rolesValue0', { value0: selectedBgDeployment.blue_roles.join(', ') }) }}</p>
         </div>
-      </Transition>
-    </Teleport>
+        <div class="p-4 bg-autobot-success-bg rounded-lg">
+          <p class="text-sm font-medium text-autobot-pill-ok-fg mb-1">{{ $t('deploymentsView.greenNodeTarget') }}</p>
+          <p class="text-lg font-semibold text-autobot-pill-ok-fg">{{ getNodeHostname(selectedBgDeployment.green_node_id) }}</p>
+          <p class="text-xs text-autobot-success mt-1">{{ $t('deploymentsView.borrowedValue0', { value0: selectedBgDeployment.borrowed_roles.join(', ') || $t('deploymentsView.noneYet') }) }}</p>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-sm font-medium text-autobot-text-secondary">{{ $t('deploymentsView.progress') }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ selectedBgDeployment.progress_percent }}%</p>
+        </div>
+        <div class="w-full bg-autobot-bg-active rounded-full h-3">
+          <div
+            class="bg-autobot-primary h-3 rounded-full transition-all"
+            :style="{ width: `${selectedBgDeployment.progress_percent}%` }"
+          ></div>
+        </div>
+        <p v-if="selectedBgDeployment.current_step" class="text-sm text-autobot-text-tertiary mt-2">
+          {{ selectedBgDeployment.current_step }}
+        </p>
+      </div>
+
+      <!-- Error -->
+      <div v-if="selectedBgDeployment.error" class="mb-6">
+        <p class="text-sm text-autobot-text-tertiary mb-2">{{ $t('deploymentsView.error') }}</p>
+        <BaseAlert variant="error">
+          <p class="text-sm font-mono whitespace-pre-wrap">{{ selectedBgDeployment.error }}</p>
+        </BaseAlert>
+      </div>
+
+      <!-- Configuration -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.deploymentType') }}</p>
+          <p class="text-sm font-medium capitalize">{{ selectedBgDeployment.deployment_type }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.autoRollback') }}</p>
+          <p class="text-sm font-medium">{{ selectedBgDeployment.auto_rollback ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.purgeOnComplete') }}</p>
+          <p class="text-sm font-medium">{{ selectedBgDeployment.purge_on_complete ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('deploymentsView.started') }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedBgDeployment.started_at, '-') }}</p>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          v-if="selectedBgDeployment.status === 'verifying'"
+          @click="handleBgSwitch(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
+          class="btn bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover"
+        >{{ $t('deploymentsView.switchToGreen') }}</button>
+        <button
+          v-if="selectedBgDeployment.status === 'active'"
+          @click="handleBgRollback(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover"
+        >{{ $t('deploymentsView.rollback') }}</button>
+        <button
+          v-if="selectedBgDeployment.status === 'failed'"
+          @click="handleBgRetry(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
+          :disabled="isRetryingBg === selectedBgDeployment.bg_deployment_id"
+          class="btn bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover disabled:opacity-50"
+        >
+          {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
+        </button>
+        <button @click="closeBgDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>

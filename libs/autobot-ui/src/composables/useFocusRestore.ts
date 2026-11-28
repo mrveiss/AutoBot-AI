@@ -15,8 +15,9 @@
  *   1. Mount-based (no argument) — save on onMounted, restore on onUnmounted.
  *      Fits dialogs that mount-on-show (parent gates with v-if).
  *   2. Trigger-based (pass a Ref<boolean>) — save on false→true transition,
- *      restore on true→false transition. Fits dialogs that stay mounted
- *      and toggle a `show`/`modelValue` prop (BaseModal, HostSelectionDialog).
+ *      restore on true→false transition, and on unmount while still active.
+ *      Fits dialogs that toggle a `show`/`modelValue` prop (BaseModal,
+ *      BaseDrawer, HostSelectionDialog), including ones a parent v-if removes.
  *
  * The canonical guard covers three edge cases the prior bespoke
  * implementations defended against separately:
@@ -57,6 +58,13 @@ export function useFocusRestore(activeWhen?: Ref<boolean>): void {
       if (isActive && !wasActive) save()
       else if (!isActive && wasActive) restore()
     }, { immediate: true })
+    // A parent can unmount the component while it is still active (a v-if around a dialog
+    // whose own flag never goes false): restore then too, or focus is stranded (#14780 review).
+    if (getCurrentScope()) {
+      onScopeDispose(() => {
+        if (activeWhen.value) restore()
+      })
+    }
   } else {
     if (getCurrentInstance()) {
       onMounted(save)

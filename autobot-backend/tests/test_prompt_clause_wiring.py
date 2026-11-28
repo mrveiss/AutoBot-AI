@@ -13,6 +13,8 @@ Unit tests of the builders cannot catch that: they passed the whole time. What
 needs pinning is the *connection*, so these tests assert the call site itself.
 `services/llm_service.py` is parsed rather than imported because the backend test
 suite stubs that module, and a stub would make any import-based assertion vacuous.
+The assembly call itself lives in `services/llm_optimized_prompt.py` (#16845), which
+`llm_service.py` hands `_build_prompt_clauses`; both halves are pinned.
 """
 
 import ast
@@ -21,16 +23,27 @@ from pathlib import Path
 import pytest
 
 _LLM_SERVICE = Path(__file__).parent.parent / "services" / "llm_service.py"
+_ASSEMBLER = Path(__file__).parent.parent / "services" / "llm_optimized_prompt.py"
 
 
-def _tree() -> ast.Module:
-    return ast.parse(_LLM_SERVICE.read_text(encoding="utf-8"))
+def _tree(path: Path = _LLM_SERVICE) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"))
 
 
 def _find_call(tree: ast.Module, func_name: str) -> ast.Call | None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == func_name:
             return node
+    return None
+
+
+def _find_call_attr(tree: ast.Module, func_name: str) -> ast.Call | None:
+    """Like _find_call, but also matches an awaited or attribute-style call target."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            if getattr(f, "id", None) == func_name or getattr(f, "attr", None) == func_name:
+                return node
     return None
 
 
@@ -49,14 +62,25 @@ def _find_func(tree: ast.Module, name: str) -> ast.AsyncFunctionDef | ast.Functi
 @pytest.mark.parametrize("kwarg", ["preference_clause", "skill_clause"])
 def test_get_optimized_prompt_is_passed_the_clause(kwarg: str) -> None:
     """The assembly call must pass both clauses, or the builders stay dead code."""
-    call = _find_call(_tree(), "get_optimized_prompt")
-    assert call is not None, "get_optimized_prompt call site not found in llm_service.py"
+    call = _find_call(_tree(_ASSEMBLER), "get_optimized_prompt")
+    assert call is not None, "get_optimized_prompt call site not found in llm_optimized_prompt.py"
 
     passed = {kw.arg for kw in call.keywords}
     assert kwarg in passed, (
         f"get_optimized_prompt is not passed {kwarg!r}. Without it the clause builder "
         "is unreachable and the prompt silently loses that signal (#12829)."
     )
+
+
+def test_the_service_hands_the_assembler_its_clause_builder() -> None:
+    """The assembler only sees clauses if llm_service passes it `_build_prompt_clauses`."""
+    call = _find_call_attr(_tree(), "build_optimized_system_prompt")
+    assert call is not None, "build_optimized_system_prompt call site not found in llm_service.py"
+    passed = {kw.arg: kw.value for kw in call.keywords}
+    builder = passed.get("build_clauses")
+    assert (
+        isinstance(builder, ast.Attribute) and builder.attr == "_build_prompt_clauses"
+    ), "llm_service no longer passes build_clauses=self._build_prompt_clauses, so neither clause reaches a prompt"
 
 
 @pytest.mark.parametrize("builder", ["build_preference_clause", "build_skill_clause"])

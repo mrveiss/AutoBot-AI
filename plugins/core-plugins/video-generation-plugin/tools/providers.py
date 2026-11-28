@@ -19,19 +19,29 @@ Providers shipped:
     * SoraProvider   — OpenAI Sora. Registered; credential-gated (SORA_API_KEY).
     * KlingProvider  — Kling AI. Registered; credential-gated (KLING_API_KEY).
 
-All HTTP is async (aiohttp). No blocking calls on the event loop.
+All HTTP is async and goes through the shared pooled client
+(``autobot_shared.http_client.get_http_client()``), never a per-call
+``aiohttp.ClientSession`` — see #12979. No blocking calls on the event loop.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
+
+from autobot_shared.generation_http_timeouts import poll_timeout
+from autobot_shared.http_client import get_http_client
+from autobot_shared.plugin_sdk.credential_binding import CredentialSlot, CredentialUnavailableError
 
 logger = logging.getLogger(__name__)
 
 # Runway developer API base + version header (stable public API surface).
+#: Host-injected, name-scoped key resolver (#18094); standalone, keys come from the environment.
+_slot = CredentialSlot()
+set_credential_resolver = _slot.set
+read_provider_key = _slot.read
+
 RUNWAY_API_BASE = "https://api.dev.runwayml.com/v1"
 RUNWAY_API_VERSION = "2024-11-06"
 
@@ -71,14 +81,28 @@ class BaseVideoProvider:
     env_var: str = ""
 
     def __init__(self, api_key: Optional[str] = None) -> None:
-        self._api_key = api_key if api_key is not None else os.environ.get(self.env_var, "")
+        self._refusal = ""
+        if api_key is not None:
+            self._api_key = api_key
+            return
+        try:
+            self._api_key = read_provider_key(self.env_var)
+        except CredentialUnavailableError as exc:  # #18094: unavailable with the reason, never from env
+            self._api_key, self._refusal = "", str(exc)
 
     @property
     def available(self) -> bool:
         """True when an API key is configured (empty key == disabled)."""
         return bool(self._api_key)
 
+    @property
+    def unavailable_reason(self) -> str:
+        """Why this provider is unavailable: a host refusal's reason, else the missing variable (never a value)."""
+        return self._refusal or f"{self.env_var} not configured"
+
     def _require_key(self) -> str:
+        if self._refusal:
+            raise ProviderError(self._refusal)
         if not self._api_key:
             raise ProviderError(f"{self.env_var} not configured")
         return self._api_key
@@ -131,41 +155,39 @@ class RunwayProvider(BaseVideoProvider):
         resolution: str = "1280x720",
         aspect_ratio: str = "16:9",
     ) -> str:
-        import aiohttp
-
         payload: Dict[str, Any] = {
             "promptText": prompt,
             "model": "gen3a_turbo",
             "duration": max(1, min(int(duration), 10)),
             "ratio": self._ratio_to_runway(aspect_ratio),
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{RUNWAY_API_BASE}/text_to_video",
-                json=payload,
-                headers=self._headers(),
-            ) as resp:
-                body = await resp.json()
-                if resp.status == 429:
-                    raise ProviderError("Runway quota/rate limit exceeded (HTTP 429)")
-                if resp.status not in (200, 201):
-                    raise ProviderError(f"Runway submit failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "POST",
+            f"{RUNWAY_API_BASE}/text_to_video",
+            json=payload,
+            headers=self._headers(),
+            timeout=poll_timeout(),
+        ) as resp:
+            body = await resp.json()
+            if resp.status == 429:
+                raise ProviderError("Runway quota/rate limit exceeded (HTTP 429)")
+            if resp.status not in (200, 201):
+                raise ProviderError(f"Runway submit failed (HTTP {resp.status}): {body}")
         job_id = body.get("id")
         if not job_id:
             raise ProviderError(f"Runway: no task id in response: {body}")
         return str(job_id)
 
     async def poll(self, job_id: str) -> JobStatus:
-        import aiohttp
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{RUNWAY_API_BASE}/tasks/{job_id}",
-                headers=self._headers(),
-            ) as resp:
-                body = await resp.json()
-                if resp.status != 200:
-                    raise ProviderError(f"Runway poll failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "GET",
+            f"{RUNWAY_API_BASE}/tasks/{job_id}",
+            headers=self._headers(),
+            timeout=poll_timeout(),
+        ) as resp:
+            body = await resp.json()
+            if resp.status != 200:
+                raise ProviderError(f"Runway poll failed (HTTP {resp.status}): {body}")
         return self._normalize(job_id, body)
 
     def _normalize(self, job_id: str, body: Dict[str, Any]) -> JobStatus:
@@ -208,29 +230,27 @@ class SoraProvider(BaseVideoProvider):
         resolution: str = "1280x720",
         aspect_ratio: str = "16:9",
     ) -> str:
-        import aiohttp
-
         payload = {"model": "sora-2", "prompt": prompt, "seconds": str(max(1, int(duration)))}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.SORA_API_BASE, json=payload, headers=self._headers()) as resp:
-                body = await resp.json()
-                if resp.status == 429:
-                    raise ProviderError("Sora quota/rate limit exceeded (HTTP 429)")
-                if resp.status not in (200, 201):
-                    raise ProviderError(f"Sora submit failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "POST", self.SORA_API_BASE, json=payload, headers=self._headers(), timeout=poll_timeout()
+        ) as resp:
+            body = await resp.json()
+            if resp.status == 429:
+                raise ProviderError("Sora quota/rate limit exceeded (HTTP 429)")
+            if resp.status not in (200, 201):
+                raise ProviderError(f"Sora submit failed (HTTP {resp.status}): {body}")
         job_id = body.get("id")
         if not job_id:
             raise ProviderError(f"Sora: no job id in response: {body}")
         return str(job_id)
 
     async def poll(self, job_id: str) -> JobStatus:
-        import aiohttp
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.SORA_API_BASE}/{job_id}", headers=self._headers()) as resp:
-                body = await resp.json()
-                if resp.status != 200:
-                    raise ProviderError(f"Sora poll failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "GET", f"{self.SORA_API_BASE}/{job_id}", headers=self._headers(), timeout=poll_timeout()
+        ) as resp:
+            body = await resp.json()
+            if resp.status != 200:
+                raise ProviderError(f"Sora poll failed (HTTP {resp.status}): {body}")
         status = str(body.get("status", "")).lower()
         if status == "completed":
             url = body.get("url") or (body.get("output") or {}).get("url")
@@ -265,29 +285,27 @@ class KlingProvider(BaseVideoProvider):
         resolution: str = "1280x720",
         aspect_ratio: str = "16:9",
     ) -> str:
-        import aiohttp
-
         payload = {"prompt": prompt, "duration": str(max(1, int(duration))), "aspect_ratio": aspect_ratio}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.KLING_API_BASE, json=payload, headers=self._headers()) as resp:
-                body = await resp.json()
-                if resp.status == 429:
-                    raise ProviderError("Kling quota/rate limit exceeded (HTTP 429)")
-                if resp.status not in (200, 201):
-                    raise ProviderError(f"Kling submit failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "POST", self.KLING_API_BASE, json=payload, headers=self._headers(), timeout=poll_timeout()
+        ) as resp:
+            body = await resp.json()
+            if resp.status == 429:
+                raise ProviderError("Kling quota/rate limit exceeded (HTTP 429)")
+            if resp.status not in (200, 201):
+                raise ProviderError(f"Kling submit failed (HTTP {resp.status}): {body}")
         job_id = (body.get("data") or {}).get("task_id") or body.get("task_id")
         if not job_id:
             raise ProviderError(f"Kling: no task id in response: {body}")
         return str(job_id)
 
     async def poll(self, job_id: str) -> JobStatus:
-        import aiohttp
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.KLING_API_BASE}/{job_id}", headers=self._headers()) as resp:
-                body = await resp.json()
-                if resp.status != 200:
-                    raise ProviderError(f"Kling poll failed (HTTP {resp.status}): {body}")
+        async with get_http_client().tracked_request(
+            "GET", f"{self.KLING_API_BASE}/{job_id}", headers=self._headers(), timeout=poll_timeout()
+        ) as resp:
+            body = await resp.json()
+            if resp.status != 200:
+                raise ProviderError(f"Kling poll failed (HTTP {resp.status}): {body}")
         data = body.get("data") or body
         status = str(data.get("task_status", "")).lower()
         if status == "succeed":

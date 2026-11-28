@@ -26,20 +26,21 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from code_intelligence.llm_pattern_analyzer import (
-    AnalysisResult,
     BatchingAnalyzer,
     BatchingOpportunity,
     CacheOpportunity,
     CacheOpportunityDetector,
     CacheOpportunityType,
+    CodePatternRecommendation,
     CodePatternScanner,
     CostCalculator,
     CostEstimate,
     LLMPatternAnalyzer,
     OptimizationCategory,
     OptimizationPriority,
-    OptimizationRecommendation,
+    PatternAnalysisResult,
     PromptAnalyzer,
     PromptIssueType,
     PromptTemplate,
@@ -94,9 +95,8 @@ class TestOptimizationPriority:
 
     def test_all_priorities_exist(self):
         """Verify all expected priorities exist."""
-        expected = ["critical", "high", "medium", "low", "info"]
-        actual = [priority.value for priority in OptimizationPriority]
-        assert set(expected) == set(actual)
+        actual = [priority.value for priority in reversed(Severity.finding_ladder())]
+        assert actual == ["critical", "high", "medium", "low", "info"]
 
     def test_priority_values(self):
         """Test specific priority values."""
@@ -291,11 +291,11 @@ class TestCostEstimate:
 
 
 class TestOptimizationRecommendation:
-    """Tests for OptimizationRecommendation dataclass."""
+    """Tests for CodePatternRecommendation dataclass."""
 
     def test_recommendation_creation(self):
-        """Test creating an OptimizationRecommendation."""
-        rec = OptimizationRecommendation(
+        """Test creating an CodePatternRecommendation."""
+        rec = CodePatternRecommendation(
             recommendation_id="rec_001",
             category=OptimizationCategory.CACHING,
             priority=OptimizationPriority.HIGH,
@@ -313,11 +313,11 @@ class TestOptimizationRecommendation:
 
 
 class TestAnalysisResult:
-    """Tests for AnalysisResult dataclass."""
+    """Tests for PatternAnalysisResult dataclass."""
 
     def test_analysis_result_creation(self):
-        """Test creating an AnalysisResult."""
-        result = AnalysisResult(
+        """Test creating an PatternAnalysisResult."""
+        result = PatternAnalysisResult(
             analysis_id="analysis_001",
             analysis_timestamp=datetime.now(),
             files_analyzed=10,
@@ -922,7 +922,7 @@ class TestConvenienceFunctions:
         priorities = get_optimization_priorities()
         assert "critical" in priorities
         assert "high" in priorities
-        assert len(priorities) == len(OptimizationPriority)
+        assert priorities == ["critical", "high", "medium", "low", "info"]
 
     def test_get_cache_opportunity_types(self):
         """Test getting cache opportunity types."""

@@ -23,7 +23,6 @@ _COMPANY_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 _ITEM_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 
 _DB = "user_management.database"
-_WIS = "llc.services.work_item_service"
 
 
 def _request(company_id: str) -> MagicMock:
@@ -49,7 +48,7 @@ def _patch_work_item(item_company_id):  # noqa: ANN001, ANN202
     svc.get = AsyncMock(return_value=item)
     return (
         patch(f"{_DB}.get_async_session_factory", new=_patched_factory),
-        patch(f"{_WIS}.WorkItemService", return_value=svc),
+        patch("llc.services.accessors.get_work_item_service", return_value=svc),
     )
 
 

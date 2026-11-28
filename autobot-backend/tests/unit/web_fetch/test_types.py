@@ -63,26 +63,28 @@ class TestFetchResult:
 
     def test_cache_key_deterministic(self) -> None:
         r = FetchResult(url="https://example.com", success=True)
-        k1 = r.cache_key(RenderMode.AUTO)
-        k2 = r.cache_key(RenderMode.AUTO)
+        k1 = r.cache_key(RenderMode.AUTO, "document")
+        k2 = r.cache_key(RenderMode.AUTO, "document")
         assert k1 == k2
 
     def test_cache_key_differs_by_mode(self) -> None:
         r = FetchResult(url="https://example.com", success=True)
-        assert r.cache_key(RenderMode.AUTO) != r.cache_key(RenderMode.PLAYWRIGHT)
+        assert r.cache_key(RenderMode.AUTO, "document") != r.cache_key(RenderMode.PLAYWRIGHT, "document")
 
     def test_cache_key_format(self) -> None:
         r = FetchResult(url="https://example.com", success=True)
-        key = r.cache_key(RenderMode.FAST)
+        key = r.cache_key(RenderMode.FAST, "document")
         assert key.startswith("web_fetch:content:")
         digest_part = key.split(":", 2)[2]
         assert len(digest_part) == 64  # sha256 hex
 
-    def test_cache_key_uses_url_and_mode(self) -> None:
+    def test_cache_key_uses_url_mode_profile_and_extractor_version(self) -> None:
         r = FetchResult(url="https://example.com", success=True)
-        raw = "https://example.com|fast"
+        from media.document.html_extraction import EXTRACTOR_VERSION
+
+        raw = f"https://example.com|fast|document|{EXTRACTOR_VERSION}"
         expected = "web_fetch:content:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
-        assert r.cache_key(RenderMode.FAST) == expected
+        assert r.cache_key(RenderMode.FAST, "document") == expected
 
 
 class TestErrorConstants:

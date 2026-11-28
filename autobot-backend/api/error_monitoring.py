@@ -14,7 +14,7 @@ import json
 import os
 import sys
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.schemas_analytics import (
     AlertThresholdRequest,
@@ -27,6 +27,7 @@ from api.schemas_analytics import (
     TestErrorRequest,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,
@@ -47,7 +48,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 logger = get_logger(__name__)
 
 # Create FastAPI router
-router = APIRouter(tags=["Error Monitoring"])
+# #16375: nine routes reachable anonymously, including `POST /clear` (wipes the
+# shared error store, Redis and in-memory) and `POST /test-error` (injects one).
+# ADMIN and not `get_current_user`: this is operational diagnostics over the
+# whole deployment -- error categories, components, timelines -- not a user's
+# own data, and two routes mutate state every other user depends on.
+router = APIRouter(tags=["Error Monitoring"], dependencies=[Depends(check_admin_permission)])
 
 
 @router.get("/statistics", response_model=ErrorMonitoringDataResponse)
@@ -249,13 +255,19 @@ async def probe_error_monitoring(
     operation="clear_error_history",
     error_code_prefix="ERROR_MONITORING",
 )
-async def clear_error_history(authorization: str | None = Header(None)):
-    """Clear error history (admin only)"""
-    try:
-        # This would typically require authentication
-        if not authorization or authorization != "Bearer admin_token":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+async def clear_error_history():
+    """Clear error history. Admin-gated at the router (#16375).
 
+    This route used to compare the Authorization header against a literal
+    defined in this file, under a comment saying authentication "would
+    typically" be required -- a placeholder never replaced. A literal is not a
+    credential: it ships in the repository, so it authenticates anyone who can
+    read the source while presenting as a gate to anyone who reads the route.
+    The literal is deliberately not repeated here, because a secrets scan reads
+    docstrings too. See #17727; the router-level `check_admin_permission` above
+    is the replacement, so this route no longer authenticates itself.
+    """
+    try:
         manager = get_error_boundary_manager()
 
         # Issue #361 - avoid blocking - clear Redis errors in thread pool

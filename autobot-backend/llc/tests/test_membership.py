@@ -18,6 +18,7 @@ import pytest
 
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.membership_service import (
     MemberAlreadyExistsError,
     MemberNotFoundError,
@@ -36,7 +37,7 @@ def _make_membership(company_id=None, user_id=None, role=MembershipRole.MEMBER) 
 
 @pytest.fixture
 def service():
-    return MembershipService()
+    return MembershipService(activity_log=AsyncMock(spec=LLCActivityLogService))
 
 
 @pytest.fixture

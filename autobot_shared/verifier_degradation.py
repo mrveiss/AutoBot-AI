@@ -47,8 +47,11 @@ class VerifierDegradation(str, Enum):
     UNPARSEABLE = "unparseable"
     #: No verifier provider was available to call.
     NO_PROVIDER = "no_provider"
-    #: The call raised or timed out.
+    #: The call raised (transport, provider error).
     CALL_FAILED = "call_failed"
+    #: The call did not answer within ``VERIFIER_TIMEOUT_S`` (#21844): its own class, since an oversized prompt or a
+    #: model that had to be loaded looks like this and a person reading the audit trail needs to tell it apart.
+    TIMEOUT = "timeout"
 
 
 #: ``block`` (the default) or ``pass``: what an unreadable verifier reply
@@ -156,7 +159,19 @@ class VerifierObservation:
         return cls(probability=None, rationale=rationale, degradation=degradation)
 
 
+def failure_observation(exc: BaseException, deadline_s: float | None = None) -> VerifierObservation:
+    """The observation for a verifier call that raised: a timeout is its own class (#21844).
+
+    *deadline_s* is the deadline that was hit; it goes into the rationale, which the audit event carries (#22254).
+    """
+    if isinstance(exc, TimeoutError):  # asyncio.TimeoutError is TimeoutError from Python 3.11
+        waited = "." if deadline_s is None else f" after {deadline_s:g}s."
+        return VerifierObservation.failed(VerifierDegradation.TIMEOUT, f"Verifier LLM timed out{waited}")
+    return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
+
+
 __all__ = [
+    "failure_observation",
     "FAIL_CLOSED",
     "ON_UNPARSEABLE_BLOCKS",
     "VerifierDegradation",

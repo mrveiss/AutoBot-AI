@@ -14,10 +14,10 @@ The reconciler must:
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 from background_vectorization import FULL_SCAN_EVERY_N_CYCLES, PENDING_SET_KEY, BackgroundVectorizer
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 
 def _run(coro):
@@ -26,25 +26,13 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-class _FakePipe:
-    def __init__(self):
-        self.sadd = AsyncMock()
-        self.srem = AsyncMock()
-        self.execute = AsyncMock(return_value=[])
-
-
 def _make_kb(pending_members=None):
     """A kb whose redis() exposes the calls the reconciler makes."""
     redis = MagicMock()
     redis.smembers = AsyncMock(return_value=set(pending_members or []))
     redis.srem = AsyncMock()
-    pipe = _FakePipe()
-
-    @asynccontextmanager
-    async def _pipeline():
-        yield pipe
-
-    redis.pipeline = _pipeline
+    pipe = FakeAsyncPipeline()  # no target: records the commands, applies nothing
+    redis.pipeline = MagicMock(return_value=pipe)
     kb = MagicMock()
     kb.redis = MagicMock(return_value=redis)
     kb._scan_redis_keys_async = AsyncMock(return_value=[])
@@ -134,8 +122,8 @@ def test_sync_pending_set_sadds_and_srems() -> None:
     v = BackgroundVectorizer()
     kb = _make_kb()
     _run(v._sync_pending_set(kb, to_add=["fact:a", "fact:b"], to_remove=["fact:c"]))
-    kb._fake_pipe.sadd.assert_awaited_once_with(PENDING_SET_KEY, "a", "b")
-    kb._fake_pipe.srem.assert_awaited_once_with(PENDING_SET_KEY, "c")
+    # one EXEC carrying exactly one SADD and one SREM, in that order
+    assert kb._fake_pipe.executed == [[("sadd", PENDING_SET_KEY, "a", "b"), ("srem", PENDING_SET_KEY, "c")]]
 
 
 def test_scan_pending_set_builds_fact_keys() -> None:

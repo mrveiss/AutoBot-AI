@@ -6,6 +6,10 @@
 
 set -e
 
+# #19413: ChromaDB 1.x heartbeat path (autobot_shared/chromadb_endpoints.py); this script
+# cannot import Python, so the copy is pinned by repo_tests/chromadb_heartbeat_one_home_19413_test.py.
+CHROMADB_HEARTBEAT_PATH="/api/v2/heartbeat"
+
 echo "Starting AutoBot DB Stack..."
 
 # Start Redis Stack
@@ -64,7 +68,7 @@ fi
 
 # ChromaDB
 echo -n "  ChromaDB (8100): "
-if curl -s "http://127.0.0.1:8100/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
+if curl -s "http://127.0.0.1:8100${CHROMADB_HEARTBEAT_PATH}" 2>/dev/null | grep -q "nanosecond"; then
     echo "OK"
 else
     echo "FAILED"

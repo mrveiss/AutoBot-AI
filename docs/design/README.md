@@ -19,9 +19,10 @@ Pre-implementation design documents. Each captures *why* a feature was designed 
 |---|---|---|
 | [[2026-04-10-causal-error-recovery]] | Causal Error Recovery system design | #2154 |
 | [[2026-04-10-counterfactual-reasoning]] | CounterfactualReasoner — three-tier prediction strategy | #4069 |
-| [[2026-07-26-cross-vendor-review-gate]] | Cross-vendor second-opinion review gate for LLC | #12618 |
+| [[2026-07-26-cross-vendor-review-gate]] | Cross-vendor second-opinion review gate for Company OS | #12618 |
 | [[2026-07-26-agent-scored-retrospectives]] | Per-agent scorecard in sprint retrospectives | #12619 |
 | [[2026-06-04-pair-device-dialog]] | QR device pairing dialog | #4463 |
+| [[2026-10-11-refined-ui-redesign]] | Refined UI redesign — mockups, tokens and implementation handoff | #18223 |
 
 ---
 

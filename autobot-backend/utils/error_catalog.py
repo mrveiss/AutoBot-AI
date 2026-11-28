@@ -9,6 +9,7 @@ Provides centralized error message retrieval from config/error_messages.yaml
 with caching, validation, and integration with error_boundaries.py
 """
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -17,6 +18,7 @@ import yaml
 
 from autobot_shared.error_boundaries import ErrorCategory
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import infrastructure_dir
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
@@ -26,7 +28,7 @@ logger = get_logger(__name__)
 _METADATA_FIELDS = frozenset({"version", "last_updated"})
 
 # Issue #912: Builtin fallback — used when error_messages.yaml is not found on the VM.
-# Mirrors infrastructure/shared/config/error_messages.yaml exactly.
+# Mirrors static/error_messages.yaml, the one tracked copy; error_catalog_parity_18556_test.py enforces it.
 _BUILTIN_FALLBACK_ERRORS: dict = {
     # AUTH errors
     "AUTH_0001": {
@@ -437,16 +439,15 @@ class ErrorCatalog:
     """
 
     _initialized: bool = False
+    _load_lock = threading.RLock()  # #20894: one first load, however many threads reach it together
 
     def __init__(self):
         """Initialize error catalog (use get_error_catalog_instance() instead)"""
         self._catalog: Dict[str, ErrorDefinition] = {}
         self._raw_data: dict | None = None
         self._catalog_path: Path | None = None
-        # #12969: which catalog is actually in use, and where it was looked for.
-        # Both are read by the error-resilience health probe, so "the deployed
-        # catalog is not being used" is a state something can observe rather
-        # than a log line nobody read for two releases.
+        # #12969: which catalog is in use and where it was looked for; the health probe reads both, so
+        # "the deployed catalog is not being used" is observable rather than a log line nobody read.
         self.source: str = SOURCE_UNLOADED
         self.searched_paths: list[Path] = []
 
@@ -467,10 +468,9 @@ class ErrorCatalog:
 
         ``PATH.CONFIG_DIR`` said ``infrastructure/shared/config`` while the
         directory here is ``autobot-infrastructure/shared/config``, so that
-        candidate never resolved; #14892 corrected the constant. Both explicit
-        spellings stay: this loader must not depend on the constant being right,
-        deduplication makes the now-correct one free, and a deployed layout may
-        still use the bare ``infrastructure/`` spelling.
+        candidate never resolved; #14892 corrected the constant. The explicit spellings stay: this loader
+        must not depend on it (#20578: ``infrastructure_dir()`` is code_source's copy, never the stale
+        one beside the install), and a deployed layout may use ``infrastructure/``.
         """
         here = Path(__file__).resolve()
         backend_dir = here.parent.parent
@@ -479,14 +479,10 @@ class ErrorCatalog:
             PATH.STATIC_DIR / CATALOG_FILENAME,
             backend_dir / "static" / CATALOG_FILENAME,
             PATH.CONFIG_DIR / CATALOG_FILENAME,
-            install_root / "autobot-infrastructure" / "shared" / "config" / CATALOG_FILENAME,
+            infrastructure_dir(fallback_root=install_root) / "shared" / "config" / CATALOG_FILENAME,  # #20578
             install_root / "infrastructure" / "shared" / "config" / CATALOG_FILENAME,
         ]
-        ordered: list[Path] = []
-        for candidate in candidates:
-            if candidate not in ordered:
-                ordered.append(candidate)
-        return ordered
+        return list(dict.fromkeys(candidates))  # first occurrence wins, order kept
 
     def _resolve_catalog_path(self) -> Path | None:
         """First candidate that exists, recording every path searched.
@@ -516,8 +512,8 @@ class ErrorCatalog:
                 retry_after=data.get("retry_after"),
                 details=data.get("details"),
             )
+        self.source = SOURCE_BUILTIN_FALLBACK  # before the flag: the unlocked fast path reads `source` on seeing it
         self._initialized = True
-        self.source = SOURCE_BUILTIN_FALLBACK
         # #12969: "not found" without saying WHERE it looked is why this sat
         # unexamined in two separate log sweeps. ERROR, not WARNING: the
         # deployed catalog being present and unread is a misconfiguration, and
@@ -565,8 +561,8 @@ class ErrorCatalog:
 
             self._catalog_path = catalog_path
             self._parse_catalog()
-            self._initialized = True
             self.source = SOURCE_YAML
+            self._initialized = True
 
             logger.info(
                 "Loaded error catalog: %d errors from %s",
@@ -611,8 +607,7 @@ class ErrorCatalog:
             ErrorDefinition if found, None otherwise
         """
         # Lazy load catalog on first access
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return self._catalog.get(error_code)
 
@@ -640,8 +635,7 @@ class ErrorCatalog:
         Returns:
             True if code exists, False otherwise
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return error_code in self._catalog
 
@@ -655,8 +649,7 @@ class ErrorCatalog:
         Returns:
             List of error codes matching prefix
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return [code for code in self._catalog if code.startswith(component_prefix + "_")]
 
@@ -667,8 +660,7 @@ class ErrorCatalog:
         Returns:
             Dictionary with catalog statistics
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         # Count errors by category
         category_counts: Dict[str, int] = {}
@@ -691,6 +683,14 @@ class ErrorCatalog:
             "by_category": category_counts,
             "by_component": component_counts,
         }
+
+    def ensure_loaded(self) -> None:
+        """Load the catalog once if nothing has loaded it yet; readers of ``source`` call this first (#20894)."""
+        if self._initialized:
+            return
+        with self._load_lock:
+            if not self._initialized:  # re-checked under the lock: the thread ahead of us may have loaded it
+                self.load_catalog()
 
     @property
     def catalog_path(self) -> Path | None:
@@ -770,6 +770,4 @@ def validate_error_code(error_code: str) -> bool:
     return catalog.validate_code(error_code)
 
 
-# Pre-load catalog on module import
-_catalog_instance = get_error_catalog_instance()
-_catalog_instance.load_catalog()
+# Loaded at first use, never at import (#20894): every accessor calls ensure_loaded().

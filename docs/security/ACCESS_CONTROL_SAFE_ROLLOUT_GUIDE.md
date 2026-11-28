@@ -83,6 +83,8 @@ User Request
 FastAPI Dependency Injection
     ↓
 validate_session_ownership() executes BEFORE endpoint handler
+(one function, two postures: the conversation-file routes call it with SessionPosture.STRICT;
+ an owner that cannot be looked up is denied under both, never claimed. See THREAT_MODEL.md section 2.)
     ↓
 ┌─────────────────────────────────────┐
 │ 1. Extract authenticated user       │

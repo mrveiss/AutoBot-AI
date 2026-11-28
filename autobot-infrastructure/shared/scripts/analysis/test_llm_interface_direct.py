@@ -13,6 +13,14 @@ from pathlib import Path
 
 import aiohttp
 
+# Runs from any directory with no PYTHONPATH: the repository root goes on the path for `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.ollama_urls import ollama_chat_url  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 # Add src directory to path
@@ -24,7 +32,7 @@ async def test_llm_interface_simplified():
     logger.info("🤖 Testing simplified LLM interface logic...")
 
     # Mimic the exact data structure AutoBot uses
-    url = "http://127.0.0.1:11434/api/chat"
+    url = ollama_chat_url(ServiceURLs.OLLAMA_LOCAL)
     headers = {"Content-Type": "application/json"}
 
     data = {
@@ -66,10 +74,10 @@ async def test_with_retry_mechanism():
     logger.info("\n🔄 Testing with retry mechanism...")
 
     # Import the retry mechanism
-    from retry_mechanism import retry_network_operation
+    from autobot_shared.retry_mechanism import retry_network_operation
 
     async def make_llm_request():
-        url = "http://127.0.0.1:11434/api/chat"
+        url = ollama_chat_url(ServiceURLs.OLLAMA_LOCAL)
         headers = {"Content-Type": "application/json"}
 
         data = {

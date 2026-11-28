@@ -12,11 +12,13 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
+import { BaseAlert, createLogger } from '@autobot/ui'
+import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
+import { useI18n } from 'vue-i18n'
 import {
   useCodeSync,
-  isSelfUpdateReconnecting,
-  classifyUpdateAllPollError,
   SLM_SELF_UPDATE_STAGE,
+  UPDATE_ALL_UNAUTHENTICATED,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -27,15 +29,20 @@ import {
   type ComponentSyncJobStatus,
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { buildLoginUrl } from '@/utils/loginRedirect'
+import { useUpdateAllPoll } from '@/composables/useUpdateAllPoll'
+import UpdateAllPollBanner from '@/components/UpdateAllPollBanner.vue'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
+import CodeRollbackPanel from '@/components/CodeRollbackPanel.vue' // #20214
+import UpdateProgressPanel from '@/components/UpdateProgressPanel.vue' // #20254
 import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
+const { t } = useI18n()
 const codeSync = useCodeSync()
 
 // =============================================================================
@@ -139,13 +146,25 @@ let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 // One-click update-all state (#9971)
 // =============================================================================
 const updateAllJob = ref<UpdateAllJob | null>(null)
-const updateAllPolling = ref(false)
-// F1: track consecutive transient errors to bound backoff
-const updateAllTransientErrors = ref(0)
-const UPDATE_ALL_MAX_TRANSIENT_ERRORS = 90  // ~3 min at 2s intervals
-const UPDATE_ALL_LOST_CONTACT_ERRORS = 30   // ~1 min before "lost contact" banner
-const updateAllLostContact = ref(false)
-let updateAllPollTimer: ReturnType<typeof setTimeout> | null = null
+// Polling state, its give-up/auth end states and the banner flags live in the composable (#20201).
+const {
+  polling: updateAllPolling, transientErrors: updateAllTransientErrors,
+  lostContact: updateAllLostContact,
+  gaveUp: updateAllGaveUp,
+  authFailed: updateAllAuthFailed,
+  reconnecting: updateAllReconnecting,
+  schedule: _scheduleUpdateAllPoll,
+  stop: _stopUpdateAllPoll,
+  recheck: handleRecheckUpdateAll,
+  clearFlags: _clearUpdateAllFlags,
+} = useUpdateAllPoll(
+  updateAllJob,
+  () => codeSync.getUpdateAllStatus(),
+  async () => {
+    // Refresh status / pending nodes once the pipeline finishes
+    await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
+  },
+)
 const showAdvanced = ref(false)
 const expandedStageLogs = ref<Set<string>>(new Set())
 
@@ -162,18 +181,18 @@ function stageI18nKey(name: string): string {
 
 function stageStatusClass(stageStatus: string): string {
   const map: Record<string, string> = {
-    pending: 'bg-gray-100 text-gray-500',
-    running: 'bg-blue-100 text-blue-700',
-    success: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-    skipped: 'bg-gray-100 text-gray-400',
-    current: 'bg-green-50 text-green-600',
+    pending: 'bg-autobot-bg-tertiary text-autobot-text-tertiary',
+    running: 'bg-autobot-pill-info-bg text-autobot-text-primary',
+    success: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg',
+    failed: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
+    skipped: 'bg-autobot-bg-tertiary text-autobot-text-tertiary',
+    current: 'bg-autobot-success-bg text-autobot-success',
     // #16640: SLM current, but a co-located component failed -- amber, not
     // the green `current`/`success` classes, so a scan of the stage row
     // reads "needs attention" rather than "done".
-    partial: 'bg-amber-100 text-amber-700',
+    partial: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
   }
-  return map[stageStatus] ?? 'bg-gray-100 text-gray-500'
+  return map[stageStatus] ?? 'bg-autobot-bg-tertiary text-autobot-text-tertiary'
 }
 
 // F2: returns an i18n key for the stage status text
@@ -239,14 +258,6 @@ const updateAllIsRunning = computed(() => {
   return s === 'pending' || s === 'running'
 })
 
-// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
-// when the SLM control plane restarts itself and polling fails transiently.
-// Derives from the last-known running stage + transient-error count, so it
-// resets to false automatically as soon as a poll succeeds again.
-const updateAllReconnecting = computed(() =>
-  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
-)
-
 // #12593: auto-expand stage-3 logs while reconnecting so the backend
 // "service will restart" message is visible during the restart window.
 watch(updateAllReconnecting, (reconnecting) => {
@@ -308,10 +319,6 @@ function toggleNode(nodeId: string): void {
 function formatVersion(version: string | null | undefined): string {
   // Use 12-character format for consistency (Issue #866)
   return getCommitHashDisplay(version).display
-}
-
-function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
 }
 
 async function handleRefresh(): Promise<void> {
@@ -380,7 +387,7 @@ async function handleSyncSelected(): Promise<void> {
     // per-node failure and its `failure_reason` still reach the operator.
     trackFleetSyncJob(result.job_id)
     const count = nodeIds.length
-    successMessage.value = `Successfully synced ${count} node${count > 1 ? 's' : ''}`
+    successMessage.value = t('codeSyncView.syncedNodes', { count }, count)
 
     // Auto-dismiss after 5 seconds
     setTimeout(() => {
@@ -390,7 +397,7 @@ async function handleSyncSelected(): Promise<void> {
     selectedNodes.value.clear()
     await handleRefresh()
   } else {
-    codeSync.setError(result.message || 'Fleet sync failed')
+    codeSync.setError(result.message || t('codeSyncView.fleetSyncFailed'))
   }
 }
 
@@ -409,7 +416,7 @@ async function handleSyncAll(): Promise<void> {
     // #13157: same asynchronous rollout as handleSyncSelected.
     trackFleetSyncJob(result.job_id)
     const count = result.nodes_queued || codeSync.pendingNodes.value.length
-    successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
+    successMessage.value = t('codeSyncView.queuedSyncNodes', { count }, count)
 
     // Auto-dismiss after 5 seconds
     setTimeout(() => {
@@ -419,7 +426,7 @@ async function handleSyncAll(): Promise<void> {
     selectedNodes.value.clear()
     await handleRefresh()
   } else {
-    codeSync.setError(result.message || 'Fleet sync failed')
+    codeSync.setError(result.message || t('codeSyncView.fleetSyncFailed'))
   }
 }
 
@@ -445,7 +452,7 @@ async function handleSelfUpdate(): Promise<void> {
       await handleRefresh()
     }, 65000)
   } else {
-    codeSync.setError(result.message || 'Self-update failed')
+    codeSync.setError(result.message || t('codeSyncView.selfUpdateFailed'))
   }
 }
 
@@ -463,8 +470,8 @@ async function handlePullFromSource(): Promise<void> {
 
   if (result.success) {
     logger.info('Pulled from source:', result.commit)
-    const shortCommit = result.commit?.substring(0, 12) || 'unknown'
-    successMessage.value = `Successfully pulled latest changes (${shortCommit})`
+    const shortCommit = result.commit?.substring(0, 12) || t('codeSyncView.unknownCommit')
+    successMessage.value = t('codeSyncView.pulledLatestChanges', { commit: shortCommit })
 
     // Auto-dismiss success message after 5 seconds
     setTimeout(() => {
@@ -475,7 +482,7 @@ async function handlePullFromSource(): Promise<void> {
     await handleRefresh()
   } else {
     logger.error('Pull failed:', result.message)
-    codeSync.setError(result.message || 'Failed to pull from source')
+    codeSync.setError(result.message || t('codeSyncView.failedToPullFromSource'))
   }
 }
 
@@ -501,7 +508,7 @@ async function handleCodeSourceSaved(): Promise<void> {
 }
 
 async function handleRemoveCodeSource(): Promise<void> {
-  if (!confirm('Remove code source assignment?')) return
+  if (!confirm(t('codeSyncView.removeCodeSourceAssignment'))) return
   await codeSourceComposable.removeCodeSource()
 }
 
@@ -538,7 +545,7 @@ async function handleSaveSchedule(scheduleData: ScheduleCreateRequest): Promise<
 }
 
 async function handleDeleteSchedule(schedule: DeepReadonly<UpdateSchedule>): Promise<void> {
-  if (!confirm(`Delete schedule "${schedule.name}"?`)) return
+  if (!confirm(t('codeSyncView.deleteSchedule', { name: schedule.name }))) return
 
   const success = await codeSync.deleteSchedule(schedule.id)
   if (success) {
@@ -563,7 +570,7 @@ async function handleRunSchedule(schedule: DeepReadonly<UpdateSchedule>): Promis
 
 function formatNextRun(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled'
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 
 function describeCron(expression: string): string {
@@ -629,7 +636,7 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   _stopResolveDriftPoll()
   isResolvingDrift.value = false
   if (result.status === 'completed' && result.success) {
-    successMessage.value = result.message || `Resynced ${result.component} from code_source`
+    successMessage.value = result.message || t('codeSyncView.componentResynced', { component: result.component })
     await handleCheckDrift()
     return
   }
@@ -640,7 +647,7 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   // the only sanctioned updater.
   resolveDriftBlocked.value = result.status === RESOLVE_STATUS_BLOCKED
   blockedDeletions.value = resolveDriftBlocked.value ? result.post_steps || [] : []
-  codeSync.setError(result.message || 'Drift resolve job failed')
+  codeSync.setError(result.message || t('codeSyncView.driftResolveJobFailed'))
 }
 
 /**
@@ -767,12 +774,12 @@ function trackFleetSyncJob(jobId: string | undefined): void {
 
 function fleetJobStatusClass(jobStatus: string): string {
   const map: Record<string, string> = {
-    pending: 'bg-gray-100 text-gray-500',
-    running: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
+    pending: 'bg-autobot-bg-tertiary text-autobot-text-tertiary',
+    running: 'bg-autobot-pill-info-bg text-autobot-text-primary',
+    completed: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg',
+    failed: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
   }
-  return map[jobStatus] ?? 'bg-gray-100 text-gray-500'
+  return map[jobStatus] ?? 'bg-autobot-bg-tertiary text-autobot-text-tertiary'
 }
 
 function fleetJobStatusI18nKey(jobStatus: string): string {
@@ -795,80 +802,13 @@ watch(showAdvanced, (open) => {
 // One-click update-all methods (#9971)
 // =============================================================================
 
-function _stopUpdateAllPoll(): void {
-  if (updateAllPollTimer) {
-    clearTimeout(updateAllPollTimer)
-    updateAllPollTimer = null
-  }
-  updateAllPolling.value = false
-}
-
-/**
- * F1: Resilient polling loop.
- *   - null   = 404, no job → stop
- *   - undefined = transient error (network/5xx) → keep polling with bounded backoff
- *   - UpdateAllJob = update UI, decide whether to continue
- */
-function _scheduleUpdateAllPoll(): void {
-  if (updateAllPolling.value) return
-  updateAllPolling.value = true
-  updateAllTransientErrors.value = 0
-
-  const poll = async () => {
-    const result = await codeSync.getUpdateAllStatus()
-
-    if (result === undefined) {
-      // Transient error (SLM restart in progress)
-      updateAllTransientErrors.value += 1
-      const decision = classifyUpdateAllPollError(
-        updateAllTransientErrors.value,
-        UPDATE_ALL_LOST_CONTACT_ERRORS,
-        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
-      )
-      if (decision === 'giveup') {
-        // Gave up — show "lost contact" banner, re-enable CTA
-        updateAllLostContact.value = true
-        updateAllPolling.value = false
-        updateAllPollTimer = null
-        return
-      }
-      if (decision === 'lost-contact') {
-        updateAllLostContact.value = true
-      }
-      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
-      // already true (transient errors >= 1) so the reconnecting affordance
-      // shows immediately without waiting for the lost-contact threshold.
-      updateAllPollTimer = setTimeout(poll, 2000)
-      return
-    }
-
-    // Successful contact — clear lost-contact banner if it was showing
-    updateAllLostContact.value = false
-    updateAllTransientErrors.value = 0
-
-    if (result === null) {
-      // True 404: no job ever started → stop polling
-      _stopUpdateAllPoll()
-      return
-    }
-
-    updateAllJob.value = result
-    if (result.status === 'running' || result.status === 'pending') {
-      updateAllPollTimer = setTimeout(poll, 2000)
-    } else {
-      updateAllPolling.value = false
-      updateAllPollTimer = null
-      // Refresh status / pending nodes once pipeline finishes
-      await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
-    }
-  }
-
-  updateAllPollTimer = setTimeout(poll, 1000)
+function goToLogin(): void {
+  window.location.href = buildLoginUrl(window.location)
 }
 
 async function handleUpdateAll(): Promise<void> {
   codeSync.clearError()
-  updateAllLostContact.value = false
+  _clearUpdateAllFlags()
   const job = await codeSync.startUpdateAll()
   if (job) {
     updateAllJob.value = job
@@ -876,10 +816,10 @@ async function handleUpdateAll(): Promise<void> {
   }
 }
 
-// Resume polling if a job is already running when the view mounts
-async function _checkExistingUpdateAllJob(): Promise<void> {
-  const result = await codeSync.getUpdateAllStatus()
-  if (result === undefined || result === null) {
+// Follow the update-all job: the running one on mount, or the one a rollback just started (#20214, no re-fetch)
+async function adoptRunningUpdateAllJob(started?: UpdateAllJob): Promise<void> {
+  const result = started ?? (await codeSync.getUpdateAllStatus())
+  if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
   }
   updateAllJob.value = result
@@ -900,7 +840,7 @@ onMounted(async () => {
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
-    _checkExistingUpdateAllJob(),
+    adoptRunningUpdateAllJob(),
   ])
 })
 
@@ -914,11 +854,11 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <!-- Header -->
+    <UpdateNodesOfflineAlert :updating="updateAllPolling" />
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSync') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.codeSync') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('codeSyncView.manageAgentCodeVersions') }}
         </p>
       </div>
@@ -950,11 +890,10 @@ onUnmounted(() => {
     <div class="card p-5 mb-6">
       <div class="flex items-start justify-between gap-4">
         <div class="flex-1">
-          <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ $t('codeSyncView.updatePipelineTitle') }}</h2>
-          <p class="text-sm text-gray-500">{{ $t('codeSyncView.updatePipelineDesc') }}</p>
+          <h2 class="text-lg font-semibold text-autobot-text-primary mb-1">{{ $t('codeSyncView.updatePipelineTitle') }}</h2>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('codeSyncView.updatePipelineDesc') }}</p>
         </div>
         <div class="shrink-0">
-          <!-- Already current state -->
           <button
             v-if="!codeSync.hasUpdate.value && codeSync.outdatedCount.value === 0 && !updateAllIsRunning"
             disabled
@@ -995,7 +934,7 @@ onUnmounted(() => {
         <!-- #12593: inline reconnecting notice during the stage-3 self-restart window -->
         <div
           v-if="updateAllReconnecting"
-          class="mb-3 flex items-center gap-2 text-sm text-amber-700"
+          class="mb-3 flex items-center gap-2 text-sm text-autobot-pill-warn-fg"
         >
           <svg class="w-4 h-4 animate-spin shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1033,25 +972,25 @@ onUnmounted(() => {
                    hide exactly the reason #13156 was filed about. -->
               <div
                 v-if="stage.message"
-                class="mt-1 text-xs text-gray-600 text-center leading-4 break-words w-full"
+                class="mt-1 text-xs text-autobot-text-secondary text-center leading-4 break-words w-full"
                 :title="stage.message"
                 data-testid="stage-message"
               >{{ stage.message }}</div>
               <!-- SHA badge -->
-              <div v-if="stage.sha" class="mt-1 text-xs text-gray-400">
+              <div v-if="stage.sha" class="mt-1 text-xs text-autobot-text-tertiary">
                 <a
                   v-if="getCommitUrl(stage.sha)"
                   :href="getCommitUrl(stage.sha)!"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="font-mono text-primary-600 hover:underline"
+                  class="font-mono text-autobot-primary hover:underline"
                   :title="stage.sha"
                 >{{ stage.sha }}</a>
                 <span v-else class="font-mono">{{ stage.sha }}</span>
               </div>
               <!-- Deps badge -->
               <div v-if="stage.deps_changed" class="mt-1">
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-amber-100 text-amber-700 font-medium">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-autobot-pill-warn-bg text-autobot-pill-warn-fg font-medium">
                   {{ $t('codeSyncView.depsBadge') }}
                 </span>
               </div>
@@ -1059,7 +998,7 @@ onUnmounted(() => {
               <button
                 v-if="stage.log_lines && stage.log_lines.length > 0"
                 @click="toggleStageLog(stage.name)"
-                class="mt-1 text-xs text-primary-600 hover:text-primary-800"
+                class="mt-1 text-xs text-autobot-primary hover:text-autobot-primary-dark"
               >
                 {{ expandedStageLogs.has(stage.name) ? $t('codeSyncView.collapseLog') : $t('codeSyncView.expandLog') }}
               </button>
@@ -1067,28 +1006,27 @@ onUnmounted(() => {
             <!-- Connector arrow (not after last) -->
             <div
               v-if="idx < updateAllJob.stages.length - 1"
-              class="flex items-center pt-4 px-1 text-gray-300 text-lg select-none"
+              class="flex items-center pt-4 px-1 text-autobot-text-tertiary text-lg select-none"
             >›</div>
           </template>
         </div>
 
-        <!-- Expanded stage logs -->
         <template v-for="stage in updateAllJob.stages" :key="`log-${stage.name}`">
           <div
             v-if="expandedStageLogs.has(stage.name) && stage.log_lines.length > 0"
-            class="mt-3 bg-gray-900 rounded-md p-3 font-mono text-xs text-green-300 max-h-40 overflow-y-auto"
+            class="mt-3 bg-autobot-bg-tertiary rounded-md p-3 font-mono text-xs text-autobot-success max-h-40 overflow-y-auto"
           >
             <div v-for="(line, i) in stage.log_lines" :key="i" class="leading-5">{{ line }}</div>
           </div>
         </template>
 
         <!-- Failure reason -->
-        <div
+        <BaseAlert
           v-if="updateAllJob.status === 'failed' && updateAllJob.failure_reason"
-          class="mt-3 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
-        >
-          {{ updateAllJob.failure_reason }}
-        </div>
+          variant="error"
+          class="mt-3"
+          :message="updateAllJob.failure_reason"
+        />
 
         <!-- Partial: fleet stage skipped one or more non-operational nodes
              (#11511). The backend reports this as its own terminal status, so
@@ -1096,7 +1034,7 @@ onUnmounted(() => {
              the failure banner above nor the success banner below matched. -->
         <div
           v-if="updateAllJob.status === 'partial' && !colocatedPartial"
-          class="mt-3 flex items-center gap-2 text-sm text-amber-700"
+          class="mt-3 flex items-center gap-2 text-sm text-autobot-pill-warn-fg"
         >
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
@@ -1112,7 +1050,7 @@ onUnmounted(() => {
              component and why. -->
         <div
           v-if="updateAllJob.status === 'partial' && colocatedPartial"
-          class="mt-3 flex items-center gap-2 text-sm text-amber-700"
+          class="mt-3 flex items-center gap-2 text-sm text-autobot-pill-warn-fg"
         >
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
@@ -1123,7 +1061,7 @@ onUnmounted(() => {
         <!-- Completed success: F2 use i18n for both terminal labels -->
         <div
           v-if="updateAllJob.status === 'completed' || updateAllJob.status === 'already_current'"
-          class="mt-3 flex items-center gap-2 text-sm text-green-700"
+          class="mt-3 flex items-center gap-2 text-sm text-autobot-pill-ok-fg"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -1132,77 +1070,52 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
-         during the stage-3 self-restart window; escalates to a static warning
-         with a retry CTA only once polling has lost contact / given up. -->
-    <div
-      v-if="updateAllLostContact || updateAllReconnecting"
-      class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg
-          v-if="updateAllReconnecting && !updateAllLostContact"
-          class="w-5 h-5 text-amber-600 animate-spin"
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        <svg v-else class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div class="flex-1">
-          <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">
-            <span v-if="updateAllReconnecting && !updateAllLostContact">
-              {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
-            </span>
-            <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
-          </div>
-        </div>
-      </div>
-      <button
-        v-if="updateAllLostContact"
-        @click="updateAllLostContact = false; handleUpdateAll()"
-        class="btn btn-secondary text-sm shrink-0 ml-4"
-      >
-        {{ $t('codeSyncView.updateAll') }}
-      </button>
-    </div>
+    <UpdateProgressPanel :active="updateAllIsRunning" :since="updateAllJob?.created_at" class="mb-6" />
+    <!-- #12593/#20201: reconnecting / lost-contact / gave-up / session-expired banner -->
+    <UpdateAllPollBanner
+      :reconnecting="updateAllReconnecting"
+      :lost-contact="updateAllLostContact"
+      :gave-up="updateAllGaveUp"
+      :auth-failed="updateAllAuthFailed"
+      :attempt="updateAllTransientErrors"
+      @login="goToLogin"
+      @recheck="handleRecheckUpdateAll"
+      @update="_clearUpdateAllFlags(); handleUpdateAll()"
+    />
 
     <!-- Status Banner -->
     <div class="card p-5 mb-6">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
-          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.latestVersion') }}</span>
+          <span class="text-sm text-autobot-text-tertiary block mb-1">{{ $t('codeSyncView.latestVersion') }}</span>
           <a
             v-if="getCommitUrl(codeSync.latestVersion.value)"
             :href="getCommitUrl(codeSync.latestVersion.value)!"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-lg font-semibold font-mono text-primary-600 hover:text-primary-800 hover:underline cursor-pointer"
-            :title="codeSync.latestVersion.value || 'View commit on GitHub'"
+            class="text-lg font-semibold font-mono text-autobot-primary hover:text-autobot-primary-dark hover:underline cursor-pointer"
+            :title="codeSync.latestVersion.value || $t('codeSyncView.viewCommitOnGithub')"
           >
             {{ formatVersion(codeSync.latestVersion.value) }}
           </a>
           <span
             v-else
-            class="text-lg font-semibold font-mono text-gray-900"
+            class="text-lg font-semibold font-mono text-autobot-text-primary"
           >
             {{ formatVersion(codeSync.latestVersion.value) }}
           </span>
         </div>
         <div>
-          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
-          <span class="text-lg font-semibold text-gray-900">
-            {{ formatDate(codeSync.status.value?.last_fetch ?? null) }}
+          <span class="text-sm text-autobot-text-tertiary block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
+          <span class="text-lg font-semibold text-autobot-text-primary">
+            {{ formatFleetDateTime(codeSync.status.value?.last_fetch ?? null) }}
           </span>
         </div>
         <div>
-          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.outdatedNodes') }}</span>
+          <span class="text-sm text-autobot-text-tertiary block mb-1">{{ $t('codeSyncView.outdatedNodes') }}</span>
           <span
             class="text-lg font-semibold"
-            :class="codeSync.hasOutdatedNodes.value ? 'text-yellow-600' : 'text-gray-900'"
+            :class="codeSync.hasOutdatedNodes.value ? 'text-autobot-warning' : 'text-autobot-text-primary'"
           >
             {{ codeSync.outdatedCount.value }} / {{ codeSync.totalNodes.value }}
           </span>
@@ -1210,7 +1123,7 @@ onUnmounted(() => {
         <div class="flex items-end">
           <span
             v-if="codeSync.hasOutdatedNodes.value"
-            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-autobot-pill-warn-bg text-autobot-pill-warn-fg"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1219,7 +1132,7 @@ onUnmounted(() => {
           </span>
           <span
             v-else
-            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-autobot-pill-ok-bg text-autobot-pill-ok-fg"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -1231,46 +1144,37 @@ onUnmounted(() => {
     </div>
 
     <!-- Sync Progress Banner (Issue #880) -->
-    <div
-      v-if="syncingNodeId && syncProgress.size > 0"
-      class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <BaseAlert v-if="syncingNodeId && syncProgress.size > 0" variant="info" class="mb-6" :icon="false">
+      <template #title>
+        <svg class="w-4 h-4 animate-spin inline-block mr-1.5 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <div class="flex-1">
-          <div class="font-medium text-blue-900">{{ $t('codeSyncView.syncInProgress') }}</div>
-          <div class="text-sm text-blue-700">
-            {{ Array.from(syncProgress.values())[0] }}
-          </div>
-        </div>
-      </div>
-    </div>
+        {{ $t('codeSyncView.syncInProgress') }}
+      </template>
+      {{ Array.from(syncProgress.values())[0] }}
+    </BaseAlert>
 
     <!-- SLM Self-Sync Restart Banner (Issue #1231) -->
-    <div
+    <BaseAlert
       v-if="slmRestartPending"
-      class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6"
+      variant="warning"
+      class="mb-6"
+      :icon="false"
     >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-amber-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <template #title>
+        <svg class="w-4 h-4 animate-spin inline-block mr-1.5 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <div class="flex-1">
-          <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">
-            {{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}
-          </div>
-        </div>
-      </div>
-    </div>
+        {{ $t('codeSyncView.sLMManagerRestarting') }}
+      </template>
+      {{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}
+    </BaseAlert>
 
     <!-- Advanced / Diagnostics accordion (#9971 — demoted from primary) -->
     <div class="mb-6">
       <button
         @click="showAdvanced = !showAdvanced"
-        class="w-full flex items-center justify-between px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+        class="w-full flex items-center justify-between px-4 py-3 bg-autobot-bg-tertiary hover:bg-autobot-bg-active rounded-lg text-sm font-medium text-autobot-text-secondary transition-colors"
         :aria-expanded="showAdvanced"
       >
         <span>{{ $t('codeSyncView.advancedDiagnostics') }}</span>
@@ -1283,9 +1187,7 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      <div v-if="showAdvanced" class="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-b-lg text-xs text-amber-700 leading-5">
-        {{ $t('codeSyncView.advancedWarning') }}
-      </div>
+      <BaseAlert v-if="showAdvanced" variant="warning" size="compact" class="mt-1" :message="$t('codeSyncView.advancedWarning')" />
     </div>
 
     <div v-if="showAdvanced">
@@ -1338,7 +1240,7 @@ onUnmounted(() => {
     <!-- Code Source Card (Issue #779) -->
     <div class="card p-5 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSource') }}</h2>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.codeSource') }}</h2>
         <button
           @click="showCodeSourceModal = true"
           class="btn btn-primary text-sm"
@@ -1349,34 +1251,34 @@ onUnmounted(() => {
 
       <div v-if="codeSourceData" class="flex items-center justify-between">
         <div>
-          <p class="font-medium text-gray-900">{{ codeSourceData.hostname || codeSourceData.node_id }}</p>
-          <p class="text-sm text-gray-500">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
-          <p class="text-sm text-gray-500">
+          <p class="font-medium text-autobot-text-primary">{{ codeSourceData.hostname || codeSourceData.node_id }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
+          <p class="text-sm text-autobot-text-tertiary">
             {{ $t('codeSyncView.lastCommit') }}
             <a
               v-if="getCommitUrl(codeSourceCommit.full)"
               :href="getCommitUrl(codeSourceCommit.full)!"
               target="_blank"
               rel="noopener noreferrer"
-              class="font-mono text-primary-600 hover:text-primary-800 hover:underline"
-              :title="codeSourceCommit.full || 'View commit on GitHub'"
+              class="font-mono text-autobot-primary hover:text-autobot-primary-dark hover:underline"
+              :title="codeSourceCommit.full || $t('codeSyncView.viewCommitOnGithub')"
             >
               {{ codeSourceCommit.display }}
             </a>
             <span
               v-else
               class="font-mono cursor-help"
-              :title="codeSourceCommit.full || 'Full commit hash unavailable'"
+              :title="codeSourceCommit.full || $t('codeSyncView.fullCommitHashUnavailable')"
             >
               {{ codeSourceCommit.display }}
             </span>
           </p>
         </div>
-        <button @click="handleRemoveCodeSource" class="btn btn-danger text-sm">
+        <button @click="handleRemoveCodeSource" class="btn btn-error text-sm">
           {{ $t('codeSyncView.remove') }}
         </button>
       </div>
-      <div v-else class="text-gray-500">
+      <div v-else class="text-autobot-text-tertiary">
         {{ $t('codeSyncView.noCodeSourceConfigured') }}
       </div>
     </div>
@@ -1385,18 +1287,18 @@ onUnmounted(() => {
     <div class="card p-5 mb-6">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.fileDriftCheck') }}</h2>
-          <p class="text-sm text-gray-500 mt-1">
+          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.fileDriftCheck') }}</h2>
+          <p class="text-sm text-autobot-text-tertiary mt-1">
             {{ $t('codeSyncView.compareChecksumsBetweenCode') }}
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <label for="drift-component-select" class="text-sm text-gray-600 font-medium whitespace-nowrap">{{ $t('codeSyncView.component') }}</label>
+          <label for="drift-component-select" class="text-sm text-autobot-text-secondary font-medium whitespace-nowrap">{{ $t('codeSyncView.component') }}</label>
           <select
             id="drift-component-select"
             v-model="selectedDriftComponent"
             :disabled="isDriftLoading || isResolvingDrift"
-            class="form-select text-sm rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
+            class="form-select text-sm rounded border-autobot-border-strong focus:border-autobot-primary focus:ring-autobot-primary"
           >
             <option value="autobot-slm-backend">autobot-slm-backend</option>
             <option value="autobot-slm-frontend">autobot-slm-frontend</option>
@@ -1431,22 +1333,22 @@ onUnmounted(() => {
         <div class="flex items-center gap-3 mb-3">
           <span
             v-if="driftReport.drift_detected"
-            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-autobot-pill-bad-bg text-autobot-pill-bad-fg"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>{{ $t('codeSyncView.countDriftedFilePluralDetected', { count: driftReport.drifted_files.length, plural: driftReport.drifted_files.length !== 1 ? 's' : '' }) }}</span>
+            </svg>{{ $t('codeSyncView.countDriftedFilePluralDetected', { count: driftReport.drifted_files.length }, driftReport.drifted_files.length) }}</span>
           <span
             v-else
-            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-autobot-pill-ok-bg text-autobot-pill-ok-fg"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>{{ $t('codeSyncView.noDriftDetectedValue0FilesCompared', { value0: driftReport.total_compared }) }}</span>
-          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDate(driftReport.checked_at) }) }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('codeSyncView.checkedValue0', { value0: formatFleetDateTime(driftReport.checked_at) }) }}</span>
         </div>
 
-        <div class="text-xs text-gray-400 mb-3">
+        <div class="text-xs text-autobot-text-tertiary mb-3">
           {{ $t('codeSyncView.source') }} <code class="font-mono">{{ driftReport.source_dir }}</code>
           {{ $t('codeSyncView.nbspRarrNbspDeployed') }} <code class="font-mono">{{ driftReport.deployed_dir }}</code>
         </div>
@@ -1476,7 +1378,7 @@ onUnmounted(() => {
           </button>
           <button
             @click="showDriftDetails = !showDriftDetails"
-            class="text-sm text-primary-600 hover:text-primary-800 font-medium"
+            class="text-sm text-autobot-primary hover:text-autobot-primary-dark font-medium"
           >
             {{ showDriftDetails ? $t('codeSyncView.hideDetails') : $t('codeSyncView.showDetails') }}
           </button>
@@ -1485,7 +1387,7 @@ onUnmounted(() => {
         <!-- #11303: Async resolve job progress (rsync/pip/build/restart may take 40-120s) -->
         <div
           v-if="isResolvingDrift && resolveDriftJob && !resolveDriftLostContact"
-          class="text-sm text-gray-600 mb-3 flex items-center gap-2"
+          class="text-sm text-autobot-text-secondary mb-3 flex items-center gap-2"
         >
           <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1498,53 +1400,42 @@ onUnmounted(() => {
           the paths; this offers the documented override so the operator is not
           stuck — the builtin updater is the only sanctioned path.
         -->
-        <div
+        <BaseAlert
           v-if="resolveDriftBlocked"
-          class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3"
+          variant="error"
+          class="mb-3"
+          :title="$t('codeSyncView.resolveWouldDelete')"
         >
-          <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div>
-              <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
-              <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
-              <ul
-                v-if="blockedDeletions.length"
-                class="mt-2 text-xs font-mono text-red-800 space-y-0.5 max-h-40 overflow-y-auto"
-              >
-                <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
-              </ul>
-              <button
-                @click="handleResolveDrift(true)"
-                :disabled="isResolvingDrift"
-                class="mt-2 text-sm font-medium text-red-800 underline hover:text-red-900"
-              >
-                {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
-              </button>
-            </div>
-          </div>
-        </div>
+          <p>{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</p>
+          <ul
+            v-if="blockedDeletions.length"
+            class="mt-2 text-xs font-mono space-y-0.5 max-h-40 overflow-y-auto"
+          >
+            <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
+          </ul>
+          <button
+            @click="handleResolveDrift(true)"
+            :disabled="isResolvingDrift"
+            class="mt-2 text-sm font-medium underline"
+          >
+            {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
+          </button>
+        </BaseAlert>
 
         <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
-        <div
+        <BaseAlert
           v-if="resolveDriftLostContact"
-          class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3"
-        >
-          <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <div class="font-medium text-amber-900 text-sm">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-            <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
-          </div>
-        </div>
+          variant="warning"
+          class="mb-3"
+          :title="$t('codeSyncView.sLMManagerRestarting')"
+          :message="$t('codeSyncView.codeSyncedSuccessfullyBackend')"
+        />
 
         <!-- Drifted files table -->
         <div v-if="showDriftDetails && driftReport.drifted_files.length > 0" class="overflow-x-auto">
           <table class="min-w-full text-sm">
             <thead>
-              <tr class="text-left text-gray-500 border-b">
+              <tr class="text-left text-autobot-text-tertiary border-b">
                 <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.status') }}</th>
                 <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.file') }}</th>
                 <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.sourceSHA256') }}</th>
@@ -1560,19 +1451,18 @@ onUnmounted(() => {
                 <td class="py-2 pr-4">
                   <span
                     :class="{
-                      'text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded text-xs': file.status === 'modified',
-                      'text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs': file.status === 'source_only',
-                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'untracked',
+                      'text-autobot-pill-warn-fg bg-autobot-pill-warn-bg px-2 py-0.5 rounded text-xs': file.status === 'modified' || file.status === 'untracked',
+                      'text-autobot-pill-info-fg bg-autobot-pill-info-bg px-2 py-0.5 rounded text-xs': file.status === 'source_only',
                     }"
                   >
                     {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.untracked') }}
                   </span>
                 </td>
-                <td class="py-2 pr-4 font-mono text-xs text-gray-700">{{ file.path }}</td>
-                <td class="py-2 pr-4 font-mono text-xs text-gray-500">
+                <td class="py-2 pr-4 font-mono text-xs text-autobot-text-secondary">{{ file.path }}</td>
+                <td class="py-2 pr-4 font-mono text-xs text-autobot-text-tertiary">
                   {{ file.source_checksum ? file.source_checksum.substring(0, 16) + '...' : '—' }}
                 </td>
-                <td class="py-2 font-mono text-xs text-gray-500">
+                <td class="py-2 font-mono text-xs text-autobot-text-tertiary">
                   {{ file.deployed_checksum ? file.deployed_checksum.substring(0, 16) + '...' : '—' }}
                 </td>
               </tr>
@@ -1589,16 +1479,16 @@ onUnmounted(() => {
         <div v-if="untrackedFiles.length > 0" class="mt-4">
           <button
             @click="showUntrackedDetails = !showUntrackedDetails"
-            class="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1.5"
+            class="text-sm text-autobot-text-secondary hover:text-autobot-text-primary font-medium flex items-center gap-1.5"
           >
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length, plural: untrackedFiles.length !== 1 ? 's' : '' }) }}
+            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length }, untrackedFiles.length) }}
           </button>
           <div v-if="showUntrackedDetails" class="mt-2">
-            <p class="text-xs text-gray-500 mb-2">{{ $t('codeSyncView.untrackedExplainer') }}</p>
-            <ul class="text-xs font-mono text-gray-700 space-y-1">
+            <p class="text-xs text-autobot-text-tertiary mb-2">{{ $t('codeSyncView.untrackedExplainer') }}</p>
+            <ul class="text-xs font-mono text-autobot-text-secondary space-y-1">
               <li v-for="file in untrackedFiles" :key="file.path">{{ file.path }}</li>
             </ul>
           </div>
@@ -1606,64 +1496,47 @@ onUnmounted(() => {
       </div>
 
       <!-- Placeholder when not yet checked -->
-      <div v-else class="text-sm text-gray-400">
+      <div v-else class="text-sm text-autobot-text-tertiary">
         {{ $t('codeSyncView.clickCheckDriftTo') }}
       </div>
     </div>
 
-    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
-         per-component card above; independent state, independent endpoint. -->
-    <div class="mb-6">
+    <div class="mb-6 space-y-6">
+      <CodeRollbackPanel :disabled="updateAllIsRunning" @started="adoptRunningUpdateAllJob" />
       <FullTreeDriftPanel />
     </div>
 
     <!-- Error Display -->
-    <div
+    <BaseAlert
       v-if="codeSync.error.value"
-      class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="text-red-700">{{ codeSync.error.value }}</span>
-      </div>
-      <button
-        @click="codeSync.clearError()"
-        class="text-red-600 hover:text-red-800 font-medium text-sm"
-      >
-        {{ $t('codeSyncView.dismiss') }}
-      </button>
-    </div>
+      variant="error"
+      class="mb-6"
+      :message="codeSync.error.value"
+      dismissible
+      :dismiss-label="$t('codeSyncView.dismiss')"
+      @dismiss="codeSync.clearError()"
+    />
 
     <!-- Success Display -->
-    <div
+    <BaseAlert
       v-if="successMessage"
-      class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="text-green-700">{{ successMessage }}</span>
-      </div>
-      <button
-        @click="successMessage = null"
-        class="text-green-600 hover:text-green-800 font-medium text-sm"
-      >
-        {{ $t('codeSyncView.dismiss') }}
-      </button>
-    </div>
+      variant="success"
+      class="mb-6"
+      :message="successMessage"
+      dismissible
+      :dismiss-label="$t('codeSyncView.dismiss')"
+      @dismiss="successMessage = null"
+    />
 
     <!-- Sync Options -->
     <div class="card p-5 mb-6">
-      <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ $t('codeSyncView.syncOptions') }}</h2>
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('codeSyncView.syncOptions') }}</h2>
       <div class="flex flex-wrap items-center gap-6">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSyncView.restartStrategy') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSyncView.restartStrategy') }}</label>
           <select
             v-model="syncStrategy"
-            class="px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="graceful">{{ $t('codeSyncView.gracefulWaitForTasks') }}</option>
             <option value="immediate">{{ $t('codeSyncView.immediate') }}</option>
@@ -1675,9 +1548,9 @@ onUnmounted(() => {
             <input
               type="checkbox"
               v-model="restartAfterSync"
-              class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
             />
-            <span class="text-sm text-gray-700">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
+            <span class="text-sm text-autobot-text-secondary">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
           </label>
         </div>
       </div>
@@ -1690,8 +1563,8 @@ onUnmounted(() => {
     <div class="card p-5 mb-6">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.fleetSyncJobs') }}</h2>
-          <p class="text-sm text-gray-500">{{ $t('codeSyncView.fleetSyncJobsDesc') }}</p>
+          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.fleetSyncJobs') }}</h2>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('codeSyncView.fleetSyncJobsDesc') }}</p>
         </div>
         <button
           @click="loadRecentFleetJobs"
@@ -1706,75 +1579,77 @@ onUnmounted(() => {
       <div
         v-if="fleetSyncJob"
         data-testid="fleet-sync-job"
-        class="border border-gray-200 rounded-md p-3 mb-4"
+        class="border border-autobot-border rounded-md p-3 mb-4"
       >
         <div class="flex items-center gap-2 flex-wrap">
           <span
             :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(fleetSyncJob.status)]"
           >{{ $t(fleetJobStatusI18nKey(fleetSyncJob.status)) }}</span>
-          <span class="font-mono text-xs text-gray-500">{{ fleetSyncJob.job_id }}</span>
-          <span class="text-sm text-gray-700">{{
+          <span class="font-mono text-xs text-autobot-text-tertiary">{{ fleetSyncJob.job_id }}</span>
+          <span class="text-sm text-autobot-text-secondary">{{
             $t('codeSyncView.fleetJobProgress', {
               completed: fleetSyncJob.completed_nodes,
               total: fleetSyncJob.total_nodes,
             })
           }}</span>
-          <span v-if="fleetSyncJob.failed_nodes > 0" class="text-sm text-red-700">{{
+          <span v-if="fleetSyncJob.failed_nodes > 0" class="text-sm text-autobot-pill-bad-fg">{{
             $t('codeSyncView.fleetJobFailedNodes', { count: fleetSyncJob.failed_nodes })
           }}</span>
         </div>
         <!-- #13157: the reason the backend recorded (code_sync.py:402) -->
-        <div
+        <BaseAlert
           v-if="fleetSyncJob.failure_reason"
           data-testid="fleet-job-failure-reason"
-          class="mt-2 bg-red-50 border border-red-200 rounded-md p-2 text-sm text-red-700"
+          variant="error"
+          size="compact"
+          class="mt-2"
         >
           <span class="font-medium">{{ $t('codeSyncView.fleetJobFailureReason') }}</span>
           {{ fleetSyncJob.failure_reason }}
-        </div>
+        </BaseAlert>
         <!-- Per-node outcome; `message` carries the ansible fatal on failure -->
         <ul v-if="fleetSyncJob.nodes.length > 0" class="mt-2 space-y-1">
           <li
             v-for="node in fleetSyncJob.nodes"
             :key="node.node_id"
-            class="text-xs text-gray-600 flex gap-2"
+            class="text-xs text-autobot-text-secondary flex gap-2"
           >
             <span class="font-medium shrink-0">{{ node.hostname || node.node_id }}</span>
             <span class="shrink-0">{{ node.status }}</span>
-            <span v-if="node.message" class="text-gray-500 break-words">{{ node.message }}</span>
+            <span v-if="node.message" class="text-autobot-text-tertiary break-words">{{ node.message }}</span>
           </li>
         </ul>
       </div>
 
       <!-- Recent jobs, so a rollout that failed while the page was closed is
            still inspectable -->
-      <h3 class="text-sm font-medium text-gray-700 mb-2">{{ $t('codeSyncView.recentFleetJobs') }}</h3>
+      <h3 class="text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('codeSyncView.recentFleetJobs') }}</h3>
       <div v-if="recentFleetJobs.length > 0" class="space-y-2">
         <div
           v-for="job in recentFleetJobs"
           :key="job.job_id"
           data-testid="recent-fleet-job"
-          class="border border-gray-200 rounded-md p-2"
+          class="border border-autobot-border rounded-md p-2"
         >
           <div class="flex items-center gap-2 flex-wrap">
             <span
               :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(job.status)]"
             >{{ $t(fleetJobStatusI18nKey(job.status)) }}</span>
-            <span class="font-mono text-xs text-gray-500">{{ job.job_id }}</span>
-            <span class="text-xs text-gray-500">{{ formatDateTime(job.created_at) }}</span>
-            <span class="text-xs text-gray-700">{{
+            <span class="font-mono text-xs text-autobot-text-tertiary">{{ job.job_id }}</span>
+            <span class="text-xs text-autobot-text-tertiary">{{ formatFleetDateTime(job.created_at) }}</span>
+            <span class="text-xs text-autobot-text-secondary">{{
               $t('codeSyncView.fleetJobProgress', {
                 completed: job.completed_nodes,
                 total: job.total_nodes,
               })
             }}</span>
           </div>
-          <div v-if="job.failure_reason" class="mt-1 text-xs text-red-700 break-words">
+          <div v-if="job.failure_reason" class="mt-1 text-xs text-autobot-pill-bad-fg break-words">
             {{ job.failure_reason }}
           </div>
         </div>
       </div>
-      <div v-else-if="!recentFleetJobsLoading" class="text-sm text-gray-500">
+      <div v-else-if="!recentFleetJobsLoading" class="text-sm text-autobot-text-tertiary">
         {{ $t('codeSyncView.noRecentFleetJobs') }}
       </div>
     </div>
@@ -1782,8 +1657,8 @@ onUnmounted(() => {
     <!-- Pending Updates Section -->
     <div class="card overflow-hidden">
       <!-- Section Header -->
-      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-800">{{ $t('codeSyncView.pendingUpdates') }}</h2>
+      <div class="px-6 py-4 border-b border-autobot-border flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.pendingUpdates') }}</h2>
         <div v-if="codeSync.pendingNodes.value.length > 0" class="flex items-center gap-3">
           <button
             @click="handleSyncSelected"
@@ -1808,23 +1683,23 @@ onUnmounted(() => {
         v-if="codeSync.pendingNodes.value.length === 0 && !codeSync.loading.value"
         class="px-6 py-12 text-center"
       >
-        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-16 h-16 mx-auto text-autobot-text-tertiary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
         </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('codeSyncView.allNodesAreUp') }}</h3>
-        <p class="text-gray-500">
+        <h3 class="text-lg font-medium text-autobot-text-primary mb-2">{{ $t('codeSyncView.allNodesAreUp') }}</h3>
+        <p class="text-autobot-text-tertiary">
           {{ $t('codeSyncView.noCodeUpdatesAre') }}
         </p>
       </div>
 
       <!-- Loading State -->
       <div v-if="codeSync.loading.value && codeSync.pendingNodes.value.length === 0" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
 
       <!-- Pending Updates Table -->
-      <table v-if="codeSync.pendingNodes.value.length > 0" class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+      <table v-if="codeSync.pendingNodes.value.length > 0" class="min-w-full divide-y divide-autobot-border">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
             <th class="px-6 py-3 text-left w-12">
               <input
@@ -1832,53 +1707,53 @@ onUnmounted(() => {
                 :checked="allSelected"
                 :indeterminate="someSelected"
                 @change="toggleSelectAll"
-                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
               />
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.hostname') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.iPAddress') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.currentVersion') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.status') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.actions') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.hostname') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.iPAddress') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.currentVersion') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
+        <tbody class="bg-white divide-y divide-autobot-border">
           <tr
             v-for="node in codeSync.pendingNodes.value"
             :key="node.node_id"
-            :class="{ 'bg-primary-50': selectedNodes.has(node.node_id) }"
+            :class="{ 'bg-autobot-primary-bg': selectedNodes.has(node.node_id) }"
           >
             <td class="px-6 py-4">
               <input
                 type="checkbox"
                 :checked="selectedNodes.has(node.node_id)"
                 @change="toggleNode(node.node_id)"
-                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
               />
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-autobot-text-primary">
               {{ node.hostname }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-autobot-text-tertiary">
               {{ node.ip_address }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-autobot-text-tertiary">
               <a
                 v-if="getCommitUrl(node.current_version)"
                 :href="getCommitUrl(node.current_version)!"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="text-primary-600 hover:text-primary-800 hover:underline"
-                :title="node.current_version || 'View commit on GitHub'"
+                class="text-autobot-primary hover:text-autobot-primary-dark hover:underline"
+                :title="node.current_version || $t('codeSyncView.viewCommitOnGithub')"
               >
                 {{ formatVersion(node.current_version) }}
               </a>
-              <span v-else :title="node.current_version || 'Full commit hash unavailable'">
+              <span v-else :title="node.current_version || $t('codeSyncView.fullCommitHashUnavailable')">
                 {{ formatVersion(node.current_version) }}
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+              <span class="px-2 py-1 text-xs font-medium rounded-full bg-autobot-pill-warn-bg text-autobot-pill-warn-fg">
                 {{ $t('codeSyncView.outdated') }}
               </span>
             </td>
@@ -1886,14 +1761,14 @@ onUnmounted(() => {
               <button
                 @click="handleSyncNode(node)"
                 :disabled="syncingNodeId === node.node_id"
-                class="text-primary-600 hover:text-primary-800 font-medium text-sm disabled:opacity-50"
+                class="text-autobot-primary hover:text-autobot-primary-dark font-medium text-sm disabled:opacity-50"
               >
                 {{ syncingNodeId === node.node_id ? $t('codeSyncView.syncing') : $t('codeSyncView.sync') }}
               </button>
               <!-- Progress indicator (Issue #880) -->
               <div
                 v-if="syncingNodeId === node.node_id && syncProgress.has(node.node_id)"
-                class="mt-1 text-xs text-gray-600 flex items-center gap-1"
+                class="mt-1 text-xs text-autobot-text-secondary flex items-center gap-1"
               >
                 <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1909,11 +1784,11 @@ onUnmounted(() => {
     <!-- Role-Based Sync Section (Issue #779) -->
     <div class="card p-5 mt-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.roleBasedSync') }}</h2>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.roleBasedSync') }}</h2>
         <!-- Pull from Source button moved to page header next to Refresh -->
       </div>
 
-      <div v-if="codeSync.roles.value.length === 0" class="text-gray-500">
+      <div v-if="codeSync.roles.value.length === 0" class="text-autobot-text-tertiary">
         {{ $t('codeSyncView.noRolesConfiguredAdd') }}
       </div>
 
@@ -1921,16 +1796,16 @@ onUnmounted(() => {
         <div
           v-for="role in codeSync.roles.value"
           :key="role.name"
-          class="p-4 bg-gray-50 rounded-lg border border-gray-200"
+          class="p-4 bg-autobot-bg-secondary rounded-lg border border-autobot-border"
         >
           <div class="flex items-center justify-between mb-2">
-            <span class="font-medium text-gray-900">{{ role.display_name || role.name }}</span>
+            <span class="font-medium text-autobot-text-primary">{{ role.display_name || role.name }}</span>
             <span
               v-if="role.auto_restart"
-              class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-sm"
+              class="text-xs px-2 py-1 bg-autobot-pill-info-bg text-autobot-text-primary rounded-sm"
             >{{ $t('codeSyncView.autoRestart') }}</span>
           </div>
-          <p class="text-sm text-gray-500 mb-3 truncate" :title="role.target_path">
+          <p class="text-sm text-autobot-text-tertiary mb-3 truncate" :title="role.target_path">
             {{ role.target_path }}
           </p>
           <button
@@ -1947,10 +1822,10 @@ onUnmounted(() => {
     <!-- Schedules Section (Issue #741 - Phase 7) -->
     <div class="card overflow-hidden mt-6">
       <!-- Section Header -->
-      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div class="px-6 py-4 border-b border-autobot-border flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-semibold text-gray-800">{{ $t('codeSyncView.scheduledUpdates') }}</h2>
-          <p class="text-sm text-gray-500 mt-0.5">{{ $t('codeSyncView.configureAutomaticCodeSync') }}</p>
+          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('codeSyncView.scheduledUpdates') }}</h2>
+          <p class="text-sm text-autobot-text-tertiary mt-0.5">{{ $t('codeSyncView.configureAutomaticCodeSync') }}</p>
         </div>
         <button
           @click="openCreateScheduleModal"
@@ -1968,11 +1843,11 @@ onUnmounted(() => {
         v-if="codeSync.schedules.value.length === 0"
         class="px-6 py-12 text-center"
       >
-        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-16 h-16 mx-auto text-autobot-text-tertiary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('codeSyncView.noSchedulesConfigured') }}</h3>
-        <p class="text-gray-500 mb-4">
+        <h3 class="text-lg font-medium text-autobot-text-primary mb-2">{{ $t('codeSyncView.noSchedulesConfigured') }}</h3>
+        <p class="text-autobot-text-tertiary mb-4">
           {{ $t('codeSyncView.createAScheduleTo') }}
         </p>
         <button
@@ -1984,29 +1859,29 @@ onUnmounted(() => {
       </div>
 
       <!-- Schedules Table -->
-      <table v-if="codeSync.schedules.value.length > 0" class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+      <table v-if="codeSync.schedules.value.length > 0" class="min-w-full divide-y divide-autobot-border">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.name') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.schedule') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.nextRun') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.status') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.actions') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.name') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.schedule') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.nextRun') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
+        <tbody class="bg-white divide-y divide-autobot-border">
           <tr v-for="schedule in codeSync.schedules.value" :key="schedule.id">
             <td class="px-6 py-4 whitespace-nowrap">
-              <div class="text-sm font-medium text-gray-900">{{ schedule.name }}</div>
-              <div class="text-xs text-gray-500">
+              <div class="text-sm font-medium text-autobot-text-primary">{{ schedule.name }}</div>
+              <div class="text-xs text-autobot-text-tertiary">
                 {{ schedule.target_type === 'all' ? $t('codeSyncView.allOutdatedNodes') : `${schedule.target_nodes?.length || 0} specific nodes` }}
               </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <div class="text-sm text-gray-900">{{ describeCron(schedule.cron_expression) }}</div>
-              <div class="text-xs text-gray-500 font-mono">{{ schedule.cron_expression }}</div>
+              <div class="text-sm text-autobot-text-primary">{{ describeCron(schedule.cron_expression) }}</div>
+              <div class="text-xs text-autobot-text-tertiary font-mono">{{ schedule.cron_expression }}</div>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               {{ formatNextRun(schedule.next_run) }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
@@ -2014,7 +1889,7 @@ onUnmounted(() => {
                 @click="handleToggleSchedule(schedule)"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden',
-                  schedule.enabled ? 'bg-primary-600' : 'bg-gray-200',
+                  schedule.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-active',
                 ]"
               >
                 <span
@@ -2030,22 +1905,22 @@ onUnmounted(() => {
                 <button
                   @click="handleRunSchedule(schedule)"
                   :disabled="runningScheduleId === schedule.id"
-                  class="text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
+                  class="text-autobot-primary hover:text-autobot-primary-dark font-medium disabled:opacity-50"
                   :title="$t('codeSyncView.runNow')"
                 >
                   {{ runningScheduleId === schedule.id ? $t('codeSyncView.running') : $t('codeSyncView.run') }}
                 </button>
-                <span class="text-gray-300">|</span>
+                <span class="text-autobot-text-tertiary">|</span>
                 <button
                   @click="openEditScheduleModal(schedule)"
-                  class="text-gray-600 hover:text-gray-800 font-medium"
+                  class="text-autobot-text-secondary hover:text-autobot-text-primary font-medium"
                 >
                   {{ $t('codeSyncView.edit') }}
                 </button>
-                <span class="text-gray-300">|</span>
+                <span class="text-autobot-text-tertiary">|</span>
                 <button
                   @click="handleDeleteSchedule(schedule)"
-                  class="text-red-600 hover:text-red-800 font-medium"
+                  class="text-autobot-error hover:text-autobot-pill-bad-fg font-medium"
                 >
                   {{ $t('codeSyncView.delete') }}
                 </button>

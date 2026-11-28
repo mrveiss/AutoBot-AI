@@ -43,6 +43,7 @@ The idle baseline held to within 1.4% over the same samples. See
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from pathlib import Path
 from typing import NamedTuple
@@ -531,3 +532,18 @@ async def test_shutdown_is_idempotent():
     await shutdown_scan_pool()
     await shutdown_scan_pool()
     assert process_offload._pool is None
+
+
+def _worker_nice() -> int:
+    return os.nice(0)
+
+
+async def test_pool_workers_run_at_a_lowered_priority_and_the_backend_does_not() -> None:
+    """#20483: two workers at nice 0 competed with the API during a codebase analysis."""
+    before = os.nice(0)
+    pool = await process_offload._get_pool()
+    assert pool is not None
+    worker = await asyncio.get_running_loop().run_in_executor(pool, _worker_nice)
+    await process_offload.shutdown_scan_pool()
+    assert worker == before + process_offload._WORKER_NICE
+    assert os.nice(0) == before

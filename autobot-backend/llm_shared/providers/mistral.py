@@ -28,6 +28,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
     MISTRAL_CODESTRAL_LATEST,
     MISTRAL_DEVSTRAL_LATEST,
@@ -42,6 +43,7 @@ from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -56,7 +58,7 @@ MISTRAL_MODELS: List[str] = [
     MISTRAL_NEMO,
 ]
 
-_DEFAULT_MODEL = MISTRAL_SMALL_LATEST
+_DEFAULT_MODEL = hosted_default_model("mistral")  # #15501
 
 
 class MistralProvider(BaseProvider):
@@ -131,13 +133,7 @@ class MistralProvider(BaseProvider):
         if response_format:
             params["response_format"] = response_format
         if not stream and request.tools:
-            params["tools"] = [
-                {
-                    "type": "function",
-                    "function": {"name": t.name, "description": t.description, "parameters": t.input_schema},
-                }
-                for t in request.tools
-            ]
+            params["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 params["tool_choice"] = request.tool_choice
         return params

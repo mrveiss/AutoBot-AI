@@ -11,7 +11,7 @@ export { SshTerminal, BaseXTerminal }
 export { useTerminalStore } from './src/composables/useTerminalStore'
 export type { HostConfig, TerminalSession, TerminalTab } from './src/composables/useTerminalStore'
 export { useWebSocket } from './src/composables/useWebSocket'
-export { usePollingJob } from './src/composables/usePollingJob'
+export { usePollingJob } from '@autobot/ui'
 
 export const TerminalPlugin = {
   install(app: App) {

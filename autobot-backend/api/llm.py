@@ -12,13 +12,12 @@ current LLM config, and selecting the active model.
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from api.schemas_agent import (
     LLMConfigResponse,
     LLMConnectionTestResponse,
     LLMCurrentResponse,
-    LLMEmbeddingModelsResponse,
     LLMModelsResponse,
 )
 from api.schemas_common import DataResponse
@@ -37,12 +36,13 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager
 
 # Import unified configuration system - NO HARDCODED VALUES
-from constants.model_constants import ModelConstants
+from config.model_config import resolve_active_llm
 from services.config_service import ConfigService
 from services.llm_service import get_llm_service
 
@@ -56,10 +56,6 @@ router = APIRouter()
 
 logger = get_logger(__name__)
 
-# Performance optimization: O(1) lookup for embedding model detection (Issue #326)
-EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
-TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
-
 
 @router.get("/config", response_model=LLMConfigResponse)
 @with_error_handling(
@@ -68,14 +64,13 @@ TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
     error_code_prefix="LLM",
 )
 async def get_llm_config(
-    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Get current LLM configuration.
 
-    Issue #744: Requires authenticated user.
-    """
+    Issue #18193: admin-only, and nested credentials are redacted (defence in depth)."""
     try:
-        return ConfigService.get_llm_config()
+        return redact_nested(ConfigService.get_llm_config())
     except Exception as e:
         logger.error("Error getting LLM config: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting LLM config")
@@ -174,19 +169,15 @@ async def get_available_llm_models(
 async def get_current_llm(
     current_user: dict = Depends(get_current_user),
 ):
-    """Get current LLM model and configuration.
+    """Get the current LLM model and provider.
 
     Issue #744: Requires authenticated user.
     """
     try:
-        config = ConfigService.get_llm_config()
-        current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
-
-        return {
-            "model": current_model,
-            "provider": config.get("provider", "ollama"),
-            "config": config,
-        }
+        # #18193: model and provider only (the tree is admin-only on GET /config).
+        # #18215: the ACTIVE selection.  #15502: the response is slimmed to exactly these two fields.
+        provider, model = resolve_active_llm(ConfigService.get_llm_config())
+        return {"model": model, "provider": provider}
     except Exception as e:
         logger.error("Error getting current LLM: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting current LLM")
@@ -271,72 +262,15 @@ async def update_llm_provider(
     )
 
 
-@router.get("/embedding/models", response_model=LLMEmbeddingModelsResponse)
-@cache_response(cache_key="embedding_models", ttl=300)  # Cache for 5 minutes
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_embedding_models",
-    error_code_prefix="LLM",
-)
-async def get_available_embedding_models(
-    current_user: dict = Depends(get_current_user),
-):
-    """Get list of available embedding models.
+@router.get("/embedding/models")
+async def get_available_embedding_models() -> RedirectResponse:
+    """Moved to ``GET /api/embeddings/models``, the one embedding-model listing (#19378).
 
-    Issue #744: Requires authenticated user.
+    This listing used its own name patterns and fell back to a hard-coded pair, so it could offer a
+    chat model or a model that is not installed. The options endpoint filters with the canonical
+    ``is_embedding_model_id`` and marks the active model.
     """
-    try:
-        # For now, return Ollama models (embedding models are typically the same as LLM models)
-        result = await ModelManager.get_available_models()
-        if result["status"] == "error":
-            raise HTTPException(status_code=500, detail=result["error"])
-
-        # Filter to common embedding models if possible, otherwise return all
-        embedding_models = []
-        for model in result["models"]:
-            model_name = model.get("name", "") if isinstance(model, dict) else str(model)
-            # Cache model_name.lower() to avoid repeated computation (Issue #323)
-            model_name_lower = model_name.lower()
-            # Common embedding model patterns
-            if any(pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS):
-                embedding_models.append(model)
-            elif "text" in model_name_lower and any(size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS):
-                embedding_models.append(model)
-
-        # If no specific embedding models found, include some common ones
-        if not embedding_models:
-            embedding_models = [
-                {"name": "nomic-embed-text", "available": True, "type": "ollama"},
-                {"name": "all-minilm:l6-v2", "available": True, "type": "ollama"},
-            ]
-
-        return {"models": embedding_models, "total_count": len(embedding_models)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error getting available embedding models: %s", str(e))
-        raise HTTPException(
-            status_code=500,
-            detail="Error getting available embedding models",
-        )
-
-
-async def _apply_embedding_config(provider: str, model: str, embedding_data: dict) -> None:
-    """Helper for update_embedding_model. Ref: #1088."""
-    config.set("backend.llm.embedding.provider", provider)
-    config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
-    if "endpoint" in embedding_data:
-        config.set(
-            f"backend.llm.embedding.providers.{provider}.endpoint",
-            embedding_data["endpoint"],
-        )
-    if provider == "openai" and "api_key" in embedding_data:
-        config.set(
-            f"backend.llm.embedding.providers.{provider}.api_key",
-            embedding_data["api_key"],
-        )
-    await asyncio.to_thread(config.save_settings)
-    await asyncio.to_thread(config.save_config_to_yaml)
+    return RedirectResponse("/api/embeddings/models", status_code=308)
 
 
 @router.post("/embedding", response_model=DataResponse[LLMDeprecatedData])

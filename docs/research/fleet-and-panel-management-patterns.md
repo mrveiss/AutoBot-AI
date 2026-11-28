@@ -274,3 +274,10 @@ environments, so hosts consume a known set while upstream keeps moving. That is 
   not want: unbounded growth without pruning, and an agent silently stuck at an old offset. Our
   transport was not audited in this pass, so no verdict — but "how do we detect an agent that has
   fallen behind" is the question their design answers badly and ours should answer explicitly.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16028 — Adopt external host-lifecycle methods into the SLM layer (umbrella)
+- #16056 — A node that falls behind drops buffered events silently — the SLM cannot see backlog or loss

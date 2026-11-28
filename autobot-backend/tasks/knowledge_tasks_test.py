@@ -359,3 +359,45 @@ def test_crontab_from_string_falls_back_on_malformed():
     cron = crontab_from_string("not a cron")
     assert 0 in cron.minute
     assert 3 in cron.hour
+
+
+@pytest.mark.skipif(
+    not _have_real_celery(),
+    reason="requires real celery package",
+)
+def test_crontab_from_string_falls_back_on_out_of_range_field():
+    """Five fields but minute 60: Celery raises on construction, the helper must fall back (#22280)."""
+    from utils.celery_schedules import crontab_from_string
+
+    cron = crontab_from_string("60 3 * * *")
+    assert cron.minute == {0}
+    assert cron.hour == {3}
+
+
+@pytest.mark.asyncio
+async def test_run_man_page_indexing_uses_the_return_value_not_stdout():
+    """#22272: counts come from ``index_all_man_pages``' return value (the script logs to stderr)."""
+    from unittest.mock import AsyncMock
+
+    from tasks import man_page_indexing
+
+    counts = {"commands_scanned": 9, "commands_indexed": 8, "storage_failed": 2, "total_facts": 40, "total_vectors": 39}
+    with patch.object(man_page_indexing, "index_all_man_pages", AsyncMock(return_value=counts)):
+        result = await man_page_indexing.run_man_page_indexing()
+    assert result["status"] == "success"
+    assert (result["commands_indexed"], result["storage_failed"], result["total_facts"]) == (8, 2, 40)
+
+
+@pytest.mark.asyncio
+async def test_run_man_page_indexing_reports_a_known_failure_reason():
+    """#22280: 'No commands found' reaches the admin; it is not flattened to the generic message."""
+    from unittest.mock import AsyncMock, patch
+
+    from services.man_page_ingestion import ManPageIndexingError
+    from tasks import man_page_indexing
+
+    failing = AsyncMock(side_effect=ManPageIndexingError("No commands found"))
+    with patch.object(man_page_indexing, "index_all_man_pages", failing):
+        result = await man_page_indexing.run_man_page_indexing()
+    assert result["status"] == "failed"
+    assert result["error"] == "No commands found"

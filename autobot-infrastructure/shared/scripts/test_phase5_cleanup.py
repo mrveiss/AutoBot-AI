@@ -48,10 +48,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # SLM tree was added here too while the ClaudeAPIMonitor check imported
 # ``monitoring.claude_api_monitor``; that module is retired (#16282) and the check
 # reads files instead, so nothing here imports from the SLM.
+# The backend's own modules import `autobot_shared` from the repository root, which was not on the
+# path either, so the root goes on too (#18288): a backend tool runs from any directory.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_BACKEND = str(_REPO_ROOT / "autobot-backend")
-if _BACKEND not in sys.path:
-    sys.path.insert(0, _BACKEND)
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 PASSED = "PASSED"
 FAILED = "FAILED"

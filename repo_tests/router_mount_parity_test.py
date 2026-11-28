@@ -82,7 +82,7 @@ _GATE_HINTS = ("permission", "auth", "admin", "rbac", "require", "verify", "curr
 
 @pytest.fixture(scope="module")
 def graph() -> MountGraph:
-    return build_graph(_BACKEND)
+    return build_graph(_BACKEND, skip_tests=True)
 
 
 # --- non-vacuity ------------------------------------------------------------

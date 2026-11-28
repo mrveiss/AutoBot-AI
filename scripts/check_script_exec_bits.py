@@ -27,19 +27,28 @@ a command that genuinely cannot work.
 Exit code:
   0 — every documented direct invocation targets an executable script
   1 — at least one disagreement
+  2 — the tracked-file enumeration failed or was empty; nothing was checked
 """
 
 from __future__ import annotations
 
+import logging
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from tools.lint._scan_helpers import (  # noqa: E402
+    EmptyEnumeration,
+    GitEnumerationFailed,
+    configure_logging,
+    tracked_modes,
+    tracked_paths,
+)
+
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_GLOBS = ("docs/**/*.md", "*.md", ".github/**/*.yml", ".github/**/*.yaml")
@@ -77,47 +86,31 @@ _INTERPRETED = re.compile(r"(?:^|[\s`\"'|(&;])(?:bash|sh|zsh|source|\.)\s+(?:\./
 _DIRECTIVE = re.compile(r"shellcheck\s+source=")
 
 
-def _require_git_ok(result: "subprocess.CompletedProcess[str]", root: Path) -> None:
-    """Fail loudly when git could not answer (#13668).
-
-    Both call sites use ``check=False`` and read only stdout, so a broken or
-    missing git — or a directory that is not a checkout — produced an empty file
-    list, no disagreements, and ``main()`` exiting 0. The CI check then reported
-    success while having verified nothing, which is the failure mode this
-    checker exists to prevent.
-    """
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"git failed in {root} (exit {result.returncode}): {result.stderr.strip() or '<no stderr>'}"
-        )
-
-
 def _tracked_files(patterns: Iterable[str], root: Path = REPO_ROOT) -> list[Path]:
+    """Tracked files matching *patterns*; raises (never ``[]``) on a git failure.
+
+    A pattern with no match is normal (a repo may hold no ``.yaml`` workflow);
+    ALL of them matching nothing is not, so that raises ``EmptyEnumeration``.
+    """
     out: list[Path] = []
     for pattern in patterns:
-        # Fixed argv, no shell, and `pattern` is a module constant — not input.
-        result = subprocess.run(  # nosec B603 B607
-            ["git", "ls-files", pattern], cwd=root, capture_output=True, text=True, check=False, env=scrubbed_git_env()
-        )
-        _require_git_ok(result, root)
-        out.extend(root / line for line in result.stdout.splitlines() if line)
+        try:
+            out.extend(root / rel for rel in tracked_paths(root, pattern))
+        except EmptyEnumeration:
+            continue
+    if not out:
+        raise EmptyEnumeration(f"git ls-files {' '.join(patterns)} listed nothing in {root}")
     return out
 
 
 def _is_executable(path: Path, root: Path = REPO_ROOT) -> bool:
-    # Fixed argv, no shell; the path comes from git ls-files output, not a caller.
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "-s", str(path.relative_to(root))],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=scrubbed_git_env(),
-    )
-    _require_git_ok(result, root)
-    # "100755 <sha> 0\t<path>" — read the mode git records, not the working tree,
-    # because that is what a fresh clone gets.
-    return result.stdout.startswith("100755")
+    """Whether git records *path* as ``100755`` -- the index, not the work tree,
+    because that is what a fresh clone gets. An untracked path is not executable."""
+    try:
+        modes = tracked_modes(root, str(path.relative_to(root)))
+    except EmptyEnumeration:
+        return False
+    return modes[0][0] == "100755"
 
 
 def find_disagreements(root: Path = REPO_ROOT) -> list[str]:
@@ -162,7 +155,12 @@ def find_disagreements(root: Path = REPO_ROOT) -> list[str]:
 
 
 def main() -> int:
-    problems = find_disagreements()
+    try:
+        problems = find_disagreements()
+    except (EmptyEnumeration, GitEnumerationFailed) as exc:
+        configure_logging(logger)
+        logger.error("check_script_exec_bits: cannot enumerate tracked files, nothing was checked: %s", exc)
+        return 2
     for problem in problems[:_MAX_REPORTED]:
         print(problem)
     if len(problems) > _MAX_REPORTED:

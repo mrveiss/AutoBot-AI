@@ -8,7 +8,7 @@
     <h3>
       <Icon name="users-cog" /> {{ $t('analytics.codebase.ownership.title') }}
       <span v-if="analysis" class="total-count">
-        ({{ analysis.summary.total_contributors }} contributors)
+        ({{ $t('analytics.codebase.shared.contributors', { count: analysis.summary.total_contributors }, analysis.summary.total_contributors) }})
       </span>
       <button
         @click="emit('refresh')"
@@ -159,19 +159,16 @@
           <h4><Icon name="star" /> {{ $t('analytics.codebase.ownership.topContributors') }}</h4>
           <div class="contributor-list">
             <div
-              v-for="(contrib, index) in analysis.metrics.top_contributors.slice(0, 5)"
+              v-for="(contrib, index) in visible('contributors', analysis.metrics.top_contributors, 5)"
               :key="'top-' + index"
               class="contributor-item"
             >
               <span class="rank">#{{ index + 1 }}</span>
               <span class="name">{{ contrib.name }}</span>
-              <span class="lines">{{ contrib.lines.toLocaleString() }} lines</span>
-              <span class="score">{{ contrib.score.toFixed(0) }} pts</span>
+              <span class="lines">{{ $t('analytics.codebase.shared.lines', { count: contrib.lines.toLocaleString() }, contrib.lines) }}</span>
+              <span class="score">{{ $t('analytics.codebase.shared.points', { count: Number(contrib.score.toFixed(0)) }, Number(contrib.score.toFixed(0))) }}</span>
             </div>
-            <TruncationNotice
-              :shown="Math.min(5, analysis.metrics.top_contributors.length)"
-              :total="analysis.metrics.top_contributors.length"
-            />
+            <TruncationNotice :shown="shown('contributors', analysis.metrics.top_contributors.length, 5)" :total="analysis.metrics.top_contributors.length" :step="5" @show-more="showMore('contributors', 5)" />
           </div>
         </div>
 
@@ -190,7 +187,7 @@
               class="risk-badge"
               :class="'risk-' + risk"
             >
-              {{ formatFactorName(String(risk)) }}: {{ count }} files
+              {{ $t('analytics.codebase.shared.riskCount', { name: formatFactorName(String(risk)), count }, Number(count)) }}
             </span>
           </div>
         </div>
@@ -211,27 +208,27 @@
           <div class="expert-stats">
             <div class="stat">
               <Icon name="code" />
-              <span>{{ expert.total_lines.toLocaleString() }} lines</span>
+              <span>{{ $t('analytics.codebase.shared.lines', { count: expert.total_lines.toLocaleString() }, expert.total_lines) }}</span>
             </div>
             <div class="stat">
               <Icon name="code-branch" />
-              <span>{{ expert.total_commits }} commits</span>
+              <span>{{ $t('analytics.codebase.shared.commits', { count: expert.total_commits }, expert.total_commits) }}</span>
             </div>
             <div class="stat">
               <Icon name="star" />
-              <span>{{ expert.files_owned }} files owned</span>
+              <span>{{ $t('analytics.codebase.shared.filesOwned', { count: expert.files_owned }, expert.files_owned) }}</span>
             </div>
           </div>
           <div class="expert-scores">
             <div class="score-bar">
-              <span class="score-label">Impact</span>
+              <span class="score-label">{{ $t('analytics.codebase.shared.impact') }}</span>
               <div class="score-track">
                 <div class="score-fill impact" :style="{ width: expert.impact_score + '%' }"></div>
               </div>
               <span class="score-value">{{ expert.impact_score.toFixed(0) }}</span>
             </div>
             <div class="score-bar">
-              <span class="score-label">Recency</span>
+              <span class="score-label">{{ $t('analytics.codebase.shared.recency') }}</span>
               <div class="score-track">
                 <div class="score-fill recency" :style="{ width: expert.recency_score + '%' }"></div>
               </div>
@@ -239,11 +236,13 @@
             </div>
           </div>
           <div v-if="expert.expertise_areas.length > 0" class="expertise-areas">
-            <span class="area-tag" v-for="area in expert.expertise_areas.slice(0, 3)" :key="area">
+            <span class="area-tag" v-for="area in visible('areas-' + index, expert.expertise_areas, 3)" :key="area">
               {{ area }}
             </span>
+            <TruncationNotice :shown="shown('areas-' + index, expert.expertise_areas.length, 3)" :total="expert.expertise_areas.length" :step="3" @show-more="showMore('areas-' + index, 3)" />
           </div>
         </div>
+        <TruncationNotice v-if="analysis.expertise_scores.length >= SERVER_CAPS.experts && analysis.summary.total_contributors > analysis.expertise_scores.length" :shown="analysis.expertise_scores.length" :total="analysis.summary.total_contributors" server-limited />
       </div>
 
       <!-- Files Tab -->
@@ -255,7 +254,7 @@
           </h4>
           <div class="directory-list">
             <div
-              v-for="(dir, index) in analysis.directory_ownership.slice(0, 15)"
+              v-for="(dir, index) in visible('directories', analysis.directory_ownership, 15)"
               :key="'dir-' + index"
               class="directory-item"
               :class="'risk-' + dir.knowledge_risk"
@@ -267,13 +266,11 @@
                 <span class="dir-bus-factor" :class="dir.bus_factor <= 1 ? 'low' : ''">
                   <Icon name="users" /> {{ dir.bus_factor }}
                 </span>
-                <span class="dir-lines">{{ dir.total_lines.toLocaleString() }} lines</span>
+                <span class="dir-lines">{{ $t('analytics.codebase.shared.lines', { count: dir.total_lines.toLocaleString() }, dir.total_lines) }}</span>
               </div>
             </div>
-            <TruncationNotice
-              :shown="Math.min(15, analysis.directory_ownership.length)"
-              :total="analysis.directory_ownership.length"
-            />
+            <TruncationNotice :shown="shown('directories', analysis.directory_ownership.length, 15)" :total="analysis.directory_ownership.length" :step="15" @show-more="showMore('directories', 15)" />
+            <TruncationNotice v-if="analysis.directory_ownership.length >= SERVER_CAPS.directories && analysis.summary.total_directories > analysis.directory_ownership.length" :shown="analysis.directory_ownership.length" :total="analysis.summary.total_directories" server-limited />
           </div>
         </div>
 
@@ -284,7 +281,7 @@
           </h4>
           <div class="file-list">
             <div
-              v-for="(file, index) in analysis.file_ownership.slice(0, 30)"
+              v-for="(file, index) in visible('files', analysis.file_ownership, 30)"
               :key="'file-' + index"
               class="file-item"
               :class="'risk-' + file.knowledge_risk"
@@ -296,13 +293,11 @@
                 <span class="file-bus-factor" :class="file.bus_factor <= 1 ? 'low' : ''">
                   <Icon name="users" /> {{ file.bus_factor }}
                 </span>
-                <span class="file-lines">{{ file.total_lines }} lines</span>
+                <span class="file-lines">{{ $t('analytics.codebase.shared.lines', { count: file.total_lines }, file.total_lines) }}</span>
               </div>
             </div>
-            <TruncationNotice
-              :shown="Math.min(30, analysis.file_ownership.length)"
-              :total="analysis.file_ownership.length"
-            />
+            <TruncationNotice :shown="shown('files', analysis.file_ownership.length, 30)" :total="analysis.file_ownership.length" :step="30" @show-more="showMore('files', 30)" />
+            <TruncationNotice v-if="analysis.file_ownership.length >= SERVER_CAPS.files && analysis.summary.total_files > analysis.file_ownership.length" :shown="analysis.file_ownership.length" :total="analysis.summary.total_files" server-limited />
           </div>
         </div>
       </div>
@@ -325,7 +320,7 @@
                 {{ gap.risk_level.toUpperCase() }}
               </span>
               <span class="gap-type">{{ formatFactorName(gap.gap_type) }}</span>
-              <span class="gap-lines">{{ gap.affected_lines.toLocaleString() }} lines</span>
+              <span class="gap-lines">{{ $t('analytics.codebase.shared.lines', { count: gap.affected_lines.toLocaleString() }, gap.affected_lines) }}</span>
             </div>
             <div class="gap-area"><Icon name="folder" /> {{ gap.area }}</div>
             <div class="gap-description">{{ gap.description }}</div>
@@ -333,12 +328,13 @@
               <Icon name="lightbulb" /> {{ gap.recommendation }}
             </div>
           </div>
+          <TruncationNotice v-if="analysis.knowledge_gaps.length >= SERVER_CAPS.gaps && analysis.summary.knowledge_gaps_count > analysis.knowledge_gaps.length" :shown="analysis.knowledge_gaps.length" :total="analysis.summary.knowledge_gaps_count" server-limited />
         </div>
       </div>
 
       <div class="scan-timestamp">
         <Icon name="clock" />
-        Analysis completed in {{ analysis.analysis_time_seconds.toFixed(2) }}s
+        {{ $t('analytics.codebase.shared.analysisCompleted', { seconds: analysis.analysis_time_seconds.toFixed(2) }) }}
       </div>
     </div>
 
@@ -353,6 +349,7 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
+import { useShowMore } from '@autobot/ui'
 import TruncationNotice from '../TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
@@ -433,12 +430,15 @@ interface OwnershipAnalysisResult {
   metrics: OwnershipMetrics
 }
 
-defineProps<{
+const props = defineProps<{
   analysis: OwnershipAnalysisResult | null
   loading: boolean
   error: string | null
 }>()
 
+// #12741: rows the server returns per list at most (endpoints/ownership.py); `summary` has the real counts.
+const SERVER_CAPS = { files: 50, directories: 30, experts: 20, gaps: 30 } as const
+const { visible, shown, showMore } = useShowMore(15, () => props.analysis)
 const emit = defineEmits<{
   refresh: []
   export: [format: 'md' | 'json']

@@ -78,7 +78,8 @@ def test_born_digital_pdf_passes_the_upload_guard_unchanged():
 
 
 def test_no_text_detail_names_ocr_for_a_stamped_scan():
-    from api.knowledge import _extract_file_content, _no_text_detail
+    from api.knowledge import _extract_file_content
+    from knowledge.upload_rejections import no_text_detail as _no_text_detail
 
     _, extracted_doc = _extract_file_content("scan.pdf", _stamped_scan_pdf())
     detail = _no_text_detail(extracted_doc)
@@ -88,6 +89,6 @@ def test_no_text_detail_names_ocr_for_a_stamped_scan():
 
 
 def test_no_text_detail_does_not_claim_ocr_for_a_blank_text_file():
-    from api.knowledge import _no_text_detail
+    from knowledge.upload_rejections import no_text_detail as _no_text_detail
 
     assert "OCR" not in _no_text_detail(None)

@@ -52,21 +52,21 @@ export default {
 
 ## 🔌 WebSocket Integration
 
-### Global WebSocket Service
+### Real-time events
+Channel-based events go through `useEventBus`, the one entry point for real-time updates. (`useGlobalWebSocket` was retired in #15402 after its callers moved here, #9062.)
 ```javascript
-// Use the global WebSocket service
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js';
+import { useEventBus } from '@/composables/useEventBus'
 
-const { isConnected, on, send, state } = useGlobalWebSocket();
+const { subscribe, isConnected, connectionState } = useEventBus()
 
-// Listen for events
-on('llm_response', (data) => {
-  // Handle real-time LLM responses
-});
-
-// Send messages
-send({ type: 'ping' });
+// Subscribe to a channel; the returned function unsubscribes (it also runs on unmount)
+const unsubscribe = subscribe('global', (event) => {
+  // Handle a real-time event
+})
+// Channels: 'global', 'agent:{id}', 'task:{id}', 'workflow:{id}'
 ```
+
+A connection to one specific endpoint (e.g. a log stream or a terminal) uses `useWebSocket` instead.
 
 ### Event Handling Patterns
 ```javascript

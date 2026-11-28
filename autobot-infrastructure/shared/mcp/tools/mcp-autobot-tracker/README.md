@@ -78,8 +78,8 @@ The installer automatically configures Claude Desktop. Manual configuration:
             "command": "node",
             "args": ["/path/to/mcp-autobot-tracker/dist/index.js"],
             "env": {
-                "REDIS_HOST": "172.16.168.23",
-                "REDIS_PORT": "6379"
+                "REDIS_HOST": "<redis-host>",
+                "AUTOBOT_REDIS_PORT": "6379"
             }
         }
     }
@@ -87,8 +87,8 @@ The installer automatically configures Claude Desktop. Manual configuration:
 ```
 
 ### Environment Variables
-- `REDIS_HOST`: Redis server host (default: 172.16.168.23)
-- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_HOST`: Redis server host (empty by default; set it to your Redis node)
+- `AUTOBOT_REDIS_PORT`: Redis server port (default: 6379), the same name the platform's `PortConfig` reads. The bare `REDIS_PORT` is still read as a fallback for one release (#19489); every port in `src/constants/network.ts` follows the same `AUTOBOT_*`-first rule.
 - `NODE_ENV`: Environment mode (development/production)
 
 ## 🛠️ Usage

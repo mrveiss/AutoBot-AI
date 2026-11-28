@@ -35,10 +35,11 @@ if _env_path.exists():
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # ssot-config-exempt: runtime env mutation for HuggingFace
 
 from app_factory import create_app
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.stream_logging import load_uvicorn_log_config
 
-# Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
+# Service startup (uvicorn imports this module): file logging on from here (#20894)
+setup_logging()
 logger = get_logger(__name__, "backend")
 logger.info("📊 Log level configured via centralized logging manager")
 
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     logger.info("🌟 Starting AutoBot Backend in standalone mode...")
 
     # Get configuration from environment with intelligent defaults
-    host = config.vm.main  # Bind to all interfaces for network access
+    host = config.vm.main_bind  # listen address; vm.main is the address clients dial (#18810)
     port = config.port.backend
 
     # Determine if we're in development mode

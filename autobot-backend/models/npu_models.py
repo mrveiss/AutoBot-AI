@@ -47,7 +47,7 @@ class LoadBalancingStrategy(str, Enum):
     PRIORITY = "priority"
 
 
-class NPUWorkerConfig(BaseModel):
+class NPUWorkerDefinition(BaseModel):
     """NPU Worker Configuration Model"""
 
     id: str = Field(..., description="Unique worker identifier")
@@ -130,7 +130,7 @@ class NPUWorkerStatus(BaseModel):
     )
 
 
-class NPUWorkerMetrics(BaseModel):
+class NPUWorkerLoadMetrics(BaseModel):
     """NPU Worker Performance Metrics Model"""
 
     id: str = Field(..., description="Worker identifier")
@@ -202,9 +202,9 @@ class LoadBalancingConfig(BaseModel):
 class NPUWorkerDetails(BaseModel):
     """Combined Worker Configuration and Status"""
 
-    config: NPUWorkerConfig = Field(..., description="Worker configuration")
+    config: NPUWorkerDefinition = Field(..., description="Worker configuration")
     status: NPUWorkerStatus = Field(..., description="Worker runtime status")
-    metrics: NPUWorkerMetrics | None = Field(default=None, description="Worker performance metrics")
+    metrics: NPUWorkerLoadMetrics | None = Field(default=None, description="Worker performance metrics")
 
     def to_event_dict(self) -> Dict[str, Any]:
         """Convert to event dictionary format (Issue #372 - reduces feature envy)."""

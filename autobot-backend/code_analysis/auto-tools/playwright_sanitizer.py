@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
+from utils.file_categorization import HTML_EXTENSIONS
 from utils.line_index import LineIndex  # #12884
 
 # Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
@@ -45,7 +46,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = (".html", ".htm")
+_HTML_EXTENSIONS = tuple(sorted(HTML_EXTENSIONS))
 
 # Issue #1183: Module-level constant extracted from inject_runtime_protection()
 _PLAYWRIGHT_RUNTIME_PROTECTION_SCRIPT = """

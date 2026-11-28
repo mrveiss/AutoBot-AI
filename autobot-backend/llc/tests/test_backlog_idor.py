@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
@@ -23,7 +24,8 @@ _OTHER_ORG = "99999999-9999-9999-9999-999999999999"
 
 def _make_client(caller_org_id: str, is_platform_admin: bool = False) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
-    from llc.api.backlog import get_session, router  # noqa: PLC0415
+    from llc.api.backlog import router  # noqa: PLC0415
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
@@ -52,7 +54,8 @@ def _stop_patches():
 
 class TestBacklogNoAuth:
     def test_get_backlog_no_token_returns_401(self):
-        from llc.api.backlog import get_session, router
+        from llc.api.backlog import router
+        from llc.deps import get_session
 
         app = FastAPI()
         app.include_router(router, prefix="/api/llc")
@@ -62,8 +65,7 @@ class TestBacklogNoAuth:
 
         app.dependency_overrides[get_session] = _fake_session
 
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = TestClient(app)
             resp = client.get("/api/llc/backlog", params={"company_id": str(uuid.uuid4())})
         assert resp.status_code == 401

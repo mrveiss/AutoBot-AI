@@ -38,7 +38,7 @@ from autobot_types import TaskComplexity
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from services.workflow_automation.workflow_ownership import caller_id
 from utils.advanced_cache_manager import smart_cache
-from workflow_templates import TemplateCategory, workflow_template_manager
+from workflow_templates import WorkflowTemplateCategory, workflow_template_manager
 
 logger = get_logger(__name__)
 
@@ -104,7 +104,7 @@ async def list_workflow_templates(
         category_filter = None
         if category:
             try:
-                category_filter = TemplateCategory(category.lower())
+                category_filter = WorkflowTemplateCategory(category.lower())
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
 
@@ -207,7 +207,7 @@ async def list_template_categories():
     """List all available template categories"""
     try:
         categories = []
-        for category in TemplateCategory:
+        for category in WorkflowTemplateCategory:
             # Count templates in each category
             template_count = len(workflow_template_manager.list_templates(category=category))
             categories.append(
@@ -237,7 +237,7 @@ async def get_template_statistics():
 
         # Category statistics
         category_stats = {}
-        for category in TemplateCategory:
+        for category in WorkflowTemplateCategory:
             category_stats[category.value] = len(workflow_template_manager.list_templates(category=category))
 
         # Complexity statistics

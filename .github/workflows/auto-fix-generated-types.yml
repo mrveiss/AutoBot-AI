@@ -3,8 +3,8 @@
 # force every author to hand-run `npm run gen:types` against a py3.14 backend
 # (the deployed/dev boxes may run a different Python and produce a schema that
 # never matches the gate), this job regenerates api.ts in the SAME py3.14
-# environment the gate uses and commits it back to the PR branch — self-healing
-# the recurring drift (#10817). Runs on GitHub-hosted runners so it never
+# environment the gate uses. It no longer commits the result back to the PR branch
+# (#15362, see `permissions` below). Runs on GitHub-hosted runners so it never
 # competes with the self-hosted runner.
 #
 # #14368: autobot-slm-frontend carries the identical drift risk (verified by
@@ -20,56 +20,27 @@
 
 name: Auto-fix Generated Types
 
+# #20552: called by ci.yml, only after verify failed. The caller's run owns concurrency, and
+# the path set is the verify gate's own, so this file carries neither.
 on:
-  pull_request:
-    paths:
-      # Backend changes can alter the OpenAPI schema that api.ts is generated from.
-      - 'autobot-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - 'autobot-frontend/src/types/generated/api.ts'
-      # #14368: SLM backend changes can alter the OpenAPI schema
-      # autobot-slm-frontend's openapi.json + api.ts are generated from.
-      # openapi.json (unlike the backend's, which is an ephemeral CI temp
-      # file never committed) IS a checked-in artifact here, so it is watched
-      # too — a hand-edit or bad merge of it must also trigger the fix-back.
-      - 'autobot-slm-backend/**/*.py'
-      # #12986: completes the canonical `backend-python` set from .github/filters/backend-python-paths.yml;
-      # enforced by pipeline-scripts/check_workflow_path_filters.py.
-      - '.github/filters/backend-python-paths.yml'
-      - 'autobot-slm-frontend/openapi.json'
-      - 'autobot-slm-frontend/src/types/generated/api.ts'
-      - '.github/workflows/auto-fix-generated-types.yml'
+  workflow_call:
+    secrets:
+      AUTOBOT_PUSH_TOKEN:
+        description: "Push token used by the checkout so a regenerated-types report can trigger checks"
+        required: false
 
-# #16360: a run caused by this workflow's OWN push (github-actions[bot]
-# committing the regenerated types) gets a group of its own. Before this, the
-# `approve-parked-runs` job below released that parked run, the released run
-# joined this group, and its cancel-in-progress cancelled the very run the
-# approver lives in: on #16351 the released run 34615151655 started at
-# 15:23:12Z and the approver's run 34612780429 was cancelled at 15:23:15Z.
-# Separating the GROUP is used rather than a per-run cancel-in-progress
-# expression because it does not depend on which run's setting governs a
-# cancel, which GitHub does not document. `github.actor` is the bot on that run
-# (run API: actor and triggering_actor both github-actions[bot]; the human run
-# it cancelled: both the PR author) and, unlike `github.triggering_actor`, stays
-# the bot if a human later approves or re-runs it.
+# #15362: `read`, not `write`. `autofix-types` used to commit the regenerated types
+# back to the PR branch, which invalidated every check already in flight and
+# restarted the whole ~20-minute pass for a codegen nit. It now reports the drift
+# with the command that fixes it.
 #
-# #16363 review: "a bot" is any `[bot]` actor, not only github-actions[bot].
-# The checkout below pushes with AUTOBOT_PUSH_TOKEN when it is set; if that token
-# belongs to a GitHub App or another bot identity, the fork policy parks the push
-# and the approver releases it exactly as in the fallback case. dependabot[bot]
-# is excluded: its runs are never parked, so there is no approver to protect,
-# and its rebases should keep superseding each other.
-#
-# Accepted trade-off: two bot-caused runs for DIFFERENT head SHAs no longer
-# cancel each other. Each is the regen run of its own commit, which pushes
-# nothing when the types already match, and a stale one's push, if it made one,
-# would be rejected as a non-fast-forward.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
-  cancel-in-progress: true
-
+# Dropping the permission rather than only deleting the `git push` line is the
+# point: a workflow without `contents: write` CANNOT push, so the property is
+# enforced by the token rather than by whoever edits this file next. The
+# `approve-parked-runs` job below declares its own `contents: read` plus
+# `actions: write`, so it never relied on this default.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   autofix-types:
@@ -97,133 +68,23 @@ jobs:
           # immediately instead of leaving it parked.
           token: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v7
-        with:
-          python-version-file: '.python-version'
-          cache: 'pip'
-          cache-dependency-path: |
-            requirements*.txt
-            autobot-backend/requirements*.txt
-            autobot-slm-backend/requirements.txt
 
-      - name: Install backend dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary
+      # The steps are the generated-types-autofix composite action, shared with the
+      # dispatch caller (#18500).
+      - name: Regenerate the generated types and report drift
+        uses: ./.github/actions/generated-types-autofix
 
-      - name: Dump authoritative OpenAPI schema
-        run: |
-          set -o pipefail
-          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
-          mkdir -p data logs static config
-          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.raw.json; then
-            echo "::error::Backend app.openapi() build failed — cannot regenerate types (see startup-import-smoke)."
-            exit 1
-          fi
-          # Strip the audit-only x-websocket-paths extension so the schema matches
-          # exactly what verify-generated-types diffs against.
-          python -c "import json; s=json.load(open('openapi.raw.json')); s.pop('x-websocket-paths', None); json.dump(s, open('openapi.json','w'))"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            autobot-frontend/package-lock.json
-            autobot-slm-frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        working-directory: autobot-frontend
-        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
-        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
-        # required check. Local dev `npm ci` is unaffected and still gets it.
-        env:
-          CYPRESS_INSTALL_BINARY: '0'
-        run: npm ci
-
-      - name: Regenerate api.ts from authoritative schema
-        working-directory: autobot-frontend
-        run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
-
-      - name: Set up isolated venv for SLM backend dependencies
-        # #14368: autobot-slm-backend/requirements.txt pins its own
-        # fastapi/pydantic/starlette range plus packages the backend never
-        # imports (croniter, authlib, ldap3, pysaml2, pyotp, bcrypt,
-        # PyJWT[crypto], ...) — the same reason `verify-generated-types-slm`
-        # runs as a separate job from `verify-types-run` rather than sharing
-        # its environment. A venv gets the same isolation here without a
-        # second job, so this stays the one push/approve pair the backend
-        # already has.
-        run: python -m venv .venv-slm
-
-      - name: Install SLM backend dependencies
-        run: |
-          .venv-slm/bin/python -m pip install --upgrade pip setuptools wheel
-          .venv-slm/bin/python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary
-
-      - name: Dump authoritative SLM OpenAPI schema
-        run: |
-          set -o pipefail
-          mkdir -p data logs static config autobot-slm-backend/data
-          export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
-          if ! .venv-slm/bin/python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.raw.json; then
-            echo "::error::SLM backend app.openapi() build failed — cannot regenerate types (see startup-import-smoke)."
-            exit 1
-          fi
-          # Same recipe as verify-generated-types-slm: strip the audit-only
-          # x-websocket-paths extension and write with the exact formatting
-          # (indent=2, sort_keys, trailing newline) `npm run gen:types:openapi`
-          # produces locally, so the two can never disagree on the diff.
-          .venv-slm/bin/python -c "
-          import json
-          s = json.load(open('slm_openapi.raw.json'))
-          s.pop('x-websocket-paths', None)
-          with open('autobot-slm-frontend/openapi.json', 'w', encoding='utf-8') as f:
-              json.dump(s, f, indent=2, sort_keys=True, ensure_ascii=False)
-              f.write('\n')
-          "
-
-      - name: Install SLM frontend dependencies
-        working-directory: autobot-slm-frontend
-        run: npm ci
-
-      - name: Regenerate SLM api.ts from authoritative schema
-        working-directory: autobot-slm-frontend
-        run: npx --no-install openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
-
-      - name: Commit regenerated types if drifted
-        run: |
-          rm -f openapi.raw.json openapi.json slm_openapi.raw.json
-          rm -rf .venv-slm
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add autobot-frontend/src/types/generated/api.ts \
-            autobot-slm-frontend/openapi.json \
-            autobot-slm-frontend/src/types/generated/api.ts
-          if git diff --staged --quiet; then
-            echo "Generated types already fresh — nothing to commit."
-          else
-            git commit -m "$(cat <<'EOF'
-          chore(types): regenerate generated API types from OpenAPI schema(s)
-
-          Auto-regenerated (py3.14) to match the backend and/or SLM backend
-          schema so the required verify-generated-types gate(s) pass.
-          Triggered by auto-fix-generated-types.yml.
-          EOF
-          )"
-            git push
-            # This push only touches api.ts / openapi.json, the exact paths
-            # this workflow's own `on.pull_request.paths` filter watches, so
-            # it DOES retrigger a new run on the branch. That rerun repeats
-            # the same regeneration, finds the tree already fresh (the diff
-            # below is empty), and takes the "nothing to commit" branch above
-            # instead of pushing again — the loop terminates in two runs, the
-            # same self-limiting shape the backend-only version already had.
-            echo "✅ Generated types regenerated and pushed to the PR branch."
-          fi
-
+  # #15362: `approve-parked-runs` below is now VESTIGIAL and deliberately kept.
+  # `autofix-types` no longer pushes, so nothing parks and there is nothing for it
+  # to approve: it will run, find no parked run for this PR, and exit clean.
+  #
+  # It is not removed here because nothing in #15362 requires it, and removing it
+  # would retire three guard files that belong to other issues --
+  # `approver_self_cancel_16360_test.py` (#16360),
+  # `git_hooks_formatter_dispatch_16923_test.py` (#16923) and the approval wiring
+  # pinned for #14311. Reversing those rulings inside a PR about CI invalidation
+  # would be a scope change disguised as tidying. Retiring the job and its guards
+  # together is its own issue.
   # #14311: when the token above falls back to the default GITHUB_TOKEN (or
   # even with AUTOBOT_PUSH_TOKEN configured but still resolving to a bot/app
   # identity the fork-PR approval policy does not recognise as a human), the
@@ -268,6 +129,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
 
       # The sweep's output is kept for the summary step below. pipefail keeps
       # the script's exit code, which `| tee` would otherwise discard.

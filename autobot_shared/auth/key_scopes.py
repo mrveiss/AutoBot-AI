@@ -90,3 +90,16 @@ def key_permissions(scopes: object) -> FrozenSet[Permission]:
     return frozenset(
         permission for name, bundle in SCOPE_PERMISSIONS.items() if scope_granted(scopes, name) for permission in bundle
     )
+
+
+def key_scope_allows(caller: object, permission: Permission) -> bool:
+    """Return whether an API-key caller's scopes carry *permission* (#16040 AC2, moved here by #18263).
+
+    A pre-enforcement key in its grace period (``legacy_full_scope``) carries
+    its owner's full role (AC5). A malformed ``scopes`` value carries nothing.
+    """
+    if not isinstance(caller, dict):
+        return False
+    if caller.get("legacy_full_scope") is True:
+        return True
+    return permission in key_permissions(caller.get("scopes"))

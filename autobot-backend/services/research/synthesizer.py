@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 from llm_shared.json_utils import extract_json_object
 
-from .models import Citation, StoredFact
+from .models import ResearchFactCitation, StoredFact
 
 logger = get_logger(__name__)
 
@@ -42,7 +42,7 @@ class SynthesisResult:
     """Grounded answer plus the citations that survived the post-check."""
 
     answer: str
-    citations: List[Citation]
+    citations: List[ResearchFactCitation]
     confidence: float
 
 
@@ -70,7 +70,9 @@ def _parse_synthesis_payload(raw_content: str) -> Dict[str, Any]:
         return {}
 
 
-def _sanitize_answer_and_collect_citations(answer: str, facts: List[StoredFact]) -> tuple[str, List[Citation]]:
+def _sanitize_answer_and_collect_citations(
+    answer: str, facts: List[StoredFact]
+) -> tuple[str, List[ResearchFactCitation]]:
     """Strip markers citing an out-of-range fact number; collect valid citations.
 
     Anti-hallucinated-citation post-check (#12622 acceptance criteria):
@@ -91,9 +93,9 @@ def _sanitize_answer_and_collect_citations(answer: str, facts: List[StoredFact])
     return sanitized, citations
 
 
-def _fact_to_citation(fact: StoredFact) -> Citation:
+def _fact_to_citation(fact: StoredFact) -> ResearchFactCitation:
     """Map a stored fact to its citation shape."""
-    return Citation(fact_id=fact.fact_id, source_url=fact.source_url, source_doc_id=fact.source_doc_id)
+    return ResearchFactCitation(fact_id=fact.fact_id, source_url=fact.source_url, source_doc_id=fact.source_doc_id)
 
 
 async def synthesize_answer(llm_service: Any, question: str, facts: List[StoredFact]) -> SynthesisResult:

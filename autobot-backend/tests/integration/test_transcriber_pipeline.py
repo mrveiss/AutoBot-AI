@@ -22,7 +22,7 @@ from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import Database
 from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator
-from voice_processing.language_detection import detect_language
+from voice_processing.language_detection import detect_audio_language
 from voice_processing.providers import get_speech_provider_registry
 
 
@@ -55,7 +55,7 @@ async def test_service_availability():
     assert get_speech_provider_registry() is not None
 
     # Language detection degrades to None for a missing audio file.
-    result = await detect_language(audio_path="/nonexistent/sample_lv.wav", filename_hint="sample_lv.wav")
+    result = await detect_audio_language(audio_path="/nonexistent/sample_lv.wav", filename_hint="sample_lv.wav")
     assert result in ["lv", "en", None]
 
 
@@ -131,7 +131,7 @@ async def test_process_recording_blocks_path_outside_upload_dir(
     orchestrator, transcriber_db, project_id, tmp_path, monkeypatch
 ):
     """Issue #9214: files outside the upload base dir must be rejected."""
-    monkeypatch.setenv("AUTOBOT_UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr("transcriber.upload_security._configured_upload_dir", lambda: str(tmp_path / "uploads"))
     recording_id = await transcriber_db.create_recording(
         project_id, "invalid.wav", "/nonexistent/path.wav", user_id="u1"
     )
