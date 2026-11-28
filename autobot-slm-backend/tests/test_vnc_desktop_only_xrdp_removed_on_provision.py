@@ -412,5 +412,5 @@ def test_the_credential_name_uses_the_node_hostname_with_a_fallback() -> None:
 
 
 def test_the_provisioning_inventory_carries_the_node_hostname() -> None:
-    src = (_ANSIBLE.parent / "api" / "nodes.py").read_text(encoding="utf-8")
-    assert 'f"      node_hostname: {json.dumps(node.hostname)}' in src and "slm_node_id: {node_id}" in src
+    src = (_ANSIBLE.parent / "services" / "provision_inventory.py").read_text(encoding="utf-8")
+    assert '"node_hostname": node.hostname' in src and '"slm_node_id": node_id' in src
