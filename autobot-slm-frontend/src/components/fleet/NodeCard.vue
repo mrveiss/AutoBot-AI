@@ -285,7 +285,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       <span
         v-for="role in node.roles"
         :key="role"
-        class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
+        class="px-2 py-0.5 text-xs font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-sm"
       >
         {{ role }}
       </span>
@@ -393,7 +393,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       <div class="flex gap-1">
         <button
           @click="handleAction('view')"
-          class="p-1.5 text-autobot-text-tertiary hover:text-primary-600 hover:bg-primary-50 transition-colors rounded-sm"
+          class="p-1.5 text-autobot-text-tertiary hover:text-autobot-primary hover:bg-autobot-primary-bg transition-colors rounded-sm"
           :aria-label="$t('fleet.nodeCard.viewDetailsForNodeAria', { hostname: node.hostname })"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

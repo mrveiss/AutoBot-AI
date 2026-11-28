@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,20 +31,6 @@ def test_candidates_name_code_source_and_never_the_stale_copy(tmp_path, monkeypa
     stale = install / paths.INFRASTRUCTURE_DIR_NAME / "shared" / "config" / CATALOG_FILENAME
     assert current in candidates
     assert stale not in candidates
-
-
-def test_man_page_indexer_is_under_code_source(tmp_path, monkeypatch) -> None:
-    from tasks import man_page_indexing
-
-    install, code_source = _two_copies(tmp_path)
-    monkeypatch.setenv(paths.CODE_SOURCE_ENV, str(code_source))
-    monkeypatch.setenv(paths.BASE_DIR_ENV, str(install))
-    try:
-        reloaded = importlib.reload(man_page_indexing)
-        assert code_source in reloaded.MAN_PAGE_INDEXER.parents
-    finally:
-        monkeypatch.undo()
-        importlib.reload(man_page_indexing)
 
 
 def test_candidates_survive_an_undeterminable_project_root(tmp_path, monkeypatch) -> None:

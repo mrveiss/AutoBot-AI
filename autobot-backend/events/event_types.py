@@ -55,3 +55,9 @@ VERIFIER_VERDICT = "verifier_verdict"
 # model_fallback_coordinator.py) and services/llm_service.py's inline
 # chat()/stream() fallback loops, so neither call site is inert.
 PROVIDER_FALLBACK = "provider_fallback"
+
+# Self-model change (#22277; services/self_model_producer.py)
+# Published on the "global" channel, ephemeral, when the SLM self-model's revision moved (an install, a
+# removal, an upgrade, a node going stale, or a declared/probed status change). The model itself is the
+# state: a client that missed the event reads the current entities through the query_self_model tool.
+SELF_MODEL_CHANGED = "self_model.changed"

@@ -64,8 +64,8 @@ function toggleSort(key: SortKey) {
 function getStatusColor(status: string): string {
   switch (status.toLowerCase()) {
     case 'online':
-    case 'healthy': return 'bg-success-100 text-success-800'
-    case 'degraded': return 'bg-warning-100 text-warning-800'
+    case 'healthy': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'degraded': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'offline':
     case 'unhealthy': return 'bg-autobot-bg-tertiary text-autobot-text-primary'
     default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
@@ -73,8 +73,8 @@ function getStatusColor(status: string): string {
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-error-600 font-semibold'
-  if (value >= 70) return 'text-warning-600'
+  if (value >= 90) return 'text-autobot-alert-text font-semibold'
+  if (value >= 70) return 'text-autobot-pill-warn-fg'
   return 'text-autobot-text-primary'
 }
 
@@ -85,7 +85,7 @@ function getSortIcon(key: SortKey): string {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+  <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-autobot-border">
       <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('monitoring.nodeMetricsGrid.nodeMetrics') }}</h3>
@@ -93,7 +93,7 @@ function getSortIcon(key: SortKey): string {
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
     </div>
 
     <div v-else-if="!nodes || nodes.length === 0" class="text-center py-12 text-autobot-text-tertiary">
@@ -132,7 +132,7 @@ function getSortIcon(key: SortKey): string {
             </th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-autobot-border">
+        <tbody class="bg-autobot-bg-secondary divide-y divide-autobot-border">
           <tr
             v-for="node in sortedNodes"
             :key="node.node_id"
@@ -167,7 +167,7 @@ function getSortIcon(key: SortKey): string {
               <div class="text-sm text-autobot-text-primary">
                 {{ node.services_running }} / {{ node.services_running + node.services_failed }}
               </div>
-              <div v-if="node.services_failed > 0" class="text-xs text-error-600">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
+              <div v-if="node.services_failed > 0" class="text-xs text-autobot-alert-text">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               <span v-if="node.last_heartbeat">

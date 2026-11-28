@@ -23,7 +23,7 @@ task modules into that package's ``__init__``.
 
 What this test does
 -------------------
-It parses every ``"task": "<name>"`` from celery_app.py's ``beat_schedule``,
+It reads every scheduled task name from celery_app.py's ``beat_schedule`` (``testkit.beat_schedule``),
 imports the exact registration surface celery_app.py loads at startup (the
 autodiscovered packages plus ``services.pricing_refresh``), and asserts every
 scheduled task name is present in the Celery task registry. A scheduled task
@@ -41,6 +41,8 @@ import importlib
 import re
 import sys
 from pathlib import Path
+
+from testkit.beat_schedule import beat_schedule_entries
 
 _BACKEND_DIR = Path(__file__).resolve().parent
 _CELERY_APP_SRC = (_BACKEND_DIR / "celery_app.py").read_text(encoding="utf-8")
@@ -67,13 +69,12 @@ _KNOWN_DROPPED = {
 
 
 def _scheduled_task_names() -> set[str]:
-    """Task names celery_app.py's beat_schedule dispatches (parsed from source).
+    """Task names celery_app.py's beat_schedule dispatches (read from source).
 
     celery_app.py is heavy and pytest-stubbed (#7766), so the schedule is read
-    from source text rather than by importing the real module — the same
-    approach as celery_queue_coverage_test.py.
+    from source by ``testkit.beat_schedule``, the one reader of it (#22280).
     """
-    names = set(re.findall(r'"task":\s*"([\w.]+)"', _CELERY_APP_SRC))
+    names = {entry["task"] for entry in beat_schedule_entries().values()}
     assert names, "no beat_schedule task names parsed from celery_app.py"
     return names
 

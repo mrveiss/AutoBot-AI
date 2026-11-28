@@ -106,6 +106,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #16905: the legacy-chat company proposer is an explicit admin trigger (owner decision 2026-11-23); no UI yet.
     # A person approves each proposal in the Approvals inbox, which is the UI for the outcome.
     "/api/chat-company-proposals": "an administrator, over HTTP (no UI yet)",
+    # #22277: the main backend's SLM client (autobot-backend/services/slm_self_model.py) posts observations and reads
+    # entities with f"{SELF_MODEL_PATH}/..." -- the vault client's shape above, so the detector sees no literal.
+    "/api/nodes/self-model": "the main backend's SLM client (services/slm_self_model.py), over HTTP",
 }
 
 

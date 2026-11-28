@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.service_registry_core import shared_endpoint as _shared_endpoint
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, SystemdState
@@ -88,13 +89,12 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_BACKEND_HOST",
         default_port_env="AUTOBOT_BACKEND_PORT",
         default_host=os.environ.get("AUTOBOT_BACKEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=8443,  # Issue #858/#861: HTTPS port
+        **_shared_endpoint("backend", tls=True),  # #858/#861: HTTPS port, from the core (#22273)
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-backend && "
             "source venv/bin/activate && nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
         stop_command="pkill -f 'python.*backend/main.py'",
-        health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         systemd_service="autobot-backend",  # #13915: was unnamed, so no query could find it
         requires_sudo=False,
@@ -108,14 +108,13 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_TLS_PORT",  # nginx HTTPS; AUTOBOT_FRONTEND_PORT is Vite (#19326)
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=config.tls.frontend_tls_port,
+        **_shared_endpoint("frontend", tls=True),
         systemd_service="nginx",  # Production uses nginx
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-slm-frontend && "
             f"nohup npm run dev -- --host 0.0.0.0 --port {config.port.frontend} > /tmp/vite.log 2>&1 &"
         ),
         stop_command=f"pkill -f 'npm.*dev' || pkill -f 'vite.*{config.port.frontend}'",
-        health_check_path="/",
         health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
         working_dir=f"{FLEET_INSTALL_ROOT}/autobot-slm-frontend",
@@ -128,7 +127,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_REDIS_HOST",
         default_port_env="AUTOBOT_REDIS_PORT",
         default_host=os.environ.get("AUTOBOT_REDIS_HOST", ""),  # noqa: ssot-fallback
-        default_port=6379,
+        **_shared_endpoint("redis", health_path=False),
         systemd_service="redis-stack-server",
         health_check_type="redis",
         requires_sudo=True,
@@ -141,14 +140,13 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_NPU_WORKER_HOST",
         default_port_env="AUTOBOT_NPU_WORKER_PORT",
         default_host=os.environ.get("AUTOBOT_NPU_WORKER_HOST", ""),  # noqa: ssot-fallback
-        default_port=8081,
+        **_shared_endpoint("npu-worker"),
         systemd_service="autobot-npu-worker",
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-npu-worker && "
             "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &"
         ),
         stop_command="pkill -f 'npu.*worker'",
-        health_check_path="/health",
         health_check_type="http",
         requires_sudo=False,
         description="NPU hardware AI acceleration worker",
@@ -162,11 +160,10 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_AI_STACK_HOST",
         default_port_env="AUTOBOT_AI_STACK_PORT",
         default_host=os.environ.get("AUTOBOT_AI_STACK_HOST", ""),  # noqa: ssot-fallback
-        default_port=11434,
+        **_shared_endpoint("ollama"),
         systemd_service="ollama",
         start_command="ollama serve",
         stop_command="pkill -f 'ollama serve'",
-        health_check_path="/api/tags",
         health_check_type="http",
         requires_sudo=False,
         description="Ollama AI LLM server",
@@ -178,13 +175,12 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_BROWSER_SERVICE_HOST",
         default_port_env="AUTOBOT_BROWSER_SERVICE_PORT",
         default_host=os.environ.get("AUTOBOT_BROWSER_SERVICE_HOST", ""),  # noqa: ssot-fallback
-        default_port=3000,
+        **_shared_endpoint("playwright-vnc"),
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-browser-worker && "
             "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
-        health_check_path="/health",
         health_check_type="http",
         requires_sudo=False,
         working_dir=f"{FLEET_INSTALL_ROOT}/autobot-browser-worker",
@@ -284,7 +280,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_AI_STACK_HOST",
         default_port_env="AUTOBOT_AI_STACK_PORT",
         default_host=os.environ.get("AUTOBOT_AI_STACK_HOST", ""),  # noqa: ssot-fallback
-        default_port=8080,  # roles/backend/defaults/main.yml: backend_ai_stack_port
+        **_shared_endpoint("ai-stack", health_path=False),
         systemd_service="autobot-ai-stack",
         health_check_type="http",
         requires_sudo=True,

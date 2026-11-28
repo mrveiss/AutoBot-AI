@@ -505,6 +505,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "running before the gate existed are grandfathered as enabled on the first start, each with a "
         "durable audit entry.",
     ),
+    "self_model": Concept(
+        name="self_model",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-slm-backend/services/self_model_store.py",
+            "autobot-slm-backend/migrations/add_self_model_tables.py",
+        ),
+        rebuilt_by="autobot-slm-backend/services/self_model_reconcile.reconcile folds every producer's next batch "
+        "(heartbeat inventory, the backend's route/tool/agent/service-health pushes) back into the tables; the "
+        "backend holds no copy and reads the model through the SLM API (api/self_model.py).",
+        note="Owner decision on #22277 (2026-11-26): SLM Postgres, because the SLM already owns node identity and "
+        "the heartbeat. self_model_history is append-only and nothing is ever deleted: a removal is status "
+        "'absent' with removed_at.",
+    ),
     "voice_realtime_session": Concept(
         name="voice_realtime_session",
         system_of_record=Store.REDIS,
