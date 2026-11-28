@@ -56,7 +56,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "client-error-detail-sweep-21943",
     discover=_modules,
-    floor=3625,
+    floor=3758,  # mid-window: population 3908, window (3608, 3908)
     growth=300,
     roots=_ROOTS,
     what="non-test backend, SLM and shared modules scanned for a 4xx answered 'Internal server error'",
