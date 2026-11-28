@@ -60,8 +60,8 @@ const typeIcon = (type: string): string => {
   right: 0;
   max-height: 200px;
   overflow-y: auto;
-  background-color: #1e1e1e;
-  border: 1px solid #444;
+  background-color: var(--terminal-chrome-bg-alt);
+  border: 1px solid var(--terminal-border);
   border-bottom: none;
   border-radius: var(--radius-default) 4px 0 0;
   z-index: var(--z-popover);
@@ -80,29 +80,29 @@ const typeIcon = (type: string): string => {
 
 .completion-item:hover,
 .completion-item.selected {
-  background-color: #264f78;
+  background-color: var(--terminal-selection-bg);
 }
 
 .item-icon {
-  color: #888;
+  color: var(--terminal-text-muted);
   width: 16px;
   text-align: center;
   flex-shrink: 0;
   font-weight: bold;
 }
 
-.type-command .item-icon { color: #87ceeb; }
-.type-path .item-icon { color: #98c379; }
-.type-history .item-icon { color: #e5c07b; }
-.type-argument .item-icon { color: #c678dd; }
+.type-command .item-icon { color: var(--terminal-ansi-cyan); }
+.type-path .item-icon { color: var(--terminal-syntax-path); }
+.type-history .item-icon { color: var(--terminal-syntax-history); }
+.type-argument .item-icon { color: var(--terminal-syntax-argument); }
 
 .item-value {
-  color: #ffffff;
+  color: var(--terminal-text);
   flex-shrink: 0;
 }
 
 .item-desc {
-  color: #666;
+  color: var(--terminal-border-strong);
   margin-left: auto;
   font-size: var(--text-xs);
   white-space: nowrap;
@@ -113,8 +113,8 @@ const typeIcon = (type: string): string => {
 .completion-hint {
   padding: var(--spacing-0-5) var(--spacing-3);
   font-size: var(--text-xs);
-  color: #555;
-  border-top: 1px solid #333;
+  color: var(--terminal-text-faint);
+  border-top: 1px solid var(--terminal-border-subtle);
   text-align: center;
 }
 
@@ -124,11 +124,11 @@ const typeIcon = (type: string): string => {
 }
 
 .completion-suggestions::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--terminal-chrome-bg-alt);
 }
 
 .completion-suggestions::-webkit-scrollbar-thumb {
-  background: #555;
+  background: var(--terminal-btn-hover-bg);
   border-radius: var(--radius-default);
 }
 </style>

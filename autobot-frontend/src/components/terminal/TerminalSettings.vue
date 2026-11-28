@@ -257,7 +257,7 @@ input[type='range'] {
   appearance: none;
   height: 6px;
   border-radius: var(--radius-default);
-  background: #4a5568;
+  background: var(--terminal-slider-track);
 }
 
 input[type='range']::-webkit-slider-thumb {
