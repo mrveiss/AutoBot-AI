@@ -37,6 +37,7 @@ from api.schemas_orphan_storage import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.principal import require_audit_actor_id
 from models.approval import ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.orphan_storage import list_all_candidates, registered_providers
@@ -107,7 +108,7 @@ async def propose_orphan_storage_deletion(
         title=f"Delete orphan storage: {body.provider}/{body.candidate_id}",
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
         description=body.reason or "Proposed from the orphan-storage admin view.",
-        requested_by_agent=current_user.get("username"),
+        requested_by_agent=require_audit_actor_id(current_user),
         context={
             "action": ORPHAN_STORAGE_DELETE,
             "provider": body.provider,

@@ -5,7 +5,8 @@
 """The orphan-storage admin routes: admin-only, every detector, no host paths, and PROPOSE-only deletion (#17038, #17039, #17315)."""
 
 import uuid
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -16,7 +17,12 @@ from auth_middleware import get_current_user
 from models.approval import Approval
 from services import orphan_storage
 from services.approval_gate_service import ApprovalGateService
-from testkit.canonical_gate import canonical_resolver, real_admin_gate
+from testkit.canonical_gate import (
+    HUMAN_PRINCIPAL,
+    SERVICE_PRINCIPAL,
+    canonical_resolver,
+    real_admin_gate,
+)
 from testkit.fake_async_session import FakeAsyncSession
 
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
@@ -198,3 +204,16 @@ def test_a_proposal_creates_a_pending_approval_and_deletes_nothing(monkeypatch):
 
 async def _noop():
     return None
+
+
+async def test_proposal_requester_is_the_principal_id_or_the_service_name(monkeypatch):
+    """#22338: the stored requester is the id (a service's stable name), never the mutable username."""
+    service = MagicMock()
+    service.return_value.create_approval = AsyncMock(return_value=SimpleNamespace(id="a1", status="pending"))
+    body = SimpleNamespace(provider="p", candidate_id="c", reason=None)
+    monkeypatch.setattr(route, "ApprovalGateService", service)
+    monkeypatch.setattr(route, "registered_providers", lambda: ["p"])
+    await route.propose_orphan_storage_deletion(body, HUMAN_PRINCIPAL, MagicMock())
+    await route.propose_orphan_storage_deletion(body, SERVICE_PRINCIPAL, MagicMock())
+    calls = service.return_value.create_approval.await_args_list
+    assert [c.kwargs["requested_by_agent"] for c in calls] == ["u-123", "service:ci-runner"]

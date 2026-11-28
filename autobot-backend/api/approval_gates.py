@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.approval_gates_approver import require_action_approver_role
 from api.approval_gates_requester import (
-    caller_identities,
     display_requester,
+    requester_is_caller,
     requester_names,
     stamped_requester,
     with_requested_label,
@@ -182,14 +182,13 @@ def _requester_matches(approval, current_user: dict) -> bool:
     """Whether the AUTHENTICATED caller is the person who made this request (#17349).
 
     ``requested_by_agent`` is ``<kind>:<user id>`` for server-made proposals and free text elsewhere; either the
-    whole value or the part after the last colon must equal the caller's verified id or username. A request with
-    no recorded requester can be resubmitted by nobody.
+    whole value or the part after the last colon must equal the caller's verified id, or their username when the
+    value is not an id. A request with no recorded requester can be resubmitted by nobody.
     """
     requester = str(approval.requested_by_agent or "").strip()
     if not requester:
         return False
-    mine = caller_identities(current_user)
-    return requester in mine or requester.rsplit(":", 1)[-1] in mine
+    return requester_is_caller(requester, current_user)
 
 
 def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> None:

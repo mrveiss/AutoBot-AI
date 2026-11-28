@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import require_principal_id, resolve_audit_actor_id, resolve_principal_id
 from security.human_admin import refuse_service_principal
 from services.audit_logger import audit_log
 
@@ -79,9 +80,9 @@ async def _resolve_target_user(
     memories (owner decision 2026-10-17, #18688); a human admin passes the
     canonical gate, which refuses a token revoked by a password change.
     """
-    caller_id = current_user.get("user_id") or current_user.get("username", "")
+    caller_id = resolve_principal_id(current_user)
     if not target_user_id or target_user_id == caller_id:
-        return caller_id
+        return require_principal_id(current_user)
 
     # Only human admins may operate on another user's memories.
     try:
@@ -132,7 +133,7 @@ async def list_memories(
     await audit_log(
         "memory.privacy.list",
         result="success",
-        user_id=current_user.get("user_id") or current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"user:{user_id}",
         details={"item_count": len(memories)},
     )
@@ -176,7 +177,7 @@ async def forget_everywhere(
         await audit_log(
             "memory.privacy.forget_everywhere",
             result="rejected",
-            user_id=current_user.get("user_id") or current_user.get("username"),
+            user_id=resolve_audit_actor_id(current_user),
             resource=f"memory:{memory_id}",
             details={"target_user": user_id, "ambiguous_stores": exc.stores},
         )
@@ -193,7 +194,7 @@ async def forget_everywhere(
     await audit_log(
         "memory.privacy.forget_everywhere",
         result="success",
-        user_id=current_user.get("user_id") or current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"memory:{memory_id}",
         details={"target_user": user_id, "deleted_from": deleted_from},
     )
@@ -238,7 +239,7 @@ async def forget_from_store(
     await audit_log(
         "memory.privacy.forget",
         result="success",
-        user_id=current_user.get("user_id") or current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"memory:{store}:{memory_id}",
         details={"target_user": user_id, "store": store},
     )
@@ -288,7 +289,7 @@ async def amend_memory(
     await audit_log(
         "memory.privacy.amend",
         result="success",
-        user_id=current_user.get("user_id") or current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"memory:{store}:{memory_id}",
         details={"target_user": user_id, "store": store},
     )
@@ -319,7 +320,7 @@ async def export_memory(
     await audit_log(
         "memory.privacy.export",
         result="success",
-        user_id=current_user.get("user_id") or current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"user:{user_id}",
         details={"item_count": payload.get("total_items", 0)},
     )

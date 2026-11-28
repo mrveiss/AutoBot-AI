@@ -17,6 +17,9 @@ class AuditEntryResponse(BaseModel):
     an open string: operation rows say success/denied/failed/error/attempted, identity
     rows add verified/backup-code and more. It is never narrowed to a Literal, which
     would turn one off-vocabulary row into a 500 for the whole query.
+
+    ``user_id`` is the stored actor (a user id, ``service:<caller>`` or ``system``); ``user_name`` is that user's
+    display name resolved at read time, absent when the actor is not a user row (#22338).
     """
 
     id: str
@@ -25,6 +28,7 @@ class AuditEntryResponse(BaseModel):
     operation: str
     result: str
     user_id: Optional[str] = None
+    user_name: Optional[str] = None
     ip_address: Optional[str] = None
     session_id: Optional[str] = None
     user_role: Optional[str] = None

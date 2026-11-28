@@ -59,7 +59,7 @@
             <div class="entry-meta">
               <span v-if="type === 'session' && entry.user_id" class="meta-item">
                 <Icon name="user" />
-                {{ entry.user_id }}
+                {{ entry.user_name || entry.user_id }}
               </span>
               <span v-if="type === 'user' && entry.session_id" class="meta-item">
                 <Icon name="lock" />

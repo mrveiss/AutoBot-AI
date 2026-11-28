@@ -18,6 +18,7 @@ import sqlalchemy as sa
 from fastapi import HTTPException
 
 from api import conversation_file_cleanup_admin as admin
+from api.quarantine_read_audit import INTERNAL_SERVICE_ACTOR
 from conversation_file_manager import ConversationFileManager
 
 pytestmark = pytest.mark.asyncio
@@ -38,7 +39,9 @@ async def manager(tmp_path, monkeypatch):
 def request_for(manager, monkeypatch):
     audit = AsyncMock(return_value=True)
     monkeypatch.setattr(admin, "audit_log", audit)
-    monkeypatch.setattr(admin, "resolve_human_user", AsyncMock(return_value={"username": "alice"}))
+    monkeypatch.setattr(
+        admin, "resolve_human_user", AsyncMock(return_value={"id": "u-alice", "username": "alice-renamed"})
+    )
     monkeypatch.setenv("AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS", "2")
     req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(conversation_file_manager=manager)))
     return req, audit
@@ -83,7 +86,7 @@ async def test_reset_clears_the_count_audits_and_removes_no_bytes(manager, reque
     assert sorted(p.name for p in path.rglob("*") if p.is_file()) == before, "reset removes no bytes"
     audit.assert_awaited_once()
     assert audit.await_args.args[0] == "conversation_file.cleanup_reset"
-    assert audit.await_args.kwargs["user_id"] == "alice"
+    assert audit.await_args.kwargs["user_id"] == "u-alice"
     assert audit.await_args.kwargs["resource"] == f"conversation_file:{file_id}"
 
 
@@ -149,3 +152,18 @@ async def test_migration_creates_the_index_when_there_are_no_duplicates(monkeypa
     create = _run_upgrade(_migration(), monkeypatch, ["f-1", "f-2"])
     create.assert_called_once()
     assert create.call_args.args[0] == "uq_approvals_pending_file_cleanup"
+
+
+async def test_reset_audits_the_internal_service_for_no_user_and_refuses_a_user_with_no_id(manager, request_for):
+    """#22338: no user is the internal service key; a username-only user is a 401, never read as the service."""
+    req, audit = request_for
+    file_id = await _stuck_file(manager)
+    admin.resolve_human_user.return_value = {"username": "root"}
+    with pytest.raises(HTTPException) as err:
+        await admin.reset_stuck_cleanup(req, file_id)
+    assert err.value.status_code == 401
+    audit.assert_not_awaited()
+
+    admin.resolve_human_user.return_value = None
+    await admin.reset_stuck_cleanup(req, file_id)
+    assert audit.await_args.kwargs["user_id"] == INTERNAL_SERVICE_ACTOR

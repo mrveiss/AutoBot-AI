@@ -105,7 +105,7 @@
                 class="link-btn mono-id"
                 @click.stop="$emit('user-click', entry.user_id)"
               >
-                {{ entry.user_id }}
+                {{ entry.user_name || entry.user_id }}
               </button>
               <span v-else class="empty-value">-</span>
             </td>
@@ -185,8 +185,12 @@
               </span>
             </div>
             <div class="detail-item">
+              <label>{{ $t('audit.logTable.user') }}</label>
+              <span>{{ selectedEntry.user_name || selectedEntry.user_id || '-' }}</span>
+            </div>
+            <div v-if="selectedEntry.user_name && selectedEntry.user_id" class="detail-item">
               <label>{{ $t('audit.logTable.userId') }}</label>
-              <span>{{ selectedEntry.user_id || '-' }}</span>
+              <span class="mono-id">{{ selectedEntry.user_id }}</span>
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.sessionId') }}</label>

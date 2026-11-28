@@ -9,6 +9,7 @@ import json
 import uuid
 
 import pytest
+from fastapi import HTTPException
 
 import api.admin_oauth_bundle_strip as proposer
 from api.schemas_oauth_bundle_strip import OAuthBundleStripRequest
@@ -19,6 +20,7 @@ from knowledge.connectors.credential_store import _refresh_lock_key
 from models.approval import Approval, ApprovalComment
 from services import approval_execution, oauth_bundle_strip, oauth_bundle_strip_action
 from services.approval_gate_service import ApprovalGateService
+from testkit.canonical_gate import NAME_ONLY_PRINCIPAL
 from testkit.fake_approval_session import ApprovalClaimSession
 
 pytestmark = pytest.mark.asyncio
@@ -354,7 +356,9 @@ async def test_propose_then_approve_runs_the_strip_and_audits(configured, backup
     session = ApprovalClaimSession()
 
     resp = await proposer.propose_oauth_bundle_strip(
-        OAuthBundleStripRequest(backup_reference="snap-1"), current_user={"username": "agent"}, session=session
+        OAuthBundleStripRequest(backup_reference="snap-1"),
+        current_user={"id": "u-agent", "username": "agent-renamed"},
+        session=session,
     )
     assert resp.status == "pending" and svc.writes == []  # a proposal executes nothing
 
@@ -366,6 +370,23 @@ async def test_propose_then_approve_runs_the_strip_and_audits(configured, backup
     assert any("1 stripped" in c.body for c in comments) and _SECRET not in " ".join(c.body for c in comments)
     assert audited and audited[-1][0] == "oauth_bundle.strip_app_credentials"
     assert _SECRET not in json.dumps(audited[-1][1], default=str)
+
+
+async def test_a_proposal_from_a_bare_username_is_refused_and_records_the_id_otherwise(configured, monkeypatch):
+    """#22338: the stored requester is the principal id; a username-only caller is a 401, and so is the preview."""
+    monkeypatch.setattr(ApprovalGateService, "_notify", lambda self, event, approval: _noop())
+    request = OAuthBundleStripRequest(backup_reference="snap-1")
+    with pytest.raises(HTTPException) as err:
+        await proposer.propose_oauth_bundle_strip(
+            request, current_user=NAME_ONLY_PRINCIPAL, session=ApprovalClaimSession()
+        )
+    assert err.value.status_code == 401
+    with pytest.raises(HTTPException) as preview:
+        await proposer.preview_oauth_bundle_strip(current_user=NAME_ONLY_PRINCIPAL)
+    assert preview.value.status_code == 401
+    session = ApprovalClaimSession()
+    await proposer.propose_oauth_bundle_strip(request, current_user={"id": "u-agent", "username": "x"}, session=session)
+    assert session.approval.requested_by_agent == "u-agent"
 
 
 async def test_execution_refuses_without_a_backup_reference(configured):

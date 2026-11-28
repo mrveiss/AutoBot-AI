@@ -65,7 +65,10 @@ def _column_filters(flt: AuditFilter) -> list:
         (AuditLog.resource_ref, flt.resource_id),
         (AuditLog.category, flt.category.value if flt.category else None),
     )
-    return [column == value for column, value in pairs if value is not None]
+    clauses = [column == value for column, value in pairs if value is not None]
+    if flt.actor_ids is not None:
+        clauses.append(AuditLog.actor.in_(sorted(flt.actor_ids)))
+    return clauses
 
 
 def where_clauses(flt: AuditFilter) -> list:

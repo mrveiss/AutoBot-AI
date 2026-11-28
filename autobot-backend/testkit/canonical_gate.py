@@ -97,3 +97,10 @@ def real_admin_gate(middleware):
                     app.dependency_overrides.pop(stub_gate, None)
                 else:
                     app.dependency_overrides[stub_gate] = before
+
+
+# Principals for the actor/owner id tests (#22338): the username differs from the id, so a test that reads the
+# wrong claim fails. An admitted service has no id (its stable name is the actor); a bare username is no identity.
+HUMAN_PRINCIPAL = {"id": "u-123", "username": "alice-renamed", "role": "admin"}
+SERVICE_PRINCIPAL = {"username": "service:ci-runner", "service": True}
+NAME_ONLY_PRINCIPAL = {"username": "mallory"}

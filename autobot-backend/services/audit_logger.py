@@ -170,6 +170,7 @@ def _entry_filter(start: datetime, end: datetime, **filters: Any) -> AuditFilter
     vm_name = filters.pop("vm_name", None)
     return AuditFilter(
         actor_id=filters.get("user_id"),
+        actor_ids=frozenset(filters["user_ids"]) if filters.get("user_ids") else None,
         action=filters.get("operation"),
         session_id=filters.get("session_id"),
         outcome=filters.get("result"),
@@ -268,7 +269,10 @@ class AuditLogger:
         offset: int = 0,
         **filters: Any,
     ) -> List[AuditEntry]:
-        """Entries matching ``operation``/``user_id``/``session_id``/``vm_name``/``result``, newest first."""
+        """Entries matching ``operation``/``user_id`` (or any of ``user_ids``)/``session_id``/``vm_name``/``result``.
+
+        Newest first.
+        """
         end = end_time or _now()
         start = start_time or end - _DEFAULT_QUERY_WINDOW
         flt = _entry_filter(start, end, **{k: v for k, v in filters.items() if v is not None})

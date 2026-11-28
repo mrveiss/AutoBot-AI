@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, Query
 from api.feature_flags import require_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_audit_actor_id
 from knowledge.source_liveness import (
     DEFAULT_SWEEP_LIMIT,
     source_liveness_census,
@@ -82,7 +83,7 @@ async def post_source_liveness_sweep(
     result = await sweep_source_liveness(limit=limit)
     await audit_log(
         "knowledge.source_liveness.sweep",
-        user_id=admin.get("username") or admin.get("id"),
+        user_id=resolve_audit_actor_id(admin),
         probed=result["probed"],
         outcomes=result["outcomes"],
         # What was probed and what was written can differ when two sweeps overlap
