@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.fd_poll import poll_readable
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
 
@@ -532,11 +533,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
         if self.process:
             try:
-                self.process.terminate()
-                # Brief delay to allow graceful termination before force kill
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)
-                if self.process.returncode is None:
-                    self.process.kill()
+                # SIGTERM, a brief MICRO_DELAY to exit gracefully, then SIGKILL (the pre-#20924 behaviour)
+                await kill_and_reap(self.process, terminate_first=True, bounded=True, grace=TimingConstants.MICRO_DELAY)
             except Exception as e:
                 logger.debug("Process termination during cleanup: %s", e)
 

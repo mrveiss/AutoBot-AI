@@ -438,6 +438,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_MCP_ISOLATED_STOP_GRACE_S",
+        type=float,
+        default=3.0,
+        description=(
+            "Seconds an isolated MCP bridge worker gets to exit after SIGTERM before SIGKILL, "
+            "and the bound on reaping a killed worker (services/mcp_isolated_runtime.py, #20924)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_KILL_GRACE_S",
         type=float,
         default=5.0,
@@ -445,7 +458,7 @@ register_env_var(
             "Grace period between SIGTERM and SIGKILL when killing a timed-out playbook "
             "subprocess's whole process group. Long enough for ansible-playbook / a forked ssh "
             "child to unwind cleanly; short enough that a wedged process does not itself become "
-            "an unbounded second wait (services/process_group.py, #14524, #19475)."
+            "an unbounded second wait (services/process_group.py KILL_GRACE_S, #14524, #19475)."
         ),
         component="backend",
     )

@@ -26,6 +26,7 @@ Boundary with long_running_operations (#1751):
 """
 
 import asyncio
+import contextlib
 import os
 import signal as signal_module
 import uuid
@@ -36,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
@@ -222,11 +224,8 @@ class ProcessAdapterService:
             return stdout or b"", stderr or b"", False
         except asyncio.TimeoutError:
             logger.warning("Process %s timed out after %ss", run_id, timeout)
-            try:
-                proc.kill()
-                await proc.communicate()
-            except Exception:
-                pass
+            with contextlib.suppress(OSError):  # a stop that fails must not turn the timeout result into a raise
+                await kill_and_reap(proc, bounded=True)
             return b"", b"timeout exceeded", True
 
     async def _finalize_run(

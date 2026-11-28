@@ -20,12 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
 from services.pending_role_provisioning import provisioner_holds
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
-from services.process_group import kill_process_group
+from services.process_group import KILL_GRACE_S
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
 
 logger = logging.getLogger(__name__)
@@ -461,7 +462,7 @@ class SyncOrchestrator:
         try:
             await asyncio.wait_for(proc.communicate(), timeout=BRANCH_CHECKOUT_TIMEOUT_S)
         except asyncio.TimeoutError:
-            await kill_process_group(proc)
+            await kill_and_reap(proc, process_group=True, terminate_first=True, bounded=True, grace=KILL_GRACE_S)
             raise
 
     async def _get_local_git_commit(self, repo_path: str) -> str | None:

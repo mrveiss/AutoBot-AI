@@ -19,6 +19,7 @@ from pathlib import Path
 from autobot_shared.env_utils import env_float
 from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 
 logger = get_logger(__name__)
 
@@ -66,8 +67,8 @@ async def run_git_capture(repo_root: str, *args: str, timeout: float = GIT_TIMEO
         return stdout.decode("utf-8", errors="replace"), 0
     except (asyncio.TimeoutError, OSError) as exc:
         logger.warning("git %s error: %s", " ".join(args), exc)
-        if proc is not None and proc.returncode is None:
-            proc.kill()  # a timed-out git must not outlive its caller
+        if proc is not None:
+            await kill_and_reap(proc, bounded=True)  # a timed-out git must not outlive its caller
         return "", 1
 
 

@@ -23,6 +23,7 @@ from typing import Callable, Dict, List
 from autobot_shared.env_utils import env_float, env_int_clamped
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.git_probe import start_git
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.ansible_utils import ansible_config_env, ansible_exit_code, with_limit_proof
@@ -35,7 +36,7 @@ from services.inventory_builder import (
 )
 from services.playbook_code_source_gate import refusal_without_code_source
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
-from services.process_group import KILL_GRACE_S, kill_process_group
+from services.process_group import KILL_GRACE_S
 from services.provision_progress import TaskProgressTracker
 from services.rollback_target import deploy_ref_vars
 from services.sync_restart import reject_negated_tags
@@ -1002,10 +1003,12 @@ class PlaybookExecutor:
     async def _kill_process_group(self, process: asyncio.subprocess.Process) -> None:
         """SIGTERM then SIGKILL the whole process group of a timed-out run (#14524).
 
-        One implementation, in services/process_group.py (#19475); the grace is read from this
+        One implementation, autobot_shared.subprocess_reap.kill_and_reap (#19475, #20924); the grace is read from this
         module at call time so the timeout tests can shorten it.
         """
-        await kill_process_group(process, PLAYBOOK_KILL_GRACE_S)
+        await kill_and_reap(
+            process, process_group=True, terminate_first=True, bounded=True, grace=PLAYBOOK_KILL_GRACE_S
+        )
 
     @staticmethod
     def _stage_dir_for_run(detach: bool) -> str | None:

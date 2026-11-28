@@ -22,6 +22,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EgressBlockedError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.url_safety import is_public_url_async
 from services.mcp_isolation_config import BridgePolicy
 
@@ -173,13 +174,9 @@ class StdioTransport(MCPTransport):
         """Terminate the subprocess gracefully."""
         if self._proc is None:
             return
-        try:
-            if self._proc.stdin:
-                self._proc.stdin.close()
-            self._proc.terminate()
-            await asyncio.wait_for(self._proc.wait(), timeout=5.0)
-        except (asyncio.TimeoutError, ProcessLookupError):
-            self._proc.kill()
+        if self._proc.stdin:
+            self._proc.stdin.close()
+        await kill_and_reap(self._proc, terminate_first=True, bounded=True)
         logger.debug("StdioTransport: closed pid=%s", self._proc.pid)
         self._proc = None
 

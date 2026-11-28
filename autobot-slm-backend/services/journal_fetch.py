@@ -20,11 +20,11 @@ stays behind is the route that maps the answer onto HTTP.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import shlex
 
 from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.unit_names import validate_journal_since, validate_unit_name
 
 #: Upper bound on ``journalctl -n``; matches the logs route's ``le=`` (#18359).
@@ -96,8 +96,7 @@ async def fetch_service_journal(ssh_cmd: list[str], service_name: str) -> tuple[
         # slow node would accumulate one orphan per attempt. ProcessLookupError
         # means it exited between the cancellation and here -- the outcome kill
         # was asking for, not an error to report.
-        with contextlib.suppress(ProcessLookupError):
-            process.kill()
+        await kill_and_reap(process, bounded=True)
         raise JournalFetchTimeout(
             f"Journal fetch for '{service_name}' did not complete within "
             f"{JOURNAL_SSH_TIMEOUT_SECONDS:g}s. Any logs it had read are incomplete, "

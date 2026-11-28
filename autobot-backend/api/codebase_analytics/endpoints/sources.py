@@ -24,6 +24,7 @@ from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_h
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.security.safe_response import safe_error_reason
+from autobot_shared.subprocess_reap import kill_and_reap
 from security.secrets_store_errors import SecretsStoreUnavailable
 
 from .. import source_service
@@ -96,8 +97,7 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+        await kill_and_reap(proc, bounded=True)
         return f"git clone timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
@@ -112,8 +112,7 @@ async def _run_git_pull(clone_path: str) -> str:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+        await kill_and_reap(proc, bounded=True)
         return f"git pull timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")

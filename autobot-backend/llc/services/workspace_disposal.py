@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional
 
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.subprocess_reap import kill_and_reap
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +90,7 @@ async def _git(*args: str, cwd: Optional[str] = None) -> tuple[int, str]:
         # git process outlives the sweep that gave up on it, holding the worktree it
         # was asked about -- and this sweep's whole job is deciding whether that
         # directory is safe to remove (#17725 review).
-        process.kill()
-        await process.wait()
+        await kill_and_reap(process, bounded=True)
         logger.warning(
             "#16818: git %s timed out in %s after %ss, child killed", " ".join(args), cwd, GIT_TIMEOUT_SECONDS
         )

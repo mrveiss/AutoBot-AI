@@ -23,6 +23,7 @@ import json
 import pathlib
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.subprocess_reap import kill_and_reap
 
 _SCRIPT_PATH = str(pathlib.Path(__file__).parent / "scripts" / "vega_render.mjs")
 _DEFAULT_TIMEOUT = env_float("VEGA_RENDER_TIMEOUT_S", 10.0)
@@ -60,7 +61,7 @@ async def render_vegalite_to_svg(spec: dict, *, timeout: float = _DEFAULT_TIMEOU
             timeout=timeout,
         )
     except TimeoutError as exc:
-        proc.kill()
+        await kill_and_reap(proc, bounded=True)
         raise VegaRenderError(f"Vega render timed out after {timeout}s") from exc
 
     if proc.returncode != 0:

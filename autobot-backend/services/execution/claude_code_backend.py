@@ -58,6 +58,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_claude_models import CLAUDE_SONNET
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.execution.base_backend import (
     BackendType,
     ExecutionBackend,
@@ -404,6 +405,7 @@ class ClaudeCodeBackend(ExecutionBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                start_new_session=True,  # its own group, so a timeout kill reaches the CLI's tool children
             )
         except FileNotFoundError as exc:
             return "", f"Failed to start claude CLI: {exc}", False
@@ -419,7 +421,7 @@ class ClaudeCodeBackend(ExecutionBackend):
                 timeout=float(timeout),
             )
         except asyncio.TimeoutError:
-            proc.kill()
+            await kill_and_reap(proc, process_group=True, bounded=True)
             ok = False
             stderr_chunks.append(f"Timed out after {timeout}s")
         except Exception as exc:

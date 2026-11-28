@@ -40,6 +40,7 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
+from autobot_shared.subprocess_reap import kill_and_reap
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
@@ -249,14 +250,8 @@ def _hermetic_git_env() -> dict[str, str]:
 
 async def _terminate(proc: asyncio.subprocess.Process) -> None:
     """Kill and reap a probe that outstayed its timeout."""
-    if proc.returncode is not None:
-        return
-    try:
-        proc.kill()
-    except (ProcessLookupError, OSError):
-        return
-    with contextlib.suppress(Exception):
-        await proc.wait()
+    with contextlib.suppress(OSError):
+        await kill_and_reap(proc, bounded=True)
 
 
 async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | None:

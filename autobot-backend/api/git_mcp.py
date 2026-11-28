@@ -55,6 +55,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import now_utc
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from services.tool_output_filter import get_tool_output_filter
@@ -276,8 +277,7 @@ async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Meta
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
+        await kill_and_reap(process, bounded=True)
         raise HTTPException(
             status_code=504,
             detail=f"Git command timed out after {timeout} seconds",

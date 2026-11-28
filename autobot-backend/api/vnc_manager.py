@@ -58,6 +58,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.temp_files import temporary_file_path
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
@@ -214,8 +215,7 @@ async def restart_vnc_server(
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
+                await kill_and_reap(proc, bounded=True)
 
         async def kill_websockify():
             """Kill websockify with timeout handling."""
@@ -229,8 +229,7 @@ async def restart_vnc_server(
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
+                await kill_and_reap(proc, bounded=True)
 
         # Run both kill operations in parallel
         await asyncio.gather(kill_vnc(), kill_websockify(), return_exceptions=True)

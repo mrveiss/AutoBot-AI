@@ -36,6 +36,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
+from autobot_shared.subprocess_reap import kill_and_reap
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -588,8 +589,7 @@ async def _execute_docker_logs_command(container_name: str, lines: int, tail: bo
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
+        await kill_and_reap(process, bounded=True)
         raise HTTPException(status_code=408, detail="Container log read timed out")
 
     if process.returncode != 0:

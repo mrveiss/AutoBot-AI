@@ -52,6 +52,7 @@ from autobot_shared.git_refs import is_safe_range
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from utils.line_index import LineIndex  # #12884
@@ -401,8 +402,7 @@ async def get_git_diff(commit_range: str | None = None) -> str:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
             return stdout.decode("utf-8") if process.returncode == 0 else ""
         except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+            await kill_and_reap(process, bounded=True)
             logger.warning("Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT)
             return ""
     except Exception as e:

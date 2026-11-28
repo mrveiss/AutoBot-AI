@@ -33,6 +33,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.logging_once import first_time
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from config import config_manager
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
@@ -152,12 +153,7 @@ async def _terminate_async_process_safely(process: ProcessType | None, process_k
     if not process:
         return False
     try:
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+        await kill_and_reap(process, terminate_first=True, bounded=True)
         return True
     except OSError as e:
         logger.warning("Error terminating async %s: %s", process_key, e)

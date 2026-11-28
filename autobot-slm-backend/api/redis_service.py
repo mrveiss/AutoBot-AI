@@ -24,6 +24,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
@@ -48,8 +49,7 @@ async def _run_systemctl(args: list[str], timeout: float = 15.0) -> tuple[int, s
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
+        await kill_and_reap(proc, bounded=True)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"systemctl {args[0]} timed out after {timeout}s",

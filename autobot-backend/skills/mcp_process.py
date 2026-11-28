@@ -22,6 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_write import run_redis_write
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from skills.mcp_trace import MCPSpan, new_span, write_span
 
 logger = get_logger(__name__)
@@ -187,15 +188,7 @@ class MCPProcessManager:
         if not entry:
             return
         try:
-            entry.proc.terminate()
-            await asyncio.wait_for(entry.proc.wait(), timeout=config.timeout.subprocess_short)
-        except asyncio.TimeoutError:
-            try:
-                entry.proc.kill()
-            except ProcessLookupError:
-                pass
-        except ProcessLookupError:
-            pass  # Process already exited
+            await kill_and_reap(entry.proc, terminate_first=True, bounded=True)
         finally:
             if os.path.exists(entry.tmpfile):
                 os.unlink(entry.tmpfile)

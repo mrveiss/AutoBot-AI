@@ -8,13 +8,14 @@ A caller spawns with ``start_new_session=True``, so the child's pid is its proce
 every grandchild (ansible's forks and ssh children, ``npm run dev``'s vite) shares it. Stopping
 only the leader orphans them; checking only the leader misses a survivor.
 
-The SLM's async ``kill_process_group`` (``autobot-slm-backend/services/process_group.py``,
-#14524, #19475) and the startup coordinator's synchronous stop (#19496) both read
-:func:`process_group_is_dead` from here.
+The async group kill is ``autobot_shared.subprocess_reap.kill_and_reap(process_group=True,
+terminate_first=True)`` (#14524, #19475, #20924); it and the startup coordinator's synchronous stop
+(#19496) both read :func:`process_group_is_dead` from here.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
 import subprocess
@@ -61,3 +62,19 @@ def stop_process_group(process: subprocess.Popen, grace_s: float = 5.0) -> bool:
             break
     process.poll()
     return True
+
+
+async def wait_for_process_group_death(pgid: int, timeout_s: float) -> bool:
+    """Poll :func:`process_group_is_dead` for up to *timeout_s* seconds (#14524).
+
+    Checks the GROUP, not the one pid asyncio tracks: a sibling can outlive the leader.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+    poll_s = min(0.1, timeout_s) if timeout_s > 0 else 0.05
+    while True:
+        if process_group_is_dead(pgid):
+            return True
+        if loop.time() >= deadline:
+            return process_group_is_dead(pgid)
+        await asyncio.sleep(poll_s)

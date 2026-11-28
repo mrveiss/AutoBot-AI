@@ -29,6 +29,7 @@ from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.ollama_urls import ollama_version_url
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import utc_timestamp
 from config import ConfigManager
 
@@ -172,8 +173,7 @@ class FleetPerformanceMonitor:
                         gpu_util, mem_used, mem_total = map(int, lines[0].split(", "))
                         return float(gpu_util), (mem_used / mem_total) * 100
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                await kill_and_reap(process, bounded=True)
         except (FileNotFoundError, Exception):
             pass
         return None, None
@@ -210,8 +210,7 @@ class FleetPerformanceMonitor:
                     )
                     return None
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                await kill_and_reap(process, bounded=True)
         except Exception:
             self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
@@ -396,8 +395,7 @@ class FleetPerformanceMonitor:
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20.0)
             return process.returncode, stdout.decode("utf-8")
         except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+            await kill_and_reap(process, bounded=True)
             return 1, ""
 
     async def test_inter_vm_performance(self) -> List[InterVMMetrics]:

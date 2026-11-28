@@ -28,6 +28,7 @@ Safety:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
 import shutil
@@ -38,6 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 
 from .archive import Archive
 from .auto_research_agent import ApprovalGate
@@ -257,11 +259,8 @@ class MetaEvalHarness:
                 timeout=self.config.meta_agent_test_timeout,
             )
         except asyncio.TimeoutError:
-            try:
-                process.kill()
-                await process.wait()
-            except Exception:
-                pass
+            with contextlib.suppress(OSError):  # the timeout error below must win over a failed kill
+                await kill_and_reap(process, bounded=True)
             raise RuntimeError(f"Test run timed out after {self.config.meta_agent_test_timeout}s")
 
         output = stdout.decode("utf-8", errors="replace") if stdout else ""

@@ -14,7 +14,8 @@ import os
 
 import pytest
 
-from services import ansible_utils, process_group
+from autobot_shared import process_group
+from services import ansible_utils
 
 _REAL_EXEC = asyncio.create_subprocess_exec
 
@@ -33,7 +34,7 @@ def _hung_ansible(spawned):
 async def test_a_timed_out_run_leaves_no_process_behind(monkeypatch, tmp_path):
     spawned = []
     monkeypatch.setattr(ansible_utils.asyncio, "create_subprocess_exec", _hung_ansible(spawned))
-    monkeypatch.setattr(process_group, "KILL_GRACE_S", 0.3)
+    monkeypatch.setattr(ansible_utils, "KILL_GRACE_S", 0.3)
 
     with pytest.raises(asyncio.TimeoutError):
         await ansible_utils.run_single_host_playbook(tmp_path, tmp_path / "p.yml", "node", "u", 22, timeout=0.3)
