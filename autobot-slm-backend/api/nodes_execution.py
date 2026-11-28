@@ -23,6 +23,7 @@ Security model
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import shlex
@@ -38,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
-from autobot_shared.subprocess_reap import kill_and_reap
+from autobot_shared.subprocess_reap import GRACE_SECONDS, kill_and_reap
 from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
@@ -507,6 +508,22 @@ _SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
 _is_local_ip = is_local_ip
 
 
+async def _stop_and_drain(proc: asyncio.subprocess.Process) -> None:
+    """Kill a timed-out child and reap it without hanging on a descendant that holds its pipes (#20924).
+
+    The pipes are drained while the kill is reaped: a descendant blocked writing to an unread pipe
+    would otherwise keep ``wait()`` pending. Both waits are bounded, so the 124 result is always returned.
+    """
+    drain = asyncio.ensure_future(proc.communicate())
+    try:
+        await kill_and_reap(proc, bounded=True)
+        await asyncio.wait({drain}, timeout=GRACE_SECONDS)
+    finally:
+        drain.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await drain
+
+
 async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
     """Execute a pre-tokenised command locally; return (exit_code, stdout, stderr).
 
@@ -521,7 +538,7 @@ async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
-        await kill_and_reap(proc)
+        await _stop_and_drain(proc)
         return 124, "", f"Execution timed out after {timeout}s"
     return (
         proc.returncode if proc.returncode is not None else 1,
@@ -598,7 +615,7 @@ async def _run_via_ssh(
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
-        await kill_and_reap(proc)
+        await _stop_and_drain(proc)
         return 124, "", f"SSH execution timed out after {timeout}s"
     return (
         proc.returncode if proc.returncode is not None else 1,

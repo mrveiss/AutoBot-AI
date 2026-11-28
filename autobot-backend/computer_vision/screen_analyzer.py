@@ -318,7 +318,7 @@ class ScreenAnalyzer:
                     image = PILImage.open(io.BytesIO(stdout))
                     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             except asyncio.TimeoutError:
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
                 logger.warning("X11 screenshot command timed out")
         except Exception as e:
             logger.warning("X11 screenshot failed: %s", e)

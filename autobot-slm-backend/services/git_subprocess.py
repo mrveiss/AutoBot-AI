@@ -68,7 +68,7 @@ async def run_git_capture(repo_root: str, *args: str, timeout: float = GIT_TIMEO
     except (asyncio.TimeoutError, OSError) as exc:
         logger.warning("git %s error: %s", " ".join(args), exc)
         if proc is not None:
-            await kill_and_reap(proc)  # a timed-out git must not outlive its caller
+            await kill_and_reap(proc, bounded=True)  # a timed-out git must not outlive its caller
         return "", 1
 
 

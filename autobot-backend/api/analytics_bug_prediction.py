@@ -268,7 +268,7 @@ async def get_git_bug_history(root: Path) -> dict[str, Any]:
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
-            await kill_and_reap(proc)
+            await kill_and_reap(proc, bounded=True)
             logger.warning("Git bug history command timed out")
             return {}
 
@@ -292,7 +292,7 @@ async def get_file_change_frequency(root: Path) -> dict[str, int]:
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
-            await kill_and_reap(proc)
+            await kill_and_reap(proc, bounded=True)
             logger.warning("Git change frequency command timed out")
             return {}
 

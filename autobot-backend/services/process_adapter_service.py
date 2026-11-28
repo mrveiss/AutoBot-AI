@@ -225,7 +225,7 @@ class ProcessAdapterService:
         except asyncio.TimeoutError:
             logger.warning("Process %s timed out after %ss", run_id, timeout)
             with contextlib.suppress(OSError):  # a stop that fails must not turn the timeout result into a raise
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
             return b"", b"timeout exceeded", True
 
     async def _finalize_run(

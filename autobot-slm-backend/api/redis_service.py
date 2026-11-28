@@ -49,7 +49,7 @@ async def _run_systemctl(args: list[str], timeout: float = 15.0) -> tuple[int, s
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"systemctl {args[0]} timed out after {timeout}s",

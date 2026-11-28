@@ -97,7 +97,7 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         return f"git clone timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
@@ -112,7 +112,7 @@ async def _run_git_pull(clone_path: str) -> str:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         return f"git pull timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")

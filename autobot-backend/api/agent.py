@@ -147,7 +147,7 @@ async def _kill_timed_out_process(
     """Kill a timed out subprocess safely (Issue #315: extracted)."""
     if not process:
         return
-    await kill_and_reap(process)
+    await kill_and_reap(process, bounded=True)
 
 
 def _validate_command_request(command: str | None, security_layer, user_role: str) -> JSONResponse | None:

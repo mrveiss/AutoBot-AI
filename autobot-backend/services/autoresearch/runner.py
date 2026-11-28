@@ -329,7 +329,7 @@ class ExperimentRunner:
             )
         except asyncio.TimeoutError:
             if self._current_process:
-                await kill_and_reap(self._current_process)
+                await kill_and_reap(self._current_process, bounded=True)
             wall_time = time.monotonic() - start
             return ExperimentResult(
                 error_message=(f"Training timed out after " f"{self.config.default_training_timeout}s"),
@@ -447,7 +447,7 @@ class ExperimentRunner:
                         "Failed to docker kill container %s after timeout",
                         self._current_container_name,
                     )
-            await kill_and_reap(self._current_process)
+            await kill_and_reap(self._current_process, bounded=True)
 
         return ExperimentResult(
             error_message=(f"Docker experiment timed out after {self.config.docker_timeout}s"),

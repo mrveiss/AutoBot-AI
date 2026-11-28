@@ -153,7 +153,7 @@ async def _terminate_async_process_safely(process: ProcessType | None, process_k
     if not process:
         return False
     try:
-        await kill_and_reap(process, terminate_first=True)
+        await kill_and_reap(process, terminate_first=True, bounded=True)
         return True
     except OSError as e:
         logger.warning("Error terminating async %s: %s", process_key, e)

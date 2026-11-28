@@ -114,7 +114,7 @@ async def _self_update_unit_active() -> bool | None:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=DEPLOY_ACTIVITY_QUERY_TIMEOUT_S)
     except asyncio.TimeoutError:
         logger.warning("deploy activity: systemctl query timed out after %ss", DEPLOY_ACTIVITY_QUERY_TIMEOUT_S)
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         return None
 
     if proc.returncode != 0:

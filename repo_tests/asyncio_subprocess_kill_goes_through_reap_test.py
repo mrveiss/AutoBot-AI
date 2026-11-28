@@ -26,7 +26,9 @@ detector that silently stops seeing a site fails instead of reporting clean (RAT
 from __future__ import annotations
 
 import ast
+import io
 import re
+import tokenize
 from collections import Counter
 from pathlib import Path
 
@@ -172,9 +174,22 @@ def signalling_calls(source: str) -> list[tuple[str, str]]:
     return walker.found
 
 
+def _without_comments(source: str) -> list[str]:
+    """The source lines with each comment token cut off; a '#' inside a string is not a comment, so it stays."""
+    lines = source.splitlines()
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type == tokenize.COMMENT:
+                row, col = tok.start
+                lines[row - 1] = lines[row - 1][:col]
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass  # unparseable text: the lines found so far stand, and the tree derivation reports nothing for it
+    return lines
+
+
 def text_lines(source: str) -> list[str]:
     """The stripped lines a regex finds the call on, comments excluded; the independent second derivation."""
-    return [ln.strip() for ln in source.splitlines() if _TEXT_CALL.search(ln) and not ln.lstrip().startswith("#")]
+    return [ln.strip() for ln in _without_comments(source) if _TEXT_CALL.search(ln)]
 
 
 def _scan(root: Path, rels) -> tuple[Counter, set[tuple[str, str]], set[tuple[str, str]]]:
@@ -244,6 +259,11 @@ def test_the_detector_sees_a_hand_rolled_timeout_kill():
         ("C.m", "self._proc.terminate()")
     ]
     assert signalling_calls("async def f(proc):\n    await kill_and_reap(proc)\n") == []
+    commented = "async def f(proc):\n    await kill_and_reap(proc)  # replaces proc.kill()\n"
+    assert (
+        signalling_calls(commented) == [] and text_lines(commented) == []
+    )  # negative control: a comment is not a call
+    assert text_lines('x = "# not a comment"; proc.kill()\n') == ['x = "# not a comment"; proc.kill()']
     assert signalling_calls("proc.kill(9)\n") == [("<module>", "proc.kill(9)")]
 
 

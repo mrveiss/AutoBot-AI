@@ -288,7 +288,7 @@ async def _communicate_with_process(
         else:
             stdout, stderr = await process.communicate()
     except asyncio.TimeoutError:
-        await kill_and_reap(process)
+        await kill_and_reap(process, bounded=True)
         return _create_timeout_result(args, timeout)
 
     return _parse_command_output(stdout, stderr, process.returncode)

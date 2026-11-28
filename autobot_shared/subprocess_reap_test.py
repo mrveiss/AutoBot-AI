@@ -8,6 +8,7 @@ import asyncio
 import os
 import signal
 import sys
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -116,9 +117,10 @@ _SPAWNS_SIGTERM_IGNORER = (
 async def test_group_terminate_first_sigkills_a_sibling_that_ignores_sigterm(monkeypatch):
     sent = _spy_signals(monkeypatch)
     process = await asyncio.create_subprocess_exec(
-        sys.executable, "-c", _SPAWNS_SIGTERM_IGNORER, start_new_session=True
+        sys.executable, "-c", _SPAWNS_SIGTERM_IGNORER, start_new_session=True, stdout=asyncio.subprocess.PIPE
     )
-    await asyncio.sleep(0.5)  # the sibling is up and has its handler installed
+    # the sibling prints "up" once its handler is installed; the fixture inherits stdout, so read it from the pipe
+    assert await asyncio.wait_for(process.stdout.readline(), timeout=10) == b"up\n"
     await kill_and_reap(process, process_group=True, terminate_first=True, bounded=True, grace=0.5)
     assert process.returncode == -signal.SIGTERM  # the leader died on SIGTERM, the sibling did not
     assert sent == [signal.SIGTERM, signal.SIGKILL]
@@ -160,3 +162,28 @@ async def test_group_that_survives_sigkill_is_logged_as_an_error(monkeypatch):
     monkeypatch.setattr(subprocess_reap, "wait_for_process_group_death", _never_dead)
     await kill_and_reap(process, process_group=True, terminate_first=True, grace=0.2)
     logger.error.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_group_sigkill_arrives_within_one_grace_when_leader_and_sibling_ignore_sigterm(monkeypatch):
+    """One deadline covers the leader wait and the group probe: SIGKILL follows after ~grace, not 2 x grace."""
+    sent_at: dict[int, float] = {}
+    real = os.killpg
+
+    def _killpg(pgid, sig):
+        if sig:
+            sent_at.setdefault(sig, time.monotonic())
+        return real(pgid, sig)
+
+    monkeypatch.setattr(os, "killpg", _killpg)
+    code = (
+        "import signal,subprocess,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN);"
+        "p=subprocess.Popen([sys.executable,'-c'," + repr(_IGNORES_SIGTERM) + "],stdout=sys.stdout); time.sleep(60)"
+    )
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", code, start_new_session=True, stdout=asyncio.subprocess.PIPE
+    )
+    assert await asyncio.wait_for(process.stdout.readline(), timeout=10) == b"up\n"
+    await kill_and_reap(process, process_group=True, terminate_first=True, bounded=True, grace=1.0)
+    assert sent_at[signal.SIGKILL] - sent_at[signal.SIGTERM] < 1.6  # a second grace would put it at ~2.0s
+    assert process_group_is_dead(process.pid)

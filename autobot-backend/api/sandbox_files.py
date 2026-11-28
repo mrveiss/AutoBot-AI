@@ -251,7 +251,7 @@ def _hermetic_git_env() -> dict[str, str]:
 async def _terminate(proc: asyncio.subprocess.Process) -> None:
     """Kill and reap a probe that outstayed its timeout."""
     with contextlib.suppress(OSError):
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
 
 
 async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | None:

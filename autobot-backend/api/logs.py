@@ -589,7 +589,7 @@ async def _execute_docker_logs_command(container_name: str, lines: int, tail: bo
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
     except asyncio.TimeoutError:
-        await kill_and_reap(process)
+        await kill_and_reap(process, bounded=True)
         raise HTTPException(status_code=408, detail="Container log read timed out")
 
     if process.returncode != 0:

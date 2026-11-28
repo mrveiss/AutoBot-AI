@@ -402,7 +402,7 @@ async def get_git_diff(commit_range: str | None = None) -> str:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
             return stdout.decode("utf-8") if process.returncode == 0 else ""
         except asyncio.TimeoutError:
-            await kill_and_reap(process)
+            await kill_and_reap(process, bounded=True)
             logger.warning("Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT)
             return ""
     except Exception as e:

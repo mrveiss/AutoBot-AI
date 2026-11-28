@@ -173,7 +173,7 @@ class FleetPerformanceMonitor:
                         gpu_util, mem_used, mem_total = map(int, lines[0].split(", "))
                         return float(gpu_util), (mem_used / mem_total) * 100
             except asyncio.TimeoutError:
-                await kill_and_reap(process)
+                await kill_and_reap(process, bounded=True)
         except (FileNotFoundError, Exception):
             pass
         return None, None
@@ -210,7 +210,7 @@ class FleetPerformanceMonitor:
                     )
                     return None
             except asyncio.TimeoutError:
-                await kill_and_reap(process)
+                await kill_and_reap(process, bounded=True)
         except Exception:
             self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
@@ -395,7 +395,7 @@ class FleetPerformanceMonitor:
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20.0)
             return process.returncode, stdout.decode("utf-8")
         except asyncio.TimeoutError:
-            await kill_and_reap(process)
+            await kill_and_reap(process, bounded=True)
             return 1, ""
 
     async def test_inter_vm_performance(self) -> List[InterVMMetrics]:

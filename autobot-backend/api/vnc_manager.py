@@ -215,7 +215,7 @@ async def restart_vnc_server(
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except asyncio.TimeoutError:
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
 
         async def kill_websockify():
             """Kill websockify with timeout handling."""
@@ -229,7 +229,7 @@ async def restart_vnc_server(
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except asyncio.TimeoutError:
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
 
         # Run both kill operations in parallel
         await asyncio.gather(kill_vnc(), kill_websockify(), return_exceptions=True)

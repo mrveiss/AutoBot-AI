@@ -277,7 +277,7 @@ async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Meta
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        await kill_and_reap(process)
+        await kill_and_reap(process, bounded=True)
         raise HTTPException(
             status_code=504,
             detail=f"Git command timed out after {timeout} seconds",

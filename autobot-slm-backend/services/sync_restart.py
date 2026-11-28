@@ -67,7 +67,7 @@ async def _probe_and_record() -> None:
             await asyncio.to_thread(write_marker, started, Path(BACKEND_DATA_DIR))
     finally:
         if proc is not None:
-            await kill_and_reap(proc)
+            await kill_and_reap(proc, bounded=True)
 
 
 async def record_backend_start(services: Iterable[str]) -> None:

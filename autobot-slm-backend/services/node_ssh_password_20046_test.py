@@ -7,6 +7,7 @@ The package conftest stubs ``services.*``, so the real modules are loaded from d
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import sys
 import uuid
@@ -470,7 +471,7 @@ async def test_a_child_that_never_reaps_does_not_hold_the_caller_past_the_ceilin
 
     with (
         patch.object(module.asyncio, "create_subprocess_exec", _spawn),
-        patch.object(module, "_REAP_TIMEOUT_S", 0.2),
+        patch.object(module, "kill_and_reap", functools.partial(module.kill_and_reap, grace=0.2)),
         pytest.raises(asyncio.TimeoutError),
     ):
         await asyncio.wait_for(module.spawn_ssh(["ssh"], timeout=0.2), timeout=5)

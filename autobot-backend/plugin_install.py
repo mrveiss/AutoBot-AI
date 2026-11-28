@@ -247,7 +247,7 @@ async def _git_clone(url: str, ref: str | None, dest: Path) -> None:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_CLONE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="git clone timed out",

@@ -641,7 +641,7 @@ class PerformanceBenchmark:
                     )
                     return None
             except asyncio.TimeoutError:
-                await kill_and_reap(process)
+                await kill_and_reap(process, bounded=True)
 
         except Exception as e:
             self.logger.debug(f"GPU benchmark error: {e}")
@@ -668,7 +668,7 @@ class PerformanceBenchmark:
                     value = stdout.decode("utf-8").strip().split("\n")[0].strip()
                     return float(value)
             except asyncio.TimeoutError:
-                await kill_and_reap(process)
+                await kill_and_reap(process, bounded=True)
         except Exception as e:
             self.logger.debug(f"GPU utilization query error: {e}")
         return None
@@ -705,7 +705,7 @@ class PerformanceBenchmark:
                     )
                     return None
             except asyncio.TimeoutError:
-                await kill_and_reap(process)
+                await kill_and_reap(process, bounded=True)
 
         except Exception as e:
             self.logger.debug(f"NPU benchmark error: {e}")

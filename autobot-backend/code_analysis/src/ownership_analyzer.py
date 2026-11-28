@@ -427,7 +427,7 @@ class OwnershipAnalyzer:
     @staticmethod
     async def _terminate(proc: "asyncio.subprocess.Process") -> None:
         """Kill a blame child and reap it, tolerating one that already exited."""
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
 
     async def _get_file_ownership(self, file_path: Path, root: Path) -> FileOwnership | None:
         """Get ownership data for a single file using git blame"""

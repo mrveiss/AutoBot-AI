@@ -45,16 +45,18 @@ async def _wait_leader(process: asyncio.subprocess.Process, grace: float) -> boo
 
 
 async def _exited_after_sigterm(process: asyncio.subprocess.Process, process_group: bool, grace: float) -> bool:
-    """SIGTERM the child (or its group) and report whether everything exited within *grace* seconds.
+    """SIGTERM the child (or its group) and report whether everything exited within *grace* seconds in all.
 
     For a group the whole group is probed (signal 0), not just the leader: a leader that dies on
     SIGTERM while a sibling ignores it must still get the SIGKILL (#14524, #19475).
     """
+    deadline = asyncio.get_running_loop().time() + grace  # one budget for the leader wait and the group probe
     _signal(process, signal.SIGTERM, process_group)
     leader_gone = await _wait_leader(process, grace)
     if not process_group:
         return leader_gone
-    return await wait_for_process_group_death(process.pid, grace)
+    remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+    return await wait_for_process_group_death(process.pid, remaining)
 
 
 async def _reap(process: asyncio.subprocess.Process, bounded: bool, grace: float) -> None:
