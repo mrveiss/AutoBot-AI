@@ -18,6 +18,7 @@ from fastapi import HTTPException, Request
 
 from auth_middleware import resolve_human_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_audit_actor_id
 from knowledge.quarantine import audit_quarantine_read, is_quarantined
 
 logger = get_logger(__name__)
@@ -34,7 +35,7 @@ async def request_actor(request: Request) -> str:
     user = await resolve_human_user(request)
     if not user:
         return INTERNAL_SERVICE_ACTOR
-    return str(user.get("username") or user.get("user_id") or user.get("id") or INTERNAL_SERVICE_ACTOR)
+    return resolve_audit_actor_id(user) or INTERNAL_SERVICE_ACTOR
 
 
 async def request_person(request: Request) -> str:

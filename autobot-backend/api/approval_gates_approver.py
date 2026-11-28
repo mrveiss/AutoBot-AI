@@ -7,6 +7,7 @@
 from fastapi import HTTPException, status
 
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.principal import resolve_audit_actor_id
 from services.approval_execution import action_needs_elevated_approver
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
@@ -21,7 +22,7 @@ async def require_action_approver_role(approval, current_user: dict) -> None:
         AuditAction.APPROVAL_APPROVE,
         result="denied",
         durable=True,
-        user_id=current_user.get("username"),
+        user_id=resolve_audit_actor_id(current_user),
         resource=f"approval:{approval.id}",
         details={"reason": "admin role required for this action", "action": action},
     )

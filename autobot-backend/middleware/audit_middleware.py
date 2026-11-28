@@ -40,6 +40,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_audit_actor_id
 from constants.api_constants import PATH_API_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.audit_logger import AuditResult, get_audit_logger
@@ -246,7 +247,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if hasattr(request.state, "user"):
             user = request.state.user
             if isinstance(user, dict):
-                return user.get("username")
+                return resolve_audit_actor_id(user)
             return str(user)
 
         # Try to get from headers
@@ -611,7 +612,7 @@ def _extract_user(request: Request) -> str | None:
     if hasattr(request.state, "user"):
         user = request.state.user
         if isinstance(user, dict):
-            return user.get("username")
+            return resolve_audit_actor_id(user)
         return str(user)
     return request.headers.get("X-User-ID") or request.headers.get("X-Username")
 

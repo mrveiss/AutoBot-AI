@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission, resolve_human_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_audit_actor_id
 from conversation_file_cleanup import cleanup_status, reset_cleanup_attempts
 from services.audit_logger import audit_log
 
@@ -52,7 +53,7 @@ async def reset_stuck_cleanup(request: Request, file_id: str) -> Dict[str, Any]:
     user = await resolve_human_user(request) or {}
     await audit_log(
         "conversation_file.cleanup_reset",
-        user_id=user.get("username") or user.get("user_id") or "internal-service",
+        user_id=resolve_audit_actor_id(user) or "internal-service",
         resource=f"conversation_file:{file_id}",
         details={"effect": "file may be proposed for removal again; no bytes removed"},
     )

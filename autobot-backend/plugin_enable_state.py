@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk import PluginLoader, PluginRegistry
 from autobot_shared.plugin_sdk.lifecycle import enable_attributed
+from autobot_shared.principal import resolve_audit_actor_id
 from autobot_shared.store_authority import system_of_record
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
@@ -212,7 +213,7 @@ async def _persist_and_apply(
     plugin_name: str, enabled: bool, user: dict, plugin: Any, store: PluginEnableStore | None
 ) -> None:
     """Audit, write the decision, then flip the loaded plugin's status; the caller holds the plugin's lock."""
-    actor = user.get("username") or "unknown"
+    actor = resolve_audit_actor_id(user) or "unknown"
     action = AuditAction.PLUGIN_ENABLE if enabled else AuditAction.PLUGIN_DISABLE
     await audit_decision(action, plugin_name, actor, loaded=plugin is not None)
     await (store or PluginEnableStore()).put([(plugin_name, enabled, SOURCE_ADMIN, actor)])

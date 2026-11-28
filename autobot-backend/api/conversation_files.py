@@ -47,6 +47,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_audit_actor_id
 from conversation_file_mcp_dispatch import dispatch_mcp_tool
 from conversation_file_quota_owner import mcp_quota_owner, resolve_agent_quota_owner
 from security.session_ownership import validate_session_ownership
@@ -111,7 +112,7 @@ def _audit_file_operation(request: Request, action: str, user_data: dict, sessio
     }
     security_layer.audit_log(
         action=action,
-        user=user_data.get("username", "unknown"),
+        user=resolve_audit_actor_id(user_data) or "unknown",
         outcome="success",
         details=full_details,
     )
