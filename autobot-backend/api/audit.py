@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import SQLAlchemyError
 
-from api.approval_gates_requester import actor_names
+from api.approval_gates_requester import actor_names, is_actor_id
 from api.schemas_audit import (
     AuditIntegrityReport,
     AuditIntegrityRequest,
@@ -48,6 +48,7 @@ from security.human_admin import refuse_service_principal
 from services.audit.integrity import current_head, last_report, report_summary, verify_chain
 from services.audit_logger import AuditResult, get_audit_logger
 from user_management.database import db_session_context
+from user_management.services.user_service import UserService
 from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
@@ -88,6 +89,26 @@ def _build_query_dict(
     }
 
 
+async def _actor_filter(user_id: str | None) -> list[str] | None:
+    """The stored actor values a ``user_id`` filter matches (#22338).
+
+    An id-form value queries as-is. Anything else is a username: it matches that user's id (rows written since
+    the actor became the id) and the raw value (rows written before, which stored the name). A name with no user
+    row, or a lookup that fails, still matches the raw value.
+    """
+    if not user_id:
+        return None
+    if is_actor_id(user_id):
+        return [user_id]
+    try:
+        async with db_session_context() as session:
+            user = await UserService(session).get_user_by_username(user_id)
+    except SQLAlchemyError:
+        logger.warning("audit user filter could not be resolved as a username; using it as typed", exc_info=True)
+        return [user_id]
+    return [user_id, str(user.id)] if user else [user_id]
+
+
 async def _entry_dicts(entries) -> list[dict]:
     """The response rows, each with ``user_name``: its actor id resolved to a display name in one batch (#22338).
 
@@ -114,7 +135,7 @@ async def query_audit_logs(
     start_time: str | None = Query(None, description="Start time (ISO format)"),
     end_time: str | None = Query(None, description="End time (ISO format)"),
     operation: str | None = Query(None, description="Operation filter"),
-    user_id: str | None = Query(None, description="User filter: the actor id (a user id or service:<caller>)"),
+    user_id: str | None = Query(None, description="User filter: a user id, a username or service:<caller>"),
     session_id: str | None = Query(None, description="Session filter"),
     vm_name: str | None = Query(None, description="VM filter"),
     result: AuditResult | None = Query(None, description="Result filter"),
@@ -135,7 +156,7 @@ async def query_audit_logs(
             start_time=start_dt,
             end_time=end_dt,
             operation=operation,
-            user_id=user_id,
+            user_ids=await _actor_filter(user_id),
             session_id=session_id,
             vm_name=vm_name,
             result=result,
@@ -260,9 +281,9 @@ async def get_user_audit_trail(
     """
     Get audit trail for a specific user
 
-    Requires admin permission. ``user_id`` is the user's id, the actor every audit row stores since #22338; a
-    username matches only rows written before then. Returns all audit entries for the specified user within the
-    requested time period.
+    Requires admin permission. ``user_id`` is the user's id (the actor every audit row stores since #22338) or a
+    username, which matches that user's id and the rows written before then. Returns all audit entries for the
+    specified user within the requested time period.
     """
     try:
         audit_logger = await get_audit_logger()
@@ -270,7 +291,12 @@ async def get_user_audit_trail(
         end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=days)
 
-        entries = await audit_logger.query(start_time=start_time, end_time=end_time, user_id=user_id, limit=1000)
+        entries = await audit_logger.query(
+            start_time=start_time,
+            end_time=end_time,
+            user_ids=await _actor_filter(user_id),
+            limit=1000,
+        )
 
         # Issue #372: Use model method to reduce feature envy
         entry_dicts = await _entry_dicts(entries)

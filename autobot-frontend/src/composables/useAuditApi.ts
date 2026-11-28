@@ -448,12 +448,13 @@ export function useAuditState() {
   }
 
   function exportToCsv(): string {
-    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address']
+    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'User Name', 'Session ID', 'VM Name', 'IP Address']
     const rows = entries.value.map((entry) => [
       escapeCsvField(auditTimestampToDate(entry.timestamp).toISOString()),
       escapeCsvField(entry.operation),
       escapeCsvField(entry.result),
       escapeCsvField(entry.user_id),
+      escapeCsvField(entry.user_name),
       escapeCsvField(entry.session_id),
       escapeCsvField(entry.vm_name),
       escapeCsvField(entry.ip_address)

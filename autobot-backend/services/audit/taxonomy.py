@@ -250,11 +250,13 @@ class AuditFilter:
     """One question asked of the audit trail; every field is optional and ANDed.
 
     ``actions`` matches any of a set (the knowledge permission-change view);
-    ``metadata`` matches by key equality (``organization_id``, ``vm_name``).
+    ``metadata`` matches by key equality (``organization_id``, ``vm_name``). ``actor_ids`` matches any of a set: a
+    user's id together with the username older rows stored (#22338).
     """
 
     category: AuditCategory | None = None
     actor_id: str | None = None
+    actor_ids: frozenset[str] | None = None
     action: str | None = None
     actions: frozenset[str] | None = None
     session_id: str | None = None
@@ -284,6 +286,8 @@ class AuditFilter:
         if self.category is not None and event.get("category") != self.category.value:
             return False
         if any(event.get(col) != want for col, want in self._column_values().items()):
+            return False
+        if self.actor_ids is not None and event.get("actor_id") not in self.actor_ids:
             return False
         accepted = self.action_set()
         if accepted is not None and event.get("action") not in accepted:

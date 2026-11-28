@@ -540,9 +540,9 @@ export interface paths {
          * Get User Audit Trail
          * @description Get audit trail for a specific user
          *
-         *     Requires admin permission. ``user_id`` is the user's id, the actor every audit row stores since #22338; a
-         *     username matches only rows written before then. Returns all audit entries for the specified user within the
-         *     requested time period.
+         *     Requires admin permission. ``user_id`` is the user's id (the actor every audit row stores since #22338) or a
+         *     username, which matches that user's id and the rows written before then. Returns all audit entries for the
+         *     specified user within the requested time period.
          */
         get: operations["get_user_audit_trail_api_audit_user__user_id__get"];
         put?: never;
@@ -110771,7 +110771,7 @@ export interface operations {
                 end_time?: string | null;
                 /** @description Operation filter */
                 operation?: string | null;
-                /** @description User filter: the actor id (a user id or service:<caller>) */
+                /** @description User filter: a user id, a username or service:<caller> */
                 user_id?: string | null;
                 /** @description Session filter */
                 session_id?: string | null;

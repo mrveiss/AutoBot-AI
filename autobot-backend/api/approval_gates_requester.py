@@ -75,6 +75,11 @@ def _requester_user_id(requester: str) -> uuid.UUID | None:
     return None
 
 
+def is_actor_id(value: str) -> bool:
+    """Whether *value* is id-form (a user id, bare or after a ``user:`` prefix), not a username or a service name."""
+    return _requester_user_id(value) is not None
+
+
 async def actor_names(session: AsyncSession, actors: Iterable[str]) -> dict[str, str]:
     """Stored actor value -> that user's human-readable name, resolved at read time (#22222, #22338).
 

@@ -8312,7 +8312,7 @@
       "failed": "Failed",
       "error": "Error",
       "attempted": "Attempted",
-      "userPlaceholder": "Filter by user ID...",
+      "userPlaceholder": "Filter by username or user ID...",
       "sessionPlaceholder": "Filter by session...",
       "vmPlaceholder": "Filter by VM...",
       "applyFilters": "Apply Filters",
