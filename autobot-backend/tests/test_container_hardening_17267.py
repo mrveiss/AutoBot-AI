@@ -10,8 +10,11 @@ existed; the mock docker client captures what actually reaches ``create``/``run`
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
-from unittest.mock import MagicMock
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -234,3 +237,31 @@ def test_cli_flags_honour_the_audited_opt_outs_and_refuse_nameless_ones() -> Non
     assert flags[flags.index("--memory") + 1] == flags[flags.index("--memory-swap") + 1] == "2g"
     with pytest.raises(ValueError):
         execution_hardening_cli_flags(network_reason="")
+
+
+def test_autoresearch_container_is_fully_hardened_with_a_named_user() -> None:
+    from autobot_shared.container_hardening import execution_hardening_cli_flags
+    from services.autoresearch.config import AutoResearchConfig
+    from services.autoresearch.models import Experiment, ExperimentState
+    from services.autoresearch.runner import ExperimentRunner
+
+    config = AutoResearchConfig(
+        default_training_timeout=10,
+        improvement_threshold=0.01,
+        docker_enabled=True,
+        docker_image="ghcr.io/mrveiss/autobot-autoresearch:test",
+        docker_memory_limit="2g",
+        docker_cpu_limit=1.0,
+        docker_timeout=30,
+    )
+    runner = ExperimentRunner(config=config, store=AsyncMock(), parser=MagicMock())
+    experiment = Experiment(hypothesis="test hypothesis", state=ExperimentState.PENDING)
+    with tempfile.TemporaryDirectory() as tmp:
+        cmd = runner._build_docker_command(experiment, Path(tmp))
+
+    flags = execution_hardening_cli_flags(memory_limit="2g")
+    assert any(cmd[i : i + len(flags)] == flags for i in range(len(cmd))), "canonical hardening flags missing"
+    for needle in ("--read-only", "--cap-drop", "--security-opt", "--pids-limit", "--tmpfs"):
+        assert needle in cmd
+    assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+    assert cmd[cmd.index("--network") + 1] == "none"

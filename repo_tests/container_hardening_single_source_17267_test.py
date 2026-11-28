@@ -240,8 +240,9 @@ _CLI_BUILDER = "execution_hardening_cli_flags"
 _CLI_VERBS = frozenset({"run", "create"})
 _RUNNER_FILE = "autobot-backend/services/autoresearch/runner.py"
 
-#: Operator tooling whose ``docker run`` argv is a throwaway utility container, not a workload
-#: sandbox, pinned by site count so a new one is reviewed in (tracked for hardening in the PR body).
+#: Operator tooling whose ``docker run`` argv is not a workload sandbox (a backup helper, and a
+#: long-lived ``docker run -d`` service container), pinned by site count so a new one is reviewed
+#: in. Hardening both is tracked in #22402.
 _ALLOWED_CLI_SITES = {
     "autobot-infrastructure/shared/scripts/backup_manager.py": 1,
     "autobot-infrastructure/shared/scripts/zero_downtime_deploy.py": 1,
