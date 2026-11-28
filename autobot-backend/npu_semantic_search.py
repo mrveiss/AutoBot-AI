@@ -31,7 +31,6 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from npu_cpu_fallback import cpu_search, cpu_search_or_error
 from config import config_manager as cfg
 
 # Import existing AutoBot components
@@ -45,6 +44,7 @@ from knowledge.index_embedding_space import (
 )
 from knowledge.quarantine import servable_unquarantined, with_quarantine
 from knowledge_factory import get_knowledge_base_async
+from npu_cpu_fallback import cpu_search, cpu_search_or_error
 
 # Issue #387: GPU-accelerated vector search
 from utils.gpu_vector_search import (
@@ -393,7 +393,7 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        hits, failure = await cpu_search_or_error(self.knowledge_base, query, similarity_top_k, filters)
+        hits, failure = await cpu_search_or_error(self.knowledge_base, query, similarity_top_k, filters, error)
         if failure:
             return [], self._failed_metrics(failure, start_time)
         fallback_results = self._convert_basic_results(hits, "fallback")  # KB.search gated it (#19144)
