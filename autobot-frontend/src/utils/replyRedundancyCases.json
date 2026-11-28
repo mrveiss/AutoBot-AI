@@ -60,10 +60,10 @@
     "redundant": true
   },
   {
-    "name": "devanagari marks split tokens the same way on both sides",
+    "name": "a devanagari word is not a prefix of a longer word",
     "narration": "उत्तर",
     "answer": "उत्तरी भारत",
-    "redundant": true
+    "redundant": false
   },
   {
     "name": "narration plus the respond call itself (#21880)",

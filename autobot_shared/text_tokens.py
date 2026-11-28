@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The one word tokenizer: lowercase, split on non-word characters (#18093).
+"""The one word tokenizer: lowercase, split on non-word characters, marks kept in the word (#18093, #21891).
 
 Three copies existed and are now parameter sets of this module:
 
@@ -27,12 +27,62 @@ is a lossless code tokenizer, not word extraction.
 from __future__ import annotations
 
 import re
-from typing import FrozenSet, List
+import unicodedata
+from functools import lru_cache
+from typing import FrozenSet, List, Pattern
 
 __all__ = ["word_token_list", "word_tokens"]
 
-_SPLIT_UNDERSCORE = re.compile(r"[\W_]+")
-_KEEP_UNDERSCORE = re.compile(r"\W+")
+_MARK_CATEGORIES = frozenset({"Mn", "Mc", "Me"})
+
+
+# Codepoint ranges that can hold a mark (Mn, Mc, Me); every other plane has none. Scanning only
+# these (about 131k codepoints, tens of ms) instead of all 1.1M (about 1s) keeps the first
+# tokenizing request fast. The test `test_mark_scan_ranges_match_a_full_scan` proves the set
+# complete for the running Python's unicodedata, so a Unicode upgrade that adds a mark elsewhere
+# fails CI rather than silently dropping it.
+_MARK_SCAN_RANGES = (
+    (0x0000, 0x10000),  # plane 0 (BMP): Combining Diacriticals, Indic/Arabic/Hebrew signs, ...
+    (0x10000, 0x20000),  # plane 1 (SMP): Brahmi, Grantha, Kaithi, Musical Symbols, ...
+    (0xE0000, 0xE0200),  # plane 14 (SSP): Variation Selectors Supplement (U+E0100-E01EF)
+)
+
+
+def _scan_marks(scan_ranges) -> list:
+    """Maximal (start, end) runs of mark codepoints in the half-open *scan_ranges*."""
+    runs, start = [], None
+    for lo, hi in scan_ranges:
+        for cp in range(lo, hi):
+            if unicodedata.category(chr(cp)) in _MARK_CATEGORIES:
+                start = cp if start is None else start
+            elif start is not None:
+                runs.append((start, cp - 1))
+                start = None
+        if start is not None:
+            runs.append((start, hi - 1))
+            start = None
+    return runs
+
+
+def _mark_class_body() -> str:
+    """Regex class body listing every Unicode mark (Mn, Mc, Me) as `\\U` ranges.
+
+    `re` has no `\\p{M}` and the `regex` package is not a dependency, so the ranges
+    are read from `unicodedata`, the tables `str.isalnum` (and so `\\w`) already use.
+    """
+    runs = _scan_marks(_MARK_SCAN_RANGES)
+    return "".join(f"\\U{a:08x}" if a == b else f"\\U{a:08x}-\\U{b:08x}" for a, b in runs)
+
+
+@lru_cache(maxsize=None)
+def _pattern(split_underscore: bool) -> Pattern[str]:
+    """Separator pattern: a run of non-word characters, with marks kept inside the word (#21891).
+
+    Marks (Devanagari vowel signs, Tamil pulli, Arabic harakat, NFD diacritics) are not
+    `\\w`, so `\\W+` cut such words apart. Built on first use, not at import.
+    """
+    separator = f"[^\\w{_mark_class_body()}]"
+    return re.compile(f"(?:_|{separator})+" if split_underscore else f"{separator}+")
 
 
 def word_token_list(text: str, *, split_underscore: bool = True, lowercase: bool = True) -> List[str]:
@@ -50,7 +100,7 @@ def word_token_list(text: str, *, split_underscore: bool = True, lowercase: bool
     >>> word_token_list("Analyze_this PDF-document!", split_underscore=False)
     ['analyze_this', 'pdf', 'document']
     """
-    pattern = _SPLIT_UNDERSCORE if split_underscore else _KEEP_UNDERSCORE
+    pattern = _pattern(split_underscore)
     return [t for t in pattern.split(text.lower() if lowercase else text) if t]
 
 

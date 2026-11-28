@@ -7,7 +7,7 @@
  *
  * The same rule as the backend (`autobot-backend/chat_workflow/reply_persistence.py`), pinned by the one case
  * table `replyRedundancyCases.json`. Both texts are normalised (Unicode fold, lower case, every run of
- * non-letters and non-digits, underscore included, reduced to one space). A narration is redundant when its
+ * non-letters, non-digits and non-marks, underscore included, reduced to one space). A narration is redundant when its
  * tokens are a contiguous run of whole tokens of the `respond` text ("art" is not in "party"). Narration that says
  * more than the answer is kept.
  */
@@ -22,7 +22,7 @@ export function normalizeReply(text: string | null | undefined): string {
   return stripProtocolTagsForDisplay(text ?? '')
     .normalize('NFKC')
     .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
+    .split(/[^\p{L}\p{N}\p{M}]+/u)
     .filter(Boolean)
     .join(' ')
 }
