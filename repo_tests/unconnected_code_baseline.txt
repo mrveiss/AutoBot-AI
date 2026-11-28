@@ -47,7 +47,6 @@ module:autobot-backend/media/manager.py	#10603
 module:autobot-backend/models/document_version.py	#10603
 module:autobot-backend/models/settings.py	#10603
 module:autobot-backend/operator_dashboard/gmail_service.py	#10603
-module:autobot-backend/orchestration/capability_audit.py	#10603
 module:autobot-backend/plugin_sdk/capabilities.py	#10603
 module:autobot-backend/plugin_sdk/extension_manifest.py	#10603
 module:autobot-backend/plugin_sdk/manifest_contract.py	#10603

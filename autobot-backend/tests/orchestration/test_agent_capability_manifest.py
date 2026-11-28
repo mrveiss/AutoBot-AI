@@ -100,3 +100,59 @@ class TestRoutingOverlayNonRegressive:
         assert set(agent_capabilities) == before_keys
         # ... and the overlapping agent's capabilities are unchanged (single source).
         assert set(agent_capabilities["research_agent"]) == before_research
+
+
+class TestOneAgentRecord:
+    """#22275: health and presence are attributes of one agent record, not separate registries."""
+
+    def test_record_joins_profile_health_and_presence(self) -> None:
+        from orchestration.agent_record import agent_records
+
+        records = agent_records()
+        assert {r["name"] for r in records} >= {p.agent_id for p in get_default_agents()}
+        for r in records:
+            assert r["kind"] == "agent" and r["serving_service"] == "backend"
+            assert {"capabilities", "health", "presence", "forbidden_work"} <= set(r["fields"])
+
+    def test_populated_health_and_presence_are_joined_on_their_own_keys(self) -> None:
+        """research_agent (agent_type "research"): health joins on agent_type, presence on agent_id (#22280)."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+
+        from orchestration import agent_record
+        from protocols.agent_kind import AgentKind
+        from protocols.agent_presence import PresenceEntry
+
+        health = SimpleNamespace(agent_health={"research": MagicMock(to_dict=lambda: {"status": "healthy"})})
+        entry = PresenceEntry(
+            kind=AgentKind.AI_STACK, tenant_id=None, name="research_agent", busy=True, instance_id="i-1"
+        )
+        presence = MagicMock(snapshot_for_projection=lambda: [entry])
+        with patch.object(agent_record, "get_presence_registry", return_value=presence):
+            by_name = {r["name"]: r["fields"] for r in agent_record.agent_records(health)}
+
+        research = by_name["research_agent"]
+        assert research["health"] == {"status": "healthy"}
+        assert research["presence"]["busy"] is True and research["presence"]["instance_id"] == "i-1"
+        # A profile with neither a health nor a presence entry keeps both attributes None.
+        other = next(f for n, f in by_name.items() if n != "research_agent")
+        assert other["health"] is None and other["presence"] is None
+
+    def test_no_further_agent_registry_class(self) -> None:
+        """A new live-status registry must be an attribute of the record, not a class of its own."""
+        import pathlib
+        import re
+
+        from autobot_shared.testfile_names import is_test_filename
+
+        root = pathlib.Path(__file__).resolve().parents[2]
+        found = set()
+        for path in root.rglob("*.py"):
+            if "tests" in path.parts or is_test_filename(path.name) or "venv" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            found.update(re.findall(r"^class (Agent\w*Registry)\b", text, re.MULTILINE))
+        known = {"AgentCapabilityRegistry", "AgentHealthRegistry", "AgentPresenceRegistry", "AgentRegistryService"}
+        assert (
+            found - known <= set()
+        ), f"#22275: new agent registry classes {sorted(found - known)}; add an attribute to the record"

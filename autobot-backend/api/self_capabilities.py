@@ -12,6 +12,13 @@ OpenAPI tag(s) and HTTP method, caches the result with a configurable TTL,
 and returns the payload in a format that LLM agents can consume directly.
 
 Issue #3295: replace the hardcoded endpoint list in llm_self_awareness.py.
+
+Issue #22274: this crawl is THE route registry. ``api/developer.py`` derives its
+endpoint view from ``discover_endpoints``; ``api/registry.py`` ``APIRegistry`` is
+the hand-written router-level catalogue (prefix/tags/auth per mounted module), a
+different granularity that the loader tests read, kept as router metadata rather
+than a second route list. Every route record names the service that serves it
+(``serving_service``); ``route_records`` is the accessor the self-model ingests.
 """
 
 import asyncio
@@ -27,6 +34,7 @@ from api.user_management.dependencies import get_current_user
 from autobot_shared.api_routing.router_routes import effective_route_count
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
@@ -35,6 +43,10 @@ logger = get_logger(__name__)
 # route added later inherits it. Authentication only:
 # a read-only description of the API's own capabilities.
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# The service whose FastAPI app this process crawls (#22274). Named through the one
+# service table, so a rename there fails here at import rather than drifting.
+SERVING_SERVICE: str = SERVICE_DEFINITIONS["backend"].name
 
 # ---------------------------------------------------------------------------
 # In-process cache (singleton per worker process — acceptable for LLM hints)
@@ -110,6 +122,7 @@ def _build_endpoint_entry(path: str, method: str, op: Dict[str, Any]) -> Dict[st
         "description": op.get("description", ""),
         "tags": op.get("tags", ["untagged"]),
         "operation_id": op.get("operationId", ""),
+        "serving_service": SERVING_SERVICE,
     }
 
 
@@ -218,6 +231,22 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
             payload["unique_paths"],
         )
         return payload
+
+
+def _route_record(ep: Dict[str, Any]) -> Dict[str, Any]:
+    """One endpoint descriptor as a plain self-model record."""
+    return {
+        "kind": "route",
+        "name": f"{ep['method']} {ep['path']}",
+        "serving_service": ep["serving_service"],
+        "fields": {k: ep[k] for k in ("path", "method", "operation_type", "summary", "tags", "operation_id")},
+    }
+
+
+async def route_records(app: Any) -> List[Dict[str, Any]]:
+    """The route catalogue as plain records (kind, stable name, serving service, fields) (#22274)."""
+    payload = await discover_endpoints(app)
+    return [_route_record(ep) for ep in payload["endpoints"]]
 
 
 # ---------------------------------------------------------------------------

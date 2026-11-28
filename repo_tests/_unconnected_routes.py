@@ -103,6 +103,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     "/api/v2/secrets/system": "the SLM backend's vault client (user_management/services/vault_client.py), over HTTP",
     # #22212: the documented self-registration API (docs/developer/AUTHENTICATION_RBAC.md); no screen uses it.
     "/api/auth/signup": "self-registering clients of the documented signup API, over HTTP",
+    # #22277: the main backend's SLM client (autobot-backend/services/slm_self_model.py) posts observations and reads
+    # entities with f"{SELF_MODEL_PATH}/..." -- the vault client's shape above, so the detector sees no literal.
+    "/api/nodes/self-model": "the main backend's SLM client (services/slm_self_model.py), over HTTP",
 }
 
 

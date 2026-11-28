@@ -9,6 +9,7 @@ by path from the root conftest, which is where ``sys.modules["models"]`` stub
 is installed first; ``load_real_model_schemas`` then binds the real modules.
 """
 
+import ast
 import sys
 from pathlib import Path
 
@@ -62,3 +63,25 @@ def load_real_model_schemas() -> None:
     sys.modules["models.node_capability"] = _ncap_mod
     _ncap_spec.loader.exec_module(_ncap_mod)
     setattr(sys.modules["models"], "node_capability", _ncap_mod)
+    stub_self_model_widths(sys.modules["models.self_model"])
+
+
+def _string_width(tree: ast.Module, column: str) -> int:
+    """Return N of the ``Column("<column>", String(N), ...)`` call in the schema source."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "Column" and node.args:
+            first, kind = node.args[0], node.args[1] if len(node.args) > 1 else None
+            if isinstance(first, ast.Constant) and first.value == column and isinstance(kind, ast.Call):
+                return ast.literal_eval(kind.args[0])
+    raise RuntimeError(f"models/self_model.py has no String(N) column named {column!r}")
+
+
+def stub_self_model_widths(stub) -> None:
+    """Set MAX_NAME_LENGTH / MAX_VERSION_LENGTH on the ``models.self_model`` stub.
+
+    sqlalchemy is stubbed, so ``String(N).length`` is a mock and the schema module cannot be
+    real-loaded; the widths are read from its source so the numbers are defined only there (#22280).
+    """
+    tree = ast.parse((_SLM_ROOT / "models" / "self_model.py").read_text(encoding="utf-8"))
+    stub.MAX_NAME_LENGTH = _string_width(tree, "name")
+    stub.MAX_VERSION_LENGTH = _string_width(tree, "version")

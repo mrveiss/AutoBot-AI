@@ -89,3 +89,23 @@ async def test_cleanup_runs_every_step_once_in_the_pinned_order(calls):
 
     assert calls == _ORDER
     assert failed == []
+
+
+@pytest.mark.asyncio
+async def test_scheduler_stop_cancels_and_awaits_the_self_model_producer_task(monkeypatch):
+    import asyncio
+
+    task = asyncio.create_task(asyncio.sleep(3600))
+    app = SimpleNamespace(state=SimpleNamespace(self_model_producer_task=task))
+    report = SimpleNamespace(failed=lambda *a, **k: pytest.fail(f"unexpected failure {a}"))
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "knowledge.connectors.scheduler",
+        SimpleNamespace(get_connector_scheduler=lambda: SimpleNamespace(stop_all=_noop)),
+    )
+    await lifespan_shutdown.stop_connector_and_skill_schedulers(app, report)
+    assert task.cancelled()
+
+
+async def _noop():
+    return None

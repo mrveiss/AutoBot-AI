@@ -34,7 +34,6 @@ def test_dead_terminal_workflow_control_copy_is_gone():
         ("api.analytics_continuous_learning", ["get_continuous_learning_engine"]),
         ("api.cache_management", ["get_cache_redis_connection"]),
         ("api.analytics_dfa", ["DFATaintVulnerability"]),
-        ("api.developer", ["RuntimeEndpointRegistry"]),
         ("api.natural_language_search", ["CodeQueryIntent"]),
         ("api.schemas_realtime_session", ["RealtimeSessionSummary"]),
         ("api.schemas_chat_rows", ["ChatSessionSummary"]),

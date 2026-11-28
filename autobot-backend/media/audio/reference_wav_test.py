@@ -130,7 +130,7 @@ async def test_the_route_sends_the_worker_wav_for_an_m4a_and_the_wav_unchanged_f
     converted = _wav_bytes(rate=24000)
     service = type("S", (), {"extract_audio": staticmethod(_fake_extract(converted))})()
     with (
-        patch("api.voice.get_tts_client", return_value=Tts()),
+        patch("api.voice.resolve_tts_provider", return_value=Tts()),
         patch.object(reference_wav, "get_ffmpeg_service", return_value=service),
     ):
         await voice_create_api(name="n", audio=_upload(b"\x00\x00\x00\x20ftypM4A..", "memo.m4a"))
@@ -147,7 +147,7 @@ async def test_the_route_answers_garbage_with_a_4xx_and_never_calls_the_worker()
     tts = AsyncMock()
     service = type("S", (), {"extract_audio": AsyncMock(side_effect=RuntimeError("FFmpeg extraction failed: bad"))})()
     with (
-        patch("api.voice.get_tts_client", return_value=tts),
+        patch("api.voice.resolve_tts_provider", return_value=tts),
         patch.object(reference_wav, "get_ffmpeg_service", return_value=service),
     ):
         with pytest.raises(HTTPException) as caught:
@@ -162,7 +162,7 @@ async def test_a_worker_422_becomes_the_same_4xx():
     from services.tts_client import TTSReferenceAudioRejected
 
     tts = type("T", (), {"create_voice": AsyncMock(side_effect=TTSReferenceAudioRejected("Format not recognised"))})()
-    with patch("api.voice.get_tts_client", return_value=tts):
+    with patch("api.voice.resolve_tts_provider", return_value=tts):
         with pytest.raises(HTTPException) as caught:
             await voice_create_api(name="n", audio=_upload(_wav_bytes(), "ref.wav"))
     assert caught.value.status_code == 422 and caught.value.detail["code"] == UNSUPPORTED_AUDIO_CODE

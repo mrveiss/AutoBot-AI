@@ -100,10 +100,11 @@ async def test_a_missing_file_with_nothing_staged_is_still_not_found(root):
 
 def test_the_sweep_is_scheduled_with_an_env_backed_interval():
     """celery_app is stubbed under pytest (see celery_beat_registration_test.py), so read the source."""
-    src = (Path(__file__).resolve().parents[2] / "celery_app.py").read_text(encoding="utf-8")
-    entry = src[src.index('"llc-attachment-file-sweep"') :].split("},", 1)[0]
-    assert "llc.scheduler.attachment_file_sweep.run_attachment_file_sweep" in entry
-    assert "timedelta(seconds=LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS)" in entry
+    from testkit.beat_schedule import beat_schedule_entries
+
+    entry = beat_schedule_entries()["llc-attachment-file-sweep"]
+    assert entry["task"] == "llc.scheduler.attachment_file_sweep.run_attachment_file_sweep"
+    assert entry["schedule"] == "timedelta(seconds=LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS)"
 
 
 def test_the_task_is_registered_on_the_scheduler_package():
