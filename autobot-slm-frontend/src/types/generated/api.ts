@@ -3679,6 +3679,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/self-model/node-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Node Ids
+         * @description The SLM node id of each given host address that is a managed node (the mapping ``rename_hosts`` applies).
+         *
+         *     A backend fact names its host by address; the self-model keys its entities by node id. This is the one
+         *     translation, so a fact's link to a ``command`` entity cannot disagree with the entity the SLM wrote.
+         */
+        get: operations["node_ids_api_nodes_self_model_node_ids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/nodes/self-model/observations": {
         parameters: {
             query?: never;
@@ -22101,6 +22124,42 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    node_ids_api_nodes_self_model_node_ids_get: {
+        parameters: {
+            query: {
+                /** @description Comma-separated host addresses */
+                hosts: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
                     };
                 };
             };

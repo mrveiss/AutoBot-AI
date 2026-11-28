@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from autobot_shared.tool_spec import LOCATION_BACKEND, declares_tool
 from knowledge.write_scope import agent_write_scope
 
 _KB_UNAVAILABLE = "Knowledge base is not available"
@@ -23,6 +24,7 @@ _KB_UNAVAILABLE = "Knowledge base is not available"
 class KnowledgeWriteToolsMixin:
     """``add_file_to_knowledge_base`` and ``store_fact``; needs ``self.logger`` and ``self._resolve_knowledge_base``."""
 
+    @declares_tool("knowledge", LOCATION_BACKEND, None, prompt_rank=9)
     async def add_file_to_knowledge_base(
         self, file_path: str, file_type: str, metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
@@ -43,6 +45,7 @@ class KnowledgeWriteToolsMixin:
             return {"tool_name": name, "tool_args": args,
                     "result": f"Error adding file to knowledge base: {e}", "status": "error"}  # fmt: skip
 
+    @declares_tool("knowledge", LOCATION_BACKEND, None, prompt_rank=10)
     async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Store a fact in the knowledge base."""
         args = {"content": content, "metadata": metadata}

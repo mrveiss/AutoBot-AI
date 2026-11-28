@@ -203,6 +203,25 @@ def test_available_tools_derive_from_the_catalogue():
     assert set(REGISTRY_TOOLS) <= set(names)
 
 
+def test_every_listed_tool_declares_a_unique_prompt_rank():
+    """Each prompt-listed tool carries its own ``prompt_rank`` beside its handler; ranks never collide (#22280)."""
+    from tools.tool_records import _all_specs
+
+    listed = [s for s in _all_specs().values() if s.listed and not s.flag_gated]
+    assert all(s.prompt_rank is not None for s in listed), [s.name for s in listed if s.prompt_rank is None]
+    ranks = [s.prompt_rank for s in listed]
+    assert len(ranks) == len(set(ranks))
+
+
+def test_the_prompt_lists_registry_tools_by_declared_rank():
+    """The derivation follows the class MRO (mixin tools first); the prompt order is the declared rank (#22280)."""
+    from tools.tool_records import REGISTRY_TOOLS, _all_specs
+
+    specs = _all_specs()
+    assert list(REGISTRY_TOOLS) == sorted(REGISTRY_TOOLS, key=lambda n: specs[n].prompt_rank)
+    assert list(REGISTRY_TOOLS)[0] == "execute_system_command"
+
+
 def test_every_tool_record_names_where_it_runs():
     from tools.tool_records import tool_records
 
@@ -281,12 +300,14 @@ def test_the_chat_shell_tool_is_a_record_with_its_permission_and_the_host_it_is_
     assert shell["node_id"] and shell["serving_service"] == LOCATION_BACKEND
 
 
-def test_a_tool_served_from_a_placed_service_carries_its_host_and_one_not_placed_carries_none():
+def test_a_tool_served_from_a_placed_service_carries_its_host_and_a_worker_task_the_backends():
     from tools.tool_records import LOCATION_WORKER, tool_records
 
     by_name = {r["name"]: r for r in tool_records()}
     assert by_name["web_search"]["node_id"]
-    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER and by_name["type_text"]["node_id"] is None
+    # Worker tasks run in the backend process (ToolRegistry -> WorkerNode.execute_task, in-process), so its host.
+    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER
+    assert by_name["type_text"]["node_id"] == by_name["web_search"]["node_id"]
 
 
 @pytest.mark.asyncio
@@ -341,3 +362,49 @@ def test_worker_dispatched_tools_are_recorded_at_the_worker_not_the_backend():
     by_name = {r["name"]: r for r in tool_records()}
     for name in ("web_fetch", "ask_user_for_manual", "respond_conversationally"):
         assert by_name[name]["serving_service"] == LOCATION_WORKER, name
+
+
+def test_requires_is_declared_only_for_known_tools_and_sent_in_every_record():
+    """#22298: ``requires`` names commands for catalogue tools only; every record carries the field."""
+    from tools.tool_records import TOOL_REQUIRES, tool_records
+
+    records = {r["name"]: r for r in tool_records()}
+    assert set(TOOL_REQUIRES) <= set(records)
+    assert all("requires" in r["fields"] for r in records.values())
+    assert records["bring_window_to_front"]["fields"]["requires"] == ["xdotool"]
+    assert records["web_fetch"]["fields"]["requires"] == []
+
+
+def test_a_worker_tool_with_a_required_command_is_placed_where_a_missing_command_marks_it_unavailable():
+    """#22298: the tools that declare ``requires`` carry a node, or ``unavailable_because`` would never fire."""
+    from tools.tool_records import TOOL_REQUIRES, tool_records
+
+    records = {r["name"]: r for r in tool_records()}
+    for name in TOOL_REQUIRES:
+        assert records[name]["node_id"], f"{name} declares requires but has no node to check them on"
+
+
+def test_every_command_a_tool_requires_has_a_yaml_tool_doc():
+    """#22276: the YAML tool docs cover every command the catalogue says a tool needs (a guard, one direction)."""
+    import pathlib
+
+    import yaml
+
+    from tools.tool_records import TOOL_REQUIRES
+
+    docs = pathlib.Path(__file__).resolve().parents[1] / "resources" / "knowledge" / "tools"
+    documented = {
+        t["name"]
+        for f in docs.glob("*.yaml")
+        for t in (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("tools", [])
+    }
+    required = {cmd for cmds in TOOL_REQUIRES.values() for cmd in cmds}
+    assert required <= documented, f"#22276: required commands with no YAML tool doc: {sorted(required - documented)}"
+
+
+def test_every_catalogue_tool_is_declared_on_its_handler():
+    """#22276: the catalogue is the handlers' declarations; web_search and the shell come from the chat handler."""
+    from tools.tool_records import CHAT_SHELL_TOOL, REGISTRY_TOOLS, SPILL_READ_TOOL
+
+    assert {"web_search", "code_interpreter", "query_self_model", "scrape_url"} <= set(REGISTRY_TOOLS)
+    assert CHAT_SHELL_TOOL[0] == "execute_command" and SPILL_READ_TOOL[0] == "read_spilled_output"

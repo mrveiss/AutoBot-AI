@@ -147,6 +147,17 @@ def test_requirement_on_an_absent_or_stale_command_is_unavailable_on_that_node()
     assert unavailable_because({"node_id": None, "attrs": {"requires": ["ffmpeg"]}}, rows) == []
 
 
+def test_removing_a_required_command_makes_the_tool_unavailable_and_reinstalling_restores_it():
+    """#22298: the tool follows its command through removal and reinstall on the same node."""
+    tool = {"node_id": "n1", "attrs": {"requires": ["xdotool"]}}
+    rows, _ = _run({}, [_cmd("xdotool", "3.0")], T0)
+    assert unavailable_because(tool, rows) == []
+    rows, _ = _run(rows, [], T1)
+    assert unavailable_because(tool, rows) == ["xdotool"]
+    rows, _ = _run(rows, [_cmd("xdotool", "3.0")], T1 + timedelta(hours=1))
+    assert unavailable_because(tool, rows) == []
+
+
 def test_a_host_address_becomes_the_nodes_own_id_and_an_unmanaged_host_is_kept():
     tools = [
         Observation("tool", "a", DECLARED, node_id="10.0.0.5"),
@@ -167,3 +178,14 @@ def test_paging_order_is_stable_when_timestamps_tie_across_a_page_boundary():
     assert [r["entity_key"] for r in heartbeat] == [r["entity_key"] for r in ordered]
     pages = [ordered[0:2], ordered[2:4], ordered[4:6]]
     assert [r["entity_key"] for page in pages for r in page] == [r["entity_key"] for r in ordered]
+
+
+def test_a_tool_placed_by_host_address_is_unavailable_once_its_required_command_is_gone_from_that_node():
+    """#22298: the backend places a tool by SSOT host; the SLM renames it to the node id its commands live under."""
+    rows, _ = _run({}, [_cmd("xdotool")], T0)
+    rows, _ = _run(rows, [], T1)  # the node's inventory dropped xdotool
+    placed = rename_hosts(
+        [Observation("tool", "bring_window_to_front", DECLARED, node_id="10.0.0.5")], {"10.0.0.5": "n1"}
+    )
+    tool = {"node_id": placed[0].node_id, "attrs": {"requires": ["xdotool"]}}
+    assert unavailable_because(tool, rows) == ["xdotool"]

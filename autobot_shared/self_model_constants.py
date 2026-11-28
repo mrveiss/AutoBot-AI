@@ -19,10 +19,11 @@ logger = get_logger(__name__)
 #: The entity kinds of the self-model: one list for the SLM's validation and the backend's queries.
 ENTITY_KINDS = ("node", "service", "route", "tool", "model", "command", "agent", "package")
 
-#: The sources a producer may claim entities under: the backend's two pushes. The SLM refuses any other.
+#: The sources a producer may claim entities under: the backend's three pushes. The SLM refuses any other.
 CATALOGUE_SOURCE = "backend_catalogue"
 HEALTH_SOURCE = "backend_service_health"
-PRODUCER_SOURCES = (CATALOGUE_SOURCE, HEALTH_SOURCE)
+MODEL_SOURCE = "backend_models"
+PRODUCER_SOURCES = (CATALOGUE_SOURCE, HEALTH_SOURCE, MODEL_SOURCE)
 
 #: A node rescans its package and command lists at least this often, even when the mtime signature did not
 #: change: a mode change (exec permission) moves ctime, never the directory's mtime.

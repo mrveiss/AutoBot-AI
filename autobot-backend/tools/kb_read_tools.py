@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.tool_spec import LOCATION_BACKEND, declares_tool
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import filter_for_user_id
 
@@ -19,6 +21,7 @@ from knowledge.search_filters import filter_for_user_id
 class KnowledgeReadToolsMixin:
     """``search_knowledge_base`` and ``get_fact``; needs ``self.logger`` and ``self._resolve_knowledge_base``."""
 
+    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=8)
     async def search_knowledge_base(self, query: str, n_results: int = 5, user_id: str | None = None) -> Dict[str, Any]:
         """Agent tool: top-``n_results`` facts visible to ``user_id``, research quarantine excluded.
 
@@ -70,6 +73,7 @@ class KnowledgeReadToolsMixin:
                 "status": "error",
             }
 
+    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=11)
     async def get_fact(
         self, fact_id: int | None = None, query: str | None = None, user_id: str | None = None
     ) -> Dict[str, Any]:

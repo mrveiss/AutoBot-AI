@@ -33,6 +33,7 @@ import time
 from dataclasses import dataclass, field
 from threading import Lock
 
+from autobot_shared.agent_attributes import PRESENCE_ATTR, get_agent_attribute_store
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -115,6 +116,16 @@ class PresenceEntry:
     task: PresenceTask | None = None
     last_seen: float = field(default_factory=time.time)
 
+    def as_attribute(self) -> dict:
+        """This entry as the agent record's ``presence`` attribute (#22275)."""
+        return {
+            "busy": self.busy,
+            "instance_id": self.instance_id,
+            "last_seen": self.last_seen,
+            "detail": self.detail,
+            "task": {"id": self.task.id, "title": self.task.title} if self.task else None,
+        }
+
 
 @dataclass
 class _Record:
@@ -138,6 +149,31 @@ class AgentPresenceRegistry:
         self._ttl = ttl_seconds if ttl_seconds is not None else presence_ttl_seconds()
         self._entries: dict[PresenceKey, _Record] = {}
         self._lock = Lock()
+
+    def _refuse_squat(
+        self,
+        existing: "_Record | None",
+        kind: AgentKind,
+        tenant_id: str | None,
+        name: str,
+        instance_id: str,
+        now: float,
+    ) -> None:
+        """Raise when a DIFFERENT instance already holds this live name."""
+        if existing is None or existing.instance_id == instance_id or now - existing.last_seen >= self._ttl:
+            return
+        logger.warning(
+            "presence report refused: %r (%s, tenant=%r) is live under instance %r; refusing %r",
+            name,
+            kind.value,
+            tenant_id,
+            existing.instance_id,
+            instance_id,
+        )
+        raise PresenceNameCollisionError(
+            f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
+            f"{existing.instance_id!r}; refusing instance {instance_id!r}"
+        )
 
     def report(
         self,
@@ -163,21 +199,10 @@ class AgentPresenceRegistry:
         now = time.time()
         with self._lock:
             existing = self._entries.get(key)
-            if existing is not None and existing.instance_id != instance_id and now - existing.last_seen < self._ttl:
-                logger.warning(
-                    "presence report refused: %r (%s, tenant=%r) is live under instance %r; refusing %r",
-                    name,
-                    kind.value,
-                    tenant_id,
-                    existing.instance_id,
-                    instance_id,
-                )
-                raise PresenceNameCollisionError(
-                    f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
-                    f"{existing.instance_id!r}; refusing instance {instance_id!r}"
-                )
+            self._refuse_squat(existing, kind, tenant_id, name, instance_id, now)
             was_busy = existing.busy if existing is not None else None
             self._entries[key] = _Record(instance_id=instance_id, busy=busy, detail=detail, last_seen=now, task=task)
+        self._publish_attribute(kind, tenant_id, name)
         if was_busy is True and busy is False:
             notify_agent_idle(kind=kind, tenant_id=tenant_id, name=name)
 
@@ -188,6 +213,28 @@ class AgentPresenceRegistry:
             existing = self._entries.get(key)
             if existing is not None and existing.instance_id == instance_id:
                 del self._entries[key]
+        self._withdraw_attribute(name)
+
+    def _publish_attribute(self, kind: AgentKind, tenant_id: str | None, name: str) -> None:
+        """Write the live entry into the agent record (an unresolved tenant is never published)."""
+        if tenant_id == UNKNOWN_TENANT:
+            return
+        rec = self._entries.get((kind, tenant_id, name))
+        if rec is None:
+            return
+        entry = PresenceEntry(kind, tenant_id, name, rec.busy, rec.instance_id, rec.detail, rec.task, rec.last_seen)
+        remaining_ttl = self._ttl - (time.time() - rec.last_seen)
+        get_agent_attribute_store().set(name, PRESENCE_ATTR, entry.as_attribute(), ttl_seconds=remaining_ttl)
+
+    def _withdraw_attribute(self, name: str) -> None:
+        """Clear the agent's presence attribute unless another tenant's entry of that name is still live."""
+        with self._lock:
+            remaining = [(k, r) for k, r in self._entries.items() if k[2] == name and k[1] != UNKNOWN_TENANT]
+        if not remaining:
+            get_agent_attribute_store().clear(name, PRESENCE_ATTR)
+            return
+        (kind, tenant, _), _rec = max(remaining, key=lambda item: item[1].last_seen)
+        self._publish_attribute(kind, tenant, name)
 
     def list_live(self, tenant_id: str | None = None) -> list[PresenceEntry]:
         """Live agents visible to *tenant_id*: that tenant's own plus shared.

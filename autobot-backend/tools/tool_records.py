@@ -7,7 +7,8 @@
 Tool names came from five places: ``ToolRegistry``'s hardcoded list, ``ToolSDKRegistry``,
 ``BROWSER_TOOL_NAMES``, ``_INFRA_AND_SHELL_TOOLS`` and the YAML tool docs. The verdicts:
 
-* ``ToolRegistry``'s list -> this module's ``REGISTRY_TOOLS`` (declared once, with location);
+* ``ToolRegistry``'s list -> declared on each handler with ``declares_tool`` (category, location, permission,
+  requires); ``REGISTRY_TOOLS`` here is derived from those declarations;
   ``ToolRegistry.get_available_tools`` and ``WEB_RESEARCH_TOOL_NAMES`` derive from it.
 * ``ToolSDKRegistry`` -> the registered ``BaseTool`` classes; read live by ``tool_records``.
 * ``BROWSER_TOOL_NAMES`` -> already derived from ``autobot_shared.tool_catalogue.BROWSER_TOOLS``;
@@ -32,53 +33,24 @@ from autobot_shared.auth.permissions import Permission
 from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
 from autobot_shared.tool_catalogue import BROWSER_TOOLS
 from autobot_shared.tool_sdk.base import ToolPermission
+from autobot_shared.tool_spec import (  # noqa: F401 - re-exported: callers import these names from here
+    CATEGORY_WEB_RESEARCH,
+    LOCATION_BACKEND,
+    LOCATION_BROWSER,
+    LOCATION_WORKER,
+    SELF_MODEL_QUERY_TOOL_NAME,
+    ToolSpec,
+    tool_specs_declared_on,
+)
 
 TOOL_RECORD_KIND = "tool"
 
-#: Dispatched in the backend process.
-LOCATION_BACKEND = SERVICE_DEFINITIONS["backend"].name
-#: Dispatched to a worker node through ``ToolRegistry._execute_worker_task``.
-LOCATION_WORKER = "worker-node"
-#: Driven through ``browser_mcp`` against the browser service.
-LOCATION_BROWSER = SERVICE_DEFINITIONS["playwright-vnc"].name
+ToolEntry = Tuple[str, str, Optional[Permission]]  # (category, execution location, required Permission)
 
-CATEGORY_WEB_RESEARCH = "web_research"
-
-#: The read-only chat tool over the SLM self-model (#22278); the self-awareness block points at it.
-SELF_MODEL_QUERY_TOOL_NAME = "query_self_model"
-
-#: name -> (category, execution location, required Permission or None). The permission is the one every route
-#: enforces for the tool (``mcp_tool_permissions`` agrees); None means no route declares a check (#22278).
-#: Order is the order the model's prompt lists them.
-REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
-    "execute_system_command": ("system", LOCATION_WORKER, Permission.SHELL_EXECUTE),
-    # These two fall back to the backend's SystemIntegration when no worker node is attached (#22267).
-    "query_system_information": ("system", LOCATION_WORKER, Permission.MCP_METRICS_READ),
-    "list_system_services": ("system", LOCATION_WORKER, Permission.MCP_METRICS_READ),
-    "manage_service": ("system", LOCATION_WORKER, None),
-    "get_process_info": ("system", LOCATION_WORKER, None),
-    "terminate_process": ("system", LOCATION_WORKER, None),
-    "web_fetch": ("web", LOCATION_WORKER, None),  # ToolRegistry._execute_worker_task
-    "web_search": ("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ),
-    "search_knowledge_base": ("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
-    "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
-    "store_fact": ("knowledge", LOCATION_BACKEND, None),
-    "get_fact": ("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
-    SELF_MODEL_QUERY_TOOL_NAME: ("self_model", LOCATION_BACKEND, None),
-    "type_text": ("gui", LOCATION_WORKER, None),
-    "click_element": ("gui", LOCATION_WORKER, None),
-    "bring_window_to_front": ("gui", LOCATION_WORKER, None),
-    "read_text_from_region": ("gui", LOCATION_WORKER, None),  # #12070
-    "move_mouse": ("gui", LOCATION_WORKER, None),
-    "ask_user_for_manual": ("conversation", LOCATION_WORKER, None),
-    "respond_conversationally": ("conversation", LOCATION_WORKER, None),
-    "code_interpreter": ("code", LOCATION_BACKEND, None),
-    "scrape_url": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),  # #7509
-    "crawl_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE),
-    "map_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
-    "extract_structured_data": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
-    "content_reach": ("web", LOCATION_BACKEND, None),  # #10932
-}
+#: Names derived from the handlers' declarations on first access (module ``__getattr__``): the handlers import
+#: this package's leaf, so the catalogue cannot be built while they are still importing.
+_DERIVED = ("REGISTRY_TOOLS", "TOOL_REQUIRES", "_UNLISTED_TOOLS", "SPILL_READ_TOOL", "CHAT_SHELL_TOOL")
+_cache: Dict[str, Any] = {}
 
 #: SDK ``ToolPermission`` level -> the canonical ``Permission`` a role must hold to see the tool.
 #: ``role_has_permission`` knows only dot-style Permission values, so storing the bare level
@@ -90,26 +62,61 @@ _SDK_PERMISSIONS: Dict[ToolPermission, Optional[Permission]] = {
     ToolPermission.SYSTEM: Permission.ADMIN_SYSTEM,
 }
 
-#: Offered only while the tool-output spill flag is on (#13754, #13865).
-SPILL_READ_TOOL = ("read_spilled_output", ("conversation", LOCATION_BACKEND, None))
+
+def _entry(spec: ToolSpec) -> ToolEntry:
+    return (spec.category, spec.location, spec.permission)
 
 
-#: The chat shell tool: dispatched by ``_dispatch_execute_command``, not offered through the registry prompt list.
-#: The handler reads its permission from here, so the shell check has one definition (#22278).
-CHAT_SHELL_TOOL = ("execute_command", ("system", LOCATION_BACKEND, Permission.SHELL_EXECUTE))
+def _all_specs() -> Dict[str, ToolSpec]:
+    """Every declared tool: the ``ToolRegistry`` handlers, then the chat handlers (web search, the shell)."""
+    from chat_workflow.tool_handler import ToolHandlerMixin  # noqa: PLC0415 - tool_handler imports this module
+    from tools.tool_registry import ToolRegistry  # noqa: PLC0415 - ToolRegistry imports this module's leaf
 
-#: Tools outside the prompt list that still carry a catalogue entry.
-_UNLISTED_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = dict([SPILL_READ_TOOL, CHAT_SHELL_TOOL])
+    return tool_specs_declared_on(ToolRegistry, ToolHandlerMixin)
+
+
+def _build() -> None:
+    """Fill the derived views once from the declarations."""
+    specs = _all_specs()
+    gated = [s for s in specs.values() if s.flag_gated]
+    listed = [n for n, s in specs.items() if s.listed and not s.flag_gated]
+    # The derivation follows the class MRO (mixin tools first); each tool's ``prompt_rank`` sets the prompt order.
+    listed.sort(key=lambda n: (specs[n].prompt_rank is None, specs[n].prompt_rank or 0))  # stable: unranked last
+    _cache["REGISTRY_TOOLS"] = {n: _entry(specs[n]) for n in listed}
+    _cache["TOOL_REQUIRES"] = {n: s.requires for n, s in specs.items() if s.requires}
+    _cache["SPILL_READ_TOOL"] = (gated[0].name, _entry(gated[0]))
+    _cache["CHAT_SHELL_TOOL"] = ("execute_command", _entry(specs["execute_command"]))
+    _cache["_UNLISTED_TOOLS"] = dict([_cache["SPILL_READ_TOOL"], _cache["CHAT_SHELL_TOOL"]])
+
+
+def __getattr__(name: str) -> Any:
+    """Serve the derived catalogue views (PEP 562)."""
+    if name not in _DERIVED:
+        raise AttributeError(name)
+    if not _cache:
+        _build()
+    return _cache[name]
+
+
+def _view(name: str) -> Any:
+    """A derived view, honouring a module-level override (the tests replace one)."""
+    return globals()[name] if name in globals() else __getattr__(name)
 
 
 def tool_names_in_category(category: str) -> List[str]:
-    """Registry tool names of one category, in catalogue order."""
-    return [name for name, (cat, _, _perm) in REGISTRY_TOOLS.items() if cat == category]
+    """Registry tool names of one category, in catalogue order.
+
+    Reads the ``ToolRegistry`` declarations only: ``chat_workflow.tool_handler`` calls this while it is itself
+    importing, so the chat handlers' declarations are not yet available (none is in a category looked up here).
+    """
+    from tools.tool_registry import ToolRegistry  # noqa: PLC0415
+
+    return [n for n, s in tool_specs_declared_on(ToolRegistry).items() if s.listed and s.category == category]
 
 
 def required_permission_for(tool_name: str) -> Optional[Permission]:
     """The Permission the chat handler requires for registry tool *tool_name*; None when it declares no check."""
-    return {**REGISTRY_TOOLS, **_UNLISTED_TOOLS}.get(tool_name, (None, None, None))[2]
+    return {**_view("REGISTRY_TOOLS"), **_view("_UNLISTED_TOOLS")}.get(tool_name, (None, None, None))[2]
 
 
 def permission_value_for(tool_name: str) -> Optional[str]:
@@ -117,13 +124,13 @@ def permission_value_for(tool_name: str) -> Optional[str]:
     return _value(required_permission_for(tool_name))
 
 
-def _spill_tools() -> Dict[str, Tuple[str, str, Optional[Permission]]]:
+def _spill_tools() -> Dict[str, ToolEntry]:
     """The spill read tool when its flag is on, else nothing (never breaks prompt building)."""
     # Guarded: importing the leaf pulls in the whole ``agent_loop`` package (#13754).
     try:
         from agent_loop.tool_output_spill import SPILL_ENABLED  # noqa: PLC0415
 
-        return dict([SPILL_READ_TOOL]) if SPILL_ENABLED else {}
+        return dict([_view("SPILL_READ_TOOL")]) if SPILL_ENABLED else {}
     except Exception:  # pragma: no cover - never break prompt building
         from autobot_shared.logging_manager import get_logger  # noqa: PLC0415
 
@@ -138,7 +145,7 @@ def prompt_tool_names() -> List[str]:
     # Lazy: chat_workflow -> tool_handler -> tools -> tool_registry -> chat_workflow (#4557).
     from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
 
-    return [*REGISTRY_TOOLS, *_spill_tools(), *sorted(BROWSER_TOOL_NAMES)]
+    return [*_view("REGISTRY_TOOLS"), *_spill_tools(), *sorted(BROWSER_TOOL_NAMES)]
 
 
 def _value(permission: Optional[Permission]) -> Optional[str]:
@@ -151,9 +158,18 @@ def _browser_permission(name: str) -> Optional[str]:
     return _value(_mcp_required_permission(name))
 
 
-def _location_host(location: str) -> Optional[str]:
-    """The SSOT host of the service serving *location*; None where the placement is not known from code."""
-    return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == location), None)
+#: location -> the service whose process really runs its code, where that is not the location's own service.
+#: ``ToolRegistry._execute_worker_task`` calls ``WorkerNode.execute_task`` in-process (it never publishes to Redis),
+#: and the task handlers drive ``worker.system_integration`` / ``gui_controller`` in that same process; the
+#: ``SystemReadToolsMixin`` fallback is ``SystemIntegration`` in the backend as well. So worker tasks run on the
+#: backend's host (#22298).
+_EXECUTING_SERVICE: Dict[str, str] = {LOCATION_WORKER: LOCATION_BACKEND}
+
+
+def location_host(location: str) -> Optional[str]:
+    """The SSOT host that runs *location*'s code; None where the placement is not known from code."""
+    executing = _EXECUTING_SERVICE.get(location, location)
+    return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == executing), None)
 
 
 def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
@@ -162,8 +178,8 @@ def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
         "kind": TOOL_RECORD_KIND,
         "name": name,
         "serving_service": location,
-        "node_id": _location_host(location),
-        "fields": fields,
+        "node_id": location_host(location),
+        "fields": {"requires": list(_view("TOOL_REQUIRES").get(name, ())), **fields},
     }
 
 
@@ -197,7 +213,11 @@ def tool_records() -> List[Dict[str, Any]]:
     """Every tool as a plain record (kind, stable name, serving service, declared fields)."""
     registry = [
         _record(n, loc, source="tool_registry", category=cat, required_permission=_value(perm))
-        for n, (cat, loc, perm) in {**REGISTRY_TOOLS, **_spill_tools(), **dict([CHAT_SHELL_TOOL])}.items()
+        for n, (cat, loc, perm) in {
+            **_view("REGISTRY_TOOLS"),
+            **_spill_tools(),
+            **dict([_view("CHAT_SHELL_TOOL")]),
+        }.items()
     ]
     browser = [
         _record(n, LOCATION_BROWSER, source="browser", category="browser", required_permission=_browser_permission(n))

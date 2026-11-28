@@ -19,12 +19,16 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI
 
+from agents.agent_client import get_agent_client
 from api.self_capabilities import route_records
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, PUSH_INTERVAL_S
-from events.bus import PersistStrategy, publish_event
+from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, MODEL_SOURCE, PUSH_INTERVAL_S
+from events.bus import PersistStrategy, get_event_bus, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
+from orchestration.capability_audit import build_audit_report
+from services.man_page_self_model import on_self_model_changed
+from services.self_model_models import MODEL_KIND, model_observations
 from services.service_health_probe import read_service_health_snapshot
 from services.slm_self_model import push_observations
 from tools.tool_records import tool_records
@@ -36,6 +40,8 @@ _HEALTHY = "healthy"
 _NAME_MAX = 255  # the SLM entity name column
 _EVENT_CHANNEL = "global"
 _PROBED_FAILED = ("unhealthy", "circuit_open", "degraded")
+_AGENT = "agent"
+_AUDIT_ERROR = "error"
 
 
 def _from_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +73,28 @@ def health_observations(snapshot: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
     return out
 
 
+def apply_audit(observations: List[Dict[str, Any]], report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Agent observations the capability audit covered become ``probed_failed`` (an error finding) or ``probed_ok``.
+
+    The reason rides in ``attrs.audit``; an agent the audit did not cover stays ``declared`` (#22271).
+    """
+    findings: Dict[str, List[Dict[str, Any]]] = {}
+    for finding in report["findings"]:
+        findings.setdefault(finding["agent_id"], []).append(finding)
+    audited = set(report["audited_agents"])
+    out = []
+    for obs in observations:
+        if obs["kind"] != _AGENT or obs["name"] not in audited:
+            out.append(obs)
+            continue
+        found = findings.get(obs["name"], [])
+        failed = any(f["severity"] == _AUDIT_ERROR for f in found)
+        out.append(
+            {**obs, "status": "probed_failed" if failed else "probed_ok", "attrs": {**obs["attrs"], "audit": found}}
+        )
+    return out
+
+
 _last_revision: int | None = None
 
 
@@ -86,9 +114,12 @@ async def _announce_if_changed(result: Dict[str, Any]) -> None:
 
 async def push_catalogue(app: FastAPI) -> None:
     """Push the route, tool and agent catalogues (one batch: the services they are served by come with them)."""
-    records = [*await route_records(app), *tool_records(), *agent_records()]
+    await (await get_agent_client()).registry.refresh_all_health()  # the health attribute's producer, so it is not None
+    records = [*await route_records(app), *tool_records(), *await agent_records()]
     unique = {(r["kind"], r["name"]): r for r in records}  # a tool may be registered in two catalogues
-    observations = [*_service_observations(records), *(_from_record(r) for r in unique.values())]
+    observations = apply_audit(
+        [*_service_observations(records), *(_from_record(r) for r in unique.values())], build_audit_report()
+    )
     result = await push_observations(CATALOGUE_SOURCE, ("service", "route", "tool", "agent"), observations)
     logger.info("self-model catalogue pushed: %s", result)
     await _announce_if_changed(result)
@@ -103,9 +134,16 @@ async def push_service_health() -> None:
     await _announce_if_changed(result)
 
 
+async def push_models() -> None:
+    """Push the models the registered LLM providers serve, probed by their availability checks."""
+    result = await push_observations(MODEL_SOURCE, (MODEL_KIND,), await model_observations())
+    logger.info("self-model models pushed: %s", result)
+    await _announce_if_changed(result)
+
+
 async def _run_forever(app: FastAPI) -> None:
     while True:
-        for push in (push_catalogue(app), push_service_health()):
+        for push in (push_catalogue(app), push_service_health(), push_models()):
             try:
                 await push
             except Exception as exc:  # noqa: BLE001 - one failed push must not end the loop; the next tick retries
@@ -114,5 +152,9 @@ async def _run_forever(app: FastAPI) -> None:
 
 
 def start_self_model_producer(app: FastAPI) -> "asyncio.Task[None]":
-    """Start the periodic push; the caller keeps the task on ``app.state`` so shutdown can cancel it."""
+    """Start the periodic push; the caller keeps the task on ``app.state`` so shutdown can cancel it.
+
+    Also subscribes the man-page staleness listener to ``self_model.changed`` (#22299).
+    """
+    get_event_bus().subscribe(SELF_MODEL_CHANGED, on_self_model_changed)
     return asyncio.create_task(_run_forever(app), name="self-model-producer")

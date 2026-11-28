@@ -41,3 +41,11 @@ async def query_entities(filters: Dict[str, Any]) -> dict:
     """GET entities matching the non-empty *filters* (kind, name, node_id, status, limit)."""
     params = {key: str(value) for key, value in filters.items() if value not in (None, "")}
     return await _client()._slm_json("GET", f"{SELF_MODEL_PATH}/entities", params=params)
+
+
+async def node_ids_for_hosts(hosts: Iterable[str]) -> Dict[str, str]:
+    """The SLM node id of each of *hosts* (addresses) that is a managed node; an unmanaged host is absent."""
+    wanted = sorted({h for h in hosts if h})
+    if not wanted:
+        return {}
+    return await _client()._slm_json("GET", f"{SELF_MODEL_PATH}/node-ids", params={"hosts": ",".join(wanted)})

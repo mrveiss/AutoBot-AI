@@ -51,3 +51,74 @@ async def test_event_published_only_when_the_revision_moves(monkeypatch):
     for revision in (3, 3, 5):
         await producer._announce_if_changed({"revision": revision})
     assert published == [(SELF_MODEL_CHANGED, {"revision": 5})]
+
+
+def _agent_obs(name):
+    return {"kind": "agent", "name": name, "status": "declared", "attrs": {}}
+
+
+def test_audit_verdicts_feed_agent_observations_and_leave_the_rest_declared():
+    """#22271: an error finding fails the agent, a clean audited agent is probed_ok, an unaudited one stays declared."""
+    from services.self_model_producer import apply_audit
+
+    error = {"agent_id": "bad", "severity": "error", "code": "manifest_overlap", "message": "x"}
+    warning = {"agent_id": "warn", "severity": "warning", "code": "duplicate_entries", "message": "y"}
+    report = {"audited_agents": ["bad", "good", "warn"], "findings": [error, warning]}
+    tool = {"kind": "tool", "name": "bad", "status": "declared", "attrs": {}}
+    out = apply_audit([_agent_obs(n) for n in ("bad", "good", "warn", "other")] + [tool], report)
+    by_name = {(o["kind"], o["name"]): o for o in out}
+    assert by_name[("agent", "bad")]["status"] == "probed_failed"
+    assert by_name[("agent", "bad")]["attrs"]["audit"] == [error]
+    assert by_name[("agent", "good")]["status"] == "probed_ok"
+    assert by_name[("agent", "warn")]["status"] == "probed_ok"
+    assert by_name[("agent", "warn")]["attrs"]["audit"] == [warning]
+    assert by_name[("agent", "other")]["status"] == "declared"
+    assert by_name[("tool", "bad")]["status"] == "declared"
+
+
+def test_the_real_audit_report_names_the_agents_it_covered():
+    from orchestration.capability_audit import build_audit_report
+
+    report = build_audit_report()
+    assert report["agent_count"] == len(report["audited_agents"]) >= 4
+
+
+def test_tool_records_send_requires_in_the_attrs():
+    record = {"kind": "tool", "name": "t", "serving_service": "backend", "fields": {"requires": ["xdotool"]}}
+    assert _from_record(record)["attrs"]["requires"] == ["xdotool"]
+
+
+class _Provider:
+    def __init__(self, names):
+        self.names = names
+
+    async def list_models(self):
+        if self.names is None:
+            raise RuntimeError("down")
+        return self.names
+
+
+class _Registry:
+    providers = {"up": _Provider(["m1", "m1", "m2"]), "down": _Provider(["m3"]), "broken": _Provider(None)}
+
+    async def health_check_all(self):
+        return {"up": True, "down": False, "broken": True}
+
+    def get_provider_by_name(self, name):
+        return self.providers[name]
+
+    def get_provider_facts(self):
+        return {}
+
+
+async def test_models_are_probed_by_their_providers_availability(monkeypatch):
+    from services import self_model_models as models
+
+    monkeypatch.setattr(models, "get_provider_registry", lambda: _Registry())
+    out = await models.model_observations()
+    assert [(o["name"], o["status"], o["parent"]["name"]) for o in out] == [
+        ("m3", "probed_failed", "down"),
+        ("m1", "probed_ok", "up"),
+        ("m2", "probed_ok", "up"),
+    ]
+    assert out[1]["attrs"]["probe"] == "provider_availability" and out[1]["attrs"]["probed_at"]

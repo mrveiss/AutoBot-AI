@@ -310,3 +310,36 @@ tools:
       - "r/s, w/s: Read/write operations per second"
       - "rkB/s, wkB/s: Kilobytes read/written per second"
     related_tools: ["vmstat", "iotop", "sar", "pidstat"]
+
+  - name: xdotool
+    type: gui_automation
+    purpose: Raise and control desktop windows from the command line (used by the bring_window_to_front tool)
+    installation:
+      system: apt install xdotool
+    usage:
+      find_window: xdotool search --name {title}
+      raise_window: xdotool windowactivate {window_id}
+    common_examples:
+      - description: Bring a window to the front by title
+        command: xdotool search --name "Terminal" windowactivate
+        expected_output: "The matching window is raised and focused"
+    troubleshooting:
+      - problem: "Can't open display"
+        solution: "Run inside an X session or set DISPLAY"
+    related_tools: ["wmctrl"]
+
+  - name: tesseract
+    type: ocr_engine
+    purpose: Read text from images (used by the read_text_from_region tool through pytesseract)
+    installation:
+      system: apt install tesseract-ocr
+    usage:
+      read_image: tesseract {image} stdout
+    common_examples:
+      - description: Print the text found in an image
+        command: tesseract screenshot.png stdout
+        expected_output: "The recognised text"
+    troubleshooting:
+      - problem: "Error opening data file"
+        solution: "Install the language data package, for example tesseract-ocr-eng"
+    related_tools: ["pytesseract"]

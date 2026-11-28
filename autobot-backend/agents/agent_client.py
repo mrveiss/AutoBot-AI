@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.agent_attributes import HEALTH_ATTR, get_agent_attribute_store
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import exponential_backoff_delay
@@ -71,8 +72,10 @@ class AgentHealthRegistry:
     """Health-tracking registry for running BaseAgent instances.
 
     Scope (#6828): tracks which BaseAgent objects are reachable and alive,
-    performing periodic health checks.  This is the **runtime-health** registry
-    — it does not hold capability profiles or database state.  See also:
+    performing periodic health checks.  It is the **producer** of the ``health``
+    attribute of the one agent record (#22275, ``orchestration.agent_record``): each
+    check writes into ``autobot_shared.agent_attributes``; readers ask the record.
+    It does not hold capability profiles or database state.  See also:
     - orchestration.agent_registry.AgentCapabilityRegistry — static profile/capability registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
@@ -97,6 +100,7 @@ class AgentHealthRegistry:
                 del self.agent_health[agent_type]
             if agent_type in self.last_health_check:
                 del self.last_health_check[agent_type]
+            get_agent_attribute_store().clear(agent_type, HEALTH_ATTR)
             logger.info("Unregistered %s agent", agent_type)
 
     def get_agent(self, agent_type: str) -> BaseAgent | None:
@@ -130,8 +134,15 @@ class AgentHealthRegistry:
             health = await agent.health_check()
             self.agent_health[agent_type] = health
             self.last_health_check[agent_type] = datetime.now(tz=timezone.utc)
+            # The health attribute of the one agent record (#22275); keyed by the type the check knows.
+            get_agent_attribute_store().set(agent_type, HEALTH_ATTR, health.to_dict())
         except Exception as e:
             logger.error("Health check failed for %s: %s", agent_type, e)
+
+    async def refresh_all_health(self) -> None:
+        """Re-check every registered agent (each is throttled to one live check per minute)."""
+        for agent_type in self.list_agents():
+            await self.update_agent_health(agent_type)
 
 
 class ContainerAgentProxy(BaseAgent):
