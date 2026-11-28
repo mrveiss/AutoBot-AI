@@ -53,7 +53,6 @@ _get_controls = lazy_singleton(ControlsService)
 _get_membership = lazy_singleton(MembershipService)
 
 
-
 def _controls_svc() -> ControlsService:
     return _get_controls()
 

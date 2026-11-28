@@ -55,11 +55,6 @@ def _role_value(role: "MembershipRole | str | None") -> str:
     return role.value if isinstance(role, MembershipRole) else (role or "")
 
 
-def is_board_role(role: "MembershipRole | str | None") -> bool:
-    """True when *role* (an enum member or its string) is in the board set, owner or admin."""
-    return _role_value(role) in GRANTING_ROLES
-
-
 def is_coworking_role(role: "MembershipRole | str | None") -> bool:
     """True when *role* may manage co-working: the board set or ``lead``."""
     return _role_value(role) in COWORKING_ROLES

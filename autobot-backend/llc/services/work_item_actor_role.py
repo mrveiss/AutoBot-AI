@@ -78,11 +78,6 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
 _COWORKING_ROLES_DESCRIPTION = ", ".join(sorted(COWORKING_ROLES))
 
 
-def _can_manage_coworking(role: Optional[str]) -> bool:
-    """True when *role* may enable/disable co-working: the board set or lead (``is_coworking_role``)."""
-    return is_coworking_role(role)
-
-
 def _coworking_state(item: LLCWorkItem) -> dict:
     """The co-worker fields of *item*, as the activity log's before/after snapshot."""
     return {
@@ -95,6 +90,6 @@ def _coworking_state(item: LLCWorkItem) -> dict:
 
 def coworking_denial(role: Optional[str]) -> Optional[str]:
     """The refusal message when *role* may not manage co-working, else None."""
-    if _can_manage_coworking(role):
+    if is_coworking_role(role):
         return None
     return f"Role {role!r} does not have permission to manage co-working. " f"Required: {_COWORKING_ROLES_DESCRIPTION}"
