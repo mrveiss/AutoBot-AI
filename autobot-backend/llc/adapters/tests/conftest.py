@@ -16,6 +16,9 @@ from unittest.mock import MagicMock, patch
 
 import psutil
 
+# Captured at import: tests patch psutil.Process inside scoped_os_kill windows, which would hide real children.
+_REAL_PSUTIL_PROCESS = psutil.Process
+
 
 def agent_cfg(agent_id: str = "agent-1", output_dir: str | None = None, **kwargs) -> dict:
     """Build a minimal agent-config dict used across adapter test suites."""
@@ -36,7 +39,7 @@ def _is_live_child(pid: int) -> bool:
     """True if ``pid`` is a live descendant of this process (psutil; no reaping)."""
     if pid <= 1:
         return False
-    return any(c.pid == pid for c in psutil.Process(os.getpid()).children(recursive=True))
+    return any(c.pid == pid for c in _REAL_PSUTIL_PROCESS(os.getpid()).children(recursive=True))
 
 
 def _check_foreign_kill(pid: int, sig: int) -> None:
