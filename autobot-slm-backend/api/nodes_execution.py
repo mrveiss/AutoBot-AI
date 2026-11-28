@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
@@ -520,8 +521,7 @@ async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
+        await kill_and_reap(proc)
         return 124, "", f"Execution timed out after {timeout}s"
     return (
         proc.returncode if proc.returncode is not None else 1,
@@ -598,8 +598,7 @@ async def _run_via_ssh(
     try:
         raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
+        await kill_and_reap(proc)
         return 124, "", f"SSH execution timed out after {timeout}s"
     return (
         proc.returncode if proc.returncode is not None else 1,

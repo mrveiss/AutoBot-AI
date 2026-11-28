@@ -27,6 +27,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
+from autobot_shared.subprocess_reap import kill_and_reap
 from utils.file_categorization import SKIP_DIRS
 
 # Issue #542: Handle imports for both standalone execution and backend import
@@ -425,13 +426,7 @@ class OwnershipAnalyzer:
     @staticmethod
     async def _terminate(proc: "asyncio.subprocess.Process") -> None:
         """Kill a blame child and reap it, tolerating one that already exited."""
-        if proc.returncode is not None:
-            return
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            return
-        await proc.wait()
+        await kill_and_reap(proc)
 
     async def _get_file_ownership(self, file_path: Path, root: Path) -> FileOwnership | None:
         """Get ownership data for a single file using git blame"""

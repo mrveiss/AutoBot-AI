@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import strict_git_env
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from security.upload_filename_policy import ZIP_EXTENSIONS, is_safe_file
 
 logger = get_logger(__name__)
@@ -246,8 +247,7 @@ async def _git_clone(url: str, ref: str | None, dest: Path) -> None:
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_CLONE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
-        proc.kill()
-        await proc.wait()
+        await kill_and_reap(proc)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="git clone timed out",

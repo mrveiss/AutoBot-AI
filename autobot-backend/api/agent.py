@@ -50,6 +50,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import provide_config_manager, provide_knowledge_base
@@ -146,11 +147,7 @@ async def _kill_timed_out_process(
     """Kill a timed out subprocess safely (Issue #315: extracted)."""
     if not process:
         return
-    try:
-        process.kill()
-        await process.wait()
-    except ProcessLookupError:
-        pass  # Process already terminated
+    await kill_and_reap(process)
 
 
 def _validate_command_request(command: str | None, security_layer, user_role: str) -> JSONResponse | None:

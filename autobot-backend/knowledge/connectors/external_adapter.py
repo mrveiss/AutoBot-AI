@@ -44,6 +44,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -112,7 +113,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_CHECK_TIMEOUT)
             except asyncio.TimeoutError:
-                proc.kill()
+                await kill_and_reap(proc)
                 self.logger.warning("check command timed out after %ds", _CHECK_TIMEOUT)
                 return False
 
@@ -165,7 +166,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_DISCOVER_TIMEOUT)
             except asyncio.TimeoutError:
-                proc.kill()
+                await kill_and_reap(proc)
                 self.logger.warning("discover command timed out after %ds", _DISCOVER_TIMEOUT)
                 return []
 

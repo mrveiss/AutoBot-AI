@@ -38,6 +38,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, List
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TimingConstants
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
 from command_run_policy import CommandRunPolicy
 from utils.bounded_subprocess import BoundedResult, run_bounded, run_shell_bounded
@@ -287,8 +288,7 @@ async def _communicate_with_process(
         else:
             stdout, stderr = await process.communicate()
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
+        await kill_and_reap(process)
         return _create_timeout_result(args, timeout)
 
     return _parse_command_output(stdout, stderr, process.returncode)

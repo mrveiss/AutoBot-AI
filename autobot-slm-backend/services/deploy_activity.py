@@ -44,6 +44,7 @@ from pathlib import Path
 
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.playbook_executor import SELF_UPDATE_DETACH_UNIT_PREFIX, SELF_UPDATE_LOG_PATH
 from services.self_update_log_reader import read_self_update_verdict
 
@@ -113,8 +114,7 @@ async def _self_update_unit_active() -> bool | None:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=DEPLOY_ACTIVITY_QUERY_TIMEOUT_S)
     except asyncio.TimeoutError:
         logger.warning("deploy activity: systemctl query timed out after %ss", DEPLOY_ACTIVITY_QUERY_TIMEOUT_S)
-        proc.kill()
-        await proc.wait()
+        await kill_and_reap(proc)
         return None
 
     if proc.returncode != 0:

@@ -55,6 +55,7 @@ from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.status_enums import Severity
+from autobot_shared.subprocess_reap import kill_and_reap
 from constants.threshold_constants import TimingConstants
 from tasks.analytics_tasks import run_bug_prediction_analysis
 from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
@@ -267,8 +268,7 @@ async def get_git_bug_history(root: Path) -> dict[str, Any]:
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await kill_and_reap(proc)
             logger.warning("Git bug history command timed out")
             return {}
 
@@ -292,8 +292,7 @@ async def get_file_change_frequency(root: Path) -> dict[str, int]:
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await kill_and_reap(proc)
             logger.warning("Git change frequency command timed out")
             return {}
 

@@ -17,6 +17,7 @@ from typing import Any, Dict
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
 
 logger = get_logger(__name__)
@@ -149,11 +150,7 @@ class IsolatedBridgeClient:
         except Exception:
             pass
         if self._proc.returncode is None:
-            try:
-                self._proc.terminate()
-                await asyncio.wait_for(self._proc.wait(), timeout=3.0)
-            except asyncio.TimeoutError:
-                self._proc.kill()
+            await kill_and_reap(self._proc, terminate_first=True, bounded=True)
         self._proc = None
 
     async def _ensure_alive(self) -> None:
@@ -245,7 +242,7 @@ class IsolatedBridgeClient:
                 metrics = get_metrics_manager()
                 metrics.set_mcp_circuit_breaker_activated(self._bridge, True)
                 if self._proc is not None and self._proc.returncode is None:
-                    self._proc.kill()
+                    await kill_and_reap(self._proc, bounded=True)
                 return {"success": False, "result": str(exc), "bridge": self._bridge}
 
             if "error" in resp:

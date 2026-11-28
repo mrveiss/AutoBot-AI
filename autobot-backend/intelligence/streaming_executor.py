@@ -36,6 +36,7 @@ if __name__ == "__main__":
     raise SystemExit(2)
 
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.subprocess_reap import kill_and_reap
 from utils.command_validator import CommandValidator
 
 logger = get_logger(__name__)
@@ -177,11 +178,7 @@ class StreamingCommandExecutor:
 
     async def _terminate_process_safely(self, process: asyncio.subprocess.Process) -> None:
         """Terminate process with graceful fallback to kill. (Issue #315 - extracted)"""
-        try:
-            process.terminate()
-            await asyncio.wait_for(process.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            process.kill()
+        await kill_and_reap(process, terminate_first=True, bounded=True)
 
     async def execute_with_streaming(
         self,
@@ -590,14 +587,7 @@ class StreamingCommandExecutor:
 
         try:
             process_info = self.active_processes[process_id]
-            process_info.process.terminate()
-
-            # Wait a bit for graceful termination
-            try:
-                await asyncio.wait_for(process_info.process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                # Force kill if it doesn't terminate gracefully
-                process_info.process.kill()
+            await kill_and_reap(process_info.process, terminate_first=True, bounded=True)
 
             del self.active_processes[process_id]
             logger.info("Killed process %s", process_id)

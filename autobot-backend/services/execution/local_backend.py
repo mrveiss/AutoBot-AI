@@ -15,6 +15,7 @@ import sys
 from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from autobot_shared.time_utils import now_utc
 from services.execution.base_backend import (
     BackendType,
@@ -93,11 +94,7 @@ class LocalBackend(ExecutionBackend):
                     result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
                 except asyncio.TimeoutError:
-                    process.kill()
-                    try:
-                        await asyncio.wait_for(process.wait(), timeout=5)
-                    except asyncio.TimeoutError:
-                        process.kill()
+                    await kill_and_reap(process, bounded=True)
                     result.status = ExecutionStatus.TIMEOUT
                     result.stderr = f"Task exceeded timeout of {task.timeout_seconds}s"
                     result.return_code = -1
@@ -142,8 +139,7 @@ class LocalBackend(ExecutionBackend):
         for task_id, process in list(self._active_processes.items()):
             if process and not process.returncode:
                 try:
-                    process.kill()
-                    await asyncio.wait_for(process.wait(), timeout=5)
+                    await kill_and_reap(process, bounded=True)
                 except Exception as e:
                     logger.warning(f"Error killing process {task_id}: {e}")
 

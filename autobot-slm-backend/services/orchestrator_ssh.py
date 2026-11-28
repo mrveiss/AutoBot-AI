@@ -17,14 +17,13 @@ import asyncio
 import logging
 from typing import Tuple
 
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.service_restart import run_systemctl_over_ssh, systemctl_remote_command
 from services.ssh_utils import ssh_destination
 
 logger = logging.getLogger(__name__)
 
 _SSH_TIMEOUT_S = 30.0
-#: How long a killed ssh may take to be reaped before the caller gets its timeout anyway.
-_REAP_TIMEOUT_S = 5.0
 
 
 def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
@@ -44,15 +43,6 @@ def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
     ]
 
 
-async def _reap(process) -> None:
-    """Wait for the killed child, but never longer than ``_REAP_TIMEOUT_S``: a helper that inherited the pipes
-    can hold ``wait()`` open after ssh is dead, and the caller's own ceiling must still hold (#20046)."""
-    try:
-        await asyncio.wait_for(process.wait(), timeout=_REAP_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        logger.warning("ssh child %s was killed but not reaped within %ss", process.pid, _REAP_TIMEOUT_S)
-
-
 async def spawn_ssh(ssh_cmd: list, timeout: float = _SSH_TIMEOUT_S) -> tuple:
     """Run *ssh_cmd*; returns (returncode, stdout, stderr).
 
@@ -67,9 +57,8 @@ async def spawn_ssh(ssh_cmd: list, timeout: float = _SSH_TIMEOUT_S) -> tuple:
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except BaseException:  # TimeoutError, and cancellation of the caller: the child must not outlive either
-        if process.returncode is None:
-            process.kill()
-        await _reap(process)
+        # bounded: a helper that inherited the pipes can hold wait() open after ssh is dead (#20046)
+        await kill_and_reap(process, bounded=True)
         raise
     return process.returncode, stdout, stderr
 

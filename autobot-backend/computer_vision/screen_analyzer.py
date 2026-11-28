@@ -21,6 +21,7 @@ import numpy as np
 
 from autobot_shared.embedding_model import EmbeddingUnavailableError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
 from memory.storage.general_storage import SYSTEM_OWNER
@@ -317,8 +318,7 @@ class ScreenAnalyzer:
                     image = PILImage.open(io.BytesIO(stdout))
                     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
+                await kill_and_reap(proc)
                 logger.warning("X11 screenshot command timed out")
         except Exception as e:
             logger.warning("X11 screenshot failed: %s", e)

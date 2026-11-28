@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 
 from .indexing_executor import (
     _SUBPROCESS_HARD_TIMEOUT,
@@ -172,18 +173,13 @@ async def _wait_with_watchdog(
                 logger.error("[Task %s] Subprocess stale for %d seconds, killing (no progress update)", task_id, idle)
                 if kill_reasons is not None:
                     kill_reasons.append(watchdog_kill_reason(idle, _SUBPROCESS_PROGRESS_TIMEOUT))
-                proc.kill()
-                await proc.wait()
+                await kill_and_reap(proc)
                 return -9
 
 
 async def _kill_worker(proc) -> None:
     """Kill the worker and reap it; a worker that already exited is not an error."""
-    try:
-        proc.kill()
-    except ProcessLookupError:
-        pass
-    await proc.wait()
+    await kill_and_reap(proc)
 
 
 async def _wait_for_exit(proc, task_id: str, source_id: str | None, kill_reasons: list[str]) -> int:

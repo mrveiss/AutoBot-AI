@@ -20,6 +20,7 @@ from typing import Any, Dict, Iterable, Optional
 from autobot_shared.backend_start_marker import BACKEND_UNIT, parse_unix_timestamp, write_marker
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.secrets_store_snapshot import BACKEND_DATA_DIR
 
 logger = get_logger(__name__)
@@ -65,9 +66,8 @@ async def _probe_and_record() -> None:
         if started is not None:
             await asyncio.to_thread(write_marker, started, Path(BACKEND_DATA_DIR))
     finally:
-        if proc is not None and proc.returncode is None:
-            proc.kill()
-            await proc.wait()
+        if proc is not None:
+            await kill_and_reap(proc)
 
 
 async def record_backend_start(services: Iterable[str]) -> None:

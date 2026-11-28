@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, PromptScoreResult
@@ -328,8 +329,7 @@ class ExperimentRunner:
             )
         except asyncio.TimeoutError:
             if self._current_process:
-                self._current_process.kill()
-                await self._current_process.wait()
+                await kill_and_reap(self._current_process)
             wall_time = time.monotonic() - start
             return ExperimentResult(
                 error_message=(f"Training timed out after " f"{self.config.default_training_timeout}s"),
@@ -447,8 +447,7 @@ class ExperimentRunner:
                         "Failed to docker kill container %s after timeout",
                         self._current_container_name,
                     )
-            self._current_process.kill()
-            await self._current_process.wait()
+            await kill_and_reap(self._current_process)
 
         return ExperimentResult(
             error_message=(f"Docker experiment timed out after {self.config.docker_timeout}s"),

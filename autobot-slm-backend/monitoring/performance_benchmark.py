@@ -31,6 +31,7 @@ from src.constants.model_constants import ModelConstants
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.subprocess_reap import kill_and_reap
 
 logger = logging.getLogger(__name__)
 
@@ -640,8 +641,7 @@ class PerformanceBenchmark:
                     )
                     return None
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                await kill_and_reap(process)
 
         except Exception as e:
             self.logger.debug(f"GPU benchmark error: {e}")
@@ -668,8 +668,7 @@ class PerformanceBenchmark:
                     value = stdout.decode("utf-8").strip().split("\n")[0].strip()
                     return float(value)
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                await kill_and_reap(process)
         except Exception as e:
             self.logger.debug(f"GPU utilization query error: {e}")
         return None
@@ -706,8 +705,7 @@ class PerformanceBenchmark:
                     )
                     return None
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                await kill_and_reap(process)
 
         except Exception as e:
             self.logger.debug(f"NPU benchmark error: {e}")
