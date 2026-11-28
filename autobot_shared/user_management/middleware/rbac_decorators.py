@@ -112,23 +112,39 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
         )
 
 
+async def _deny_all(request: Request, user_id, org_id, names: list[str]) -> None:
+    """Audit and raise 403 for a failed all-permissions check."""
+    _path, _ip, _ua = _request_audit_context(request)
+    await _emit_permission_denied_audit(
+        user_id,
+        str(names),
+        _path,
+        org_id=org_id,
+        ip_address=_ip,
+        user_agent=_ua,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"All of these permissions required: {names}",
+    )
+
+
+async def _enforce_all(request: Request, names: list[str]) -> None:
+    """Require authentication and every permission in ``names`` (401/403 otherwise)."""
+    user_id, org_id = _extract_user_context(request)
+    _require_authentication(user_id, str(names))
+    if not await rbac_middleware.check_all_permissions(user_id, names, org_id):
+        await _deny_all(request, user_id, org_id, names)
+
+
 def require_all_permissions(*permissions: Permission):
     """
-    Decorator to require all of the specified permissions.
+    Require all of the specified ``Permission`` members (#18088).
 
-    Typed on the shared ``Permission`` enum like the one gate's factories (#18088): a string
-    raises ``TypeError`` when the decorator is built, which is import time for a route module.
-    The string-typed ``require_permission`` / ``require_any_permission`` that lived here are
-    retired; the one definition is ``autobot_shared.auth.permission_gate``.
+    A string raises ``TypeError`` at build time (import time for a route module). The one
+    gate definition is ``autobot_shared.auth.permission_gate``.
 
-    Usage:
-        @router.delete("/admin/users/{user_id}")
-        @require_all_permissions(Permission.ADMIN_USERS_READ, Permission.ADMIN_USERS_WRITE)
-        async def delete_user(request: Request, user_id: str):
-            ...
-
-    Args:
-        permissions: ``Permission`` members (all are required)
+    Usage: ``@require_all_permissions(Permission.ADMIN_USERS_READ, Permission.ADMIN_USERS_WRITE)``
     """
     if not permissions:
         raise ValueError("require_all_permissions needs at least one Permission")
@@ -139,27 +155,8 @@ def require_all_permissions(*permissions: Permission):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
             request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, str(names))
-
-            has_permission = await rbac_middleware.check_all_permissions(user_id, names, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    str(names),
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"All of these permissions required: {names}",
-                )
+            await _enforce_all(request, names)
 
             return await func(*args, request=request, **kwargs)
 
