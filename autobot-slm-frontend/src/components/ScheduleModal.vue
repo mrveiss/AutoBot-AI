@@ -199,7 +199,7 @@ const isFormValid = computed(() => {
         v-model="name"
         type="text"
         :placeholder="$t('scheduleModal.eGNightlyUpdates')"
-        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
       />
     </div>
 
@@ -213,7 +213,7 @@ const isFormValid = computed(() => {
         v-model="cronExpression"
         type="text"
         placeholder="0 2 * * *"
-        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md font-mono focus:ring-autobot-primary focus:border-autobot-primary"
       />
       <p class="mt-1 text-sm text-autobot-text-tertiary" aria-live="polite">{{ cronDescription }}</p>
 
@@ -226,7 +226,7 @@ const isFormValid = computed(() => {
           :class="[
             'px-2 py-1 text-xs rounded-full transition-colors',
             cronExpression === preset.value
-              ? 'bg-primary-100 text-primary-700 border border-primary-300'
+              ? 'bg-autobot-primary-bg text-autobot-primary-hover border border-autobot-primary-light'
               : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active',
           ]"
           :aria-pressed="cronExpression === preset.value"
@@ -244,7 +244,7 @@ const isFormValid = computed(() => {
       <select
         id="target-type"
         v-model="targetType"
-        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
       >
         <option value="all">{{ $t('scheduleModal.allOutdatedNodes') }}</option>
         <option value="specific">{{ $t('scheduleModal.specificNodes') }}</option>
@@ -264,13 +264,13 @@ const isFormValid = computed(() => {
           @click="toggleNodeSelection(node.node_id)"
           :class="[
             'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-autobot-bg-hover',
-            targetNodes.includes(node.node_id) ? 'bg-primary-50' : '',
+            targetNodes.includes(node.node_id) ? 'bg-autobot-primary-bg' : '',
           ]"
         >
           <input
             type="checkbox"
             :checked="targetNodes.includes(node.node_id)"
-            class="w-4 h-4 text-primary-600 rounded-sm"
+            class="w-4 h-4 text-autobot-primary rounded-sm"
             :aria-label="$t('scheduleModal.selectNodeAria', { hostname: node.hostname })"
             @click.stop
             @change="toggleNodeSelection(node.node_id)"
@@ -293,14 +293,14 @@ const isFormValid = computed(() => {
           @click="toggleRoleSelection(role.name)"
           :class="[
             'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-autobot-bg-hover',
-            targetRoles.includes(role.name) ? 'bg-primary-50' : '',
+            targetRoles.includes(role.name) ? 'bg-autobot-primary-bg' : '',
           ]"
         >
           <input
             type="checkbox"
             :checked="targetRoles.includes(role.name)"
             :value="role.name"
-            class="w-4 h-4 text-primary-600 rounded-sm border-autobot-border-strong"
+            class="w-4 h-4 text-autobot-primary rounded-sm border-autobot-border-strong"
             :aria-label="$t('scheduleModal.selectRoleAria', { name: role.display_name || role.name })"
             @click.stop
             @change="toggleRoleSelection(role.name)"
@@ -322,7 +322,7 @@ const isFormValid = computed(() => {
       <select
         id="restart-strategy"
         v-model="restartStrategy"
-        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
       >
         <option value="graceful">{{ $t('scheduleModal.gracefulWaitForTasks') }}</option>
         <option value="immediate">{{ $t('scheduleModal.immediate') }}</option>
@@ -336,7 +336,7 @@ const isFormValid = computed(() => {
         <input
           type="checkbox"
           v-model="restartAfterSync"
-          class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+          class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
         />
         <span class="text-sm text-autobot-text-secondary">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
       </label>
@@ -345,7 +345,7 @@ const isFormValid = computed(() => {
         <input
           type="checkbox"
           v-model="enabled"
-          class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+          class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
         />
         <span class="text-sm text-autobot-text-secondary">{{ $t('scheduleModal.scheduleEnabled') }}</span>
       </label>
@@ -360,7 +360,7 @@ const isFormValid = computed(() => {
       <button
         @click="handleSave"
         :disabled="!isFormValid"
-        class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {{ isEditing ? $t('scheduleModal.saveChanges') : $t('scheduleModal.createSchedule') }}
       </button>

@@ -88,7 +88,7 @@ onMounted(() => statusPoller.start(''))
         </p>
       </div>
       <button
-        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         :disabled="loading"
         @click="statusPoller.start('')"
       >

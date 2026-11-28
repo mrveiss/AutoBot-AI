@@ -71,7 +71,7 @@ function copyToClipboard(text: string): void {
         <button
           @click="testConnection"
           :disabled="testingConnection"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg
             :class="['w-4 h-4', { 'animate-spin': testingConnection }]"

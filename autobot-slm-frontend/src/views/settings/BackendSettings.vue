@@ -126,7 +126,7 @@ onMounted(() => {
   <div class="p-6">
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -191,12 +191,12 @@ onMounted(() => {
                 type="number"
                 min="10"
                 max="300"
-                class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
               <button
                 @click="saveSetting('heartbeat_timeout', settings.heartbeat_timeout)"
                 :disabled="saving"
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
               >
                 {{ $t('settings.backendSettings.save') }}
               </button>
@@ -225,7 +225,7 @@ onMounted(() => {
             <select
               v-model="settings.backup_retention"
               @change="saveSetting('backup_retention', settings.backup_retention)"
-              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="7">{{ $t('settings.backendSettings.7Days') }}</option>
               <option value="14">{{ $t('settings.backendSettings.14Days') }}</option>
@@ -244,7 +244,7 @@ onMounted(() => {
             <select
               v-model="settings.log_level"
               @change="saveSetting('log_level', settings.log_level)"
-              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="DEBUG">{{ $t('settings.backendSettings.debug') }}</option>
               <option value="INFO">{{ $t('settings.backendSettings.info') }}</option>

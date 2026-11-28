@@ -357,7 +357,7 @@ function getStatusClass(status: string): string {
 }
 
 .role-badge.manual {
-  background: var(--warning-bg);
+  background: var(--color-warning-bg);
   color: var(--warning-color);
 }
 
@@ -392,12 +392,12 @@ function getStatusClass(status: string): string {
 }
 
 .status-active {
-  background: var(--success-bg);
+  background: var(--color-success-bg);
   color: var(--success-color);
 }
 
 .status-inactive {
-  background: var(--warning-bg);
+  background: var(--color-warning-bg);
   color: var(--warning-color);
 }
 

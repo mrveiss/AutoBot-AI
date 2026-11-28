@@ -529,11 +529,11 @@ onMounted(() => {
               <button @click="openEditForm(role)"
                 class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm hover:bg-autobot-bg-active">{{ $t('rolesView.edit') }}</button>
               <button v-if="role.ansible_playbook" @click="openMigrateDialog(role)"
-                class="px-2 py-1 text-xs bg-autobot-illus-2-tint text-autobot-text-primary rounded-sm hover:bg-autobot-illus-2-tint">{{ $t('rolesView.migrate') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-illus-2-tint text-autobot-text-primary rounded-sm hover:bg-(--i2t-hover)">{{ $t('rolesView.migrate') }}</button>
               <button v-if="role.ansible_playbook" @click="openRedeployDialog(role)"
                 class="px-2 py-1 text-xs bg-autobot-illus-1-tint text-autobot-text-primary rounded-sm hover:bg-autobot-primary-bg">{{ $t('rolesView.redeploy') }}</button>
               <button @click="deleteRole(role.name)"
-                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg">{{ $t('rolesView.delete') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-(--bad-bg-hover)">{{ $t('rolesView.delete') }}</button>
             </td>
           </tr>
         </tbody>

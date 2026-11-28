@@ -331,6 +331,66 @@ Totals: 105 rows; 14 rows have no token for any of their roles (every `pink` and
 dark status fills `amber-900` and `red-900`); 6 more have no token for one role (the solid mid-grey fills
 `gray-400` to `gray-700`, and the dark fills of `blue-900` and `red-800`). Rebuild the table with the snippet above when the baseline moves.
 
+## SLM token vocabulary (#17566)
+
+One canonical name per concept: the SLM declares the **same custom-property names** as the user frontend and
+supplies its own values (`slm-scheme.css`, `main.css`); it does not keep a parallel set. The names that used to
+exist only in the SLM were folded onto the shared ones:
+
+| Was (SLM only) | Now |
+|---|---|
+| `--a11y-bg`, `-bg-surface`, `-bg-muted` | `--bg`, `--surface`, `--surface2` |
+| `--a11y-text`, `-text-muted`, `-border` | `--text`, `--muted`, `--border` |
+| `--a11y-focus-ring`, `-focus-width` | `--focus`, `--focus-ring-width` |
+| `--a11y-sidebar-*` (unused) | removed; the identity bar below owns the sidebar |
+| `--color-{primary,success,warning,error}-{50..900}` scale, `bg-primary-600` etc. | `--color-primary`, `-hover`, `-light`, `-dark`, `-bg` (and the same four for success, warning, error); the utilities became `bg-autobot-primary` etc. by the step map: 500/600 base, 700 `-hover`, 800/900 `-dark` (primary) or `-hover` (status), 300/400 `-light`, 50 to 200 `-bg` |
+| `--color-error-solid-hover` | kept: promoted to the user frontend (`design-tokens.css`), where it is `--color-error-dark`; `scripts/check_token_contrast.py` measures it in every theme |
+| `--success-bg`, `--warning-bg`, `--error-bg` | `--color-success-bg`, `--color-warning-bg`, `--color-error-bg` |
+| `--content-padding` | `--content-padding-x`, `--content-padding-y` |
+| `--slm-{gray,red,blue,indigo,emerald,orange}-N` | `--surface2`, `--bg-tertiary`, `--border`, `--border-strong`, `--muted`, `--color-error-bg`, `--color-error-dark`, `--color-info*`, `--color-primary*`, `--color-success*`, `--color-warning*` by role |
+| `--slm-violet-*`, `--slm-slate-*` | `--chart-5`; `--terminal-chrome-bg-alt`, `--terminal-text-output` |
+| `--slm-amber-500` / `--slm-orange-500` (sidebar update badge) | `--color-warning` / `--slm-bar-on` |
+| `--color-log-*` (setup wizard log) | `--terminal-chrome-bg-alt`, `--terminal-text-output`, `--terminal-ansi-{red,purple,cyan}`, `--color-{success,warning}-light` |
+
+**What is still SLM-only, on purpose** (the whole list; `repo_tests/slm_token_vocabulary_test.py` fails on any
+other name that exists only in the SLM, and on a name here that no longer exists):
+
+| Name | Why it is not shared |
+|---|---|
+| `--slm-bar`, `--slm-bar-fg`, `--slm-bar-muted`, `--slm-bar-hover`, `--slm-bar-line`, `--slm-bar-on` | The SLM control plane always wears a dark identity bar in every theme so it is told apart from the user frontend. The user frontend has no such surface, so there is nothing to share. Read by `Sidebar.vue` and the language picker. |
+| `--slm-stripe`, `--slm-badge-bg`, `--slm-badge-fg` | The same identity: stripe and badge accents of that bar. Declared per scheme and not yet read by a component; kept, not deleted, because the SLM identity bar that applies them is deferred to Refined UI step 5f. |
+| `--color-white`, `--color-black` | Tailwind's own theme variables, restated so the scheme has them when the build tree-shakes the theme. Framework names, not tokens. |
+
+A new SLM-only name needs a row in this table (and an owner decision that the concept really has no user-frontend
+counterpart); otherwise declare the shared name with the SLM's value.
+
+**What the guard reads** (`repo_tests/slm_token_vocabulary_test.py`; a guard's scope is part of its claim):
+
+| Side | Sources read | Not read |
+|---|---|---|
+| SLM declarations | every `*.css` under `autobot-slm-frontend/src`; the `<style>` blocks and inline `style` values of every `*.vue`; `index.html`; `setProperty('--x')` and `{'--x': v}` in `*.ts` / `*.vue`. Same-line declarations count (`a{--x:1;--y:2}`). | declarations built from a runtime string (`setProperty(name, ...)` with a variable name) |
+| Shared names | the user frontend's `design-tokens.css`, `tailwind.css`, `themes/*.css`, and the kit's `tokens/contract.css` and `tokens/adapter.css` | a name declared only in some other user-frontend component or view is **not** shared |
+
+Three checks run over that population: an SLM-only name must be in the table above; every `var(--x)` in SLM source must
+resolve to a declared name; and no class list may give a state variant (`hover:`, `focus:`, `active:`,
+`enabled:hover:`) the same utility as its base, literally or through the alias chain to the same value. A state
+takes the base's own `-hover` step, or a hover tint (`--color-{success,warning,error,info,primary}-bg-hover`,
+`--{ok,warn,bad}-bg-hover`, `--i2t-hover`, declared in both frontends). Population floors fail the run when a source
+kind reads nothing, and planted samples prove each extractor. `LanguageSwitcher.vue` re-scopes the kit's
+`--aui-color-{surface,text,border}` to the identity bar inside its own `<style>`: those names are declared by the kit
+adapter, so they are shared names given a local value, not new SLM names.
+
+Class lists are read per element (a quote-aware tag scan that joins `class=` and `:class=`), not by pairing quotes
+across the file, so a stray apostrophe in text cannot shift the pairing; a floor test fails when the tag scan reads fewer
+`class` attributes than the file contains. A utility resolves through its `--color-*` alias chain, so two names for one
+value (`bg-autobot-bg-tertiary` and `bg-autobot-bg-hover` are both `--surface2`) count as a repeat; the hover step for
+that surface is `bg-autobot-bg-active`.
+
+**Twice-defined by the promote pattern:** `--ok-bg-hover`, `--warn-bg-hover`, `--bad-bg-hover` and `--i2t-hover` are
+declared in both `slm-scheme.css` and the user frontend's `design-tokens.css` with the same derivation (the theme's
+fill mixed 10% toward its text colour). The two apps share no stylesheet, so the pair must change together; the user
+frontend has no consumer of them yet.
+
 ## Canonical homes (#17571)
 
 Which module owns each design-system concept is declared in code, not here:

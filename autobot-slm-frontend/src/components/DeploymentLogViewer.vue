@@ -260,7 +260,7 @@ onUnmounted(() => {
           :aria-label="$t('deploymentLogViewer.deploymentProgressAria', { percent: progress })"
         >
           <div
-            class="bg-primary-600 h-2 rounded-full transition-all duration-300"
+            class="bg-autobot-primary h-2 rounded-full transition-all duration-300"
             :style="{ width: `${progress}%` }"
           />
         </div>
