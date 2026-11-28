@@ -19,6 +19,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 # Lives here, not beside the script it tests -- see enhance_workflow_ui_test.py in this same
 # directory for the ci.yml path-list / `utilities` namespace-package reasoning (#14563, #14518).
 _SCRIPTS_ROOT = Path(__file__).resolve().parents[1] / "scripts"
@@ -27,6 +29,7 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 
 from utilities.migrate_codebase_to_chromadb import CodebaseChromaDBMigration  # noqa: E402
 
+_SOURCE_ID = "src-22398"
 _LEFTOVER_PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_]")
 
 
@@ -58,8 +61,10 @@ class _FakeCollection:
         self.calls.append({"ids": ids, "documents": documents, "metadatas": metadatas})
 
 
-def _migration_with(redis_client: _FakeRedis) -> tuple[CodebaseChromaDBMigration, _FakeCollection]:
-    migration = CodebaseChromaDBMigration()
+def _migration_with(
+    redis_client: _FakeRedis, source_id: str = _SOURCE_ID
+) -> tuple[CodebaseChromaDBMigration, _FakeCollection]:
+    migration = CodebaseChromaDBMigration(source_id)
     migration.redis_client = redis_client
     collection = _FakeCollection()
     migration.code_collection = collection
@@ -166,3 +171,64 @@ def test_migrate_stats_renders_real_values_not_placeholders():
     assert "Total Files: 4321" in doc_text
     assert "Total Lines: 987654" in doc_text
     assert "Last Indexed: 2026-01-01T00:00:00" in doc_text
+
+
+_FUNC_HASH = {"codebase:functions:f": {"file_path": "a.py", "start_line": "1", "end_line": "2"}}
+_CLASS_HASH = {"codebase:classes:C": {"file_path": "a.py", "start_line": "1", "end_line": "2"}}
+_PROBLEMS = json.dumps([{"type": "t", "severity": "low", "file_path": "a.py", "line_number": 1}])
+_STATS = json.dumps({"total_files": 1})
+
+
+@pytest.mark.parametrize("bad", ["", None, "*", "a:b", "a/b"])
+def test_migration_refuses_unscoped_or_malformed_source_id(bad):
+    with pytest.raises(ValueError):
+        CodebaseChromaDBMigration(bad)
+
+
+def test_main_requires_source_id_flag():
+    from utilities.migrate_codebase_to_chromadb import _parse_args
+
+    with pytest.raises(SystemExit):
+        _parse_args([])
+    assert _parse_args(["--source-id", _SOURCE_ID]).source_id == _SOURCE_ID
+
+
+@pytest.mark.parametrize(
+    "method,redis_kwargs,kind",
+    [
+        ("migrate_functions", {"hashes": _FUNC_HASH}, "function"),
+        ("migrate_classes", {"hashes": _CLASS_HASH}, "class"),
+        ("migrate_problems", {"strings": {"codebase:problems": _PROBLEMS}}, "problem"),
+        ("migrate_stats", {"strings": {"codebase:stats": _STATS}}, "stats"),
+    ],
+)
+def test_every_write_kind_is_scoped_by_source_id(method, redis_kwargs, kind):
+    migration, collection = _migration_with(_FakeRedis(**redis_kwargs))
+
+    getattr(migration, method)()
+
+    call = collection.calls[0]
+    assert all(_SOURCE_ID in doc_id for doc_id in call["ids"])
+    if kind == "stats":
+        assert call["ids"] == [f"codebase_stats_{_SOURCE_ID}"]
+    else:
+        assert all(i.startswith(f"{_SOURCE_ID}_{kind}_") for i in call["ids"])
+    assert all(m["source_id"] == _SOURCE_ID for m in call["metadatas"])
+
+
+@pytest.mark.parametrize(
+    "method,redis_kwargs",
+    [
+        ("migrate_functions", {"hashes": _FUNC_HASH}),
+        ("migrate_classes", {"hashes": _CLASS_HASH}),
+        ("migrate_problems", {"strings": {"codebase:problems": _PROBLEMS}}),
+        ("migrate_stats", {"strings": {"codebase:stats": _STATS}}),
+    ],
+)
+def test_every_write_kind_refuses_when_source_id_is_cleared(method, redis_kwargs):
+    migration, collection = _migration_with(_FakeRedis(**redis_kwargs))
+    migration.source_id = ""
+
+    getattr(migration, method)()
+
+    assert collection.calls == []

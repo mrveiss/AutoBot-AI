@@ -10,6 +10,7 @@ This script migrates all codebase analytics data (functions, classes, problems, 
 from Redis DB 11 to a new ChromaDB collection 'autobot_code'.
 """
 
+import argparse
 import json
 import logging
 import sys
@@ -27,6 +28,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# `api.source_scope` lives under autobot-backend/; it is the one validator for a source id
+# (#17758), so this script imports it rather than re-deciding what a valid id is (#22398).
+_BACKEND_ROOT = _REPO_ROOT / "autobot-backend"
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from api.source_scope import require_source_id  # noqa: E402
 from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -36,8 +44,9 @@ logger = logging.getLogger(__name__)
 class CodebaseChromaDBMigration:
     """Migrate codebase analytics from Redis to ChromaDB"""
 
-    def __init__(self):
-        """Initialize migration tool with empty client references and stats."""
+    def __init__(self, source_id: str):
+        """Initialize migration tool for one source; an unscoped migration is refused (#22398)."""
+        self.source_id = require_source_id(source_id, "codebase migration document id")
         self.redis_client = None
         self.chroma_client = None
         self.code_collection = None
@@ -49,6 +58,10 @@ class CodebaseChromaDBMigration:
             "total_migrated": 0,
             "errors": 0,
         }
+
+    def _scoped_id(self, kind: str, name: str) -> str:
+        """Document id carrying the source prefix the backend preparers use (``{source_id}_{kind}_...``)."""
+        return f"{require_source_id(self.source_id, 'codebase document id')}_{kind}_{name}"
 
     def connect_redis(self):
         """Connect to Redis DB 11 (codebase analytics)"""
@@ -118,11 +131,12 @@ Parameters: {function_data.get('parameters', 'unknown')}
 Docstring: {function_data.get('docstring', 'No documentation')}
                     """.strip()
 
-                    batch_ids.append(f"function_{function_name}")
+                    batch_ids.append(self._scoped_id("function", function_name))
                     batch_documents.append(doc_text)
                     batch_metadatas.append(
                         {
                             "type": "function",
+                            "source_id": self.source_id,
                             "name": function_name,
                             "file_path": function_data.get("file_path", ""),
                             "start_line": function_data.get("start_line", ""),
@@ -176,11 +190,12 @@ Base Classes: {class_data.get('bases', 'None')}
 Docstring: {class_data.get('docstring', 'No documentation')}
                     """.strip()
 
-                    batch_ids.append(f"class_{class_name}")
+                    batch_ids.append(self._scoped_id("class", class_name))
                     batch_documents.append(doc_text)
                     batch_metadatas.append(
                         {
                             "type": "class",
+                            "source_id": self.source_id,
                             "name": class_name,
                             "file_path": class_data.get("file_path", ""),
                             "start_line": class_data.get("start_line", ""),
@@ -234,11 +249,12 @@ Description: {problem.get('description', 'No description')}
 Suggestion: {problem.get('suggestion', 'No suggestion')}
                     """.strip()
 
-                    batch_ids.append(f"problem_{idx}")
+                    batch_ids.append(self._scoped_id("problem", str(idx)))
                     batch_documents.append(doc_text)
                     batch_metadatas.append(
                         {
                             "type": "problem",
+                            "source_id": self.source_id,
                             "problem_type": problem.get("type", ""),
                             "severity": problem.get("severity", ""),
                             "file_path": problem.get("file_path", ""),
@@ -287,9 +303,15 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
             """.strip()
 
             self.code_collection.add(
-                ids=["codebase_stats"],
+                ids=[f"codebase_stats_{require_source_id(self.source_id, 'codebase stats document id')}"],
                 documents=[doc_text],
-                metadatas=[{"type": "stats", **{k: str(v) for k, v in stats.items()}}],
+                metadatas=[
+                    {
+                        "type": "stats",
+                        **{k: str(v) for k, v in stats.items()},
+                        "source_id": self.source_id,
+                    }
+                ],
             )
 
             self.migration_stats["stats"] = 1
@@ -347,9 +369,21 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
         return True
 
 
-def main():
+def _parse_args(argv=None) -> argparse.Namespace:
+    """Parse CLI arguments; ``--source-id`` is required so no write is ever unscoped (#22398)."""
+    parser = argparse.ArgumentParser(description="Migrate codebase analytics from Redis to ChromaDB")
+    parser.add_argument("--source-id", required=True, help="Source (project) id every migrated document is scoped to")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
     """Main migration entry point"""
-    migrator = CodebaseChromaDBMigration()
+    args = _parse_args(argv)
+    try:
+        migrator = CodebaseChromaDBMigration(args.source_id)
+    except ValueError as e:
+        logger.error("❌ %s", e)
+        return 2
     success = migrator.run_migration()
 
     if success:
