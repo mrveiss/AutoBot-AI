@@ -70,10 +70,10 @@ async def _communicate_bounded(process: asyncio.subprocess.Process) -> tuple[byt
     try:
         return await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        await kill_and_reap(process)
+        await kill_and_reap(process, bounded=True)
         raise RuntimeError(f"FFmpeg extraction timed out after {FFMPEG_TIMEOUT_SECONDS:.0f}s") from None
     except asyncio.CancelledError:
-        await kill_and_reap(process)
+        await kill_and_reap(process, bounded=True)
         raise
 
 

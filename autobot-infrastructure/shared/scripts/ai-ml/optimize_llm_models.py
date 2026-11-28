@@ -212,7 +212,7 @@ class LLMModelOptimizer:
             return {"status": "failed", "error": stderr.decode()}
 
         except asyncio.TimeoutError:
-            await kill_and_reap(process)
+            await kill_and_reap(process, bounded=True)
             logger.error("Installation of %s timed out", model)
             return {"status": "timeout", "error": f"Timed out after {_MODEL_PULL_TIMEOUT_S / 60:g} minutes"}
         except Exception as e:
