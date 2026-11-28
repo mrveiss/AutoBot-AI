@@ -1,0 +1,136 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The inventory a per-node role provisioning run hands ``provision-fleet-roles.yml`` (#2959, #22262).
+
+The run targets ONE host, ``provision_target``. Roles still delegate tasks to the SLM manager
+(``delegate_to: "{{ slm_manager_inventory_host }}"``, e.g. slm_agent reading the SLM's own
+internal API key, #14350). That fact resolves from the ``slm_server`` group (group_vars/all.yml,
+#9956), so an inventory without the manager host resolved it to a name no inventory defines, and
+Ansible marked the delegated task UNREACHABLE: the run aborted before the vnc role created its
+account, and every later fleet update failed the vnc gate (#22262).
+
+The manager host is therefore copied from the fleet update's own inventory
+(``build_registry_inventory``), with the exact vars that inventory gives it, never redefined here.
+The run is limited to ``PROVISION_TARGET``, so the manager is only a delegation target, never
+provisioned itself.
+"""
+
+import asyncio
+from types import SimpleNamespace
+from typing import Any
+
+import yaml
+from sqlalchemy import select
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.network_utils import is_local_ip
+from autobot_shared.ssot_config import config
+from models.database import Node
+from services.inventory_builder import build_registry_inventory
+
+logger = get_logger(__name__)
+
+#: The inventory host name of the node being provisioned; also the run's ``--limit``.
+PROVISION_TARGET = "provision_target"
+#: The group ``slm_manager_inventory_host`` resolves the SLM manager from (group_vars/all.yml).
+SLM_MANAGER_GROUP = "slm_server"
+
+
+def slm_manager_hosts(nodes: list[Any], local_ip_check: Any) -> dict[str, dict]:
+    """The fleet update inventory's SLM manager host(s), each with every var that inventory gives it.
+
+    The update inventory sets connection vars both on the host and in ``all.vars``; both are merged
+    onto the host here (host wins, as in Ansible), so the provision inventory's other host is untouched.
+    """
+    update_inv = build_registry_inventory(nodes, local_ip_check)["all"]
+    names = update_inv["children"].get(SLM_MANAGER_GROUP, {}).get("hosts", {})
+    # sorted by name, as the update inventory is dumped with sort_keys=True: slm_server[0] is the same host
+    return {name: {**update_inv["vars"], **update_inv["hosts"][name]} for name in sorted(names)}
+
+
+def _target_hostvars(node_id: str, node: Any, target_roles: list[str], deps: list[str]) -> dict:
+    """Host vars of ``provision_target``: the node's connection and the roles to provision."""
+    hostvars: dict[str, Any] = {
+        "node_hostname": node.hostname,  # the credential name uses it (#22211)
+        "slm_node_id": node_id,  # the vnc role registers its credential only when this is set (#22211)
+        "ansible_host": node.ip_address,
+        "ansible_user": node.ssh_user or "autobot",
+        "ansible_port": node.ssh_port or 22,  # the update inventory's rule (non-22 SSH)
+        "ansible_ssh_private_key_file": config.path.ssh_key_path,  # the update inventory's key (#12429)
+        "ansible_python_interpreter": "/usr/bin/python3",
+        "node_roles": list(target_roles),
+        "node_roles_declared": list(target_roles),  # declared-only stamp, as every producer (#14594)
+    }
+    if deps:
+        hostvars["node_dependencies"] = deps
+    return hostvars
+
+
+def build_provision_inventory(
+    node_id: str, node: Any, target_roles: list[str], nodes: list[Any], local_ip_check: Any
+) -> str:
+    """YAML inventory: ``provision_target`` plus the SLM manager host(s) in their group.
+
+    Args:
+        node_id: the target's node id.
+        node: the target Node row.
+        target_roles: roles to provision on it.
+        nodes: every Node row, as the fleet update inventory is built from.
+        local_ip_check: callable(ip) -> bool; ``is_local_ip`` in production.
+    """
+    from services.role_registry import ROLE_DEPENDENCIES  # local, as at its previous call site
+
+    deps = sorted({d for r in target_roles for d in ROLE_DEPENDENCIES.get(r, [])})
+    managers = slm_manager_hosts(nodes, local_ip_check)
+    if PROVISION_TARGET in managers:  # the dict merge below would silently replace the target's vars
+        raise ValueError(
+            f"SLM manager host {PROVISION_TARGET!r} clashes with the reserved provision inventory host name; "
+            "rename that node"
+        )
+    if not managers:
+        logger.warning(
+            "provision inventory for %s has no SLM manager host: tasks delegated to the SLM will be unreachable",
+            node_id,
+        )
+    inventory = {
+        "all": {
+            "hosts": {PROVISION_TARGET: _target_hostvars(node_id, node, target_roles, deps), **managers},
+            "children": {SLM_MANAGER_GROUP: {"hosts": {name: None for name in managers}}},
+        }
+    }
+    return yaml.safe_dump(inventory, sort_keys=False, default_flow_style=False)
+
+
+#: The Node columns the inventory builders read; copied so the build can run in a worker thread.
+_NODE_FIELDS = ("node_id", "hostname", "ip_address", "ssh_user", "ssh_port", "roles", "detected_roles")
+
+
+def _plain(node: Any) -> SimpleNamespace:
+    """A plain-value copy of the Node row's inventory fields (no ORM state crosses to the thread)."""
+    return SimpleNamespace(**{f: getattr(node, f, None) for f in _NODE_FIELDS})
+
+
+async def provision_inventory_for(db: Any, node_id: str, node: Any, target_roles: list[str]) -> str:
+    """:func:`build_provision_inventory` over the node registry, as the fleet update reads it.
+
+    ``is_local_ip`` may block on DNS per node, so the build runs in a worker thread on plain copies.
+    """
+    rows = (await db.execute(select(Node))).scalars().all()
+    nodes = [_plain(n) for n in rows]
+    return await asyncio.to_thread(
+        build_provision_inventory, node_id, _plain(node), list(target_roles), nodes, is_local_ip
+    )
+
+
+def build_decommission_inventory(ip_address: str, ssh_user: str) -> str:
+    """YAML inventory for the decommission run: one ``decommission_target`` host, values safely quoted."""
+    hostvars = {
+        "ansible_host": ip_address,
+        "ansible_user": ssh_user,
+        "ansible_ssh_private_key_file": config.path.ssh_key_path,  # the update inventory's key
+        "ansible_python_interpreter": "/usr/bin/python3",
+    }
+    inventory = {"all": {"hosts": {"decommission_target": hostvars}}}
+    return yaml.safe_dump(inventory, sort_keys=False, default_flow_style=False)
