@@ -25,7 +25,7 @@ async function render(phase_details: Array<Record<string, unknown>>) {
 }
 
 describe('PhaseProgressionIndicator unscored phases', () => {
-  beforeEach(() => getMock.mockReset())
+  beforeEach(() => { getMock.mockReset() })
 
   it('reads an unscored phase as not scored with no aria-valuenow or fill', async () => {
     const w = await render([{ name: 'Phase 1' }])

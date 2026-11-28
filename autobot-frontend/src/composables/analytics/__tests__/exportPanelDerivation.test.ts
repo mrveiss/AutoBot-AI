@@ -72,7 +72,7 @@ function exporterFor(smellsExport: Ref<unknown>) {
 }
 
 describe('code smells: the export is built from the findings the panel shows (#20492)', () => {
-  beforeEach(() => saved.mockClear())
+  beforeEach(() => { saved.mockClear() })
 
   // Pre-fix (smellsExport reading a separate store): the JSON would not equal the
   // panel list, and the MD would lack the findings.

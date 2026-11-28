@@ -69,7 +69,7 @@ async function mountDashboard() {
 }
 
 describe('step rollup on the cost dashboard (#14599)', () => {
-  beforeEach(() => get.mockReset())
+  beforeEach(() => { get.mockReset() })
 
   it('states coverage beside a partial total, never the total alone', async () => {
     respond({ by_role: [PARTIAL], by_tool: [] })

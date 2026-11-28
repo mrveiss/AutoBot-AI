@@ -23,7 +23,7 @@ function respond(members: unknown[]): void {
 }
 
 describe('useCompanyPeople and inactive members (#13956)', () => {
-  beforeEach(() => get.mockReset())
+  beforeEach(() => { get.mockReset() })
 
   it('does not offer a deactivated member as an assignee', async () => {
     respond([
@@ -55,7 +55,7 @@ describe('useCompanyPeople and inactive members (#13956)', () => {
 })
 
 describe('useCompanyPeople non-envelope members reply (#21096)', () => {
-  beforeEach(() => get.mockReset())
+  beforeEach(() => { get.mockReset() })
 
   it('reads a legacy array reply as a failed load, not an empty company', async () => {
     get.mockImplementation((url?: string) =>

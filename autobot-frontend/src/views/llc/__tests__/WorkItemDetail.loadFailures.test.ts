@@ -41,7 +41,7 @@ async function openTab(label: string) {
 
 const comment = (id: string) => ({ id, work_item_id: 'w1', body: `note ${id}`, author_user_id: 'u1', created_at: '2026-01-01T00:00:00+00:00' })
 
-beforeEach(() => get.mockReset())
+beforeEach(() => { get.mockReset() })
 
 describe('failed side-panel loads are not the empty state', () => {
   it.each([

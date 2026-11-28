@@ -46,7 +46,7 @@ async function mountInbox(rows: unknown[]) {
   return wrapper
 }
 
-beforeEach(() => get.mockReset())
+beforeEach(() => { get.mockReset() })
 
 describe('ApprovalsInbox requester (#20521)', () => {
   it('shows the request label when it carries one', async () => {

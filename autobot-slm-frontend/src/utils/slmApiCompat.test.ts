@@ -48,7 +48,7 @@ describe('withParams', () => {
 })
 
 describe('makeAxiosCompatClient — envelope + routing', () => {
-  beforeEach(() => mockRaw.mockReset())
+  beforeEach(() => { mockRaw.mockReset() })
 
   it('unwraps a 2xx JSON body into { data } and routes verb + endpoint + body', async () => {
     mockRaw.mockResolvedValue(makeResponse(200, { ok: true }))
@@ -114,7 +114,7 @@ describe('makeAxiosCompatClient — envelope + routing', () => {
 })
 
 describe('makeAxiosCompatClient — textFallback for non-JSON 2xx', () => {
-  beforeEach(() => mockRaw.mockReset())
+  beforeEach(() => { mockRaw.mockReset() })
 
   it('with textFallback:true returns response.text() for a non-JSON 2xx (PEM download)', async () => {
     mockRaw.mockResolvedValue(makeResponse(200, '-----BEGIN CERT-----', 'application/x-pem-file'))

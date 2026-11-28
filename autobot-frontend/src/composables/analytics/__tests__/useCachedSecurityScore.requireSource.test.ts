@@ -20,7 +20,7 @@ import { useCachedSecurityScore } from '../useCachedSecurityScore'
 const mockedFetch = vi.mocked(fetchWithAuth)
 
 describe('the cached security score read needs a source (#21463)', () => {
-  beforeEach(() => mockedFetch.mockReset())
+  beforeEach(() => { mockedFetch.mockReset() })
 
   it('with no source selected the scoper adds nothing and no request is sent', async () => {
     const score = useCachedSecurityScore({ withSourceId: (url) => url })

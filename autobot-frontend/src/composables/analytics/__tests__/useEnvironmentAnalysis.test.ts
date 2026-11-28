@@ -39,7 +39,7 @@ const analysisUrl = () =>
   String(fetchWithAuth.mock.calls.map((c) => c[0]).find((u: string) => !u.includes(DEFAULT_MODEL_PATH)))
 
 describe('useEnvironmentAnalysis AI filter model (#15502)', () => {
-  beforeEach(() => fetchWithAuth.mockReset())
+  beforeEach(() => { fetchWithAuth.mockReset() })
 
   it('holds null until the backend names the model, then the served value', async () => {
     answer(() => ok({ model: SERVED }))

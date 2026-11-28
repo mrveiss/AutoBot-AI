@@ -301,7 +301,7 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
 })
 
 describe('getRoleOwners (#19706)', () => {
-  beforeEach(() => mockRaw.mockReset())
+  beforeEach(() => { mockRaw.mockReset() })
 
   it('returns the one owner of a single-node role and leaves out multi-node roles', async () => {
     mockRaw.mockResolvedValueOnce(
