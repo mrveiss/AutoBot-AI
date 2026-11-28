@@ -135,7 +135,8 @@ _NOT_CANCELLED = "!cancelled() && "
 
 
 def _context(ready="true", types="true", slm="true", result="success", event="pull_request") -> dict:
-    changes = {"outputs": {"ready": ready, "run_types": types, "run_slm_types": slm}}
+    # `event="pull_request"` stands for a dispatched pull request run: ci.yml's `changes` job looks it up (#20825).
+    changes = {"outputs": {"ready": ready, "run_types": types, "run_slm_types": slm, "is_pr": str(event == "pull_request").lower()}}
     return {
         "needs": {"changes": changes, "run-generated-types": {"result": result}},
         "github": {"event_name": event},

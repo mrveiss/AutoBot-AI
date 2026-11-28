@@ -115,6 +115,7 @@ def _base_without_the_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         git(repo, "add", "-A")
         git(repo, "commit", "-q", "-m", "c")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")  # not a dispatch: that refuses a missing base (#20825)
     monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     return repo
 

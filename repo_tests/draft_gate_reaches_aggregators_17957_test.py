@@ -38,10 +38,8 @@ WORKFLOWS = repo_root() / ".github" / "workflows"
 #: The gate as it is actually written. Matched on the parsed condition, never on
 #: file text -- a comment quoting the expression (this file is full of them)
 #: must not count as a gate (#17941).
-_DRAFT_GATE = re.compile(
-    r"github\.event\.pull_request\.draft\s*==\s*false"
-    r"|contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'land-next'\)"
-)
+#: A dispatched run has no `pull_request` payload (#20825): the reusable gates take `draft` as an input.
+_DRAFT_GATE = re.compile(r"inputs\.draft\s*!=\s*'true'")
 
 #: `needs.<job>.result` compared against anything. The comparison direction does
 #: not matter: `!= 'success'` fails on a skip, `== 'failure'` does not, but both
@@ -122,7 +120,7 @@ def test_a_job_that_judges_a_draft_gated_job_is_itself_draft_gated() -> None:
     )
 
 
-_GATE = "github.event_name != 'pull_request' || github.event.pull_request.draft == false"
+_GATE = "inputs.draft != 'true'"
 
 #: The shape the defect took: judge ungated, dependency gated.
 _UNGATED_JUDGE = {

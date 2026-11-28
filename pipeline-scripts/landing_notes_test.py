@@ -431,3 +431,38 @@ def test_strip_code_and_comments_blanks_comments_and_code_and_keeps_prose() -> N
     """#22261: the comment pattern is the shared one; behaviour unchanged (each construct becomes one space)."""
     assert ln.strip_code_and_comments("a<!--\nx -->b `c` d\n```\ne\n```f") == "a b   d\n f"
     assert ln.strip_code_and_comments("a <!-- unclosed") == "a <!-- unclosed"
+
+
+# ---- a push to the branch names the pull requests it merged (#20825) -----------------------------
+
+
+def _merged_pr(number: int, sha: str, **over) -> dict:
+    pr = {"number": number, "merged_at": "2026-11-28T00:00:00Z", "merge_commit_sha": sha, "body": "",
+          "base": {"ref": "main"}, "head": {"ref": f"issue-{number}-x", "repo": {"full_name": REPO}}}
+    pr.update(over)
+    return pr
+
+
+def _push_client(commit_pulls: dict) -> ln.LandingClient:
+    data = {"commit_pulls": commit_pulls, "comments": {}, "commits": [], "search": {}, "pulls": {}, "issues": {}, "labels": []}
+    client, _ = _client(data)
+    return client
+
+
+def test_a_pushed_merge_commit_names_its_pull_request() -> None:
+    client = _push_client({"a" * 40: [_merged_pr(7, "a" * 40)]})
+    assert [x.pr_number for x in ln.landings_for_push(client, "0" * 40, "a" * 40, "main")] == [7]
+
+
+@pytest.mark.parametrize(
+    "pr",
+    [
+        _merged_pr(7, "b" * 40),  # a member commit of the merged branch: not the PR's own merge commit
+        _merged_pr(7, "a" * 40, merged_at=None),  # closed unmerged
+        _merged_pr(7, "a" * 40, base={"ref": "release"}),
+        _merged_pr(7, "a" * 40, head={"ref": "x", "repo": {"full_name": "fork/other"}}),
+    ],
+)
+def test_a_push_does_not_land_what_it_did_not_merge(pr: dict) -> None:
+    client = _push_client({"a" * 40: [pr]})
+    assert ln.landings_for_push(client, "0" * 40, "a" * 40, "main") == []

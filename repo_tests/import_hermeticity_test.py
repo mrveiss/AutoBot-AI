@@ -487,10 +487,15 @@ def test_a_dependency_only_change_plans_the_full_sweep(tmp_path: Path, dependenc
     population = _plant(tmp_path)
     assert scope.plan([dependency], population) == ("full", [])
     assert scope.plan(["autobot-backend/services/s.py", dependency], population) == ("full", [])
-    doc = yaml.safe_load((_REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8"))
-    filters = (doc.get(True) or doc.get("on") or {})["pull_request"]["paths"]
+    filters = _satellite_paths()
     # Glob-aware: autobot_shared/pyproject.toml triggers through ``autobot_shared/**``.
     assert any(fnmatch.fnmatchcase(dependency, f) for f in filters), f"{_WORKFLOW}: does not trigger on {dependency}"
+
+
+def _satellite_paths() -> list[str]:
+    """The paths that start the sweep for a pull request: its key in ci.yml's satellite filter (#20825)."""
+    filters = yaml.safe_load((_REPO_ROOT / ".github/filters/satellite-paths.yml").read_text(encoding="utf-8"))
+    return [str(p) for p in filters["import-hermeticity-sweep"]]
 
 
 def test_every_environment_input_has_a_planning_case() -> None:
@@ -503,12 +508,8 @@ def test_every_self_file_exists_and_triggers_the_workflow() -> None:
     """A self file the ``paths:`` filters omit could never force the full run it is listed to force."""
     doc = yaml.safe_load((_REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8"))
     triggers = doc.get(True) or doc.get("on") or {}
-    missing = [
-        (event, path)
-        for event in ("pull_request", "push")
-        for path in sorted(scope.SELF_FILES)
-        if path not in (triggers.get(event) or {}).get("paths", [])
-    ]
+    listed = {"pull_request (satellite filter)": _satellite_paths(), "push": (triggers.get("push") or {}).get("paths", [])}
+    missing = [(event, path) for event, paths in listed.items() for path in sorted(scope.SELF_FILES) if path not in paths]
     assert not missing, f"{_WORKFLOW}: these sweep files do not trigger it: {missing}"
     absent = sorted(path for path in scope.SELF_FILES if not (_REPO_ROOT / path).is_file())
     assert not absent, f"SELF_FILES names files that do not exist: {absent}"

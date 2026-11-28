@@ -161,6 +161,13 @@ def _tracked(tree: str) -> list[str]:
     return [f for f in paths if f.rsplit(".", 1)[-1] in _SCANNED and not _IGNORED.search("/" + f)]
 
 
+def _satellite_paths() -> list[str]:
+    """The paths that start duplication-guard for a pull request: its key in the satellite filter (#20825)."""
+    listed = yaml.safe_load((repo_root() / ".github/filters/satellite-paths.yml").read_text(encoding="utf-8"))["duplication-guard"]
+    assert len(listed) > 20, "the satellite filter lost most of duplication-guard's paths"
+    return listed
+
+
 def _uncovered(paths: list[str], trigger_paths: list[str]) -> list[str]:
     return [f for f in paths if not any(_glob_matches(g, f) for g in trigger_paths)]
 
@@ -168,17 +175,18 @@ def _uncovered(paths: list[str], trigger_paths: list[str]) -> list[str]:
 def test_every_file_a_scope_scans_is_covered_by_a_trigger_glob() -> None:
     """Per scanned extension, not per tree: a tree can be scanned for .ts yet only trigger on .py."""
     on = _document()[True]
-    for event in ("pull_request", "push"):
+    # A pull request reaches this workflow through ci.yml's fan-out, which reads the paths from the satellite filter (#20825).
+    trigger_paths = {"pull_request (satellite filter)": _satellite_paths(), "push": on["push"]["paths"]}
+    for event, paths in trigger_paths.items():
         for _id, (trees, _pin, _log) in EXPECTED_SCOPES.items():
             for tree in trees:
-                missing = _uncovered(_tracked(tree), on[event]["paths"])
+                missing = _uncovered(_tracked(tree), paths)
                 assert not missing, f"{event}: {tree} has scanned files no trigger covers, e.g. {missing[:3]}"
 
 
 def test_the_coverage_check_fails_when_a_glob_is_removed() -> None:
     """Negative control: the check above must be able to fail."""
-    on = _document()[True]
-    trimmed = [g for g in on["pull_request"]["paths"] if not (g.startswith("autobot-plugins/") and g.endswith(".ts"))]
+    trimmed = [g for g in _satellite_paths() if not (g.startswith("autobot-plugins/") and g.endswith(".ts"))]
     assert _uncovered(_tracked("autobot-plugins"), trimmed), "removing a glob went unnoticed"
 
 

@@ -129,9 +129,10 @@ def test_ci_reads_every_filter_file_exactly_once_in_the_one_changes_job() -> Non
     ids = [s["id"] for s in steps]
     assert len(ids) == len(set(ids)), "two dorny steps share an id: their outputs would collide"
     for s in steps:
-        assert (
-            s["with"]["base"] == "${{ github.event.merge_group.base_sha || '' }}"
-        ), f"step {s['id']} lacks the merge_group base (#14054, #18191)"
+        # A dispatched pull request run diffs from its validated merge base (`inputs.base_sha`, #20825), a merge group
+        # from its own base (#14054, #18191). The satellite steps only ever run for a pull request, so they take the pin alone.
+        expected = "${{ inputs.base_sha }}" if s["id"].startswith("sat_") else "${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}"
+        assert s["with"]["base"] == expected, f"step {s['id']} lacks the dispatch / merge_group base (#14054, #18191, #20825)"
 
 
 def test_no_workflow_calls_the_removed_reusable_changes_workflow() -> None:

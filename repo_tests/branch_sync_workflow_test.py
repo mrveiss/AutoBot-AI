@@ -184,8 +184,8 @@ def test_permissions_are_exactly_what_the_sync_needs() -> None:
     assert spec.get("permissions") == {}, "workflow-level permissions must be empty; the job declares its own"
     (job,) = spec["jobs"].values()
     # contents: read -- the PAT pushes; GITHUB_TOKEN only reads the clone, lists PRs, labels and comments.
-    # actions: read -- the start_ci_for_pr request lists a head's workflow runs (#21577); nothing else uses it.
-    assert job["permissions"] == {"contents": "read", "pull-requests": "write", "issues": "write", "actions": "read"}
+    # No actions scope: the start_ci_for_pr request that listed a head's workflow runs is gone (#20825).
+    assert job["permissions"] == {"contents": "read", "pull-requests": "write", "issues": "write"}
     assert job.get("timeout-minutes"), "a sync over ~150 branches needs an explicit timeout"
     assert job["runs-on"] == "ubuntu-latest", "never the singleton self-hosted runner (#13401)"
 
@@ -221,3 +221,16 @@ def test_protected_branches_are_never_push_targets() -> None:
         if "git push" in line:
             for protected in _PROTECTED:
                 assert f"refs/heads/{protected}" not in line, f"pushes to `{protected}`: {line.strip()!r}"
+
+
+def test_the_start_ci_request_is_gone_from_the_workflow_and_the_script() -> None:
+    """#20825: no workflow listens to a pull request event, so an empty start-CI commit starts nothing."""
+    texts = {path.name: path.read_text(encoding="utf-8") for path in [_WORKFLOW, *_SCRIPTS]}
+    assert len(texts) == 3 and all(texts.values()), "the population is the three files that carried the mechanism"
+    leftover = {name: [w for w in ("start_ci_for_pr", "start-ci-for-pr", "START_CI_SUBJECT", "suite_already_started") if w in text]
+                for name, text in texts.items()}
+    assert not any(leftover.values()), leftover
+
+
+def test_control_the_leftover_check_sees_the_old_mechanism() -> None:
+    assert "start_ci_for_pr" in "gh workflow run sync-branches-with-main.yml -f start_ci_for_pr=1"

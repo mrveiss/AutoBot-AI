@@ -68,10 +68,15 @@ def _merge_group_context() -> dict:
 
 
 def _pull_request_context(*, commits: int) -> dict:
-    """A `pull_request` event context carrying only the field the expression reads."""
-    return _github_context(
-        event_name="pull_request", event={"pull_request": {"commits": commits}}
-    )
+    """A dispatched pull request run: `pr-context` publishes the commit count the expression reads (#20825).
+
+    A real step output is a string; GitHub coerces it to a number in `>`, which the evaluator does not, so the
+    number is given directly.
+    """
+    return {
+        **_github_context(event_name="workflow_dispatch", event={}),
+        "steps": {"pr": {"outputs": {"commits": commits}}},
+    }
 
 
 def _push_context() -> dict:
@@ -142,7 +147,7 @@ def test_mutated_operator_breaks_the_90_commit_boundary() -> None:
 
 
 def test_mutated_field_name_breaks_the_91_commit_boundary() -> None:
-    """Negative control: MUTATION TARGET is the `pull_request.commits` field name.
+    """Negative control: MUTATION TARGET is the `steps.pr.outputs.commits` field name.
 
     A wrong field name (a typo, or a rename GitHub never ships) reads null from
     every real payload, and null compares false to anything -- so the PR-depth
@@ -152,9 +157,9 @@ def test_mutated_field_name_breaks_the_91_commit_boundary() -> None:
     correct value.
     """
     real = _fetch_depth_expr()
-    mutant = real.replace("pull_request.commits", "pull_request.changed_files", 1)
+    mutant = real.replace("outputs.commits", "outputs.changed_files", 1)
     assert mutant != real, (
-        "mutation target 'pull_request.commits' not found in the live expression -- update this test"
+        "mutation target 'outputs.commits' not found in the live expression -- update this test"
     )
     past_boundary = _pull_request_context(commits=91)
     assert evaluate(real, past_boundary) == "0", (

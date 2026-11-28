@@ -69,7 +69,9 @@ _INTERPRETER = re.compile(r"(?:^|[\s;&|(])(python3?)(?=\s)")
 #: An event term of a reader gate, evaluated by `_evaluate`.
 _EVENT_TERM = re.compile(r"github\.event_name (!=|==) '([\w-]+)'")
 #: The term keeping a reader's issue steps out of pull-request runs (#16221).
-_OFF_PULL_REQUEST = "github.event_name != 'pull_request'"
+_OFF_PULL_REQUEST = "inputs.pr_number == ''"
+#: Since #20825 a pull-request run is a dispatch that carries `pr_number`; the term is true off pull requests.
+_PR_MODE_TERM = re.compile(r"inputs\.pr_number (!=|==) ''")
 
 
 @dataclass(frozen=True)
@@ -411,6 +413,9 @@ def _evaluate(term: str, step_id: str, rc: str, event: str) -> bool:
     rc_term = re.fullmatch(rf"steps\.{re.escape(step_id)}\.outputs\.rc (!=|==) '0'", term)
     if rc_term:
         return (rc != "0") is (rc_term.group(1) == "!=")
+    pr_mode = _PR_MODE_TERM.fullmatch(term)
+    if pr_mode:  # `event == "pull_request"` stands for a dispatched pull request run
+        return (event != "pull_request") is (pr_mode.group(1) == "==")
     event_term = _EVENT_TERM.fullmatch(term)
     assert event_term, f"cannot evaluate the gate term {term!r}; extend _evaluate rather than guess"
     return (event != event_term.group(2)) is (event_term.group(1) == "!=")
@@ -518,14 +523,15 @@ def test_each_reader_selects_on_rc_and_a_failure_still_reaches_one(workflow: str
 
 
 def test_a_pull_request_sweep_reports_through_its_check_never_through_an_issue() -> None:
-    """The sweep also runs on pull_request, so a diff is judged before it merges; the
+    """The sweep also runs for a dispatched pull request, so a diff is judged before it merges; the
     schedule and the push read main only after (#16221). A PR run must
     leave the issues alone -- they describe the base, not a diff that may never merge --
     and must still fail its own check on offenders.
     """
     workflow = ".github/workflows/import-hermeticity-sweep.yml"
     doc = _load(_REPO_ROOT / workflow)
-    assert "pull_request" in (doc.get(True) or doc.get("on") or {}), f"{workflow} no longer runs on pull_request"
+    dispatch = (doc.get(True) or doc.get("on") or {}).get("workflow_dispatch") or {}
+    assert "pr_number" in (dispatch.get("inputs") or {}), f"{workflow} no longer runs for a pull request"
     steps = _steps(doc)
     touches_issues = [step for step in steps if "github.rest.issues." in _script(step)]
     fail_run = [

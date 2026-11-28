@@ -266,7 +266,8 @@ def test_a_dedicated_workflow_entry_really_runs_that_guard() -> None:
     Three facts, each independently checkable, and all three have to hold:
 
       * the named workflow EXISTS;
-      * its `pull_request` `paths:` fire on the tree the glob names -- checked with the
+      * its path filter fires on the tree the glob names (since #20825 a pull request reaches a dedicated
+        workflow through ci.yml's fan-out, which reads its key in .github/filters/satellite-paths.yml) -- checked with the
         same matcher the python filter is checked with, so the two cannot drift;
       * a `run:` step in it INVOKES each guard recorded against the glob.
 
@@ -297,15 +298,15 @@ def test_a_dedicated_workflow_entry_really_runs_that_guard() -> None:
             f"{glob}: {workflow} does not exist, so nothing runs " f"{sorted(recorded)} when that tree changes"
         )
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        triggers = workflow_triggers(document)
-        paths = [str(entry) for entry in (triggers.get("pull_request") or {}).get("paths") or []]
-        assert paths, (
-            f"{glob}: {workflow} has no `pull_request:` `paths:` filter. Without one it either "
+        satellites = yaml.safe_load((REPO_ROOT / ".github/filters/satellite-paths.yml").read_text(encoding="utf-8")) or {}
+        paths = [str(entry) for entry in satellites.get(path.stem) or []]
+        assert paths and paths != ["**"], (
+            f"{glob}: {workflow} has no path filter in .github/filters/satellite-paths.yml. Without one it either "
             f"never runs on a pull request or runs on all of them -- neither is the targeted "
             f"trigger this entry claims"
         )
         assert _is_covered(_probe_path(glob), paths), (
-            f"{glob}: {workflow}'s pull_request paths {paths} do not fire on that tree, so a "
+            f"{glob}: {workflow}'s satellite paths {paths} do not fire on that tree, so a "
             f"change confined to it runs neither the python suite nor this workflow -- which is "
             f"the exact bypass this record exists to rule out"
         )

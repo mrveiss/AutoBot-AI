@@ -29,7 +29,7 @@ _ROOT = repo_root()
 _CI = _ROOT / ".github" / "workflows" / "ci.yml"
 _ACTION = "./.github/actions/setup-frontend"
 _IF = (
-    "${{ github.event_name == 'pull_request' && needs.changes.outputs.ready == 'true' "
+    "${{ needs.changes.outputs.is_pr == 'true' && needs.changes.outputs.ready == 'true' "
     "&& needs.changes.outputs.held != 'true' }}"
 )
 

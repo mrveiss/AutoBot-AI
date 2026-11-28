@@ -93,12 +93,14 @@ def _needs_context(job: dict, short_check: str, work: str, affected: bool) -> di
     inputs = _gate_inputs(job)
     refs = _CHANGES_OUTPUT.findall(inputs["applies"] + inputs["work-ok"])
     flag = "true" if affected else "false"
-    needs = {"changes": {"result": "success", "outputs": dict.fromkeys(refs, flag)}}
+    # The pull request's facts `changes` looked up live (#20825): a dispatched, admitted, non-draft pull request.
+    facts = {"is_pr": "true", "draft": "false", "admitted": "true"}
+    needs = {"changes": {"result": "success", "outputs": {**dict.fromkeys(refs, flag), **facts}}}
     needs["short-check"] = {"result": short_check}
     for name in set(_needs(job)) - {"changes", "short-check"}:
         ok = {"ok": "true", "slm_ok": "true"} if work == "success" else {}
         needs[name] = {"result": work, "outputs": ok}
-    return {"needs": needs, "github": {"event_name": "pull_request", "event": {"pull_request": {"draft": False}}}}
+    return {"needs": needs, "github": {"event_name": "workflow_dispatch"}}
 
 
 def _render(expression: str, context: dict) -> str:
