@@ -178,7 +178,10 @@ all:
         - npu-worker
         - browser-service
         - tts-worker
+        - vnc
       node_roles_declared: []
+      # #22262 (owner 2026-11-27): a detected-only vnc is not a fleet VNC node.
+      expected_role_vnc_active: false
       expected_role_backend_active: false
       expected_role_frontend_active: false
       expected_role_ai_stack_active: false

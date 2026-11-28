@@ -176,7 +176,8 @@ def test_a_run_cut_by_the_restart_leaves_the_marker_and_provisions_nothing_here(
 
     monkeypatch.setattr(prp, "provision_pending_roles", fake)
     result = asyncio.run(prp.run_update_all_nodes(_Executor(_cut()), "n1", [], True, resume_after_restart=True))
-    assert called == [] and set(resume._decode(store.row)) == {"n1"}, "the restarted process owns it now"
+    # #22262: the step before the play runs here; the one after it is the restarted process's
+    assert called == ["n1"] and set(resume._decode(store.row)) == {"n1"}, "the restarted process owns it now"
     assert result["returncode"] == -signal.SIGTERM
 
 
@@ -191,19 +192,22 @@ def test_a_run_that_ends_in_this_process_clears_the_marker_and_provisions_here(s
     monkeypatch.setattr(prp, "provision_pending_roles", fake)
     ok = {"success": True, "output": "ran", "detached": True, "returncode": 0}
     asyncio.run(prp.run_update_all_nodes(_Executor(ok), "n1", [], True, resume_after_restart=True))
-    assert called == ["n1"] and store.row is None
+    assert called == ["n1", "n1"] and store.row is None  # before the play (#22262) and after it
 
 
 def test_a_failed_run_clears_the_marker_and_provisions_nothing(store, monkeypatch) -> None:
     _install_resume_plan(monkeypatch)
 
-    async def boom(node_id, **kw):
-        raise AssertionError("must not provision after a failed update")
+    called: list[str] = []
 
-    monkeypatch.setattr(prp, "provision_pending_roles", boom)
+    async def fake(node_id, **kw):
+        called.append(node_id)
+        return ""
+
+    monkeypatch.setattr(prp, "provision_pending_roles", fake)
     bad = {"success": False, "output": "x", "detached": True, "returncode": 2}
     asyncio.run(prp.run_update_all_nodes(_Executor(bad), "n1", [], True, resume_after_restart=True))
-    assert store.row is None
+    assert store.row is None and called == ["n1"], "only the step before the play (#22262), none after a failure"
 
 
 def test_the_startup_hook_and_the_self_update_path_are_wired() -> None:

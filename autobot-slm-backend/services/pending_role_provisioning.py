@@ -8,17 +8,27 @@
 (packages, units, credential registration, and the removal that follows). A role assigned to a node
 therefore sat at ``not_installed`` until an operator pressed "provision" in the SLM.
 
-For the roles listed in ``UPDATER_PROVISIONED_ROLES`` the fleet update now finishes the job: after
-``update-all-nodes.yml`` succeeds on a node, the node's assigned-but-unprovisioned rows for those
-roles (and a vnc role whose node has no registered VNC credential) are provisioned through the
-SLM's own provisioning path (``provision-fleet-roles.yml`` via
-``api.nodes._execute_provision_playbook``). A failed provisioning fails the node's update, and the
-row is left ``failed``.
+For the roles listed in ``UPDATER_PROVISIONED_ROLES`` the fleet update now finishes the job: the
+node's assigned-but-unprovisioned rows for those roles (and a vnc role whose node has no registered
+VNC credential) are provisioned through the SLM's own provisioning path (``provision-fleet-roles.yml``
+via ``api.nodes._execute_provision_playbook``), and the row is left ``failed`` when that fails.
+
+Provisioning runs BEFORE ``update-all-nodes.yml`` (#22262): the play's vnc gate requires the
+``autobot-vnc`` account on every node whose vnc role is active, and only provisioning creates it, so
+provisioning only after a successful update deadlocked a held-but-unprovisioned node (it failed the
+gate, so it was never provisioned, so it failed every later update). It runs again after a successful
+update, for the restart-resume path.
+
+Only ASSIGNED roles are provisioned: a row whose role is declared on ``Node.roles``, the operator-intent
+record the inventory stamps as ``node_roles_declared`` (#14594), which is also what the vnc gate reads
+(owner, 2026-11-27: a role the node only DETECTED, e.g. a local vncserver on the SLM manager, is not a
+fleet vnc node and is never provisioned here).
 
 A node whose provisioning keeps failing is not retried on every update: a row attempted within
-``SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS`` is skipped, and by then the code deploy has succeeded, so a
-provisioning failure is reported as a warning in the node's output and does not fail its update. A row a
-crash left at ``installing`` becomes eligible again once it is older than the cooldown.
+``SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS`` is skipped. A provisioning failure is reported as a warning in the
+node's output and never fails its update by itself; a node whose vnc account is still missing then fails the
+update at the play's gate, naming the account. A row a crash left at ``installing`` becomes eligible again
+once it is older than the cooldown.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -30,7 +40,7 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from models.database import Node, NodeCredential, NodeRole
 from services.database import db_service
-from services.sync_restart import no_restart_args
+from services.sync_restart import RESTART_VAR, no_restart_args
 from status_enums import RoleStatus
 
 logger = get_logger(__name__)
@@ -51,6 +61,9 @@ _PROVISIONER_STATUSES = (_FAILED, _INSTALLING, _INSTALLED)
 #: Provisioner-owned statuses the role detector and the health poll must NOT overwrite: a ``failed``/``installing``
 #: row stays so, so its ``updated_at`` keeps marking the attempt and the retry cooldown holds (#22262).
 PROVISIONER_HELD_STATUSES = (_FAILED, _INSTALLING)
+#: The inventory host of the update's Play 0 (the archive build on the SLM, #1091): a play target, never a node.
+#: Every ``update-all-nodes.yml`` limit starts with it; the one spelling of it.
+ARCHIVE_BUILD_HOST = "localhost"
 
 
 def is_provisioner_held(role) -> bool:
@@ -153,7 +166,7 @@ async def _run_provisioning(db, node_id: str, node, roles: list, **playbook_kwar
         return ""
     except Exception as exc:  # noqa: BLE001 - the helper marks the rows failed; report, never raise
         logger.error("Provisioning pending roles %s on %s failed: %s", names, node_id, exc)
-        return f"WARNING: provisioning of role(s) {', '.join(names)} failed; the code update succeeded"
+        return f"WARNING: provisioning of role(s) {', '.join(names)} failed; it does not fail the code update"
     finally:
         await _settle_installing(node_id, names)
 
@@ -181,11 +194,12 @@ async def _provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
     ``playbook_kwargs`` (the no-restart arguments of a sync with ``restart=False``) reach the provisioning run.
     """
     async with db_service.session() as db:
-        roles = await pending_roles(db, node_id)
-        if not roles:
-            return ""
         node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
         if node is None:
+            return ""
+        declared = set(node.roles or [])  # assigned only: what node_roles_declared is stamped from (#14594)
+        roles = [r for r in await pending_roles(db, node_id) if r.role_name in declared]
+        if not roles:
             return ""
         for role in roles:
             role.status = _INSTALLING
@@ -197,34 +211,126 @@ async def _provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
 async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
     """``_provision_pending_roles``, with any error (the queries, the commit) turned into a warning.
 
-    By now the code update succeeded; a database error here must not fail it or break the fleet loop.
+    It runs before and after the code update; a database error here must not fail it or break the fleet loop.
     """
     try:
         return await _provision_pending_roles(node_id, **playbook_kwargs)
     except Exception as exc:  # noqa: BLE001 - reported as a warning; CancelledError still propagates
         logger.error("Pending-role provisioning for %s could not run: %s", node_id, exc)
-        return "WARNING: pending roles could not be provisioned (database error); the code update succeeded"
+        return "WARNING: pending roles could not be provisioned (database error); it does not fail the code update"
+
+
+def _with_messages(result: dict, messages: list[str], prepend: bool = False) -> dict:
+    """``result`` with the non-empty provisioning ``messages`` joined into its output (ahead of it or after it)."""
+    text = "\n".join(m for m in messages if m)
+    if not text:
+        return result
+    output = result.get("output", "")
+    return {**result, "output": f"{text}\n{output}" if prepend else f"{output}\n{text}"}
+
+
+def _with_early_messages(result: dict, early: list[str], node_id: str) -> dict:
+    """The early step's messages ahead of a successful run's output; a failed run's output stays exact.
+
+    The failure reason is read from the output of a failed run, so the messages go to the log there.
+    """
+    if result.get("success"):
+        return _with_messages(result, early, prepend=True)
+    if any(early):
+        logger.info(
+            "Pending-role provisioning before a failed update on %s: %s",
+            node_id,
+            " | ".join(filter(None, early)),
+        )
+    return result
+
+
+async def _provision_before_update(node_id: str, limit: list, restart_args: dict) -> list[str]:
+    """Provision the pending roles of every node the run targets, ahead of the play's vnc gate (#22262).
+
+    ``limit`` names the inventory hosts: the archive-build host, the node, and for the self-update the nodes
+    co-located with the SLM (#15475), each gated by its own ``role_vnc_active``.
+    """
+    targets = dict.fromkeys([node_id, *(host for host in limit if host != ARCHIVE_BUILD_HOST)])
+    return [await provision_pending_roles(target, **restart_args) for target in targets]
+
+
+async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
+    """Node ids an ``update-all-nodes.yml`` run over the setup-wizard inventory reaches that hold an assigned role.
+
+    A limit naming only nodes (node id or inventory host name) narrows the set; a group or pattern token may cover
+    any node, so then every node with an assigned updater-provisioned role is a target. A limit naming only the
+    archive-build host reaches no node; no limit at all is fleet-wide.
+    """
+    from api.setup_wizard import _sanitize_ansible_name  # lazy: the inventory's own host naming (#9283)
+
+    async with db_service.session() as db:
+        nodes = list((await db.execute(select(Node))).scalars().all())
+    names = {n.node_id: {n.node_id, _sanitize_ansible_name(n.ansible_target)} for n in nodes}
+    tokens = set(limit_hosts or []) - {ARCHIVE_BUILD_HOST}
+    if limit_hosts and not tokens:
+        return []
+    narrow = bool(tokens) and tokens <= set().union(*names.values())
+    assigned = [n.node_id for n in nodes if set(n.roles or []) & set(UPDATER_PROVISIONED_ROLES)]
+    return [node_id for node_id in assigned if not narrow or names[node_id] & tokens]
+
+
+def _raw_restart_args(variables: dict | None) -> dict:
+    """The restart policy the raw run's extra vars carry, as ``run_update_all_nodes`` passes it (#20743)."""
+    value = (variables or {}).get(RESTART_VAR, True)  # missing → restart, as Ansible's default(true)
+    # any non-bool value is truthy only by Ansible's `| bool` rules; "", "garbage" and None are not restarts
+    restart = value if isinstance(value, bool) else str(value).strip().lower() in {"true", "yes", "on", "1", "t", "y"}
+    return no_restart_args(restart)  # the one call site (#20743)
+
+
+async def provision_before_raw_update(
+    playbook_file: str, limit_hosts: list[str] | None, variables: dict | None = None
+) -> list[str]:
+    """Output lines of the pending-role step for a run that bypasses ``run_update_all_nodes`` (#22262).
+
+    ``POST /infrastructure/execute`` runs ``update-all-nodes.yml`` through its own subprocess, so it takes this
+    step before the play's vnc gate instead, with the run's restart policy (``autobot_restart_services``).
+    Any other playbook is left alone.
+    """
+    from services.rollback_target import FLEET_UPDATE_PLAYBOOK  # lazy, like api.nodes: keeps this import light
+
+    if playbook_file != FLEET_UPDATE_PLAYBOOK:
+        return []
+    try:
+        targets = await _raw_update_targets(limit_hosts)
+    except Exception as exc:  # noqa: BLE001 - the update goes on; the gate still fails an unprovisioned node
+        logger.error("Pending-role targets for a raw update could not be read: %s", exc)
+        return ["[WARNING] pending roles could not be provisioned (database error); it does not fail the update"]
+    restart_args = _raw_restart_args(variables)
+    lines = []
+    for node_id in targets:
+        message = await provision_pending_roles(node_id, **restart_args)
+        if message:
+            lines.append(f"[INFO] {node_id}: {message}")
+    return lines
 
 
 async def run_update_all_nodes(
     executor: Any, node_id: str, limit: list, restart: bool, resume_after_restart: bool = False, **playbook_kwargs: Any
 ) -> dict:
-    """Run ``update-all-nodes.yml`` for a node, then provision its pending roles (#22211).
+    """Provision the targets' pending roles, run ``update-all-nodes.yml``, then provision again (#22211, #22262).
 
-    The code deploy is the node's update. Provisioning runs only after it succeeded, with the same restart
-    policy, and a failure of it is appended to the output as a warning: it never turns a successful update
-    into a failed one. ``resume_after_restart`` is for a run that restarts THIS process (the SLM's own
-    self-update): the node is marked first and, when the restart cuts the run, the restarted process
-    provisions it (``services/pending_role_resume.py``) instead of this one.
+    The first step creates what the play's vnc gate requires (#22262); the second, after a successful run only,
+    picks up anything still pending. Both use the run's restart policy; a provisioning failure is a warning in the
+    output, never a failed update. ``resume_after_restart`` (the SLM's own self-update) marks the node first; when
+    the restart cuts the run, the restarted process does the second step (``services/pending_role_resume.py``).
     """
     from services.pending_role_resume import clear_provision_marker, mark_provision_after_restart
+    from services.rollback_target import FLEET_UPDATE_PLAYBOOK
 
+    restart_args = _raw_restart_args({RESTART_VAR: restart})  # the one no_restart_args call site (#20743)
+    early = await _provision_before_update(node_id, limit, restart_args)
     if resume_after_restart:
         await mark_provision_after_restart(node_id)
-    restart_args = no_restart_args(restart)  # #20743
     result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **restart_args
+        playbook_name=FLEET_UPDATE_PLAYBOOK, limit=limit, **playbook_kwargs, **restart_args
     )
+    result = _with_early_messages(result, early, node_id)
     if resume_after_restart:
         from api._resume_plan import restart_cut_the_wait
 
@@ -233,7 +339,4 @@ async def run_update_all_nodes(
         await clear_provision_marker(node_id)
     if not result.get("success"):
         return result
-    message = await provision_pending_roles(node_id, **restart_args)
-    if message:
-        result = {**result, "output": f"{result.get('output', '')}\n{message}"}
-    return result
+    return _with_messages(result, [await provision_pending_roles(node_id, **restart_args)])
