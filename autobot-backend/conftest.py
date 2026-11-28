@@ -42,8 +42,10 @@ sys.path.insert(0, str(backend_root))
 # ratchet without a raised ceiling every time a new module needs real-loading.
 from testkit.data_tree_isolation import isolate_chat_data_paths, pytest_sessionfinish, pytest_sessionstart  # noqa: F401
 from testkit.llm_failover_modules import load_coordinator as _load_coordinator
-from testkit.module_stubs import make_pkg_stub as _make_pkg_stub, real_load_and_bind as _real_load_and_bind
+from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
+from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
+from testkit.requirements_report import pytest_report_header  # noqa: F401 -- pytest hook
 from testkit.singleton_state import fake_session_lease, reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
@@ -1097,71 +1099,8 @@ if "models" not in sys.modules:
     _real_load_and_bind("models.infrastructure", backend_root / "models" / "infrastructure.py")
 
 
-# -- Requirements.txt enforcement (Issue #5032 / #5044) --------------------
-# Tests that use optional parsers like bs4 declare `pytest.importorskip(...)`
-# so they skip gracefully. But a silent skip of ~10% of the suite looks like
-# a passing run to an inattentive reviewer. This session hook reads
-# requirements.txt and reports which declared deps are not installed, so the
-# developer sees a clear "run pip install -r requirements.txt" hint at the
-# top of every test run instead of silent skip messages buried further down.
-#
-# Uses importlib.metadata.distribution() to check installed-ness by dist name
-# (the exact name from requirements.txt) — no module-name translation needed,
-# and no __init__.py side-effects like find_spec() would cause.
-
-
 # End of window 1 (#13446) — nothing below this line runs at import time.
 _SCOPED_REDIS.exit("conftest-import")
-
-
-def _parse_requirements(path: Path) -> list[str]:
-    """Return package names declared in a requirements.txt file."""
-    names: list[str] = []
-    if not path.exists():
-        return names
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip().split("#", 1)[0].strip()
-        if not line or line.startswith("-"):  # skip comments, blanks, -r/-e flags
-            continue
-        # Strip version specifiers and extras
-        for sep in ("==", ">=", "<=", "~=", ">", "<", "!=", "["):
-            if sep in line:
-                line = line.split(sep, 1)[0].strip()
-        if line:
-            names.append(line)
-    return names
-
-
-def pytest_report_header(config) -> list[str]:
-    """Report missing requirements.txt deps in the pytest session header.
-
-    Does NOT fail the session — stubs in this conftest and `pytest.importorskip`
-    calls in test files still handle graceful degradation. Purpose is to
-    surface the root cause when tests silently skip due to missing deps.
-    """
-    from importlib import metadata as _im
-
-    req_file = backend_root / "requirements.txt"
-    declared = _parse_requirements(req_file)
-    if not declared:
-        return []
-
-    missing: list[str] = []
-    for dist in declared:
-        try:
-            _im.distribution(dist)
-        except _im.PackageNotFoundError:
-            missing.append(dist)
-
-    if not missing:
-        return [f"requirements.txt: all {len(declared)} deps installed"]
-
-    preview = ", ".join(missing[:8]) + ("..." if len(missing) > 8 else "")
-    return [
-        f"requirements.txt: {len(missing)}/{len(declared)} deps NOT installed ({preview})",
-        "    Run: pip install -r autobot-backend/requirements.txt",
-        "    Tests using these deps will skip; see importorskip messages below.",
-    ]
 
 
 @pytest.fixture(scope="session")
