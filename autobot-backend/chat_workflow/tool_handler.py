@@ -24,7 +24,8 @@ from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS, approval_category_for
+from autobot_shared.tool_spec import CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, declares_tool
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
     format_browser_action_text,
@@ -86,7 +87,7 @@ from chat_workflow.tool_permission_gate import caller_identity, permission_denia
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
-from tools.tool_records import CATEGORY_WEB_RESEARCH, permission_value_for, tool_names_in_category
+from tools.tool_records import permission_value_for, tool_names_in_category
 from utils.errors import RepairableException
 from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
@@ -2348,6 +2349,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         """
         return format_browser_action_text(tool_name, params, inner, result)
 
+    @declares_tool("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ, name="web_search")
     async def _handle_web_search_tool(
         self,
         tool_call: dict[str, Any],
@@ -3252,6 +3254,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         # Issue #2305/#2310: Report unknown tool and track consecutive failures.
         yield self._build_unknown_tool_error(tool_name, ctx, execution_results)
 
+    @declares_tool("system", LOCATION_BACKEND, Permission.SHELL_EXECUTE, name="execute_command", listed=False)
     async def _dispatch_execute_command(
         self,
         tool_call: dict[str, Any],
