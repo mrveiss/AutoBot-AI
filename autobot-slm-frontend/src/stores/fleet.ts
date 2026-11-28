@@ -25,7 +25,7 @@ import type {
   NodeUpdate,
   NodeEvent,
   NodeEventFilters,
-  CertificateInfo,
+  CertificateResponse,
   NodeUpdateRecord,
   NodeUpdateCheckResponse,
   ConnectionTestResult,
@@ -67,7 +67,7 @@ export const useFleetStore = defineStore('fleet', () => {
   const nodeEvents = ref<Map<string, NodeEvent[]>>(new Map())
 
   /** Cache of certificate status by node ID */
-  const certificateStatus = ref<Map<string, CertificateInfo>>(new Map())
+  const certificateStatus = ref<Map<string, CertificateResponse>>(new Map())
 
   /** Cache of available updates by node ID */
   const nodeUpdates = ref<Map<string, NodeUpdateRecord[]>>(new Map())
@@ -141,7 +141,7 @@ export const useFleetStore = defineStore('fleet', () => {
   })
 
   /** Get certificate info for currently selected node */
-  const selectedNodeCertificate = computed<CertificateInfo | null>(() => {
+  const selectedNodeCertificate = computed<CertificateResponse | null>(() => {
     if (!selectedNode.value) return null
     return certificateStatus.value.get(selectedNode.value.node_id) || null
   })
@@ -481,7 +481,7 @@ export const useFleetStore = defineStore('fleet', () => {
   /**
    * Get certificate status for a node
    */
-  async function checkNodeCertificate(nodeId: string): Promise<CertificateInfo> {
+  async function checkNodeCertificate(nodeId: string): Promise<CertificateResponse> {
     try {
       const certInfo = await api.getCertificateStatus(nodeId)
       certificateStatus.value.set(nodeId, certInfo)

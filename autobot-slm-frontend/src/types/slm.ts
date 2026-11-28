@@ -73,8 +73,6 @@ export type EventType =
   | 'rollback_completed'
   | 'manual_action'
 
-export type CertificateStatus = 'valid' | 'expiring_soon' | 'expired' | 'not_issued'
-
 export type UpdateSeverity = 'low' | 'medium' | 'high' | 'critical'
 
 export interface NodeHealth {
@@ -274,17 +272,10 @@ export type RoleInfo = components['schemas']['RoleInfo'] & {
 export type RoleListResponse = { roles: RoleInfo[] } & components['schemas']['RoleListResponse']
 
 /**
- * PKI certificate status for a node
+ * PKI certificate status for a node: the API contract's `CertificateResponse`
+ * (`not_before` / `not_after`, `status` is a plain string), not a hand-typed shape.
  */
-export interface CertificateInfo {
-  issued_at: string | null
-  expires_at: string | null
-  fingerprint: string | null
-  status: CertificateStatus
-  issuer?: string
-  subject?: string
-  serial_number?: string
-}
+export type CertificateResponse = components['schemas']['CertificateResponse']
 
 /**
  * Result of SSH connection test
