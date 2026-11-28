@@ -299,7 +299,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-autobot-border flex flex-col max-h-[700px]">
+  <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border flex flex-col max-h-[700px]">
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
       <div class="flex items-center gap-3">

@@ -87,7 +87,7 @@ async function getServiceLogs(): Promise<void> {
 <template>
   <div>
     <!-- Info Banner -->
-    <div class="mb-6 flex items-center gap-2 text-sm text-autobot-text-secondary bg-white rounded-lg p-3 border border-autobot-border">
+    <div class="mb-6 flex items-center gap-2 text-sm text-autobot-text-secondary bg-autobot-bg-secondary rounded-lg p-3 border border-autobot-border">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
       </svg>
@@ -102,7 +102,7 @@ async function getServiceLogs(): Promise<void> {
         @click="selectTool(tool.id)"
         :disabled="!tool.available"
         :class="[
-          'bg-white rounded-lg shadow-xs border border-autobot-border p-6 text-left transition-all',
+          'bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6 text-left transition-all',
           tool.available
             ? 'hover:shadow-md hover:border-autobot-primary-light cursor-pointer'
             : 'opacity-50 cursor-not-allowed',
@@ -133,7 +133,7 @@ async function getServiceLogs(): Promise<void> {
     </div>
 
     <!-- Tool Interface Panel -->
-    <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-autobot-border">
+    <div v-if="activeTool" class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border">
       <!-- Panel Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
         <h2 class="text-lg font-semibold text-autobot-text-primary">

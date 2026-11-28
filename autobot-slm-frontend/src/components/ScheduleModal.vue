@@ -353,7 +353,7 @@ const isFormValid = computed(() => {
     <template #actions>
       <button
         @click="handleClose"
-        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-secondary border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
       >
         {{ $t('scheduleModal.cancel') }}
       </button>

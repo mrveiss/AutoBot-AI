@@ -113,7 +113,7 @@ function formatChecked(value: string | undefined): string {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+  <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border">
     <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
       <div>
         <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('fullTreeDriftPanel.title') }}</h3>
@@ -157,7 +157,7 @@ function formatChecked(value: string | undefined): string {
             'px-3 py-1 rounded-full text-xs font-medium border',
             verdictFilter === option
               ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-primary'
-              : 'bg-white text-autobot-text-secondary border-autobot-border-strong',
+              : 'bg-autobot-bg-secondary text-autobot-text-secondary border-autobot-border-strong',
           ]"
         >
           {{ $t(`fullTreeDriftPanel.filter.${option}`) }}

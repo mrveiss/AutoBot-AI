@@ -236,19 +236,19 @@ watch(
       <div v-if="liveMetrics" class="bg-autobot-bg-secondary rounded-lg p-4">
         <h3 class="text-sm font-medium text-autobot-text-secondary mb-3">{{ $t('fleet.nPUDetailsPanel.liveMetrics') }}</h3>
         <div class="grid grid-cols-2 gap-3">
-          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+          <div class="text-center p-2 bg-autobot-bg-tertiary rounded-sm border border-autobot-border-subtle">
             <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.inference_count }}</p>
             <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.inferences') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+          <div class="text-center p-2 bg-autobot-bg-tertiary rounded-sm border border-autobot-border-subtle">
             <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.avg_latency_ms.toFixed(1) }}ms</p>
             <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.avgLatency') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+          <div class="text-center p-2 bg-autobot-bg-tertiary rounded-sm border border-autobot-border-subtle">
             <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.throughput_rps.toFixed(1) }}</p>
             <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.throughputReqS') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+          <div class="text-center p-2 bg-autobot-bg-tertiary rounded-sm border border-autobot-border-subtle">
             <p class="text-lg font-semibold" :class="tempColor">
               {{ liveMetrics.temperature_celsius != null ? `${liveMetrics.temperature_celsius}°C` : $t('fleet.nPUDetailsPanel.notAvailable') }}
             </p>

@@ -93,7 +93,7 @@ const detectionStatus = computed(() => {
 <template>
   <div
     @click="emit('select')"
-    class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-autobot-primary-light transition-all"
+    class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-autobot-primary-light transition-all"
   >
     <!-- Header -->
     <div class="flex items-start justify-between mb-3">

@@ -126,7 +126,7 @@ watch(() => fleetStore.nodeList, () => {
   <div>
     <!-- Summary Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-autobot-pill-info-bg rounded-lg">
             <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,7 +140,7 @@ watch(() => fleetStore.nodeList, () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-autobot-pill-ok-bg rounded-lg">
             <svg class="w-5 h-5 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +154,7 @@ watch(() => fleetStore.nodeList, () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-autobot-illus-2-tint rounded-lg">
             <svg class="w-5 h-5 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,7 +168,7 @@ watch(() => fleetStore.nodeList, () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-autobot-pill-warn-bg rounded-lg">
             <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@ watch(() => fleetStore.nodeList, () => {
         <button
           @click="refreshAll"
           :disabled="loading"
-          class="px-4 py-2 bg-white border border-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover transition-colors flex items-center gap-2 text-sm"
+          class="px-4 py-2 bg-autobot-bg-secondary border border-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover transition-colors flex items-center gap-2 text-sm"
         >
           <svg
             :class="['w-4 h-4', loading ? 'animate-spin' : '']"
@@ -238,7 +238,7 @@ watch(() => fleetStore.nodeList, () => {
     <!-- Overview Tab (original content) -->
     <template v-if="activeTab === 'overview'">
       <!-- Empty State -->
-      <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-autobot-border p-12 text-center">
+      <div v-if="npuNodes.length === 0 && !loading" class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-12 text-center">
         <div class="mx-auto w-16 h-16 bg-autobot-bg-tertiary rounded-full flex items-center justify-center mb-4">
           <svg class="w-8 h-8 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />

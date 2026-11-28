@@ -167,7 +167,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
           <!-- Dropdown Menu -->
           <div
             v-if="showMenu"
-            class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-autobot-border py-1 z-50"
+            class="absolute right-0 top-full mt-1 w-48 bg-autobot-bg-elevated rounded-lg shadow-lg border border-autobot-border py-1 z-50"
             role="menu"
             :aria-label="$t('fleet.nodeCard.actionsForNodeAria', { hostname: node.hostname })"
             @keydown="handleMenuKeydown"
