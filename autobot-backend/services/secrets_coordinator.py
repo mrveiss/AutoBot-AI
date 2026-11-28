@@ -60,7 +60,7 @@ from services.secret_names import refuse_reserved_secret_name
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_access_log import record_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
-from services.secrets_maintenance import MaintenanceActor, audit_maintenance
+from services.secrets_maintenance import MaintenanceActor, audited_maintenance
 from services.secrets_principal_resolver import resolve_principal_facts
 
 logger = logging.getLogger(__name__)
@@ -476,15 +476,20 @@ class SecretsCoordinator:
         """Decrypt *secret_id* through its own owner vault for an administrator's maintenance action."""
         await self._load_maintenance_actor(session, actor)
         owner_vault = await self._owner_vault(session, secret_id)
-        await audit_maintenance("read", secret_id, actor)
-        return await self._service.read(session, secret_id=secret_id, accessible_vaults=[owner_vault])
+        return await audited_maintenance(
+            "read",
+            secret_id,
+            actor,
+            lambda: self._service.read(session, secret_id=secret_id, accessible_vaults=[owner_vault]),
+        )
 
     async def maintenance_delete(self, session: AsyncSession, *, actor: MaintenanceActor, secret_id: uuid.UUID) -> None:
         """Delete *secret_id* for an administrator's approved maintenance action (call inside ``guarded_delete``)."""
         await self._load_maintenance_actor(session, actor)
         await self._owner_vault(session, secret_id)  # absent or legacy row: not found
-        await audit_maintenance("delete", secret_id, actor)
-        await self._service.delete(session, secret_id=secret_id)
+        await audited_maintenance(
+            "delete", secret_id, actor, lambda: self._service.delete(session, secret_id=secret_id)
+        )
 
     # ------------------------------------------------------------------
     # Service-principal operations (#10436): bypass user RBAC; scope is

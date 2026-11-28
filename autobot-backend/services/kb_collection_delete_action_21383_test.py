@@ -27,6 +27,7 @@ from services.approval_execution import (
     _SERVER_ONLY,
     set_verified_decider,
 )
+from tests.helpers.audit_double import audit_log_shim
 
 _BACKEND = Path(__file__).resolve().parents[1]
 ADMIN = {"id": str(uuid.uuid4()), "role": "admin"}
@@ -132,6 +133,7 @@ def world(monkeypatch):
     monkeypatch.setattr("services.approval_gate_service.ApprovalGateService", Gate)
     monkeypatch.setattr(action, "_pending_proposal", AsyncMock(return_value=None))
     monkeypatch.setattr(action, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))  # attempt/outcome rows
     monkeypatch.setattr(action, "_kb", AsyncMock(return_value=kb))
     monkeypatch.setattr(action, "review_kb_proposal", AsyncMock(return_value=False))
     monkeypatch.setattr(routes, "get_or_create_knowledge_base", AsyncMock(return_value=kb))

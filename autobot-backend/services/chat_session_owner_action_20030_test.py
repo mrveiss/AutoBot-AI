@@ -12,6 +12,7 @@ import pytest
 
 from services import approval_execution
 from services import chat_session_owner_action as action
+from tests.helpers.audit_double import AuditDouble, unwritable_attempt
 
 _ADMIN, _OTHER, _USER_ID = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 
@@ -79,11 +80,14 @@ def _validator(cached=None, claim=None) -> SimpleNamespace:
 async def _run(manager: _Manager, approval, session, cached=None, claim=None):
     validator = _validator(cached, claim)
     redis_set = validator.set_session_owner
+    audit = AuditDouble()
+    audit.skipped = AsyncMock()  # the plain ``denied`` row of a run that changed nothing: no attempt before it
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
-        patch.object(action, "audit_log", AsyncMock()) as audit,
+        patch.object(action, "audit_log", audit.skipped),
+        audit.patch(),
     ):
         await action.execute_owner_assign(approval, session)
     return redis_set, audit
@@ -100,22 +104,23 @@ async def test_approval_writes_the_owner_to_file_and_redis_with_a_record() -> No
     assert manager.written[0][1]["owner"] == "alice" and manager.written[0][1]["username"] == "alice"
     redis_set.assert_awaited_once_with("s1", "alice")  # the claim: the one atomic first-writer path
     assert "now belongs to alice" in session.add.call_args.args[0].body
-    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "success"]
-    assert audit.await_args_list[0].kwargs["result"] == "attempted", "nothing has happened yet"
+    assert [d["stage"] for d in audit.details] == ["started", "success"]
+    assert audit.results == ["attempted", "success"], "nothing has happened yet at the first row"
+    assert audit.events[1].metadata["attempt_id"] == audit.events[0].id  # linked to its attempt
 
 
 async def test_a_session_that_gained_an_owner_is_left_alone() -> None:
     manager, session = _Manager({"s1": "bob"}), _session()
     _, audit = await _run(manager, _approval(), session)
     assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
-    assert audit.await_args.args[1:] == () and audit.await_args.kwargs["details"]["stage"] == "skipped"
+    assert not audit.awaited and audit.skipped.await_args.kwargs["details"]["stage"] == "skipped"
 
 
 async def test_the_only_admin_may_self_approve_and_it_is_flagged() -> None:
     session = _session(admins=1)
     _, audit = await _run(_Manager({"s1": None}), _approval(decider=_ADMIN), session)
     assert "(self-approved)" in session.add.call_args.args[0].body
-    assert audit.await_args.kwargs["details"]["self_approval"] is True
+    assert audit.details[-1]["self_approval"] is True
 
 
 async def test_a_self_approval_with_another_admin_writes_nothing() -> None:
@@ -153,17 +158,18 @@ async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> Non
 
 async def test_a_failed_file_write_records_no_success() -> None:
     manager, session = _Manager({"s1": None}, fail=True), _session()
-    audit = AsyncMock()
+    audit = AuditDouble()
     validator = _validator()
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
-        patch.object(action, "audit_log", audit),
+        audit.patch(),
         pytest.raises(ValueError),
     ):
         await action.execute_owner_assign(_approval(), session)
-    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
+    assert audit.results == ["attempted", "failed"]  # an outcome that is not a success, linked to its attempt
+    assert audit.events[1].metadata["attempt_id"] == audit.events[0].id
     validator.redis.delete.assert_awaited_once_with("key:s1")  # the failed proposal leaves no claim
     validator.redis.srem.assert_awaited_once_with("sessions:alice", "s1")
 
@@ -172,7 +178,7 @@ async def test_an_owner_only_in_redis_is_left_alone() -> None:
     manager, session = _Manager({"s1": None}), _session()
     _, audit = await _run(manager, _approval(), session, cached="bob")
     assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
-    assert audit.await_args.kwargs["details"]["stage"] == "skipped"
+    assert audit.skipped.await_args.kwargs["details"]["stage"] == "skipped"
 
 
 async def test_a_redis_record_of_the_named_owner_does_not_block_writing_the_file() -> None:
@@ -190,6 +196,7 @@ async def test_a_grant_landing_during_the_approval_loses_nothing_and_writes_noth
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
         patch.object(action, "audit_log", AsyncMock()),
+        AuditDouble().patch(),
     ):
         await action.execute_owner_assign(_approval(), session)
     assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
@@ -234,6 +241,7 @@ async def test_a_claim_that_failed_with_nobody_holding_the_key_writes_nothing() 
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
         patch.object(action, "audit_log", AsyncMock()),
+        AuditDouble().patch(),
         pytest.raises(ValueError, match="could not be claimed"),
     ):
         await action.execute_owner_assign(_approval(), _session())
@@ -248,7 +256,7 @@ async def test_a_cancelled_assignment_releases_the_claim_it_took() -> None:
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
-        patch.object(action, "audit_log", AsyncMock(side_effect=asyncio.CancelledError())),
+        AuditDouble(asyncio.CancelledError()).patch(),
         pytest.raises(asyncio.CancelledError),
     ):
         await action.execute_owner_assign(_approval(), _session())
@@ -263,8 +271,23 @@ async def test_a_cancelled_assignment_does_not_release_a_claim_it_did_not_take()
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
         patch.object(action, "SessionOwnershipValidator", return_value=validator),
-        patch.object(action, "audit_log", AsyncMock(side_effect=asyncio.CancelledError())),
+        AuditDouble(asyncio.CancelledError()).patch(),
         pytest.raises(asyncio.CancelledError),
     ):
         await action.execute_owner_assign(_approval(), _session())
     validator.redis.delete.assert_not_awaited()
+
+
+@pytest.mark.parametrize("written", [unwritable_attempt, OSError("no log")], ids=["refused", "raises"])
+async def test_an_unwritable_attempt_writes_no_owner_and_drops_the_claim(written) -> None:
+    manager, validator = _Manager({"s1": None}), _validator()
+    with (
+        patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
+        AuditDouble(written).patch(),
+        pytest.raises(RuntimeError, match="could not be written"),
+    ):
+        await action.execute_owner_assign(_approval(), _session())
+    assert manager.written == []
+    validator.redis.delete.assert_awaited_once_with("key:s1")

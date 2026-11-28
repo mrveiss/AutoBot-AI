@@ -147,7 +147,11 @@ def _existing_row_coordinator(monkeypatch):
     monkeypatch.setattr(coord, "_directly_granted_ids", AsyncMock(return_value=set()))
     monkeypatch.setattr(SecretsCoordinator, "_scope_permits", staticmethod(lambda *a: True))
     monkeypatch.setattr(module, "authorize", lambda *a, **k: True)
-    monkeypatch.setattr(module, "audit_maintenance", AsyncMock())
+
+    async def run_unaudited(_operation, _secret_id, _actor, run):
+        return await run()
+
+    monkeypatch.setattr(module, "audited_maintenance", run_unaudited)
     return coord, service, FakeAsyncSession(on_get=lambda _model, _pk: row), row
 
 

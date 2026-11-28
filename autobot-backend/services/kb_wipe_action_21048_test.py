@@ -18,6 +18,7 @@ from services import kb_wipe_action as action
 from services import kb_wipe_chroma as chroma_mod
 from services import kb_wipe_redis as redis_mod
 from services.approval_execution import _ADMIN_ONLY, _DECISION_REVIEWS, _REGISTRY, _SERVER_ONLY, set_verified_decider
+from tests.helpers.audit_double import audit_log_shim
 
 OVERRIDE_KEY = "autobot:kb:embedding_model"
 
@@ -268,6 +269,7 @@ def _session(order=None):
 def _wire(monkeypatch, fleet, order=None):
     audit = AsyncMock(side_effect=lambda *a, **k: (order.append("audit") if order is not None else None) or True)
     monkeypatch.setattr(action, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))  # attempt/outcome rows
     real = redis_mod.execute_redis
     monkeypatch.setattr(
         action, "execute_redis", lambda record, scope, stop=None: real(record, scope, _factory(fleet), stop)

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from prometheus_client import CollectorRegistry
@@ -16,6 +16,7 @@ from autobot_shared.monitoring.metrics.quality_gates import QualityGateMetricsRe
 from autobot_shared.pre_action_verifier_guard import VerifierResult, VerifierVerdict
 from autobot_shared.verifier_degradation import VerifierDegradation
 from services.verifier_audit import audit_verifier_degraded
+from tests.helpers.audit_double import patch_audit_log
 
 
 def _result(tool: str, degradation: VerifierDegradation) -> VerifierResult:
@@ -35,7 +36,7 @@ def _count(recorder, tool):
 
 @pytest.mark.asyncio
 async def test_each_timeout_is_counted_under_its_tool(recorder):
-    with patch("services.audit_logger.audit_log", AsyncMock(return_value=True)):
+    with patch_audit_log(AsyncMock(return_value=True)):
         await audit_verifier_degraded(_result("navigate", VerifierDegradation.TIMEOUT))
         await audit_verifier_degraded(_result("navigate", VerifierDegradation.TIMEOUT))
         await audit_verifier_degraded(_result("bash", VerifierDegradation.TIMEOUT))
@@ -44,14 +45,14 @@ async def test_each_timeout_is_counted_under_its_tool(recorder):
 
 @pytest.mark.asyncio
 async def test_a_degradation_that_is_not_a_timeout_is_not_counted_as_one(recorder):
-    with patch("services.audit_logger.audit_log", AsyncMock(return_value=True)):
+    with patch_audit_log(AsyncMock(return_value=True)):
         await audit_verifier_degraded(_result("navigate", VerifierDegradation.CALL_FAILED))
     assert _count(recorder, "navigate") is None
 
 
 @pytest.mark.asyncio
 async def test_the_timeout_is_counted_even_when_the_audit_write_fails(recorder):
-    with patch("services.audit_logger.audit_log", AsyncMock(side_effect=RuntimeError("down"))):
+    with patch_audit_log(AsyncMock(side_effect=RuntimeError("down"))):
         await audit_verifier_degraded(_result("navigate", VerifierDegradation.TIMEOUT))
     assert _count(recorder, "navigate") == 1.0
 

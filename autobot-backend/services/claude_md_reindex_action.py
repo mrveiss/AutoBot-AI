@@ -194,13 +194,13 @@ async def _refuse_then_delete(approval: "Approval", self_approval: bool, keys: l
     deleted = [0]  # the running count, readable if a batch fails
     return await run_audited_delete(
         approval,
-        audit,
+        AuditAction.KNOWLEDGE_CLAUDE_MD_REINDEX,
         what="the deletion",
         intent={"chunks": len(keys)},
         delete=lambda: _delete_all(keys, deleted),
         failure=lambda exc: {"deleted": deleted[0], "error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
-        log=logger,
+        details=lambda fields: decision_details(approval, self_approval, selector=_selector(), **fields),
     )
 
 

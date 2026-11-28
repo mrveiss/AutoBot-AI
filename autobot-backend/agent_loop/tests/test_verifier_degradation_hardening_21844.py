@@ -15,6 +15,7 @@ from autobot_shared import verifier_model, verifier_prompt
 from autobot_shared.pre_action_verifier_guard import VerifierResult, VerifierVerdict
 from autobot_shared.verifier_degradation import VerifierDegradation, failure_observation
 from services.verifier_audit import audit_verifier_degraded
+from tests.helpers.audit_double import AuditDouble, patch_audit_log, unwritable_attempt
 
 
 def _provider(models, name="ollama") -> MagicMock:
@@ -80,8 +81,10 @@ async def test_a_degraded_pass_writes_a_verifier_degraded_audit_event():
         degradation=VerifierDegradation.TIMEOUT,
         model_used="m",
     )
-    with patch("services.audit_logger.audit_log", AsyncMock(return_value=True)) as log:
+    log = AsyncMock(return_value=True)
+    with patch_audit_log(log):
         assert await audit_verifier_degraded(result, "task-1", user_id="alice")
+    assert [c.kwargs["result"] for c in log.await_args_list] == ["attempted", "success"]
     op = log.await_args.args[0]
     assert log.await_args.kwargs["user_id"] == "alice" and log.await_args.kwargs["session_id"] == "task-1"
     details = log.await_args.kwargs["details"]
@@ -92,9 +95,19 @@ async def test_a_degraded_pass_writes_a_verifier_degraded_audit_event():
 @pytest.mark.asyncio
 async def test_a_real_reading_writes_no_audit_event():
     ok = VerifierResult(VerifierVerdict.PASS, 0.1, "fine", "bash")
-    with patch("services.audit_logger.audit_log", AsyncMock()) as log:
+    log = AsyncMock()
+    with patch_audit_log(log):
         assert not await audit_verifier_degraded(ok)
     log.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_unwritable_attempt_is_reported_false_and_never_raised_the_verifier_fails_open():
+    result = VerifierResult(VerifierVerdict.SKIP, 0.0, "x", "bash", degradation=VerifierDegradation.TIMEOUT)
+    audit = AuditDouble(unwritable_attempt)
+    with audit.patch():
+        assert await audit_verifier_degraded(result, "task-1") is False
+    assert audit.results == ["attempted"]  # no outcome row for an attempt that was never written
 
 
 def test_an_empty_verifier_model_resolves_to_the_light_processing_model(monkeypatch) -> None:

@@ -23,6 +23,7 @@ from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_ownership import SessionOwnershipValidator, build_owner_metadata
 from services.approval_execution import register_post_approval_action
 from services.approval_four_eyes import is_self_approval
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 from services.audit_logger import audit_log
 from user_management.models.user import User
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+    from services.audit.taxonomy import AuditEvent
 
 logger = get_logger(__name__)
 
@@ -79,10 +81,14 @@ async def active_user_id(session: "AsyncSession", username: str, lock: bool = Fa
     return str(found) if found else None
 
 
-async def _audit(approval: "Approval", session_id: str, result: str, **details: object) -> None:
+_OPERATION = "session.owner_assign"
+
+
+async def _audit_skipped(approval: "Approval", session_id: str, **details: object) -> None:
+    """The ``denied`` row of a run that changed nothing: no attempt came before it, so it is a plain row."""
     await audit_log(
-        "session.owner_assign",
-        result=result,
+        _OPERATION,
+        result="denied",
         user_id=approval.decided_by_user,
         resource=session_id,
         details={"approval_id": str(approval.id), **details},
@@ -136,20 +142,40 @@ async def _release_claim(validator, session_id: str, owner: str) -> None:
         logger.warning("Could not release the claim on session %s: %s", session_id, type(exc).__name__)
 
 
-async def _attempt(approval: "Approval", manager, validator, claimed: bool, user_id: str, self_approved: bool) -> None:
+async def _audited_write(approval: "Approval", manager, user_id: str, self_approved: bool) -> "AuditEvent":
+    """The ``attempted`` row through the shared helper, then the owner write; no committed row, no write (#22130)."""
+    ctx = approval.context
+    session_id, owner = ctx["session_id"], ctx["owner"]
+    attempt = await record_control_attempt(
+        _OPERATION,
+        user_id=approval.decided_by_user,
+        resource=session_id,
+        details={"approval_id": str(approval.id), "stage": "started", "owner": owner, "self_approval": self_approved},
+    )
+    if attempt is None:
+        raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was changed")
+    try:
+        await _write_owner(manager, session_id, owner, user_id)
+    except BaseException as exc:  # a cancelled write is an outcome too; the error that raised stays the one raised
+        await record_control_outcome(attempt, FAILED, type(exc).__name__, {"stage": "failed"})
+        raise
+    return attempt
+
+
+async def _attempt(
+    approval: "Approval", manager, validator, claimed: bool, user_id: str, self_approved: bool
+) -> "AuditEvent":
     """Audit, then write the owner. A claim this run alone took is dropped on ANY failure, cancellation included.
 
     Our claim alone would let the owner in with the proposal failed, and a cancelled request would
     otherwise leave it until the TTL (24 hours) expired.
     """
-    ctx = approval.context
-    session_id, owner = ctx["session_id"], ctx["owner"]
     try:
-        await _audit(approval, session_id, "attempted", stage="started", owner=owner, self_approval=self_approved)
-        await _write_owner(manager, session_id, owner, user_id)
+        return await _audited_write(approval, manager, user_id, self_approved)
     except BaseException:
         if claimed:
-            await _release_claim(validator, session_id, owner)
+            ctx = approval.context
+            await _release_claim(validator, ctx["session_id"], ctx["owner"])
         raise
 
 
@@ -176,12 +202,12 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
     existing = await _owner_elsewhere(manager, validator, session_id, owner)
     if existing:
         await _comment(approval, session, f"Session {session_id} already belongs to {existing}; nothing changed.")
-        await _audit(approval, session_id, "denied", stage="skipped", existing_owner=existing)
+        await _audit_skipped(approval, session_id, stage="skipped", existing_owner=existing)
         return
-    await _attempt(approval, manager, validator, held_before is None, user_id, self_approved)
+    attempt = await _attempt(approval, manager, validator, held_before is None, user_id, self_approved)
     note = " (self-approved)" if self_approved else ""
     await _comment(approval, session, f"Session {session_id} now belongs to {owner}{note}.")
-    await _audit(approval, session_id, "success", stage="success", owner=owner, self_approval=self_approved)
+    await record_control_outcome(attempt, SUCCESS, details={"stage": "success"})
 
 
 def register_owner_assign_action() -> None:

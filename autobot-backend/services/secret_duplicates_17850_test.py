@@ -25,6 +25,7 @@ from services.envelope_secrets_service import (
 )
 from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
 from testkit.fake_async_session import FakeAsyncSession
+from tests.helpers.audit_double import AuditDouble, unwritable_attempt
 
 _V = dup.Verdict
 _VAULT = "system"
@@ -195,11 +196,13 @@ async def test_only_the_named_removals_are_deleted(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_no_delete_runs_when_the_audit_entry_cannot_be_written(monkeypatch):
-    monkeypatch.setattr(action, "_audit", AsyncMock(return_value=False))
     guarded = AsyncMock()
     monkeypatch.setattr(action, "_guarded_remove", guarded)
-    assert "kept" in await action._remove_one(_approval(), AsyncMock(), _B, str(_A))
+    audit = AuditDouble(unwritable_attempt)
+    with audit.patch():
+        assert "kept" in await action._remove_one(_approval(), AsyncMock(), _B, _review())
     guarded.assert_not_called()
+    assert audit.results == ["attempted"]  # the attempt was tried; with no committed row nothing was deleted
 
 
 def _rows(*ids):
@@ -414,15 +417,14 @@ async def test_a_removal_is_refused_when_the_survivor_is_gone_or_rotated(found):
 
 @pytest.mark.asyncio
 async def test_a_refused_removal_refreshes_the_approval_and_still_audits_from_plain_values(monkeypatch):
-    audits = []
-    monkeypatch.setattr(
-        action, "_audit", AsyncMock(side_effect=lambda review, result, sid, **kw: audits.append(result) or True)
-    )
+    audit = AuditDouble()
     monkeypatch.setattr(action, "_guarded_remove", AsyncMock(side_effect=RuntimeError("409")))
     session, approval = AsyncMock(), _approval()
-    assert "kept" in await action._remove_one(approval, session, _B, _review())
+    with audit.patch():
+        assert "kept" in await action._remove_one(approval, session, _B, _review())
     session.refresh.assert_awaited_once_with(approval)
-    assert audits == ["attempted", "failed"]
+    assert audit.results == ["attempted", "failed"]
+    assert audit.events[1].metadata["attempt_id"] == audit.events[0].id
 
 
 def test_the_proposal_records_each_copys_version():

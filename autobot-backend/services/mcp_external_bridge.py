@@ -26,7 +26,7 @@ RBAC that MCPDispatcher's single shared permission cannot express.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
@@ -37,6 +37,9 @@ from services.mcp_external_servers import MCPServerConfig, get_mcp_external_serv
 from services.mcp_isolation_config import BridgePolicy, policy_for
 from services.mcp_server_credentials import resolve_extra_headers_for_server
 from type_defs.mcp import MCPToolDefinition
+
+if TYPE_CHECKING:
+    from services.audit.taxonomy import AuditEvent
 
 logger = get_logger(__name__)
 
@@ -96,32 +99,37 @@ async def _audit_log(*args, **kwargs):
     return await audit_log(*args, **kwargs)
 
 
-async def _audit_tool_call(
-    result: str,
-    user_id: str | None,
-    resource: str,
-    details: dict[str, Any],
-    session_id: str | None = None,
-) -> bool:
-    """Audit one external tool call, naming the actor explicitly (#20709); True when it was committed.
+_TOOL_CALL_OPERATION = "mcp.external_server.tool_call"
+
+
+def _tool_call_fields(user_id: str | None, resource: str, details: dict[str, Any], session_id: str | None) -> dict:
+    """The row fields of one external tool call, naming the actor explicitly (#20709).
 
     A call with no user (background job, scheduler) is recorded as ``SYSTEM_ACTOR`` with
     ``details["actor_type"] == "system"``, so it cannot be mistaken for a lost identity.
-    Written ``durable=True``: an action on a third-party system is security-relevant, like the
-    other awaited audits (backup, approval gates), so the row is committed before we return.
-    ``AuditLogger.log`` reports a failed write by returning False, so a raise is treated the same way.
     """
     from services.audit_logger import SYSTEM_ACTOR  # noqa: PLC0415
 
+    return {
+        "user_id": user_id or SYSTEM_ACTOR,
+        "resource": resource,
+        "session_id": session_id,
+        "details": {**details, "actor_type": "user" if user_id else "system", "session_id": session_id},
+    }
+
+
+async def _audit_denied(user_id: str | None, resource: str, details: dict[str, Any], session_id: str | None) -> bool:
+    """The ``denied`` row of a call refused before any attempt; True when it was committed.
+
+    Written ``durable=True``: an action on a third-party system is security-relevant. ``AuditLogger.log`` reports
+    a failed write by returning False, so a raise is treated the same way.
+    """
     try:
         recorded = await _audit_log(
-            "mcp.external_server.tool_call",
-            result=result,
-            user_id=user_id or SYSTEM_ACTOR,
-            resource=resource,
-            session_id=session_id,
-            details={**details, "actor_type": "user" if user_id else "system", "session_id": session_id},
+            _TOOL_CALL_OPERATION,
+            result="denied",
             durable=True,
+            **_tool_call_fields(user_id, resource, details, session_id),
         )
     except Exception as exc:  # noqa: BLE001 -- reported as a failed write, never raised into the chat path
         logger.error("mcp_external_bridge: audit write raised %s", type(exc).__name__)
@@ -239,8 +247,7 @@ class MCPExternalBridge:
 
         if not _role_allowed(role, entry.allowed_roles):
             logger.warning("mcp_external_bridge.call_tool role=%s denied for tool=%s", role, name)
-            await _audit_tool_call(
-                "denied",
+            await _audit_denied(
                 user_id,
                 name,
                 {"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
@@ -250,20 +257,24 @@ class MCPExternalBridge:
 
         # Write-before-action (#20557): the call has side effects on a third-party system, so the durable
         # record comes first and a failed write refuses the call instead of leaving it unrecorded.
-        if not await _audit_tool_call("attempted", user_id, name, {"server_uri": entry.server_uri}, session_id):
+        from services.audit.outcome import record_control_attempt  # noqa: PLC0415 -- pulls in Redis; not at module init
+
+        fields = _tool_call_fields(user_id, name, {"server_uri": entry.server_uri}, session_id)
+        attempt = await record_control_attempt(_TOOL_CALL_OPERATION, **fields)
+        if attempt is None:
             logger.error("mcp_external_bridge.call_tool audit unavailable; tool=%s not called", name)
             return ExternalToolCallResult(success=False, error=_AUDIT_UNAVAILABLE)
-        return await self._call_and_audit(entry, name, arguments, user_id, session_id)
+        return await self._call_and_audit(entry, name, arguments, attempt)
 
     async def _call_and_audit(
         self,
         entry: _ExternalToolEntry,
         name: str,
         arguments: dict[str, Any],
-        user_id: str | None,
-        session_id: str | None,
+        attempt: AuditEvent,
     ) -> ExternalToolCallResult:
         """Call the external tool, then record its outcome (a follow-up to the required pre-call record)."""
+        from services.audit.outcome import ERROR, SUCCESS, record_control_outcome  # noqa: PLC0415
         MCPClient = _get_mcp_client_class()
         try:
             async with MCPClient(
@@ -275,12 +286,10 @@ class MCPExternalBridge:
                 result = await client.call_tool(entry.original_name, arguments)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mcp_external_bridge.call_tool error tool=%s: %s", name, exc)
-            await _audit_tool_call(
-                "error", user_id, name, {"server_uri": entry.server_uri, "error": str(exc)}, session_id
-            )
+            await record_control_outcome(attempt, ERROR, type(exc).__name__, {"error": str(exc)})
             return ExternalToolCallResult(success=False, error=str(exc))
 
-        await _audit_tool_call("success", user_id, name, {"server_uri": entry.server_uri}, session_id)
+        await record_control_outcome(attempt, SUCCESS)
         return ExternalToolCallResult(success=True, result=result)
 
 

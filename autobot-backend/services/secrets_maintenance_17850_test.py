@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.secrets_vault import VaultRef
-from services import secrets_maintenance as maintenance
 from services.envelope_secrets_service import SecretAccessError
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
+from tests.helpers.audit_double import audit_log_shim
 
 _ADMIN = uuid.UUID(int=7)
 _SECRET = uuid.UUID(int=1)
@@ -33,7 +33,7 @@ def _coordinator(monkeypatch, *, audit_written=True, check_admin=False):
     if not check_admin:
         monkeypatch.setattr(coordinator, "_load_maintenance_actor", AsyncMock())
     audit = AsyncMock(return_value=audit_written)
-    monkeypatch.setattr(maintenance, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))
     return coordinator, service, audit
 
 
@@ -42,8 +42,8 @@ async def test_a_maintenance_read_writes_its_audit_row_first_and_opens_through_t
     coordinator, service, audit = _coordinator(monkeypatch)
     value = await coordinator.maintenance_read(MagicMock(), actor=_ACTOR, secret_id=_SECRET)
     assert value == b"value"
-    audit.assert_awaited_once()
-    kwargs = audit.await_args.kwargs
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
+    kwargs = audit.await_args_list[0].kwargs
     assert kwargs["user_id"] == str(_ADMIN) and kwargs["resource"] == f"secret:{_SECRET}" and kwargs["durable"] is True
     assert kwargs["details"] == {"operation": "maintenance_read", "reference": "approval-42"}
     assert service.read.await_args.kwargs["accessible_vaults"] == [_OWNER]
@@ -56,8 +56,9 @@ async def test_a_maintenance_delete_is_audited_before_the_delete_runs(monkeypatc
     audit.side_effect = lambda *a, **k: order.append("audit") or True
     service.delete.side_effect = lambda *a, **k: order.append("delete")
     await coordinator.maintenance_delete(MagicMock(), actor=_ACTOR, secret_id=_SECRET)
-    assert order == ["audit", "delete"]
+    assert order == ["audit", "delete", "audit"]  # the attempt, the delete, then its outcome
     assert audit.await_args.kwargs["details"]["operation"] == "maintenance_delete"
+    assert audit.await_args.kwargs["result"] == "success"
 
 
 @pytest.mark.asyncio
@@ -108,5 +109,5 @@ async def test_a_stored_platform_admin_passes_the_canonical_role_check(monkeypat
     await coordinator.maintenance_read(
         _session_holding(is_active=True, is_platform_admin=True), actor=_ACTOR, secret_id=_SECRET
     )
-    audit.assert_awaited_once()
+    assert audit.await_count == 2  # the attempt and its outcome
     service.read.assert_awaited_once()

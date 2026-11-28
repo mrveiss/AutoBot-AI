@@ -39,11 +39,13 @@ async def audit_verifier_degraded(result: Any, session_id: str | None = None, us
     """Record ``verifier.degraded`` when *result* carries a degradation; True when an event was written.
 
     *user_id* is the server-verified user when the caller has one in scope; the session id is kept either way.
+    The row goes through ``services.audit.outcome`` as an attempt and its outcome (#22130). The verifier fails open
+    by owner decision, so an attempt that cannot be written is logged and reported as False, never raised.
     """
     if getattr(result, "degradation", VerifierDegradation.NONE) is VerifierDegradation.NONE:
         return False
     count_verifier_timeout(result)
-    from services.audit_logger import audit_log
+    from services.audit.outcome import SUCCESS, record_control_attempt, record_control_outcome  # noqa: PLC0415
 
     details = {
         "tool": result.tool_name,
@@ -53,15 +55,14 @@ async def audit_verifier_degraded(result: Any, session_id: str | None = None, us
         "verdict": result.verdict.value,
         "rationale": result.rationale,  # a timeout names the deadline it hit (#22254)
     }
-    try:
-        return await audit_log(
-            AuditAction.VERIFIER_DEGRADED.value,
-            "attempted",
-            user_id=str(user_id) if user_id else None,
-            session_id=session_id,
-            resource=result.tool_name,
-            details=details,
-        )
-    except Exception as exc:  # noqa: BLE001 - the audit write must never break the action path
-        logger.warning("verifier.degraded audit event not written (%s: %r)", type(exc).__name__, exc)
+    attempt = await record_control_attempt(
+        AuditAction.VERIFIER_DEGRADED.value,
+        user_id=str(user_id) if user_id else None,
+        session_id=session_id,
+        resource=result.tool_name,
+        details=details,
+    )
+    if attempt is None:  # the verifier fails open by owner decision: an unwritable row never stops the action
+        logger.warning("verifier.degraded audit event not written (tool=%s)", result.tool_name)
         return False
+    return await record_control_outcome(attempt, SUCCESS)

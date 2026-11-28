@@ -29,6 +29,7 @@ from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.approval_four_eyes import is_self_approval  # the one four-eyes rule (#19997, #20030)
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+    from services.audit.taxonomy import AuditEvent
 
 ENV_COPIES_ACTION = "env_backup_copies_cleanup"
 #: The production module that PROPOSES these actions (#17315).
@@ -171,7 +173,10 @@ async def _audit(
     result: AuditResult,
     **details: object,
 ) -> bool:
-    """Whether the entry was written. Durable, as the entry before a removal must not be lost (#17038)."""
+    """A row with no attempt before it (a refusal, a nothing-to-do run); the pair goes through ``record_control_attempt``.
+
+    Whether the entry was written. Durable, as an entry about a removal must not be lost (#17038).
+    """
     return await audit_log(
         action.value,
         result=result,
@@ -197,37 +202,37 @@ async def _stop_without_removal(approval: "Approval", session: "AsyncSession", r
     raise ValueError(reason)
 
 
-async def _record_intent(approval: "Approval", session: "AsyncSession", names: list[str], own: bool) -> None:
-    """The paper trail comes first: no committed entry means nothing is removed (#17038)."""
-    if await _audit(approval, _AUDIT, "attempted", phase="intent", paths=names, self_approval=own):
-        return
+async def _record_intent(approval: "Approval", session: "AsyncSession", names: list[str], own: bool) -> "AuditEvent":
+    """The paper trail comes first, through the shared helper: no committed entry means nothing is removed (#17038)."""
+    attempt = await record_control_attempt(
+        _AUDIT.value,
+        user_id=approval.decided_by_user,
+        resource=_AUDIT.value,
+        details={"approval_id": str(approval.id), "phase": "intent", "paths": names, "self_approval": own},
+    )
+    if attempt is not None:
+        return attempt
     await _record(approval, session, "Nothing removed: the audit entry could not be written.")
     raise ValueError("the audit entry could not be written, so nothing was removed")
 
 
-async def _remove_audited(approval: "Approval", plan: CleanupPlan, root: Path, own: bool) -> tuple[int, list[str]]:
+async def _remove_audited(attempt: "AuditEvent", plan: CleanupPlan, root: Path) -> tuple[int, list[str]]:
     try:
         return await asyncio.to_thread(_remove_env_copies, plan, root)
     except (OSError, ValueError) as exc:
-        await _audit(approval, _AUDIT, "failed", error=type(exc).__name__, self_approval=own)
+        await record_control_outcome(attempt, FAILED, type(exc).__name__, {"phase": "failure", "error": type(exc).__name__})
         raise
 
 
 async def _finish_removal(
-    approval: "Approval", session: "AsyncSession", names: list[str], removed: int, gone: list[str], own: bool
+    attempt: "AuditEvent", approval: "Approval", session: "AsyncSession", removed: int, gone: list[str]
 ) -> None:
     """Write the completion audit entry and the approval note; fail loudly if the audit could not be written."""
-    written = await _audit(
-        approval,
-        _AUDIT,
-        "success",
-        phase="completion",
-        removed=removed,
-        already_gone=gone,
-        paths=names,
-        self_approval=own,
+    written = await record_control_outcome(
+        attempt, SUCCESS, details={"phase": "completion", "removed": removed, "already_gone": gone}
     )
-    suffix = " (self-approved by the only admin)." if own else "."
+    names = attempt.metadata["details"]["paths"]
+    suffix = " (self-approved by the only admin)." if attempt.metadata["details"]["self_approval"] else "."
     already = f" {len(gone)} were already gone: {', '.join(gone)}." if gone else ""
     await _record(approval, session, f"Removed {removed} .env.*~ copies: {', '.join(names)}{suffix}{already}")
     if not written:
@@ -249,9 +254,9 @@ async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSessio
         await _record(approval, session, "Nothing to remove: no .env.*~ copies found.")
         return
     names = [str(p.relative_to(root)) for p in plan.targets]
-    await _record_intent(approval, session, names, own)
-    removed, gone = await _remove_audited(approval, plan, root, own)
-    await _finish_removal(approval, session, names, removed, gone, own)
+    attempt = await _record_intent(approval, session, names, own)
+    removed, gone = await _remove_audited(attempt, plan, root)
+    await _finish_removal(attempt, approval, session, removed, gone)
 
 
 def register_install_cleanup_actions() -> None:

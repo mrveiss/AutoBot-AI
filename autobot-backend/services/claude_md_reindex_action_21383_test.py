@@ -18,6 +18,7 @@ import pytest
 
 from services import claude_md_reindex_action as action
 from services.approval_execution import _ADMIN_ONLY, _REGISTRY, _SERVER_ONLY, set_verified_decider
+from tests.helpers.audit_double import audit_log_shim
 
 _BACKEND = Path(__file__).resolve().parents[1]
 OTHER_TITLE = "Some other document"
@@ -65,6 +66,7 @@ def world(monkeypatch):
     audit = AsyncMock(return_value=True)
     monkeypatch.setattr(action, "default_client", lambda database: redis)
     monkeypatch.setattr(action, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))  # attempt/outcome rows
     monkeypatch.setattr(action, "kb_index_names", lambda: (INDEX,))
     monkeypatch.setattr(action, "review_kb_proposal", AsyncMock(return_value=False))
     return types.SimpleNamespace(redis=redis, audit=audit)
