@@ -43,10 +43,10 @@
   /* #21567: hover and ink follow the active scheme's primary pair. The base state
      (no scheme: sky --primary from main.css) takes black ink, 7.6:1 on #0ea5e9
      where white is 2.8:1; every scheme redefines the pair. Hover and
-     pressed fall back to sky-600 (5.1:1 under black ink; sky-700 would be 3.5:1). */
+     pressed fall back to #0284c7 (5.1:1 under black ink; #0369a1 would be 3.5:1). */
   --on-primary: var(--color-black);
-  --color-primary-hover: var(--primary-h, var(--color-primary-600));
-  --color-primary-active: var(--primary-h, var(--color-primary-600));
+  --color-primary-hover: var(--primary-h, #0284c7);
+  --color-primary-active: var(--primary-h, #0284c7);
   --text-on-primary: var(--on-primary);
   /* #19872: white on the green and yellow fills is 2.28 / 1.92:1, so those two
      take dark ink (as the main app does). Red and sky carry white on their
@@ -55,12 +55,12 @@
   --text-on-warning: var(--color-black);
   --text-on-error: var(--color-white);
   --text-on-info: var(--color-white);
-  --color-error-solid: var(--color-error-600);
-  --color-error-solid-hover: var(--color-error-700);
-  --color-info-solid: var(--color-primary-700);
-  --border-strong: var(--a11y-text-muted);
-  --border-focus: var(--a11y-focus-ring);
-  --focus-ring-width: var(--a11y-focus-width);
+  --color-error-solid: var(--color-error-hover);
+  --color-error-solid-hover: var(--color-error-dark);
+  --color-info-solid: #0369a1;
+  --border-strong: var(--muted);
+  --border-focus: var(--focus);
+  --focus-ring-width: 3px;
   --bg-overlay: rgb(0 0 0 / 0.5);
   --shadow-2xl: var(--shadow-lg);
   /* Tailwind's own defaults, restated so the adapter has them even when the
@@ -72,7 +72,7 @@
   --duration-200: 200ms;
   /* Brand mark + tooltip names the adapter reads (#18240). The mark keeps the
      SLM primary the old "S" tile used. */
-  --brand-bg: var(--color-primary-600);
+  --brand-bg: #0284c7;
   --brand-fg: var(--color-white);
   --tooltip-delay: 500ms;
   --tooltip-hide-delay: 100ms;
@@ -84,34 +84,51 @@
   /* The rest of the contract: names the user frontend defines and the SLM did
      not, with SLM values derived from its own palette (#14775, #17566). */
   --bg-active: color-mix(in srgb, var(--text) 8%, transparent);
-  --color-primary-light: var(--color-primary-300);
-  --color-primary-dark: var(--color-primary-700);
-  --color-primary-bg: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
-  --color-secondary: var(--slm-gray-500);
-  --color-secondary-hover: var(--slm-gray-700);
-  --color-secondary-light: var(--slm-gray-300);
-  --color-success-hover: var(--color-success-600);
-  --color-success-light: color-mix(in srgb, var(--color-success-500) 60%, white);
-  --color-success-bg: color-mix(in srgb, var(--color-success-500) 10%, transparent);
-  --color-warning-hover: var(--color-warning-600);
-  --color-warning-light: color-mix(in srgb, var(--color-warning-500) 60%, white);
-  --color-warning-bg: color-mix(in srgb, var(--color-warning-500) 10%, transparent);
-  --color-error-hover: var(--color-error-600);
-  --color-error-light: color-mix(in srgb, var(--color-error-500) 60%, white);
-  --color-error-bg: color-mix(in srgb, var(--color-error-500) 10%, transparent);
-  --color-info-hover: var(--color-primary-600);
-  --color-info-light: color-mix(in srgb, var(--color-primary-500) 60%, white);
-  --color-info-bg: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
-  --chart-1: var(--color-primary-500);
-  --chart-2: var(--color-success-500);
-  --chart-3: var(--color-warning-500);
-  --chart-4: var(--color-error-500);
-  --chart-5: var(--slm-violet-600);
-  --chart-6: var(--slm-indigo-500);
-  --chart-7: var(--slm-emerald-500);
-  --chart-8: var(--slm-orange-600);
-  --chart-9: var(--slm-amber-500);
-  --chart-10: var(--slm-slate-800);
+  --color-primary-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-secondary: #6b7280;
+  --color-secondary-hover: #374151;
+  --color-secondary-light: #d1d5db;
+  --color-success-hover: #16a34a;
+  --color-success-light: color-mix(in srgb, var(--color-success) 60%, white);
+  --color-success-bg: color-mix(in srgb, var(--color-success) 10%, transparent);
+  --color-success-bg-hover: color-mix(in srgb, var(--color-success) 20%, transparent);
+  --color-warning-hover: #ca8a04;
+  --color-warning-light: color-mix(in srgb, var(--color-warning) 60%, white);
+  --color-warning-bg: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  --color-warning-bg-hover: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  --color-error-hover: #dc2626;
+  --color-error-dark: #b91c1c;
+  --color-error-light: color-mix(in srgb, var(--color-error) 60%, white);
+  --color-error-bg: color-mix(in srgb, var(--color-error) 10%, transparent);
+  --color-error-bg-hover: color-mix(in srgb, var(--color-error) 20%, transparent);
+  --color-info-hover: var(--color-primary-hover);
+  --color-info-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-info-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-info-bg-hover: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  /* Opaque pill and tile fills get one hover step each, derived from the theme's own
+     fill and text so it holds in every theme (#17566). */
+  --ok-bg-hover: color-mix(in srgb, var(--ok-bg) 90%, var(--text));
+  --warn-bg-hover: color-mix(in srgb, var(--warn-bg) 90%, var(--text));
+  --bad-bg-hover: color-mix(in srgb, var(--bad-bg) 90%, var(--text));
+  --i2t-hover: color-mix(in srgb, var(--i2t) 90%, var(--text));
+  --chart-1: var(--color-primary);
+  --chart-2: var(--color-success);
+  --chart-3: var(--color-warning);
+  --chart-4: var(--color-error);
+  --chart-5: #7c3aed;
+  --chart-6: #6366f1;
+  --chart-7: #10b981;
+  --chart-8: #ea580c;
+  --chart-9: #f59e0b;
+  --chart-10: #1e293b;
+  /* Terminal-style output panels (setup wizard provision log, process-monitor log): the
+     same names and fixed values as the user frontend's terminal block, theme-independent. */
+  --terminal-chrome-bg-alt: #1e1e1e;
+  --terminal-text-output: #d4d4d4;
+  --terminal-ansi-red: #ff6b6b;
+  --terminal-ansi-purple: #9370db;
+  --terminal-ansi-cyan: #87ceeb;
 }
 
 /* ===== Colour themes ===== */
@@ -134,6 +151,8 @@
   --primary: #0D5C55;
   --primary-h: #0A4A44;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #14A38B;
   --focus: #2563EB;
   --brand-bg: #0D5C55;
@@ -194,6 +213,10 @@
   --primary: #2CC5A8;
   --primary-h: #4FD3BA;
   --on-primary: #06201D;
+  /* Role-inverted on purpose: the primary here is bright, so -light is the deeper edge/fill step and -dark the
+     lighter one that stays readable as text on this dark surface. */
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 70%, black);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 70%, white);
   --accent: #2CC5A8;
   --focus: #7FD8FF;
   --brand-bg: #2CC5A8;
@@ -264,6 +287,8 @@
   --primary: #003D36;
   --primary-h: #002420;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #00695C;
   --focus: #0033CC;
   --brand-bg: #003D36;
@@ -334,6 +359,8 @@
   --primary: #18181B;
   --primary-h: #27272A;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #18181B;
   --focus: #18181B;
   --brand-bg: #18181B;
@@ -454,18 +481,6 @@
   --color-focus: var(--focus);
   --color-focus-ring: var(--focus);
   --color-accent: var(--accent);
-
-  /* SLM's own accessibility set follows the scheme (it fed the old values). */
-  --a11y-bg: var(--bg);
-  --a11y-bg-surface: var(--surface);
-  --a11y-bg-muted: var(--surface2);
-  --a11y-text: var(--text);
-  --a11y-text-muted: var(--muted);
-  --a11y-border: var(--border);
-  --a11y-focus-ring: var(--focus);
-  --a11y-sidebar-bg: var(--slm-bar);
-  --a11y-sidebar-text: var(--slm-bar-fg);
-  --a11y-sidebar-active: var(--slm-bar-on);
 }
 
 /* ===== Tailwind aliases: the same --color-autobot-* names as autobot-frontend =====

@@ -55,4 +55,31 @@ def require_principal_id(current_user: Optional[Dict[str, Any]]) -> str:
     return owner
 
 
-__all__ = ["require_principal_id", "resolve_principal_id"]
+def resolve_audit_actor_id(current_user: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The stable id to record as the *actor* of an audited action, or None when there is none.
+
+    A human principal resolves to its owner id (``resolve_principal_id``). An admitted service principal
+    (``service: True``, minted by ``auth_service_opt_in.admit_service``) resolves to its stable
+    ``service:<caller>`` name, which is not a user id and so is never an owner scope. Anything else, including a
+    bare ``username``, resolves to None: a mutable name is not an identity (#22222).
+    """
+    human = resolve_principal_id(current_user)
+    if human or not current_user:
+        return human
+    name = current_user.get("username")
+    if current_user.get("service") is True and isinstance(name, str) and name:
+        return name
+    return None
+
+
+def require_audit_actor_id(current_user: Optional[Dict[str, Any]]) -> str:
+    """``resolve_audit_actor_id``, or a 401 when the caller is neither a human principal nor an admitted service."""
+    actor = resolve_audit_actor_id(current_user)
+    if not actor:
+        from fastapi import HTTPException  # lazy: keep this module import-free (see the module docstring)
+
+        raise HTTPException(status_code=401, detail="User identity required")
+    return actor
+
+
+__all__ = ["require_audit_actor_id", "require_principal_id", "resolve_audit_actor_id", "resolve_principal_id"]

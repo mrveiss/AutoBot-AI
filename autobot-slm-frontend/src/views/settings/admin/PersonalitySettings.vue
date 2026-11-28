@@ -385,7 +385,7 @@ onMounted(async () => {
                   'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
                   editForm.tone === opt.value
                     ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-border-strong'
-                    : 'bg-white text-autobot-text-secondary border-autobot-border-strong hover:border-autobot-border-strong'
+                    : 'bg-white text-autobot-text-secondary border-autobot-border-strong hover:border-autobot-primary'
                 ]"
                 @click="editForm.tone = opt.value"
               >{{ opt.label }}</button>

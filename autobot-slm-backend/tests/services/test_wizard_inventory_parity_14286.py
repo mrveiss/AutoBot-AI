@@ -80,6 +80,8 @@ def _load():
         "services.ansible_utils",
         "services.auth",
         "services.database",
+        "services.git_failure",
+        "services.inventory_files",  # #22262
         "services.inventory_builder",
         "services.playbook_executor",
         "services.provision_progress",
@@ -98,6 +100,11 @@ def _load():
         placeholder = sys.modules["config"]
         placeholder.settings = SimpleNamespace()
 
+        # #22262: inventory_builder re-exports write_temp_* from inventory_files,
+        # so the real one must be importable (and published) before it loads.
+        sys.modules["services.inventory_files"] = _real_module(
+            "_if_14286", _BACKEND_ROOT / "services" / "inventory_files.py"
+        )
         inventory_builder = _real_module("_ib_14286", _BACKEND_ROOT / "services" / "inventory_builder.py")
         role_registry = _real_module("_rr_14286", _BACKEND_ROOT / "services" / "role_registry.py")
 

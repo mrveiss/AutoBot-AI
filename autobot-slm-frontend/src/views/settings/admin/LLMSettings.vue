@@ -342,7 +342,7 @@ onMounted(fetchConfig)
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div v-for="(provider, idx) in config.providers" :key="provider.name"
           class="border rounded-lg p-4"
-          :class="config.active_provider === provider.name ? 'border-autobot-primary-light bg-autobot-info-bg' : 'border-autobot-border bg-white'">
+          :class="config.active_provider === provider.name ? 'border-autobot-primary-light bg-autobot-info-bg' : 'border-autobot-border bg-autobot-bg-secondary'">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
               <span class="font-medium text-autobot-text-primary">{{ provider.name }}</span>
@@ -373,7 +373,7 @@ onMounted(fetchConfig)
 
     <!-- Server Settings Tab -->
     <div v-else-if="activeTab === 'server'" class="space-y-6">
-      <div class="bg-white border border-autobot-border rounded-lg p-6">
+      <div class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-6">
         <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.ollamaServer') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -391,7 +391,7 @@ onMounted(fetchConfig)
         </div>
       </div>
 
-      <div class="bg-white border border-autobot-border rounded-lg p-6">
+      <div class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-6">
         <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.concurrency') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -418,7 +418,7 @@ onMounted(fetchConfig)
         </div>
       </div>
 
-      <div class="bg-white border border-autobot-border rounded-lg p-6">
+      <div class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-6">
         <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.performance') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex items-center justify-between">
@@ -450,7 +450,7 @@ onMounted(fetchConfig)
 
     <!-- Models Tab -->
     <div v-else-if="activeTab === 'models'" class="space-y-6">
-      <div class="bg-white border border-autobot-border rounded-lg p-6">
+      <div class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-6">
         <div class="mb-4">
           <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.gPUModels') }}</h3>
           <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.requireGPUForReasonable') }}</p>
@@ -477,7 +477,7 @@ onMounted(fetchConfig)
         </div>
       </div>
 
-      <div class="bg-white border border-autobot-border rounded-lg p-6">
+      <div class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-6">
         <div class="mb-4">
           <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.cPUModels') }}</h3>
           <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.lightweightModelsThatRun') }}</p>

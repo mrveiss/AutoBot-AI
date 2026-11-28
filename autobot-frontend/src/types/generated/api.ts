@@ -60967,6 +60967,8 @@ export interface components {
             status: string;
             /** Requested By Agent */
             requested_by_agent?: string | null;
+            /** Requested By Name */
+            requested_by_name?: string | null;
             /** Decided By User */
             decided_by_user?: string | null;
             /** Workflow Id */

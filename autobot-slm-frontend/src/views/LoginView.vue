@@ -138,7 +138,7 @@ onMounted(async () => {
                 required
                 autocomplete="username"
                 aria-required="true"
-                class="block w-full pl-10 pr-3 py-2.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
+                class="block w-full pl-10 pr-3 py-2.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-autobot-primary transition-colors"
                 :placeholder="$t('loginView.placeholderUsername')"
               />
             </div>
@@ -162,7 +162,7 @@ onMounted(async () => {
                 required
                 autocomplete="current-password"
                 aria-required="true"
-                class="block w-full pl-10 pr-10 py-2.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
+                class="block w-full pl-10 pr-10 py-2.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-autobot-primary transition-colors"
                 :placeholder="$t('loginView.placeholderPassword')"
               />
               <button
@@ -191,7 +191,7 @@ onMounted(async () => {
           <button
             type="submit"
             :disabled="authStore.loading"
-            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-autobot-primary text-autobot-text-on-primary font-medium rounded-lg hover:bg-autobot-primary-hover focus:ring-4 focus:ring-autobot-primary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg v-if="authStore.loading" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -204,7 +204,7 @@ onMounted(async () => {
         <!-- MFA Verification Form -->
         <div v-else class="space-y-6" role="form" :aria-label="$t('loginView.twoFactorAuthenticationAria')">
           <div class="text-center mb-4">
-            <svg class="w-12 h-12 text-primary-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="w-12 h-12 text-autobot-primary mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
             <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('loginView.twoFactorAuthentication') }}</h2>
@@ -221,7 +221,7 @@ onMounted(async () => {
               maxlength="8"
               autocomplete="one-time-code"
               :aria-label="$t('loginView.digitAuthenticationCodeAria')"
-              class="block w-full text-center text-2xl tracking-widest py-3 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+              class="block w-full text-center text-2xl tracking-widest py-3 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-autobot-primary"
               :placeholder="$t('loginView.placeholderMfaCode')"
               @keyup.enter="handleMFAVerify"
             />
@@ -232,7 +232,7 @@ onMounted(async () => {
           <button
             @click="handleMFAVerify"
             :disabled="authStore.loading || mfaCode.length < 6"
-            class="w-full py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+            class="w-full py-2.5 px-4 bg-autobot-primary text-autobot-text-on-primary font-medium rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50"
           >
             {{ authStore.loading ? $t('loginView.verifying') : $t('loginView.verify') }}
           </button>
@@ -297,7 +297,7 @@ onMounted(async () => {
 <style scoped>
 input:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--a11y-focus-ring);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 </style>

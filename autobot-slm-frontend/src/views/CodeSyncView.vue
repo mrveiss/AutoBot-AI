@@ -983,7 +983,7 @@ onUnmounted(() => {
                   :href="getCommitUrl(stage.sha)!"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="font-mono text-primary-600 hover:underline"
+                  class="font-mono text-autobot-primary hover:underline"
                   :title="stage.sha"
                 >{{ stage.sha }}</a>
                 <span v-else class="font-mono">{{ stage.sha }}</span>
@@ -998,7 +998,7 @@ onUnmounted(() => {
               <button
                 v-if="stage.log_lines && stage.log_lines.length > 0"
                 @click="toggleStageLog(stage.name)"
-                class="mt-1 text-xs text-primary-600 hover:text-primary-800"
+                class="mt-1 text-xs text-autobot-primary hover:text-autobot-primary-dark"
               >
                 {{ expandedStageLogs.has(stage.name) ? $t('codeSyncView.collapseLog') : $t('codeSyncView.expandLog') }}
               </button>
@@ -1093,7 +1093,7 @@ onUnmounted(() => {
             :href="getCommitUrl(codeSync.latestVersion.value)!"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-lg font-semibold font-mono text-primary-600 hover:text-primary-800 hover:underline cursor-pointer"
+            class="text-lg font-semibold font-mono text-autobot-primary hover:text-autobot-primary-dark hover:underline cursor-pointer"
             :title="codeSync.latestVersion.value || $t('codeSyncView.viewCommitOnGithub')"
           >
             {{ formatVersion(codeSync.latestVersion.value) }}
@@ -1260,7 +1260,7 @@ onUnmounted(() => {
               :href="getCommitUrl(codeSourceCommit.full)!"
               target="_blank"
               rel="noopener noreferrer"
-              class="font-mono text-primary-600 hover:text-primary-800 hover:underline"
+              class="font-mono text-autobot-primary hover:text-autobot-primary-dark hover:underline"
               :title="codeSourceCommit.full || $t('codeSyncView.viewCommitOnGithub')"
             >
               {{ codeSourceCommit.display }}
@@ -1298,7 +1298,7 @@ onUnmounted(() => {
             id="drift-component-select"
             v-model="selectedDriftComponent"
             :disabled="isDriftLoading || isResolvingDrift"
-            class="form-select text-sm rounded border-autobot-border-strong focus:border-primary-500 focus:ring-primary-500"
+            class="form-select text-sm rounded border-autobot-border-strong focus:border-autobot-primary focus:ring-autobot-primary"
           >
             <option value="autobot-slm-backend">autobot-slm-backend</option>
             <option value="autobot-slm-frontend">autobot-slm-frontend</option>
@@ -1378,7 +1378,7 @@ onUnmounted(() => {
           </button>
           <button
             @click="showDriftDetails = !showDriftDetails"
-            class="text-sm text-primary-600 hover:text-primary-800 font-medium"
+            class="text-sm text-autobot-primary hover:text-autobot-primary-dark font-medium"
           >
             {{ showDriftDetails ? $t('codeSyncView.hideDetails') : $t('codeSyncView.showDetails') }}
           </button>
@@ -1536,7 +1536,7 @@ onUnmounted(() => {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSyncView.restartStrategy') }}</label>
           <select
             v-model="syncStrategy"
-            class="px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="graceful">{{ $t('codeSyncView.gracefulWaitForTasks') }}</option>
             <option value="immediate">{{ $t('codeSyncView.immediate') }}</option>
@@ -1548,7 +1548,7 @@ onUnmounted(() => {
             <input
               type="checkbox"
               v-model="restartAfterSync"
-              class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
             />
             <span class="text-sm text-autobot-text-secondary">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
           </label>
@@ -1694,7 +1694,7 @@ onUnmounted(() => {
 
       <!-- Loading State -->
       <div v-if="codeSync.loading.value && codeSync.pendingNodes.value.length === 0" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
 
       <!-- Pending Updates Table -->
@@ -1707,7 +1707,7 @@ onUnmounted(() => {
                 :checked="allSelected"
                 :indeterminate="someSelected"
                 @change="toggleSelectAll"
-                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
               />
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('codeSyncView.hostname') }}</th>
@@ -1721,14 +1721,14 @@ onUnmounted(() => {
           <tr
             v-for="node in codeSync.pendingNodes.value"
             :key="node.node_id"
-            :class="{ 'bg-primary-50': selectedNodes.has(node.node_id) }"
+            :class="{ 'bg-autobot-primary-bg': selectedNodes.has(node.node_id) }"
           >
             <td class="px-6 py-4">
               <input
                 type="checkbox"
                 :checked="selectedNodes.has(node.node_id)"
                 @change="toggleNode(node.node_id)"
-                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-autobot-primary rounded-sm focus:ring-autobot-primary"
               />
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-autobot-text-primary">
@@ -1743,7 +1743,7 @@ onUnmounted(() => {
                 :href="getCommitUrl(node.current_version)!"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="text-primary-600 hover:text-primary-800 hover:underline"
+                class="text-autobot-primary hover:text-autobot-primary-dark hover:underline"
                 :title="node.current_version || $t('codeSyncView.viewCommitOnGithub')"
               >
                 {{ formatVersion(node.current_version) }}
@@ -1761,7 +1761,7 @@ onUnmounted(() => {
               <button
                 @click="handleSyncNode(node)"
                 :disabled="syncingNodeId === node.node_id"
-                class="text-primary-600 hover:text-primary-800 font-medium text-sm disabled:opacity-50"
+                class="text-autobot-primary hover:text-autobot-primary-dark font-medium text-sm disabled:opacity-50"
               >
                 {{ syncingNodeId === node.node_id ? $t('codeSyncView.syncing') : $t('codeSyncView.sync') }}
               </button>
@@ -1889,7 +1889,7 @@ onUnmounted(() => {
                 @click="handleToggleSchedule(schedule)"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden',
-                  schedule.enabled ? 'bg-primary-600' : 'bg-autobot-bg-active',
+                  schedule.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-active',
                 ]"
               >
                 <span
@@ -1905,7 +1905,7 @@ onUnmounted(() => {
                 <button
                   @click="handleRunSchedule(schedule)"
                   :disabled="runningScheduleId === schedule.id"
-                  class="text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
+                  class="text-autobot-primary hover:text-autobot-primary-dark font-medium disabled:opacity-50"
                   :title="$t('codeSyncView.runNow')"
                 >
                   {{ runningScheduleId === schedule.id ? $t('codeSyncView.running') : $t('codeSyncView.run') }}

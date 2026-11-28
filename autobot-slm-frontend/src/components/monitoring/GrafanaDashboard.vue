@@ -232,8 +232,8 @@ onUnmounted(() => {
   width: 100%;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--slm-gray-100);
-  border: 1px solid var(--slm-gray-200);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
 }
 
 .grafana-embed.fullscreen {
@@ -261,7 +261,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--slm-gray-50);
+  background: var(--surface2);
   z-index: var(--z-10);
 }
 
@@ -270,14 +270,14 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--slm-gray-50);
-  border-top: 1px solid var(--slm-gray-200);
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
 }
 
 .select-sm {
   padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-default);
   font-size: 13px;
   cursor: pointer;
@@ -285,7 +285,7 @@ onUnmounted(() => {
 
 .select-sm:focus {
   outline: none;
-  border-color: var(--slm-blue-500);
+  border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
@@ -293,7 +293,7 @@ onUnmounted(() => {
   margin-left: auto;
   padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 14px;
@@ -301,7 +301,7 @@ onUnmounted(() => {
 }
 
 .btn-icon:hover {
-  background: var(--slm-gray-100);
+  background: var(--bg-tertiary);
 }
 
 .btn {

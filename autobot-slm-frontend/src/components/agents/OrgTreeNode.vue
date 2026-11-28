@@ -75,13 +75,13 @@ li {
   margin-bottom: 2px;
   list-style: none;
 }
-li:hover { background: #f3f4f6; }
-li.selected { background: #e0e7ff; }
-.node-name { font-weight: 500; color: var(--text-primary, #1a1a2e); }
-.reports-count { font-size: 11px; color: var(--text-secondary, #6b7280); margin-left: auto; }
+li:hover { background: var(--bg-tertiary); }
+li.selected { background: var(--color-primary-bg); }
+.node-name { font-weight: 500; color: var(--text-primary); }
+.reports-count { font-size: 11px; color: var(--text-secondary); margin-left: auto; }
 .role-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
-.badge-purple { background: #ede9fe; color: #7c3aed; }
-.badge-blue { background: #dbeafe; color: #2563eb; }
-.badge-green { background: #d1fae5; color: #059669; }
-.badge-gray { background: #f3f4f6; color: #6b7280; }
+.badge-purple { background: color-mix(in srgb, var(--chart-5) 10%, transparent); color: var(--chart-5); }
+.badge-blue { background: var(--info-bg); color: var(--info-fg); }
+.badge-green { background: var(--color-success-bg); color: var(--color-success-hover); }
+.badge-gray { background: var(--bg-tertiary); color: var(--muted); }
 </style>

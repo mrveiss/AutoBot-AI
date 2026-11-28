@@ -365,7 +365,7 @@ onUnmounted(() => {
           v-model="searchQuery"
           type="text"
           :placeholder="$t('fleet.nodeServicesPanel.searchServices')"
-          class="w-full pl-9 pr-4 py-1.5 text-sm border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="w-full pl-9 pr-4 py-1.5 text-sm border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
         />
       </div>
 
@@ -374,7 +374,7 @@ onUnmounted(() => {
         <label class="text-sm text-autobot-text-secondary">{{ $t('fleet.nodeServicesPanel.status') }}</label>
         <select
           v-model="statusFilter"
-          class="text-sm border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="text-sm border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
         >
           <option v-for="option in statusOptions" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -580,7 +580,7 @@ onUnmounted(() => {
         <input
           type="checkbox"
           v-model="autoRefresh"
-          class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+          class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
         />{{ $t('fleet.nodeServicesPanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
       <div class="text-xs text-autobot-text-tertiary">
         <span class="font-medium text-autobot-text-secondary">{{ filteredServices.length }}</span>{{ $t('fleet.nodeServicesPanel.ofValue0Services', { value0: totalServices }) }}<span v-if="lastRefresh">{{ $t('fleet.nodeServicesPanel.updatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
