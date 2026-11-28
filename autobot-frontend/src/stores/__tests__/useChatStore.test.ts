@@ -23,11 +23,11 @@ describe('useChatStore', () => {
       const sessionId = store.createNewSession('Test Session')
       store.addMessage({
         content: 'User message with sensitive data',
-        sender: 'user'
+        sender: 'user',
       })
       store.addMessage({
         content: 'Assistant response with private info',
-        sender: 'assistant'
+        sender: 'assistant',
       })
 
       // Verify session has messages in memory
@@ -35,15 +35,15 @@ describe('useChatStore', () => {
 
       // Simulate what the serializer would do (removes message bodies)
       const serialized = JSON.stringify({
-        sessions: store.sessions.map(session => ({
+        sessions: store.sessions.map((session) => ({
           id: session.id,
           title: session.title,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
-          isActive: session.isActive
+          isActive: session.isActive,
         })),
         currentSessionId: store.currentSessionId,
-        sidebarCollapsed: store.sidebarCollapsed
+        sidebarCollapsed: store.sidebarCollapsed,
       })
 
       const parsed = JSON.parse(serialized)
@@ -53,7 +53,7 @@ describe('useChatStore', () => {
         title: 'Test Session',
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
-        isActive: true
+        isActive: true,
       })
     })
 
@@ -68,15 +68,15 @@ describe('useChatStore', () => {
 
       // Simulate serializer removing message bodies
       const serialized = JSON.stringify({
-        sessions: store.sessions.map(session => ({
+        sessions: store.sessions.map((session) => ({
           id: session.id,
           title: session.title,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
-          isActive: session.isActive
+          isActive: session.isActive,
         })),
         currentSessionId: store.currentSessionId,
-        sidebarCollapsed: store.sidebarCollapsed
+        sidebarCollapsed: store.sidebarCollapsed,
       })
 
       const parsed = JSON.parse(serialized)
@@ -102,15 +102,15 @@ describe('useChatStore', () => {
 
       // Simulate what would be persisted (no message bodies)
       const persistedData = {
-        sessions: store.sessions.map(session => ({
+        sessions: store.sessions.map((session) => ({
           id: session.id,
           title: session.title,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
-          isActive: session.isActive
+          isActive: session.isActive,
         })),
         currentSessionId: store.currentSessionId,
-        sidebarCollapsed: store.sidebarCollapsed
+        sidebarCollapsed: store.sidebarCollapsed,
       }
 
       // Create new store and simulate deserialization
@@ -126,10 +126,10 @@ describe('useChatStore', () => {
           messages: [],
           createdAt: new Date(session.createdAt as string),
           updatedAt: new Date(session.updatedAt as string),
-          isActive: false
+          isActive: false,
         })),
         currentSessionId: persistedData.currentSessionId,
-        sidebarCollapsed: persistedData.sidebarCollapsed
+        sidebarCollapsed: persistedData.sidebarCollapsed,
       })
 
       // Verify sessions were restored without messages
@@ -156,19 +156,19 @@ describe('useChatStore', () => {
           messages: [],
           createdAt: new Date(),
           updatedAt: new Date(),
-          isActive: false
-        }
+          isActive: false,
+        },
       ]
 
       store.syncSessionsWithBackend(backendSessions, false)
 
       // Both sessions should exist (merged)
       expect(store.sessions).toHaveLength(2)
-      expect(store.sessions.map(s => s.id)).toContain(localSessionId)
-      expect(store.sessions.map(s => s.id)).toContain('backend-session-1')
+      expect(store.sessions.map((s) => s.id)).toContain(localSessionId)
+      expect(store.sessions.map((s) => s.id)).toContain('backend-session-1')
 
       // Local session messages should be preserved
-      const localSession = store.sessions.find(s => s.id === localSessionId)
+      const localSession = store.sessions.find((s) => s.id === localSessionId)
       expect(localSession?.messages).toHaveLength(1)
     })
 
@@ -202,7 +202,7 @@ describe('useChatStore', () => {
           messages: [],
           createdAt: new Date(),
           updatedAt: new Date(),
-          isActive: false
+          isActive: false,
         },
         {
           id: 'backend-2',
@@ -210,17 +210,17 @@ describe('useChatStore', () => {
           messages: [],
           createdAt: new Date(),
           updatedAt: new Date(),
-          isActive: false
-        }
+          isActive: false,
+        },
       ]
 
       store.syncSessionsWithBackend(backendSessions, false)
 
       // Local session should still exist
-      expect(store.sessions.map(s => s.id)).toContain(localSessionId)
+      expect(store.sessions.map((s) => s.id)).toContain(localSessionId)
 
       // Local messages should be preserved
-      const localSession = store.sessions.find(s => s.id === localSessionId)
+      const localSession = store.sessions.find((s) => s.id === localSessionId)
       expect(localSession?.messages).toHaveLength(1)
     })
   })
@@ -245,7 +245,7 @@ describe('useChatStore', () => {
       expect(returnedId).toBe(customId)
       expect(store.currentSessionId).toBe(customId)
 
-      const session = store.sessions.find(s => s.id === customId)
+      const session = store.sessions.find((s) => s.id === customId)
       expect(session).toBeDefined()
       expect(session?.id).toBe(customId)
     })
@@ -258,7 +258,7 @@ describe('useChatStore', () => {
       expect(returnedId).toBeTruthy()
       expect(returnedId).not.toBe('')
 
-      const session = store.sessions.find(s => s.id === returnedId)
+      const session = store.sessions.find((s) => s.id === returnedId)
       expect(session).toBeDefined()
     })
   })
@@ -275,9 +275,19 @@ describe('useChatStore', () => {
       const store = useChatStore()
       store.createNewSession('Dedup Session')
 
-      store.addOrUpdateMessage({ id: serverId, content: 'The answer is 42.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        id: serverId,
+        content: 'The answer is 42.',
+        sender: 'assistant',
+        type: 'response',
+      })
       // Second delivery of the identical reply (e.g. from a poll/refresh)
-      store.addOrUpdateMessage({ id: serverId, content: 'The answer is 42.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        id: serverId,
+        content: 'The answer is 42.',
+        sender: 'assistant',
+        type: 'response',
+      })
 
       expect(store.currentMessages).toHaveLength(1)
       expect(store.currentMessages[0].content).toBe('The answer is 42.')
@@ -288,9 +298,19 @@ describe('useChatStore', () => {
       store.createNewSession('Dedup Session')
 
       // Stream / normal path: server id lands in `id`
-      store.addOrUpdateMessage({ id: serverId, content: 'Grounded reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        id: serverId,
+        content: 'Grounded reply.',
+        sender: 'assistant',
+        type: 'response',
+      })
       // Poll / live-event echo: the same server id lands in `message_id`
-      store.addOrUpdateMessage({ message_id: serverId, content: 'Grounded reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        message_id: serverId,
+        content: 'Grounded reply.',
+        sender: 'assistant',
+        type: 'response',
+      })
 
       expect(store.currentMessages).toHaveLength(1)
     })
@@ -300,9 +320,19 @@ describe('useChatStore', () => {
       store.createNewSession('Dedup Session')
 
       // Streaming placeholder carries the backend id in message_id (frontend id differs)
-      store.addMessage({ content: 'Streamed reply.', sender: 'assistant', type: 'response', message_id: serverId })
+      store.addMessage({
+        content: 'Streamed reply.',
+        sender: 'assistant',
+        type: 'response',
+        message_id: serverId,
+      })
       // Live-event echo re-adds the same reply keyed on the server id
-      store.addOrUpdateMessage({ id: serverId, content: 'Streamed reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        id: serverId,
+        content: 'Streamed reply.',
+        sender: 'assistant',
+        type: 'response',
+      })
 
       expect(store.currentMessages).toHaveLength(1)
       expect(store.currentMessages[0].content).toBe('Streamed reply.')
@@ -312,8 +342,18 @@ describe('useChatStore', () => {
       const store = useChatStore()
       store.createNewSession('Dedup Session')
 
-      store.addOrUpdateMessage({ id: 'srv-1', content: 'First reply.', sender: 'assistant', type: 'response' })
-      store.addOrUpdateMessage({ id: 'srv-2', content: 'Second reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({
+        id: 'srv-1',
+        content: 'First reply.',
+        sender: 'assistant',
+        type: 'response',
+      })
+      store.addOrUpdateMessage({
+        id: 'srv-2',
+        content: 'Second reply.',
+        sender: 'assistant',
+        type: 'response',
+      })
 
       expect(store.currentMessages).toHaveLength(2)
     })
@@ -328,6 +368,49 @@ describe('useChatStore', () => {
       store.addOrUpdateMessage({ content: 'Second reply.', sender: 'assistant', type: 'response' })
 
       expect(store.currentMessages).toHaveLength(2)
+    })
+  })
+
+  describe('importSession company fields - #16905', () => {
+    it('omitted fields keep the existing company', () => {
+      const store = useChatStore()
+      store.createNewSession('Chat', 'imp-1')
+      store.importSession({ ...store.exportSession('imp-1')!, companyId: 'c1', unassigned: false })
+      const omitting = { ...store.exportSession('imp-1')! } as Record<string, unknown>
+      delete omitting.companyId
+      delete omitting.unassigned
+      store.importSession(omitting as never)
+
+      const kept = store.exportSession('imp-1')!
+      expect(kept.companyId).toBe('c1')
+      expect(kept.unassigned).toBe(false)
+    })
+
+    it('a company-scoped import without an unassigned flag clears a held Unassigned flag', () => {
+      const store = useChatStore()
+      store.createNewSession('Chat', 'imp-2')
+      store.importSession({ ...store.exportSession('imp-2')!, unassigned: true })
+      const assigned = { ...store.exportSession('imp-2')!, companyId: 'c2' } as Record<
+        string,
+        unknown
+      >
+      delete assigned.unassigned
+      store.importSession(assigned as never)
+
+      const moved = store.exportSession('imp-2')!
+      expect(moved.companyId).toBe('c2')
+      expect(moved.unassigned).toBe(false)
+    })
+
+    it('an empty companyId without an unassigned flag leaves the held Unassigned flag unchanged', () => {
+      const store = useChatStore()
+      store.createNewSession('Chat', 'imp-3')
+      store.importSession({ ...store.exportSession('imp-3')!, unassigned: true })
+      const emptied = { ...store.exportSession('imp-3')!, companyId: '' } as Record<string, unknown>
+      delete emptied.unassigned
+      store.importSession(emptied as never)
+
+      expect(store.exportSession('imp-3')!.unassigned).toBe(true)
     })
   })
 })

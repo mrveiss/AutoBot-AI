@@ -128,6 +128,7 @@ INDEX_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("approvals", "uq_approvals_pending_empty_collection_delete"),
     ),
     "20261124_123": (("approvals", "uq_approvals_pending_stale_sync_files_cleanup"),),
+    "20261124_124": (("approvals", "uq_approvals_pending_chat_company"),),
 }
 
 # Structural markers for constraint-only revisions: they create no table and no column, so the AST probe sees

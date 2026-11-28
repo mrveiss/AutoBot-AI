@@ -4,24 +4,38 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 
+import apiClient from '@/utils/ApiClient'
 import { ChatRepository } from '../ChatRepository'
 
 async function list(data: unknown) {
   const repo = new ChatRepository()
-  vi.spyOn(repo as unknown as { get: () => Promise<unknown> }, 'get').mockResolvedValue({ data })
+  vi.spyOn(apiClient, 'call').mockResolvedValue(data as never)
   return repo.getChatList()
 }
 
 describe('ChatRepository.getChatList Unassigned (#21997)', () => {
   it('flags the unassigned chats and keeps the company chats unflagged', async () => {
-    const out = await list({ sessions: [{ id: 'a1', title: 'A' }], unassigned: [{ id: 'u1', title: 'U' }] })
-    expect(out.map((c) => [c.id, c.unassigned])).toEqual([['a1', undefined], ['u1', true]])
+    const out = await list({
+      sessions: [{ id: 'a1', title: 'A' }],
+      unassigned: [{ id: 'u1', title: 'U' }],
+    })
+    expect(out.map((c) => [c.id, c.unassigned])).toEqual([
+      ['a1', undefined],
+      ['u1', true],
+    ])
   })
 
   it('lists a chat once when the backend returns it in both lists (no active company)', async () => {
-    const out = await list({ sessions: [{ id: 'u1' }, { id: 'u2' }], unassigned: [{ id: 'u1' }, { id: 'u2' }] })
+    const out = await list({
+      sessions: [{ id: 'u1' }, { id: 'u2' }],
+      unassigned: [{ id: 'u1' }, { id: 'u2' }],
+    })
     expect(out.map((c) => c.id)).toEqual(['u1', 'u2'])
     expect(out.every((c) => c.unassigned === true)).toBe(true)
   })
@@ -29,5 +43,11 @@ describe('ChatRepository.getChatList Unassigned (#21997)', () => {
   it('still reads a response without an unassigned list', async () => {
     const out = await list({ sessions: [{ id: 'a1' }] })
     expect(out.map((c) => c.id)).toEqual(['a1'])
+  })
+
+  it('rethrows a failed request so it stays distinguishable from an empty list (#16905)', async () => {
+    const repo = new ChatRepository()
+    vi.spyOn(apiClient, 'call').mockRejectedValue(new Error('boom'))
+    await expect(repo.getChatList()).rejects.toThrow('boom')
   })
 })

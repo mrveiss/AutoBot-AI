@@ -29,7 +29,7 @@ from security.session_company import (
     company_of_session,
     may_act_in_company,
 )
-from security.session_share_audit import ShareAuditError, audited_change
+from security.session_share_audit import ShareAuditError, assign_company_audited
 from utils.chat_utils import (
     create_chat_response,
     generate_request_id,
@@ -57,19 +57,9 @@ async def _assign_audited(request: Request, session_id: str, company: str, user:
     A lost race (another assignment won) is a 409 and its outcome row is ``failed``; no durable ``attempted`` row
     means no change (503).
     """
-    manager = get_chat_history_manager(request)
-
-    async def write() -> bool:
-        return await manager.set_metadata_if_unset(session_id, "company_id", company)
-
     try:
-        changed = await audited_change(
-            "assign_company",
-            session_shares.audit_actor(request, user),
-            session_id,
-            [],
-            write,
-            details={"company_id": company},
+        changed = await assign_company_audited(
+            get_chat_history_manager(request), session_id, company, session_shares.audit_actor(request, user)
         )
     except ShareAuditError:
         raise fixed_refusal(503) from None

@@ -12,6 +12,7 @@ import { requestQueue } from '@/composables/useRequestQueue'
 import { stripBracketTags } from '@/utils/llmProtocolTags'
 import { showAttachmentNotice } from '@/utils/attachmentNotice'
 import { keepUnansweredQuestions } from './stallQuestions'
+import { importLoadedSessions } from './loadedSessions'
 import { ActiveStreams } from './activeStreams'
 import { StreamThrottle } from './streamThrottle'
 import { mapMessageType } from './streamFormat'
@@ -616,8 +617,12 @@ export class ChatController {
   async loadChatSessions(keepOpen = false): Promise<void> {
     const seq = ++this._listSeq
     try {
-      const sessions = await chatRepository.getChatList()
+      const named = this.chatStore.activeChatContext?.company_id
+      const sessions = await chatRepository.getChatList(named)
       if (seq !== this._listSeq) return // a newer load started: this response is stale, never clear for it
+      // #16905: the scope (Company OS names one; /chat none) changed mid-request, so this is another list
+      if (this.chatStore.activeChatContext?.company_id !== named)
+        return this.loadChatSessions(keepOpen)
       const open = keepOpen ? this.chatStore.currentSessionId : null
 
       // FIXED: Clear existing sessions before loading to prevent duplicates
@@ -625,12 +630,7 @@ export class ChatController {
 
       // Update store with loaded sessions
       if (Array.isArray(sessions)) {
-        sessions.forEach(session => {
-          // #9724: the store needs isActive. Dates are taken as the repository
-          // mapped them (#20865) — re-deriving them from snake_case fields the
-          // repository does not return produced Invalid Date.
-          this.chatStore.importSession({ ...session, title: session.title ?? '', isActive: false })
-        })
+        importLoadedSessions(this.chatStore, sessions)
         logger.debug(`Loaded ${sessions.length} chat sessions`)
         if (open && sessions.some(x => x.id === open)) await this.switchToSession(open)
       } else {

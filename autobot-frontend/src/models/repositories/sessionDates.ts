@@ -13,6 +13,8 @@ export interface ChatListEntry {
   isActive: boolean
   /** The chat carries no company yet (#21997). */
   unassigned?: boolean
+  /** The company the chat is tagged with; empty when it is Unassigned (#16905). */
+  companyId?: string
 }
 
 /**
@@ -35,6 +37,9 @@ export interface BackendSessionList<T> {
   unassigned?: T[]
 }
 
+/** The list reply as the API sends it: the list itself, or wrapped in `data` (#16905). */
+export type ChatListReply<T> = BackendSessionList<T> & { data?: BackendSessionList<T> }
+
 /**
  * The company's chats plus the Unassigned set, each chat once (#21997). With no active company the
  * backend returns the same untagged chats in both lists, so an id in `unassigned` is flagged and
@@ -46,5 +51,8 @@ export function withUnassigned<T extends { id?: string; chatId?: string }>(
 ): Array<T & { unassigned?: boolean }> {
   const idOf = (s: T) => s.id || s.chatId
   const loose = new Set(unassigned.map(idOf))
-  return [...sessions.filter((s) => !loose.has(idOf(s))), ...unassigned.map((s) => ({ ...s, unassigned: true }))]
+  return [
+    ...sessions.filter((s) => !loose.has(idOf(s))),
+    ...unassigned.map((s) => ({ ...s, unassigned: true })),
+  ]
 }

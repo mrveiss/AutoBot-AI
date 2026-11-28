@@ -7,12 +7,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchWithAuth = vi.fn()
-vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/utils/fetchWithAuth', () => ({
+  fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args),
+}))
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 vi.mock('@/i18n', () => ({
   default: {
     global: {
-      t: (key: string, params: Record<string, unknown>) => `${key}|${params.filename}|${params.limit}`,
+      t: (key: string, params: Record<string, unknown>) =>
+        `${key}|${params.filename}|${params.limit}`,
     },
   },
 }))
@@ -50,7 +57,9 @@ describe('ChatRepository.getChatMessages stored attachment notices (#21006)', ()
     fetchWithAuth.mockResolvedValue({
       ok: true,
       headers: { get: () => 'application/json' },
-      json: async () => ({ data: { messages: [{ ...stored, messageType: 'response', text: 'hello' }] } }),
+      json: async () => ({
+        data: { messages: [{ ...stored, messageType: 'response', text: 'hello' }] },
+      }),
     })
     const [message] = await new ChatRepository().getChatMessages('chat-1')
     expect(message.content).toBe('hello')

@@ -138,3 +138,27 @@ async def unshare_audited(redis, session_id: str, user_id: str, actor: dict) -> 
         [user_id],
         lambda: session_shares.remove_share(redis, session_id, user_id),
     )
+
+
+async def assign_company_audited(manager, session_id: str, company: str, actor: dict) -> bool:
+    """Write a chat's company once, between its audit rows (#21997): the one path every assignment takes.
+
+    A compare-and-set under the session lease: ``False`` (outcome row ``failed``) when the chat already has a
+    company, so an assignment is made once and never moved. ``ShareAuditError`` when no ``attempted`` row could be
+    written, in which case nothing was changed. The route (owner assigns) and the approval handler (an approved
+    proposal, #16905) both call this; neither has a second way to write the key.
+    """
+
+    async def write() -> bool:
+        return await manager.set_metadata_if_unset(session_id, "company_id", company)
+
+    return await audited_change("assign_company", actor, session_id, [], write, details={"company_id": company})
+
+
+async def record_assign_refused(actor: dict, session_id: str, company: str, reason: str) -> None:
+    """The ``failed`` outcome row for an assignment refused before any write (a stale approved proposal, #16905).
+
+    The same row, shape and sink as the compare-and-set's own ``failed`` outcome (:func:`audited_change`), so an
+    approval-gate outcome that changes nothing still leaves its durable trail; the chat is never touched.
+    """
+    await _record_outcome("assign_company", "failed", actor, session_id, {"company_id": company, "reason": reason})

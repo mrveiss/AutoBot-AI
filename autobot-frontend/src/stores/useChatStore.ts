@@ -9,6 +9,7 @@ import type { ChatMessage } from '@/types/api'
 import { buildVncClientUrl, type VncClientHost } from '@/config/vnc-client'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
+import { refreshExistingCompany } from './chatSessionCompany'
 import { usePendingApproval } from './chatPendingApproval'
 import { debugPersistenceState as debugPersistenceStateCheck } from './chatPersistenceDebug'
 
@@ -65,6 +66,7 @@ export interface ChatSession {
   sessionSecrets?: SessionSecret[]
   // GH#8987: folder assignment (folder_id from useFolderStore)
   folderId?: string | null
+  companyId?: string // #16905 its company (Company OS lists only its own)
   unassigned?: boolean // #21997: no company yet; listed in the Unassigned group until a person assigns one
   // Desktop automation context. DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {
@@ -667,10 +669,7 @@ export const useChatStore = defineStore('chat', () => {
   function importSession(session: ChatSession) {
     // Skip if session already exists (prevent duplicate imports)
     const existingSession = sessions.value.find(s => s.id === session.id)
-    if (existingSession) {
-      logger.debug(`Session ${session.id} already exists, skipping import`)
-      return
-    }
+    if (existingSession) return refreshExistingCompany(existingSession, session)
 
     sessions.value.push(session)
   }

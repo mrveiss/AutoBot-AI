@@ -10,7 +10,11 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 const h = vi.hoisted(() => ({
-  store: { sessions: [] as unknown[], currentSessionId: 'a' as string | null },
+  store: {
+    sessions: [] as unknown[],
+    currentSessionId: 'a' as string | null,
+    activeChatContext: {} as Record<string, unknown>,
+  },
   controller: {
     deleteChatSession: vi.fn().mockResolvedValue(undefined),
     updateSessionTitle: vi.fn(),
@@ -23,23 +27,37 @@ const h = vi.hoisted(() => ({
 }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.store }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
-vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
-vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: h.showToast }) }))
+vi.mock('@/composables/useConfirmDialog', () => ({
+  useConfirmDialog: () => ({ confirm: h.confirm }),
+}))
+vi.mock('@/composables/useNotificationBus', () => ({
+  useNotificationBus: () => ({ showToast: h.showToast }),
+}))
 vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call } }))
 vi.mock('@/utils/conversationFileList', () => ({ mapFileList: () => ({ stats: { total: 0 } }) }))
 
 import { useChatSidebarSessions } from '../useChatSidebarSessions'
 
 const session = (id: string, title: string, content?: string) => ({
-  id, title, updatedAt: new Date(),
+  id,
+  title,
+  updatedAt: new Date(),
   messages: content ? [{ sender: 'user', content }] : [],
 })
 
 function setup() {
   let api!: ReturnType<typeof useChatSidebarSessions>
-  mount({ setup() { api = useChatSidebarSessions(); return () => null } }, {
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
-  })
+  mount(
+    {
+      setup() {
+        api = useChatSidebarSessions()
+        return () => null
+      },
+    },
+    {
+      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+    },
+  )
   return api
 }
 
@@ -51,7 +69,12 @@ beforeEach(() => {
   h.controller.deleteChatSession.mockResolvedValue(undefined)
   h.controller.getSessionFacts.mockResolvedValue({ facts: [{ id: 'f1' }, { id: 'f2' }] })
   h.controller.preserveSessionFacts.mockResolvedValue({ updated_count: 1 })
-  h.store.sessions = reactive([session('abcdefgh12345678', 'Alpha'), session('b', '', 'Hello there, this is a long first message'), session('c', '')])
+  h.store.activeChatContext = {}
+  h.store.sessions = reactive([
+    session('abcdefgh12345678', 'Alpha'),
+    session('b', '', 'Hello there, this is a long first message'),
+    session('c', ''),
+  ])
 })
 
 describe('preview and search', () => {
@@ -118,35 +141,54 @@ describe('rename and share', () => {
     expect(api.shareTargetSessionId.value).toBe('b')
     api.handleShareComplete({ shared_with: ['x'] })
     expect(api.showShareDialog.value).toBe(false)
-    expect(h.showToast).toHaveBeenCalledWith(en.chat.sidebar.sharedSuccess.replace('{count}', '1'), 'success')
+    expect(h.showToast).toHaveBeenCalledWith(
+      en.chat.sidebar.sharedSuccess.replace('{count}', '1'),
+      'success',
+    )
   })
 })
 
 describe('delete with the knowledge-fact preview', () => {
   it.each([
     [[], [], 0, 'Deleted 1 chat'],
-    [[{ id: 'f1' }, { id: 'f2' }], ['f1', 'f2'], 2, 'Deleted 1 chat (facts preserved in knowledge base)'],
+    [
+      [{ id: 'f1' }, { id: 'f2' }],
+      ['f1', 'f2'],
+      2,
+      'Deleted 1 chat (facts preserved in knowledge base)',
+    ],
     [[{ id: 'f1' }, { id: 'f2' }], [], 0, 'Deleted 1 chat and removed associated facts'],
-  ])('toasts the singular rendered count for %j preserving %j', async (facts, keep, confirmed, text) => {
-    h.controller.getSessionFacts.mockResolvedValueOnce({ facts })
-    if (keep.length) h.controller.preserveSessionFacts.mockResolvedValueOnce({ updated_count: confirmed })
-    const api = setup()
-    await api.deleteSession('b')
-    await api.handleDeleteConfirm('delete', undefined, keep as string[])
-    expect(h.showToast).toHaveBeenCalledWith(text, 'success')
-    expect(String(h.showToast.mock.calls.at(-1)?.[0])).not.toMatch(/Deleted\s{2}|\{count\}|chats/)
-  })
+  ])(
+    'toasts the singular rendered count for %j preserving %j',
+    async (facts, keep, confirmed, text) => {
+      h.controller.getSessionFacts.mockResolvedValueOnce({ facts })
+      if (keep.length)
+        h.controller.preserveSessionFacts.mockResolvedValueOnce({ updated_count: confirmed })
+      const api = setup()
+      await api.deleteSession('b')
+      await api.handleDeleteConfirm('delete', undefined, keep as string[])
+      expect(h.showToast).toHaveBeenCalledWith(text, 'success')
+      expect(String(h.showToast.mock.calls.at(-1)?.[0])).not.toMatch(/Deleted\s{2}|\{count\}|chats/)
+    },
+  )
 
   it('loads the preview, then deletes after preserving the ticked facts', async () => {
     const api = setup()
     await api.deleteSession('b')
     expect(api.showDeleteDialog.value).toBe(true)
     expect(api.deleteKBFacts.value).toHaveLength(2)
-    expect(h.call).toHaveBeenCalledWith('get', '/api/conversation-files/conversation/{session_id}/list', { path: { session_id: 'b' } })
+    expect(h.call).toHaveBeenCalledWith(
+      'get',
+      '/api/conversation-files/conversation/{session_id}/list',
+      { path: { session_id: 'b' } },
+    )
     await api.handleDeleteConfirm('delete', undefined, ['f1'])
     expect(h.controller.preserveSessionFacts).toHaveBeenCalledWith('b', ['f1'], true)
     expect(h.controller.deleteChatSession).toHaveBeenCalledWith('b', 'delete', undefined)
-    expect(h.showToast).toHaveBeenCalledWith('Deleted 1 chat (facts removed from some, preserved in others)', 'success')
+    expect(h.showToast).toHaveBeenCalledWith(
+      'Deleted 1 chat (facts removed from some, preserved in others)',
+      'success',
+    )
     expect(api.showDeleteDialog.value).toBe(false)
   })
 
@@ -188,7 +230,11 @@ describe('delete with the knowledge-fact preview', () => {
   it('ignores the previews of a superseded request', async () => {
     const api = setup()
     let release!: (v: unknown) => void
-    h.controller.getSessionFacts.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    h.controller.getSessionFacts.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve
+      }),
+    )
     const first = api.deleteSession('a')
     h.controller.getSessionFacts.mockResolvedValueOnce({ facts: [{ id: 'only-b' }] })
     await api.deleteSession('b')
@@ -210,5 +256,27 @@ describe('delete with the knowledge-fact preview', () => {
     const api = setup()
     api.deleteCurrentSession()
     await vi.waitFor(() => expect(api.deleteTargetSessionId.value).toBe('a'))
+  })
+})
+
+// #16905: the Company OS surface lists only its company's chats and has no Unassigned group; /chat is unchanged.
+describe('company scope of the list', () => {
+  const tagged = (id: string, companyId: string) => ({ ...session(id, id), companyId })
+  const loose = (id: string) => ({ ...session(id, id), unassigned: true })
+  const mixed = () => reactive([tagged('mine', 'CO-A'), tagged('theirs', 'co-b'), loose('stray')])
+
+  it('Company OS shows only the active company chats and no Unassigned group', () => {
+    h.store.sessions = mixed()
+    h.store.activeChatContext = { company_id: 'co-a' }
+    const api = setup()
+    expect(api.filteredSessions.value.map((s) => s.id)).toEqual(['mine'])
+    expect(api.unassignedSessions.value).toEqual([])
+  })
+
+  it('the general sidebar keeps every company chat and its Unassigned group', () => {
+    h.store.sessions = mixed()
+    const api = setup()
+    expect(api.filteredSessions.value.map((s) => s.id)).toEqual(['mine', 'theirs'])
+    expect(api.unassignedSessions.value.map((s) => s.id)).toEqual(['stray'])
   })
 })

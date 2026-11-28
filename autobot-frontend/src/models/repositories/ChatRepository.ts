@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
-import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEntry } from './sessionDates'
+import type { ChatListEntry } from './sessionDates'
+import { fetchChatList } from './sessionList'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
@@ -109,18 +111,6 @@ export interface KBCleanupResult {
   facts_deleted: number
   facts_preserved: number
   cleanup_error?: string | null
-}
-
-/** Minimal session shape returned by the backend list endpoint */
-interface BackendSessionEntry {
-  id?: string
-  chatId?: string
-  title?: string
-  name?: string
-  createdAt?: string
-  createdTime?: string
-  updatedAt?: string
-  lastModified?: string
 }
 
 /** RAG or tool-step source persisted at the top level of a backend message (#4448, #21976). */
@@ -241,14 +231,11 @@ export class ChatRepository {
     onChunk?: (chunk: ChatStreamResponse) => void
   ): Promise<void> {
     try {
-      const response = await fetchWithAuth(
-        `${this.baseURL}${getApiBase()}/chat`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, chat_id: chatId, stream: true }),
-        }
-      )
+      // callRaw: typed contract key, base applied by the client (VITE_API_BASE_PATH). The stream body predates the
+      // generated ChatMessage schema (content/role/session_id), so it is passed as written.
+      const response = await apiClient.callRaw('post', '/api/chat', {
+        body: { message, chat_id: chatId, stream: true } as never,
+      })
 
       if (!response.ok) {
         throw new HttpError(response.status, response.statusText)
@@ -322,30 +309,12 @@ export class ChatRepository {
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  async getChatList(): Promise<ChatListEntry[]> {
+  async getChatList(companyId?: unknown): Promise<ChatListEntry[]> {
     try {
-      const response = await this.get<BackendSessionList<BackendSessionEntry> & {
-        data?: BackendSessionList<BackendSessionEntry>
-      }>(`${getApiBase()}/chat/sessions`)
-      const body = response.data?.data ?? response.data // the list is { sessions } or { data: { sessions } }
-      const sessions = withUnassigned(body?.sessions || [], body?.unassigned || [])
-
-      // Transform backend session format to frontend store format.
-      // NOTE: the mapped objects use the store's camelCase/Date shape
-      // (createdAt/updatedAt/isActive) rather than the declared `ChatSession`
-      // wire type — masked while axios typed `.data` as `any` (#12363 Phase 2).
-      return sessions.map((session) => ({
-        id: session.id || session.chatId,
-        title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
-        messages: [], // Sessions list doesn't include messages - loaded separately
-        createdAt: toSessionDate(session.createdAt, session.createdTime),
-        updatedAt: toSessionDate(session.updatedAt, session.lastModified),
-        isActive: false, // Will be set by store when session is selected
-        unassigned: session.unassigned
-      })) as unknown as ChatListEntry[]
+      return await fetchChatList(companyId)
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
-      return [] // Return empty array on error to prevent app crash
+      throw error // #16905: a failed list stays distinguishable from an empty one
     }
   }
 
@@ -527,8 +496,12 @@ export class ChatRepository {
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.get<SessionFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`)
-      return (response.data || response) as SessionFactsResponse
+      const response = await apiClient.call(
+        'get',
+        '/api/chat-knowledge/chat/sessions/{session_id}/facts',
+        { path: { session_id: sessionId } },
+      )
+      return response as unknown as SessionFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
       throw error
@@ -546,11 +519,12 @@ export class ChatRepository {
   ): Promise<PreserveFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.post<PreserveFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
-        fact_ids: factIds,
-        preserve
-      })
-      return (response.data || response) as PreserveFactsResponse
+      const response = await apiClient.call(
+        'post',
+        '/api/chat-knowledge/chat/sessions/{session_id}/facts/preserve',
+        { path: { session_id: sessionId }, body: { fact_ids: factIds, preserve } },
+      )
+      return response as unknown as PreserveFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
       throw error
