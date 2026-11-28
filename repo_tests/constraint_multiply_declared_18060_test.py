@@ -212,3 +212,24 @@ def test_an_include_of_a_file_merely_prefixed_shared_txt_does_not_count(guard, t
     """Negative control: ``shared.txt.backup`` is another file, so its ``-c`` does not bind the bare name."""
     found = _unbound(guard, tmp_path, f"{include}\nplanted-pkg\n")
     assert any("planted-pkg" in v and "no -c line" in v for v in found), found
+
+
+def test_the_scan_set_is_the_same_from_a_subdirectory(guard, monkeypatch, capsys):
+    """#17404: enumeration is anchored to the repo root, not the invoking CWD."""
+    monkeypatch.chdir(_ROOT)
+    from_root = [str(f) for f in guard.requirement_files()], [str(f) for f in guard.manifest_files()]
+    assert guard.main() == 0
+    out_root = capsys.readouterr().out
+    monkeypatch.chdir(_ROOT / "repo_tests")
+    assert ([str(f) for f in guard.requirement_files()], [str(f) for f in guard.manifest_files()]) == from_root
+    assert guard.main() == 0
+    assert capsys.readouterr().out == out_root
+    assert "requirements files examined" in out_root
+
+
+def test_an_empty_scan_set_fails_instead_of_printing_ok(guard, monkeypatch, capsys):
+    monkeypatch.setattr(guard, "requirement_files", lambda: [])
+    assert guard.main() == 2
+    captured = capsys.readouterr()
+    assert "OK:" not in captured.out
+    assert "no requirements files found" in captured.err

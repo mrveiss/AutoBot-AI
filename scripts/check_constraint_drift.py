@@ -37,16 +37,24 @@ inside ansible ``pip: name:`` lists and Dockerfile / shell ``pip install`` lines
 ``repo_tests/ansible_requirements_parity_test.py``'s job); and ``autobot_shared/pyproject.toml`` is
 additionally guarded by ``repo_tests/autobot_shared_restates_no_constrained_floor_20092_test.py``.
 
-Run from the repo root:  python3 scripts/check_constraint_drift.py
+Runs from any directory: the scan is anchored to the repo root (``autobot_shared.paths.project_root``), so the
+examined set never depends on the invoking CWD.  python3 scripts/check_constraint_drift.py
 """
 
 import pathlib
 import re
 import sys
 
+# scripts/ is not a Python package; put the repository root on the path so the canonical root
+# resolver is importable when this runs as a bare script (same bootstrap as check_python_file_size.py).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from autobot_shared.paths import project_root  # noqa: E402
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+ROOT = project_root()
+# Repo-relative (it is printed in messages); every read goes through ROOT so the CWD never matters.
 CONSTRAINTS = pathlib.Path("constraints/shared.txt")
 # A requirement line carrying a version for some package: a specifier (also in the parenthesised form
 # ``pkg (>=1)``) or a direct URL (``pkg @ https://...``), which pins a build just as a specifier does.
@@ -84,7 +92,7 @@ def _norm(name: str) -> str:
 def constrained_packages() -> set[str]:
     """Package names that constraints/shared.txt pins a version for."""
     pkgs = set()
-    for line in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
+    for line in (ROOT / CONSTRAINTS).read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
         if not line or line.startswith("-"):
             continue
@@ -94,13 +102,18 @@ def constrained_packages() -> set[str]:
     return pkgs
 
 
+def _scan(pattern: str) -> list[pathlib.Path]:
+    """Repo-relative paths under ROOT matching *pattern*, independent of the process CWD."""
+    return [p.relative_to(ROOT) for p in ROOT.rglob(pattern)]
+
+
 def requirement_files() -> list[pathlib.Path]:
     files = []
     seen = set()
     # `requirements*.txt` anywhere, plus every *.txt inside a `requirements*` directory
     # (e.g. requirements-ci/ai-ml.txt, which is a requirements file not named requirements*).
     for pattern in ("requirements*.txt", "requirements*/*.txt"):
-        for p in pathlib.Path(".").rglob(pattern):
+        for p in _scan(pattern):
             if any(part in _EXCLUDE_DIRS for part in p.parts) or p.parts[0] in _EXCLUDE_TOP:
                 continue
             if p == CONSTRAINTS or p in seen:
@@ -114,7 +127,7 @@ def manifest_files() -> list[pathlib.Path]:
     """Every ``pyproject.toml`` / ``setup.py`` outside vendored and generated trees."""
     found = []
     for name in MANIFESTS:
-        found += [p for p in pathlib.Path(".").rglob(name) if not any(part in _EXCLUDE_DIRS for part in p.parts)]
+        found += [p for p in _scan(name) if not any(part in _EXCLUDE_DIRS for part in p.parts)]
     return sorted(found)
 
 
@@ -127,7 +140,7 @@ def manifest_violations(files: list[pathlib.Path], specs: dict[str, str]) -> lis
     """
     out = []
     for f in files:
-        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        for n, line in enumerate((ROOT / f).read_text(encoding="utf-8").splitlines(), 1):
             for m in _QUOTED_REQ.finditer(line):
                 pkg, spec = _norm(m.group(1)), m.group(2).strip()
                 floor = _FLOOR.search(spec)
@@ -140,7 +153,7 @@ def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Pat
     """package -> [(file, line number, raw line, carries a version spec)]."""
     decls: dict[str, list[tuple[pathlib.Path, int, str, bool]]] = {}
     for f in files:
-        for n, raw in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        for n, raw in enumerate((ROOT / f).read_text(encoding="utf-8").splitlines(), 1):
             line = raw.split("#", 1)[0].strip()
             if not line or line.startswith("-"):
                 continue
@@ -168,7 +181,7 @@ def unconstrained_bare_names(files: list[pathlib.Path], pinned: set[str]) -> lis
     """
     out = []
     for f in files:
-        text = f.read_text(encoding="utf-8")
+        text = (ROOT / f).read_text(encoding="utf-8")
         if _SHARED_INCLUDE.search(text):
             continue
         sites = _declarations([f])
@@ -189,7 +202,7 @@ def _satisfies(version: str, spec: str) -> bool:
 def constraint_specs() -> dict[str, str]:
     """Package -> its specifier text in constraints/shared.txt."""
     specs = {}
-    for line in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
+    for line in (ROOT / CONSTRAINTS).read_text(encoding="utf-8").splitlines():
         m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*((?:==|>=|<)[^#\s]*)", line.strip())
         if m:
             specs[_norm(m.group(1))] = m.group(2)
@@ -215,8 +228,8 @@ def find_violations(decls, pinned: set[str]) -> list[str]:
 
 
 def main() -> int:
-    if not CONSTRAINTS.exists():
-        print(f"ERROR: {CONSTRAINTS} not found (run from repo root).", file=sys.stderr)
+    if not (ROOT / CONSTRAINTS).exists():
+        print(f"ERROR: {CONSTRAINTS} not found under the repo root.", file=sys.stderr)
         return 2
 
     pinned = constrained_packages()
@@ -226,6 +239,12 @@ def main() -> int:
 
     specs = constraint_specs()
     files = requirement_files()
+    if not files:
+        print(
+            f"ERROR: no requirements files found under the repo root ({len(files)} scanned) -- refusing to pass.",
+            file=sys.stderr,
+        )
+        return 2
     violations = find_violations(_declarations(files), pinned)
     violations += unconstrained_bare_names(files, pinned)
     violations += manifest_violations(manifest_files(), specs)
@@ -240,7 +259,10 @@ def main() -> int:
         )
         return 1
 
-    print(f"OK: no constraint drift. {len(pinned)} packages guarded; {len(EXEMPT)} exempt.")
+    print(
+        f"OK: no constraint drift. {len(files)} requirements files examined; "
+        f"{len(pinned)} packages guarded; {len(EXEMPT)} exempt."
+    )
     return 0
 
 
