@@ -31,6 +31,7 @@ G7  control fixtures: a gate missing `if: always()`, a gate gated on a filter ou
 """
 
 import copy
+import re
 from pathlib import Path
 
 import pytest
@@ -404,14 +405,46 @@ CI_DRAFT_HELD_JOBS = (
 )
 
 
+def _pr_trigger(doc: dict):
+    """The `pull_request` trigger as a dict (None when absent), for the three YAML shapes."""
+    on = _on(doc)
+    if on == "pull_request" or (isinstance(on, list) and "pull_request" in on):
+        return {}
+    if isinstance(on, dict) and "pull_request" in on:
+        return on["pull_request"] or {}
+    return None
+
+
 def _pr_workflows(workflows: dict) -> dict:
-    return {n: d for n, d in workflows.items() if "pull_request" in (_on(d) if isinstance(_on(d), dict) else {})}
+    return {n: d for n, d in workflows.items() if _pr_trigger(d) is not None}
+
+
+# A real draft-false condition: the event field compared to false, or the ci.yml `ready` output.
+_DRAFT_FALSE = re.compile(
+    r"pull_request\.draft\s*==\s*false|pull_request\.draft\s*!=\s*true|outputs\.ready\s*==\s*'true'"
+)
+
+
+def _skips_draft(spec: dict) -> bool:
+    cond = "\n".join(ln for ln in str(spec.get("if", "")).splitlines() if not ln.lstrip().startswith("#"))
+    return bool(_DRAFT_FALSE.search(cond))
+
+
+def _held_back(jobs: dict, name: str, job_id: str, seen: frozenset = frozenset()) -> bool:
+    """Gated on a draft, exempt, or every job it needs is held back (transitively)."""
+    spec = jobs.get(job_id)
+    if spec is None or job_id in seen:
+        return False
+    if (name, job_id) in DRAFT_EXEMPT_JOBS or _skips_draft(spec):
+        return True
+    needed = _needs(spec)
+    return bool(needed) and all(_held_back(jobs, name, n, seen | {job_id}) for n in needed)
 
 
 def _park_violations(workflows: dict) -> list:
     problems = []
     for name, doc in _pr_workflows(workflows).items():
-        types = (_on(doc)["pull_request"] or {}).get("types")
+        types = _pr_trigger(doc).get("types")
         if name not in CLOSED_ONLY_WORKFLOWS and (not types or "ready_for_review" not in types):
             problems.append(f"{name}: pull_request.types lacks ready_for_review ({types!r})")
         if name == "ci.yml":
@@ -421,10 +454,8 @@ def _park_violations(workflows: dict) -> list:
             continue
         if name in DRAFT_EXEMPT_WORKFLOWS:
             continue
-        for job_id, spec in doc["jobs"].items():
-            if (name, job_id) in DRAFT_EXEMPT_JOBS or "needs" in spec:
-                continue
-            if "draft" not in str(spec.get("if", "")):
+        for job_id in doc["jobs"]:
+            if not _held_back(doc["jobs"], name, job_id):
                 problems.append(f"{name} '{job_id}' does not skip on a draft")
     return problems
 
@@ -446,3 +477,25 @@ def test_control_a_job_that_runs_on_drafts_fails_the_park_checker():
     docs = _fixture()
     docs["ci.yml"]["jobs"]["run-security"]["if"] = "${{ needs.changes.outputs.held != 'true' }}"
     assert any("'run-security'" in p for p in _park_violations(docs))
+    docs = _fixture()
+    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ github.event.pull_request.draft == true }}"
+    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+    docs = _fixture()
+    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ true }}\n# pull_request.draft == false"
+    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+
+
+def test_control_a_job_needing_an_ungated_job_fails_the_park_checker():
+    docs = _fixture()
+    jobs = docs["marker-tests.yml"]["jobs"]
+    jobs["follower"] = {"needs": "marker-tests", "runs-on": "ubuntu-latest"}
+    jobs["marker-tests"]["if"] = "${{ github.event_name == 'pull_request' }}"
+    assert any("marker-tests.yml 'follower' does not skip" in p for p in _park_violations(docs))
+
+
+def test_the_park_checker_reads_every_pull_request_trigger_shape():
+    for shape in ("pull_request", ["pull_request"], {"pull_request": None}):
+        docs = _fixture()
+        docs["marker-tests.yml"][True] = shape
+        assert "marker-tests.yml" in _pr_workflows(docs)
+        assert any(p.startswith("marker-tests.yml: pull_request.types") for p in _park_violations(docs))
