@@ -12,6 +12,7 @@ import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { collectUnvectorizedFiles } from '@/composables/knowledge/knowledgeTreeUtils'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
+import { vectorizableIds } from '@/composables/knowledge/vectorizable'
 import type { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 
 const logger = createLogger('KnowledgeBrowserSelection')
@@ -30,9 +31,7 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
   const showProgressModal = ref(false)
 
   /** Selected documents that still need vectorizing (the rule vectorizeSelected applies). */
-  const eligibleCount = computed(
-    () => vec.selectedDocumentsList.value.filter((id) => vec.documentStates.value.get(id)?.status !== 'vectorized').length,
-  )
+  const eligibleCount = computed(() => vectorizableIds(vec.selectedDocumentsList.value, vec.documentStates.value).length)
 
   // Identity of the latest run: a cancelled run can settle after a newer one started and must not clear its flag.
   let activeRun = 0
@@ -86,7 +85,7 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
 
   /** Only the selected documents that are not vectorized yet (the set eligibleCount counts). */
   const vectorizeSelected = () => {
-    const ids = vec.selectedDocumentsList.value.filter((id) => vec.documentStates.value.get(id)?.status !== 'vectorized')
+    const ids = vectorizableIds(vec.selectedDocumentsList.value, vec.documentStates.value)
     return guarded(
       'Batch vectorization',
       async (runId) => {

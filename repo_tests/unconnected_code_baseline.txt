@@ -1447,7 +1447,6 @@ route:autobot-slm-backend/api/redis_service.py:GET /status	#21651
 frontend:autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue	#21629
 frontend:autobot-frontend/src/components/collaboration/index.ts	#21629
 frontend:autobot-frontend/src/components/examples/ThemingPatternExample.vue	#21629
-frontend:autobot-frontend/src/components/knowledge/modals/DocumentExportModal.vue	#21629
 frontend:autobot-frontend/src/components/manpage/index.ts	#21629
 frontend:autobot-frontend/src/components/transcriber/AiAnalysisPanel.vue	#21629
 frontend:autobot-frontend/src/components/transcriber/ExportMenu.vue	#21629

@@ -112,6 +112,9 @@ class DetailedKnowledgeStats(BaseModel):
     rag_available: bool = False
     # Offline branch adds this; populated branch omits it.
     message: str | None = None
+    degraded: bool = Field(
+        False, description="True when the fact store could not be read; breakdowns are then empty, not zero"
+    )
 
 
 class KnowledgeCategoryEntry(BaseModel):
@@ -131,6 +134,9 @@ class KnowledgeCategoriesResponse(BaseModel):
 
     categories: List[KnowledgeCategoryEntry] = Field(default_factory=list)
     total: int = 0
+    degraded: bool = Field(
+        False, description="True when the fact store could not be read; counts are then unknown, not zero"
+    )
 
 
 class KnowledgeMainCategoryEntry(BaseModel):

@@ -30,7 +30,9 @@ excluded.
 bound method and called later (``HybridSearcher`` keeps ``self.search``); polymorphic
 backend dispatch (``VectorSearchEngine`` backends); filters hidden in ``**kwargs``; the
 infra MCP server's HTTP hop; reads that bypass the primitives through direct ``fact:*`` Redis
-reads; raw ChromaDB reads on a KB-content collection outside :data:`KB_CONTENT_MODULES` that
+reads (the module-level readers :data:`READ_FUNCTIONS` -- ``fact_rows``, ``get_facts_page`` -- ARE seen, when
+called with a KB receiver as the first argument; ones reached through another name or a non-receiver first
+argument are not); raw ChromaDB reads on a KB-content collection outside :data:`KB_CONTENT_MODULES` that
 reach it through a parameter or an attribute other than the KB's own handles (e.g.
 ``knowledge/vector_membership.py``'s ``vectorized_ids(collection)``; see :func:`_is_raw_kb_read`); receivers named
 outside :data:`KB_RECEIVERS` -- including a bare ``self`` (the KB's own mixins calling a
@@ -76,6 +78,10 @@ READ_METHODS = frozenset(
         "search_ctx",
     }
 )
+#: KB reads that are module-level functions taking the KB as their FIRST argument, not methods on it
+#: (``knowledge.fact_aggregate.fact_rows``, ``knowledge.fact_stream.get_facts_page``): matched by bare name or
+#: module attribute when that first argument is one of :data:`KB_RECEIVERS` (#17530).
+READ_FUNCTIONS = frozenset({"fact_rows", "get_facts_page"})
 KB_RECEIVERS = frozenset(
     {
         "kb",
@@ -209,7 +215,13 @@ MIN_READS_FOUND = 40
 #: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
 #: Then 64 -> 66 (#19647): the backup's vector read and the restore's existence check, both NOT_USER_FACING.
 #: Then 66 -> 67 (#20028): the sync's pre-delete check of a replaced fact, NOT_USER_FACING.
-UNFILTERED_READ_CEILING = 67
+#: Then 67 -> 71 (#17530): the detector widened to the module-level readers ``fact_rows`` and ``get_facts_page``
+#: (READ_FUNCTIONS), which the Knowledge Manage endpoints use and the method-only rule could not see. Live set
+#: measured before and after by the detector's logic over every call site (``git grep`` of both names): the only
+#: difference is four new keys, all in ``api/knowledge.py`` and all behind ``Depends(check_admin_permission)``,
+#: classified _SCOPED_ADMIN_ROUTER: ``get_knowledge_categories``, ``get_knowledge_entries``, ``get_detailed_stats``,
+#: ``get_man_pages_summary``. A measured widening, not new debt.
+UNFILTERED_READ_CEILING = 71
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -289,15 +301,21 @@ THREAD_OFFLOADS = frozenset({"asyncio.to_thread", "to_thread"})
 
 
 def _is_kb_read(call: ast.Call) -> bool:
-    func = call.func
-    if _dotted(func) in THREAD_OFFLOADS and call.args:
-        func = call.args[0]
-    if not isinstance(func, ast.Attribute):
-        return False
-    receiver, method = _dotted(func.value), func.attr
-    return (method in READ_METHODS and receiver in KB_RECEIVERS) or (
-        method in RAG_METHODS and receiver in RAG_RECEIVERS
-    )
+    func, args = call.func, call.args
+    if _dotted(func) in THREAD_OFFLOADS and args:
+        func, args = args[0], args[1:]
+    if isinstance(func, ast.Attribute):
+        receiver, method = _dotted(func.value), func.attr
+        if method in READ_METHODS and receiver in KB_RECEIVERS:
+            return True
+        if method in RAG_METHODS and receiver in RAG_RECEIVERS:
+            return True
+    return _called_function_name(func) in READ_FUNCTIONS and bool(args) and _dotted(args[0]) in KB_RECEIVERS
+
+
+def _called_function_name(func: ast.AST) -> str | None:
+    """The name of a bare ``fact_rows(...)`` or module-attribute ``fact_aggregate.fact_rows(...)`` callee."""
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
 
 
 def _is_principal_scoped_rag_call(call: ast.Call) -> bool:
@@ -497,6 +515,16 @@ def test_a_leg_that_filters_through_the_principal_helpers_is_marked_filtered():
         "    return await filter_ranked(rows, p, self._ownership_manager())\n"
     )
     assert kb_reads(source) == [("leg", 2, True)]
+
+
+def test_a_bare_function_read_with_a_kb_receiver_is_found_and_other_first_arguments_are_not():
+    """Control for READ_FUNCTIONS (#17530): ``fact_rows(kb)`` / ``mod.get_facts_page(kb, ...)`` are KB reads."""
+    assert kb_reads("async def f(kb):\n    return await fact_rows(kb)\n") == [("f", 2, False)]
+    assert kb_reads("async def f(kb_to_use):\n    return await agg.fact_rows(kb_to_use)\n") == [("f", 2, False)]
+    assert kb_reads("async def f(kb):\n    return await get_facts_page(kb, 0, 10)\n") == [("f", 2, False)]
+    assert kb_reads("async def f(kb):\n    return await asyncio.to_thread(fact_rows, kb)\n") == [("f", 2, False)]
+    assert kb_reads("async def f(rows):\n    return await fact_rows(rows)\n") == []
+    assert kb_reads("async def f():\n    return await fact_rows()\n") == []
 
 
 def test_rag_reads_count_and_unrelated_search_calls_do_not():

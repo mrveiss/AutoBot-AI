@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from autobot_shared.fact_key_families import FACT_COLLECTIONS_PREFIX
 from autobot_shared.logging_manager import get_logger
 from knowledge.collections import _unapproved
 
@@ -38,12 +39,14 @@ class SelectedFactsDeleteMixin:
 
     async def _unlink_from_collections(self, fid: str) -> None:
         """Take the fact out of every collection it is in and refresh their counts. Idempotent; the row is untouched."""
-        collections = [_text(c) for c in await self.redis().smembers(f"fact:collections:{fid}")]
+        collections = [_text(c) for c in await self.redis().smembers(f"{FACT_COLLECTIONS_PREFIX}{fid}")]
         for cid in collections:
             await self.redis().srem(f"collection:facts:{cid}", fid)
         for cid in collections:
             await self._update_collection_fact_count(cid)
-        await self.redis().delete(f"fact:collections:{fid}")  # last: until it is gone a retry redoes the whole unlink
+        await self.redis().delete(
+            f"{FACT_COLLECTIONS_PREFIX}{fid}"
+        )  # last: until it is gone a retry redoes the whole unlink
 
     async def _delete_selected_one(self, fid: str) -> bool:
         """One fact unlinked from its collections, THEN deleted; False when it was not deleted.

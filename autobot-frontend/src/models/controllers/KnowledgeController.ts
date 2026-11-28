@@ -9,9 +9,10 @@
  * @author mrveiss
  */
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useKnowledgeListStatus } from '@/stores/useKnowledgeListStatus'
 import { useAppStore } from '@/stores/useAppStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
-import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE } from '@/models/repositories/knowledgeFactMapping'
+import { DEFAULT_FACT_CATEGORY } from '@/models/repositories/knowledgeFactMapping'
 import type {
   SearchKnowledgeRequest,
   AddTextRequest,
@@ -19,7 +20,8 @@ import type {
   AddFileOptions
 } from '@/models/repositories/KnowledgeRepository'
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
-import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
+import { generateCategoryId } from '@/utils/ChatIdGenerator'
+import { entryToDocument } from './knowledgeDocumentMapping'
 import { createLogger } from '@/utils/debugUtils'
 import i18n from '@/i18n'
 import { proposeSelectedDelete } from './selectedDelete'
@@ -115,20 +117,11 @@ export class KnowledgeController {
         visibility: accessOptions?.visibility || 'private'
       }
 
-      await knowledgeRepository.addTextToKnowledge(request)
+      const result = await knowledgeRepository.addTextToKnowledge(request)
 
-      // Add to local store
-      const documentId = this.knowledgeStore.addDocument({
-        title: request.title || this.generateTitleFromContent(content),
-        content,
-        source: 'Manual Entry',
-        type: DEFAULT_FACT_TYPE,
-        category: request.category || DEFAULT_FACT_CATEGORY,
-        tags: request.tags || []
-      })
-
-      await this.refreshStats()
-      return documentId
+      // The list is a server read: rebuild it, never append a local copy (#17530)
+      await this.loadAllDocuments()
+      return result.document_id ?? ''
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -150,18 +143,8 @@ export class KnowledgeController {
 
       const result = await knowledgeRepository.addUrlToKnowledge(request)
 
-      // Add to local store (backend response should include processed content)
-      const documentId = this.knowledgeStore.addDocument({
-        title: result.title || url,
-        content: result.content || '',
-        source: url,
-        type: 'webpage',
-        category: request.category || 'Web Content',
-        tags: request.tags || []
-      })
-
-      await this.refreshStats()
-      return documentId
+      await this.loadAllDocuments()
+      return result.document_id ?? ''
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -171,7 +154,8 @@ export class KnowledgeController {
     }
   }
 
-  async addFileDocument(file: File, category?: string, tags?: string[]): Promise<string> {
+  /** `reload: false` lets a batch upload re-read the list once at the end instead of once per file. */
+  async addFileDocument(file: File, category?: string, tags?: string[], reload = true): Promise<string> {
     try {
 
       // Build options with proper typing
@@ -182,22 +166,8 @@ export class KnowledgeController {
 
       const result = await knowledgeRepository.addFileToKnowledge(file, options)
 
-      // Add to local store
-      const documentId = this.knowledgeStore.addDocument({
-        title: file.name,
-        content: result.content || '',
-        source: file.name,
-        type: 'upload',
-        category: options.category || 'Uploads',
-        tags: options.tags || [],
-        metadata: {
-          fileSize: file.size,
-          wordCount: result.word_count
-        }
-      })
-
-      await this.refreshStats()
-      return documentId
+      if (reload) await this.loadAllDocuments()
+      return result.document_id ?? ''
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -411,66 +381,52 @@ export class KnowledgeController {
     }
   }
 
-  // Load all documents
-  async loadAllDocuments(): Promise<void> {
-    try {
+  // Load all documents. Reads never overlap: a call made while one is in flight queues ONE
+  // follow-up read that starts after it settles (so it sees any write made since), and every
+  // queued caller shares it. A slow earlier response therefore cannot overwrite a later one.
+  private documentsRead: Promise<void> | null = null
+  private documentsReread: Promise<void> | null = null
 
+  loadAllDocuments(): Promise<void> {
+    if (this.documentsRead) {
+      this.documentsReread ??= this.documentsRead.then(() => {
+        this.documentsReread = null
+        return this.loadAllDocuments()
+      })
+      return this.documentsReread
+    }
+    this.documentsRead = this.readAllDocuments().finally(() => {
+      this.documentsRead = null
+    })
+    return this.documentsRead
+  }
+
+  private async readAllDocuments(): Promise<void> {
+    this.knowledgeStore.isLoading = true
+    const listStatus = useKnowledgeListStatus()
+    try {
       const response = await knowledgeRepository.getAllEntries()
       logger.debug('Knowledge entries response:', response)
 
       if (response.success && response.entries) {
-        // Clear existing documents
-        this.knowledgeStore.documents = []
+        // The one write to the document list: a server read (#17530)
+        const documents = response.entries.map(entryToDocument).filter((d): d is KnowledgeDocument => d !== null)
+        this.knowledgeStore.setDocuments(documents)
+        listStatus.loaded(response.truncated)
+        if (response.truncated) logger.warn('Knowledge entries list truncated; more entries exist on the server')
 
-        // Convert backend entries to frontend document format
-        const documents = response.entries.map((entry) => {
-          const metadata = entry.metadata || {}
-          return {
-            id: entry.id || entry.fact_id || generateDocumentId(),
-            title: (metadata.title as string) || entry.fact || 'Untitled',
-            content: entry.fact || entry.content || '',
-            source: (metadata.source as string) || (metadata.url as string) || 'Unknown',
-            type: this.determineDocumentType(metadata),
-            tags: (metadata.tags as string[]) || [],
-            category: (metadata.category as string) || DEFAULT_FACT_CATEGORY,
-            createdAt: metadata.created_at ? new Date(metadata.created_at as string) : new Date(entry.created_at || Date.now()),
-            updatedAt: metadata.updated_at ? new Date(metadata.updated_at as string) : new Date(entry.updated_at || Date.now()),
-            metadata: {
-              wordCount: metadata.word_count as number | undefined,
-              fileSize: metadata.file_size as number | undefined,
-              language: metadata.language as string | undefined,
-              author: metadata.author as string | undefined,
-              factType: typeof metadata.type === 'string' ? metadata.type : undefined }
-          }
-        })
-
-        // Add documents to store
-        this.knowledgeStore.documents = documents
-
-        // Update categories based on documents
         await this.refreshStats()
+      } else {
+        listStatus.failed() // an unsuccessful read leaves the list stale, as a thrown one does
       }
-
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logger.error('Failed to load documents:', error)
-      this.appStore.setGlobalError(`Failed to load documents: ${errorMessage}`)
+      listStatus.failed()
+      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.loadFailed', { error: errorMessage }))
     } finally {
+      this.knowledgeStore.isLoading = false
     }
-  }
-
-  // Helper to determine document type from metadata
-  private determineDocumentType(metadata: Record<string, unknown>): 'document' | 'webpage' | 'api' | 'upload' {
-    if (metadata.content_type === 'url' || metadata.type === 'url_reference') {
-      return 'webpage'
-    }
-    if (metadata.filename || (typeof metadata.content_type === 'string' && metadata.content_type.includes('multipart'))) {
-      return 'upload'
-    }
-    if (typeof metadata.source === 'string' && metadata.source.toLowerCase().includes('api')) {
-      return 'api'
-    }
-    return DEFAULT_FACT_TYPE
   }
 
   async getDetailedStats(): Promise<unknown> {

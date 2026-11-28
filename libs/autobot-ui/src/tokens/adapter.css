@@ -105,6 +105,9 @@
   --aui-z-tooltip: var(--z-tooltip);
   --aui-z-toast: var(--z-toast);
 
+  /* ---- Section layout (SectionShell) --------------------------------- */
+  --aui-section-nav-width: var(--subnav-w);
+
   /* ---- Tooltip ------------------------------------------------------- */
   --aui-tooltip-delay: var(--tooltip-delay);
   --aui-tooltip-hide-delay: var(--tooltip-hide-delay);

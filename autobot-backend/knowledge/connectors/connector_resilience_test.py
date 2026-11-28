@@ -578,3 +578,22 @@ class TestConnectionLevelRetry:
                 content = await self.conn.fetch_content(_url_to_source_id("https://example.com"))
 
         assert call_count == 2
+
+
+class TestIngestReportsAStoreFactError:
+    """#17530: ``store_fact`` reports failure as a dict; the connector must count it failed, not added."""
+
+    @pytest.mark.asyncio
+    async def test_an_error_dict_from_store_fact_fails_the_source_and_is_recorded(self):
+        from knowledge.connectors.models import SyncResult
+
+        conn = _DummyConnector(_make_config())
+        content = ContentResult(source_id="gdrive:c1:file:/a.md", content="body", content_type="text/plain")
+        conn.fetch_content = AsyncMock(return_value=content)
+        kb = MagicMock(store_fact=AsyncMock(return_value={"status": "error", "message": "Knowledge operation failed"}))
+        result = SyncResult(connector_id="test-conn", started_at=datetime_now(), completed_at=None, status="success")
+        change = ChangeInfo(source_id=content.source_id, change_type="added", timestamp=datetime_now())
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=kb)):
+            await conn._process_change(change, result)
+        assert result.added == 0 and result.sources_failed == 1
+        assert result.errors and "Knowledge operation failed" in result.errors[0]

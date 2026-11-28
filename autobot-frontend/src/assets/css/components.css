@@ -1060,7 +1060,7 @@
 html[data-ui="minimal"] .adv {
   display: none;
 }
-/* (0,2,1): outranks a kit root's own scoped `display` (e.g. BaseCard `.aui-card[data-v]`, 0,2,0). */
+/* (0,2,1): outranks a kit root's own scoped `display` (e.g. BaseCard `[data-slot="card"][data-v]`, 0,2,0). */
 html:not([data-ui="minimal"]) .only-min {
   display: none;
 }

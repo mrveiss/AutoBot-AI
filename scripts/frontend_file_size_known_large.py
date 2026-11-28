@@ -65,13 +65,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
-    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2068,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 846,
-    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1631,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 797,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
@@ -109,7 +107,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/__tests__/useTimeout.test.ts": 1211,
     "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 685,
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
-    "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
+    "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 676,
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 829,
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
@@ -118,14 +116,13 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1085,
-    "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
-    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
+    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 870,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1159,
-    "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
+    "autobot-frontend/src/stores/useKnowledgeStore.ts": 806,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 751,  # #20670: 796 -> 751, role and admin cells extracted

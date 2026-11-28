@@ -99,6 +99,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
+import { isVectorizable } from '@/composables/knowledge/vectorizable'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
 // Metadata attached to a knowledge tree node. Mirrors the KnowledgeFactLike
@@ -176,7 +177,7 @@ const vectorizationStatus = computed(() => {
 
 const canVectorize = computed(() => {
   if (props.node.type !== 'file') return false
-  return vectorizationStatus.value !== 'vectorized'
+  return isVectorizable(vectorizationStatus.value)
 })
 
 // Count unvectorized documents in a folder (recursive)
@@ -188,7 +189,7 @@ const unvectorizedCount = computed(() => {
       const state = props.vectorizationStates.get(node.id)
       // parent (KnowledgeBrowser) owns the authoritative state map
       const status = state?.status || 'pending'
-      return status !== 'vectorized' ? 1 : 0
+      return isVectorizable(status) ? 1 : 0
     }
 
     if (node.type === 'folder' && node.children) {

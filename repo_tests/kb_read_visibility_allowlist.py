@@ -124,6 +124,10 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/chat_sessions.py",
         "get_share_preview",
     ): "TRACKED_GAP #16671: session fact sharing reads facts through an unwired kb_manager",
+    ("autobot-backend/api/knowledge.py", "get_detailed_stats"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge.py", "get_knowledge_categories"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge.py", "get_knowledge_entries"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge.py", "get_man_pages_summary"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge.py", "search_man_pages"): _SCOPED_ADMIN_ROUTER,
     (
         "autobot-backend/api/knowledge_categories.py",

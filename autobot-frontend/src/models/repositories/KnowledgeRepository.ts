@@ -31,7 +31,15 @@ import type {
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 import apiClient from '@/utils/ApiClient'
-import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
+import {
+  DEFAULT_FACT_CATEGORY,
+  DEFAULT_FACT_TYPE,
+  collectAllEntries,
+  factByKeyUrl,
+  factToDocument,
+  type AllEntriesResult,
+  type FactByKeyBody,
+} from './knowledgeFactMapping'
 
 // Re-export types for convenience
 export type { KnowledgeDocument, SearchResult }
@@ -424,7 +432,8 @@ export class KnowledgeRepository extends ApiRepository {
         largest_fact_size: 0,
         smallest_fact_size: 0
       },
-      rag_available: data?.rag_available ?? false
+      rag_available: data?.rag_available ?? false,
+      degraded: data?.degraded ?? false
     }
   }
 
@@ -846,39 +855,14 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get all knowledge entries with optional collection filter
+   * Get all knowledge entries, following the server's cursor until it reports no more (#17530:
+   * the Manage list is a projection of the whole knowledge base, never of its first page).
    */
-  async getAllEntries(collection?: string): Promise<{
-    success: boolean
-    entries: Array<{
-      id: string
-      fact_id?: string
-      fact?: string
-      content?: string
-      metadata?: Record<string, unknown>
-      created_at?: string
-      updated_at?: string
-    }>
-    total: number
-  }> {
-    const url = collection
-      ? `${getApiBase()}/knowledge_base/entries?collection=${encodeURIComponent(collection)}`
-      : `${getApiBase()}/knowledge_base/entries`
-    const response = await this.get(url)
-
-    // Normalize response format
-    const data = response.data as {
-      entries?: Array<{
-        id: string; fact_id?: string; fact?: string; content?: string
-        metadata?: Record<string, unknown>; created_at?: string; updated_at?: string
-      }>
-      total?: number
-    }
-    return {
-      success: true,
-      entries: data.entries || [],
-      total: data.total || data.entries?.length || 0
-    }
+  async getAllEntries(): Promise<AllEntriesResult> {
+    const { entries, truncated } = await collectAllEntries((query) =>
+      apiClient.call('get', '/api/knowledge_base/entries', { query }),
+    )
+    return { success: true, entries, total: entries.length, truncated }
   }
 }
 

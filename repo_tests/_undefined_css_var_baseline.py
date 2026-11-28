@@ -56,17 +56,14 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
     "--color-danger-border": 1,
     "--color-error-active": 1,
     "--color-error-bg-transparent": 3,
-    "--color-error-rgb": 3,
     "--color-error-shadow": 1,
     "--color-error-text": 4,
     "--color-info-active": 1,
     "--color-info-bg-transparent": 1,
     "--color-info-border": 2,
     "--color-primary-border": 1,
-    "--color-primary-rgb": 1,
     "--color-purple-bg-transparent": 1,
     "--color-success-bg-transparent": 3,
-    "--color-success-rgb": 2,
     "--color-surface-hover": 3,
     "--color-warning-active": 1,
     "--color-warning-bg-light": 3,
@@ -104,4 +101,4 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a per-name edit cannot drift it unseen.
-TOTAL_SITES = 119  # #18244: -6 (three vars cleared); #18819: -5 (ErrorBanner, ui/BaseAlert)
+TOTAL_SITES = 113  # #18244: -6 (three vars cleared); #18819: -5 (ErrorBanner, ui/BaseAlert)

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
+from knowledge.fact_stream import FACT_KEY_PATTERN, is_fact_key
 
 if TYPE_CHECKING:
     import aioredis
@@ -141,9 +142,7 @@ class StatsMixin:
 
             logger.info("Initializing stats counters from existing data...")
 
-            fact_count = 0
-            async for _ in self.redis().scan_iter(match="fact:*", count=1000):
-                fact_count += 1
+            fact_count = await self._count_actual_facts()
 
             vector_count = 0
             if self.vector_store:
@@ -159,10 +158,7 @@ class StatsMixin:
 
     async def _count_actual_facts(self) -> int:
         """Count actual facts via Redis scan (Issue #398: extracted)."""
-        count = 0
-        async for _ in self.redis().scan_iter(match="fact:*", count=1000):
-            count += 1
-        return count
+        return sum([1 async for key in self.redis().scan_iter(match=FACT_KEY_PATTERN, count=1000) if is_fact_key(key)])
 
     def _count_actual_vectors(self) -> int:
         """Count actual vectors from ChromaDB (Issue #398: extracted)."""
@@ -327,7 +323,9 @@ class StatsMixin:
         """Sample fact keys for category extraction (Issue #315)."""
         fact_keys = []
         try:
-            async for key in self.redis().scan_iter(match="fact:*", count=limit):
+            async for key in self.redis().scan_iter(match=FACT_KEY_PATTERN, count=limit):
+                if not is_fact_key(key):
+                    continue
                 fact_keys.append(key)
                 if len(fact_keys) >= limit:
                     break

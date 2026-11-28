@@ -41,6 +41,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from knowledge.fact_stream import scan_fact_keys
 from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 
 # Import Pydantic models from dedicated module
@@ -136,7 +137,7 @@ async def _scan_all_facts(kb) -> tuple[dict, int]:
     while True:
 
         def _scan_and_fetch():
-            cur, scanned_keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+            cur, scanned_keys = scan_fact_keys(kb.redis_client, cursor, 100)
             if not scanned_keys:
                 return cur, [], []
             pipe = kb.redis_client.pipeline()
@@ -765,8 +766,7 @@ def _scan_redis_for_orphans(redis_client) -> tuple:
     total_checked = 0
 
     while True:
-        cursor, keys = redis_client.scan(cursor, match="fact:*", count=100)
-
+        cursor, keys = scan_fact_keys(redis_client, cursor, 100)
         if not keys:
             if cursor == 0:
                 break
@@ -958,8 +958,7 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
     total_with_session = 0
 
     while True:
-        cursor, keys = redis_client.scan(cursor, match="fact:*", count=100)
-
+        cursor, keys = scan_fact_keys(redis_client, cursor, 100)
         if not keys:
             if cursor == 0:
                 break

@@ -51,6 +51,8 @@ export interface SourceDocument {
 const props = defineProps<{
   modelValue: boolean
   document: SourceDocument | null
+  /** Hide the deep link when the panel already sits inside the Knowledge Manager (the Manage screen). */
+  hideOpenInManager?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -245,6 +247,7 @@ onUnmounted(() => {
           </BaseButton>
 
           <BaseButton
+            v-if="!hideOpenInManager"
             variant="primary"
             size="sm"
             @click="openInKnowledgeManager"

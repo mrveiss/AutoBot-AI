@@ -51,7 +51,6 @@ PINS: dict[str, dict[str, int]] = {
         "components/artifact-cells/ChartCell.vue": 2,
         "components/audit/AuditLogTable.vue": 1,
         "components/file-browser/FileListTable.vue": 1,
-        "components/knowledge/KnowledgeEntries.vue": 1,
         "components/knowledge/graph/EntityDetail.vue": 1,
         "components/llc/ExecutorRollupPanel.vue": 1,
         "components/operations/OperationsList.vue": 1,

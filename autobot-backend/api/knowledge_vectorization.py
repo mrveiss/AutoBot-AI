@@ -384,7 +384,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
         all_fact_data = await pipe.execute()
 
     # Extract fact IDs
-    fact_ids = [fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch]
+    fact_ids = [fact_key.split(":", 1)[-1] for fact_key in batch]
 
     # If skip_existing, also batch check vector existence
     vector_exists = {}

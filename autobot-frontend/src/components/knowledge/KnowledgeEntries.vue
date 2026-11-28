@@ -1,654 +1,184 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  KnowledgeEntries — "Knowledge · Manage" (#18244): the Upload, Manage, Watch Folders and
+  Connectors tabs. The Manage list is a server read (#17530): it is loaded from the entries
+  endpoint every time the screen opens, never accumulated from this session's uploads.
+-->
 <template>
-  <div class="knowledge-entries">
-    <!-- Sub-tabs for Manage section -->
-    <div class="manage-tabs">
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'upload'"
-        :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
-      >
-        <Icon name="upload" class="mr-2" />{{ $t('knowledge.entries.uploadTab') }}
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'manage'"
-        :class="['manage-tab-btn', { active: manageTab === 'manage' }]"
-      >
-        <Icon name="edit" class="mr-2" />{{ $t('knowledge.entries.manageTab') }}
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'watchFolders'"
-        :class="['manage-tab-btn', { active: manageTab === 'watchFolders' }]"
-      >
-        <Icon name="folder" class="mr-2" />{{ $t('knowledge.entries.watchFoldersTab') }}
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'connectors'"
-        :class="['manage-tab-btn', { active: manageTab === 'connectors' }]"
-      >
-        <Icon name="plug" class="mr-2" />{{ $t('knowledge.entries.connectorsTab') }}
-      </BaseButton>
-    </div>
+  <div class="knowledge-entries flex flex-col gap-4 p-4">
+    <BaseTabs v-model="manageTab" :items="tabItems" :label="$t('knowledge.entries.tabsLabel')" class="manage-tabs">
+      <template #icon="{ item }"><Icon :name="TAB_ICONS[item.value as ManageTab]" aria-hidden="true" /></template>
+      <template #panel-upload><KnowledgeUploadTab /></template>
+      <template #panel-watchFolders><WatchFoldersPanel /></template>
+      <template #panel-connectors><ConnectorManager /></template>
+      <template #panel-manage>
+        <div class="flex flex-col gap-4">
+          <BaseAlert v-if="listStatus.stale" variant="warning">{{ $t('knowledge.entries.listStale') }}</BaseAlert>
+          <BaseAlert v-if="listStatus.truncated" variant="warning">{{ $t('knowledge.entries.listTruncated') }}</BaseAlert>
 
-    <!-- Upload Tab Content -->
-    <KnowledgeUploadTab v-if="manageTab === 'upload'" />
+          <KnowledgeEntriesFilters
+            v-model:search="list.searchQuery.value"
+            v-model:category="list.filterCategory.value"
+            v-model:type="list.filterType.value"
+            :categories="store.categories"
+            :total="list.filteredDocuments.value.length"
+            @clear="list.clearFilters"
+          />
 
-    <!-- Watch Folders Tab Content -->
-    <WatchFoldersPanel v-if="manageTab === 'watchFolders'" />
+          <BulkActionsToolbar
+            :selected-count="selection.selectedCount.value"
+            :total-count="list.filteredDocuments.value.length"
+            :page-count="list.paginatedEntries.value.length"
+            :all-page-selected="selection.allSelected.value"
+            :all-matching-selected="list.allMatchingSelected.value"
+            @select-all-page="list.selectAllPage"
+            @select-all-matching="list.selectAllMatching"
+            @clear-selection="list.clearSelection"
+            @export="onBulkExport"
+            @change-category="openBulkEdit('category')"
+            @add-tags="openBulkEdit('tags-add')"
+            @remove-tags="openBulkEdit('tags-remove')"
+            @delete="deleteSelected"
+          />
 
-    <!-- Connectors Tab Content (#16897) -->
-    <ConnectorManager v-if="manageTab === 'connectors'" />
-
-    <!-- Manage Tab Content -->
-    <div v-if="manageTab === 'manage'" class="entries-content">
-    <!-- Search Bar -->
-    <div class="entries-header">
-      <div class="search-box">
-        <Icon name="search" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="$t('knowledge.entries.searchPlaceholder')"
-          class="search-input"
-          :aria-label="$t('knowledge.entries.searchAriaLabel')"
-          @input="filterEntries"
-        />
-      </div>
-      <span class="total-count">{{ filteredDocuments.length }} {{ $t('knowledge.entries.entries') }}</span>
-    </div>
-
-    <!-- Issue #747: Bulk Actions Toolbar -->
-    <BulkActionsToolbar
-      :selected-count="selection.selectedCount.value"
-      :total-count="filteredDocuments.length"
-      :page-count="paginatedEntries.length"
-      :all-page-selected="allSelected"
-      :all-matching-selected="allMatchingSelected"
-      @select-all-page="selectAllPage"
-      @select-all-matching="selectAllMatching"
-      @clear-selection="clearSelection"
-      @export="handleExport"
-      @change-category="openBulkCategoryChange"
-      @add-tags="openBulkAddTags"
-      @remove-tags="openBulkRemoveTags"
-      @delete="deleteSelected"
-    />
-
-    <!-- Filter bar -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label for="category-filter">{{ $t('knowledge.entries.categoryLabel') }}</label>
-        <select
-          id="category-filter"
-          v-model="filterCategory"
-          @change="filterEntries"
-          class="filter-select"
-          :aria-label="$t('knowledge.entries.filterByCategoryAria')"
-        >
-          <option value="">{{ $t('knowledge.entries.allCategories') }}</option>
-          <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
-            {{ cat.name }} ({{ cat.documentCount }})
-          </option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="type-filter">{{ $t('knowledge.entries.typeLabel') }}</label>
-        <select
-          id="type-filter"
-          v-model="filterType"
-          @change="filterEntries"
-          class="filter-select"
-          :aria-label="$t('knowledge.entries.filterByTypeAria')"
-        >
-          <option value="">{{ $t('knowledge.entries.allTypes') }}</option>
-          <option value="document">{{ $t('knowledge.entries.documents') }}</option>
-          <option value="webpage">{{ $t('knowledge.entries.webPages') }}</option>
-          <option value="api">{{ $t('knowledge.entries.apiDocs') }}</option>
-          <option value="upload">{{ $t('knowledge.entries.uploads') }}</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="sort-filter">{{ $t('knowledge.entries.sortBy') }}</label>
-        <select
-          id="sort-filter"
-          v-model="sortBy"
-          @change="sortEntries"
-          class="filter-select"
-          :aria-label="$t('knowledge.entries.sortByAria')"
-        >
-          <option value="updatedAt">{{ $t('knowledge.entries.lastUpdated') }}</option>
-          <option value="createdAt">{{ $t('knowledge.entries.dateCreated') }}</option>
-          <option value="title">{{ $t('knowledge.entries.titleSort') }}</option>
-          <option value="category">{{ $t('knowledge.entries.categorySort') }}</option>
-        </select>
-      </div>
-
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="clearFilters"
-        class="clear-filters-btn"
-      >
-        {{ $t('knowledge.entries.clearFilters') }}
-      </BaseButton>
-    </div>
-
-    <!-- Entries list -->
-    <div v-if="store.isLoading" class="loading-state">
-      <Icon name="spinner" class="animate-spin" />
-      <p>{{ $t('knowledge.entries.loadingEntries') }}</p>
-    </div>
-
-    <EmptyState
-      v-else-if="filteredDocuments.length === 0"
-      icon="file-alt"
-      :title="$t('knowledge.entries.noEntriesFound')"
-      :message="searchQuery || filterCategory || filterType ? $t('knowledge.entries.adjustFilters') : $t('knowledge.entries.addFirstEntry')"
-    />
-
-    <div v-else class="entries-table">
-      <table>
-        <thead>
-          <tr>
-            <th class="checkbox-column">
-              <input
-                type="checkbox"
-                :checked="allSelected"
-                @change="toggleSelectAll"
-              />
-            </th>
-            <th>{{ $t('knowledge.entries.thTitle') }}</th>
-            <th>{{ $t('knowledge.entries.thCategory') }}</th>
-            <th>{{ $t('knowledge.entries.thType') }}</th>
-            <th>{{ $t('knowledge.entries.thTags') }}</th>
-            <th>{{ $t('knowledge.entries.thUpdated') }}</th>
-            <th>{{ $t('knowledge.entries.thActions') }}</th>
-          </tr>
-        </thead>
-        <tbody ref="scrollContainerRef" class="entries-tbody-virtual">
-          <!-- Virtual scroll spacer before -->
-          <tr v-if="spacerBefore > 0" style="height: 0px; visibility: hidden;"></tr>
-
-          <tr
-            v-for="entry in displayedEntries"
-            :key="entry.id"
-            :class="{ 'selected': selection.isSelected(entry) }"
-          >
-            <td class="checkbox-column">
-              <input
-                type="checkbox"
-                :checked="selection.isSelected(entry)"
-                @change="selection.toggle(entry)"
-              />
-            </td>
-            <td class="title-cell" @click="viewEntry(entry)">
-              <span class="entry-title">{{ formatManPageTitle(entry.title, entry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
-              <span
-                v-if="getVerificationStatus(entry)"
-                class="provenance-dot"
-                :class="'provenance-' + getVerificationStatus(entry)"
-                :title="getVerificationLabel(entry)"
-              ></span>
-            </td>
-            <td>
-              <span class="category-badge" :style="getCategoryStyle(entry.category)">
-                {{ entry.category }}
-              </span>
-            </td>
-            <td>
-              <span class="type-badge">
-                <Icon :name="getDocumentTypeIcon(entry.type)" />
-                {{ entry.type }}
-              </span>
-            </td>
-            <td>
-              <div class="tags-cell">
-                <span v-for="tag in entry.tags.slice(0, 3)" :key="tag" class="tag-chip">
-                  {{ tag }}
-                </span>
-                <span v-if="entry.tags.length > 3" class="more-tags">
-                  +{{ entry.tags.length - 3 }}
-                </span>
-              </div>
-            </td>
-            <td class="date-cell">{{ formatDate(entry.updatedAt) }}</td>
-            <td class="actions-cell">
-              <BaseButton
-                variant="ghost"
-                size="xs"
-                @click="viewEntry(entry)"
-                class="icon-btn"
-                :title="$t('knowledge.entries.viewBtn')"
-                :aria-label="$t('knowledge.entries.viewBtn')"
-              >
-                <Icon name="eye" />
-              </BaseButton>
-              <BaseButton
-                variant="ghost"
-                size="xs"
-                @click="editEntry(entry)"
-                class="icon-btn"
-                :title="$t('knowledge.entries.editBtn')"
-                :aria-label="$t('knowledge.entries.editBtn')"
-              >
-                <Icon name="edit" />
-              </BaseButton>
-              <BaseButton
-                variant="ghost"
-                size="xs"
-                @click="deleteEntry(entry)"
-                class="icon-btn danger"
-                :title="$t('knowledge.entries.deleteBtn')"
-                :aria-label="$t('knowledge.entries.deleteBtn')"
-              >
-                <Icon name="trash" />
-              </BaseButton>
-            </td>
-          </tr>
-
-          <!-- Virtual scroll spacer after -->
-          <tr v-if="spacerAfter > 0" style="height: 0px; visibility: hidden;"></tr>
-        </tbody>
-      </table>
-
-      <!-- Pagination -->
-      <div class="pagination">
-        <BaseButton
-          variant="outline"
-          size="sm"
-          @click="currentPage--"
-          :disabled="currentPage === 1"
-          class="page-btn"
-        >
-          <Icon name="chevron-left" />
-        </BaseButton>
-
-        <span class="page-info">
-          {{ $t('knowledge.entries.pageInfo', { current: currentPage, total: totalPages, count: filteredDocuments.length }) }}
-        </span>
-
-        <BaseButton
-          variant="outline"
-          size="sm"
-          @click="currentPage++"
-          :disabled="currentPage === totalPages"
-          class="page-btn"
-        >
-          <Icon name="chevron-right" />
-        </BaseButton>
-      </div>
-    </div>
-
-    <!-- View/Edit Dialog -->
-    <BaseModal
-      :close-label="t('ui.modal.closeDialog')"
-      v-model="showDialog"
-      :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
-      size="lg"
-      scrollable
-    >
-      <div v-if="currentEntry && dialogMode === 'view'" class="view-mode">
-        <div class="entry-metadata">
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.titleLabel') }}</label>
-            <span>{{ formatManPageTitle(currentEntry.title, currentEntry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
-          </div>
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.categoryViewLabel') }}</label>
-            <span class="category-badge" :style="getCategoryStyle(currentEntry.category)">
-              {{ currentEntry.category }}
-            </span>
-          </div>
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.typeViewLabel') }}</label>
-            <span class="type-badge">
-              <Icon :name="getDocumentTypeIcon(currentEntry.type)" />
-              {{ currentEntry.type }}
-            </span>
-          </div>
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.sourceLabel') }}</label>
-            <span>{{ currentEntry.source }}</span>
-          </div>
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.createdLabel') }}</label>
-            <span>{{ formatDateTime(currentEntry.createdAt) }}</span>
-          </div>
-          <div class="meta-item">
-            <label>{{ $t('knowledge.entries.updatedLabel') }}</label>
-            <span>{{ formatDateTime(currentEntry.updatedAt) }}</span>
-          </div>
-          <div v-if="currentEntry.tags.length > 0" class="meta-item tags-section">
-            <label>{{ $t('knowledge.entries.tagsLabel') }}</label>
-            <div class="tags-list">
-              <span v-for="tag in currentEntry.tags" :key="tag" class="tag-chip">
-                {{ tag }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div class="entry-content">
-          <h4>{{ $t('knowledge.entries.content') }}</h4>
-          <div class="content-viewer" v-html="formatContent(currentEntry.content)"></div>
-        </div>
-      </div>
-
-      <div v-else-if="currentEntry" class="edit-mode">
-        <div class="form-group">
-          <label for="edit-title">{{ $t('knowledge.entries.editTitle') }}</label>
-          <input
-            id="edit-title"
-            v-model="editForm.title"
-            type="text"
-            class="form-input"
+          <KnowledgeEntriesTable
+            v-model:page="list.currentPage.value"
+            :documents="list.filteredDocuments.value"
+            :loading="store.isLoading"
+            :page-size="MANAGE_PAGE_SIZE"
+            :sort-key="list.sortKey.value"
+            :sort-order="list.sortOrder.value"
+            :total="list.filteredDocuments.value.length"
+            :empty-description="filtersActive ? $t('knowledge.entries.adjustFilters') : $t('knowledge.entries.addFirstEntry')"
+            :is-selected="selection.isSelected"
+            @sort="list.onSort"
+            @toggle="selection.toggle"
+            @preview="openPreview"
+            @view="dialog.viewEntry"
+            @edit="dialog.editEntry"
+            @delete="deleteEntry"
           />
         </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="edit-category">{{ $t('knowledge.entries.editCategory') }}</label>
-            <select id="edit-category" v-model="editForm.category" class="form-select">
-              <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
-                {{ cat.name }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="edit-source">{{ $t('knowledge.entries.editSource') }}</label>
-            <input
-              id="edit-source"
-              v-model="editForm.source"
-              type="text"
-              class="form-input"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="edit-tags">{{ $t('knowledge.entries.editTags') }}</label>
-          <input
-            id="edit-tags"
-            v-model="editForm.tagsInput"
-            type="text"
-            class="form-input"
-            :placeholder="$t('knowledge.entries.editTagsPlaceholder')"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="edit-content">{{ $t('knowledge.entries.editContent') }}</label>
-          <textarea
-            id="edit-content"
-            v-model="editForm.content"
-            class="form-textarea"
-            rows="10"
-          ></textarea>
-        </div>
-      </div>
-
-      <template #actions>
-        <BaseButton
-          v-if="dialogMode === 'view'"
-          variant="primary"
-          @click="switchToEdit"
-        >
-          <Icon name="edit" />
-          {{ $t('knowledge.entries.editBtn') }}
-        </BaseButton>
-        <BaseButton
-          v-if="dialogMode === 'edit'"
-          variant="secondary"
-          @click="cancelEdit"
-        >
-          {{ $t('knowledge.entries.cancel') }}
-        </BaseButton>
-        <BaseButton
-          v-if="dialogMode === 'edit'"
-          variant="primary"
-          @click="saveEdit"
-        >
-          {{ $t('knowledge.entries.saveChanges') }}
-        </BaseButton>
       </template>
-    </BaseModal>
+    </BaseTabs>
 
-    <!-- Issue #747: Bulk Edit Modal -->
+    <KnowledgeEntryDialog
+      v-model="dialog.showDialog.value"
+      :mode="dialog.dialogMode.value"
+      :entry="dialog.currentEntry.value"
+      :categories="store.categories"
+      :can-save="dialog.canSaveEdit.value"
+      @edit="dialog.currentEntry.value && dialog.editEntry(dialog.currentEntry.value)"
+      @cancel="dialog.cancelEdit"
+      @export="openDocumentExport"
+      @save="dialog.saveEdit"
+    />
+
     <BulkEditModal
       v-model="showBulkEditModal"
       :mode="bulkEditMode"
       :selected-entries="selectedBulkEditEntries"
       @confirm="handleBulkEditConfirm"
     />
-    </div>
+
+    <SourcePreviewPanel v-model="showPreview" :document="previewDocument" hide-open-in-manager />
+    <DocumentExportModal v-model="showDocumentExport" :documents="exportDocuments" />
   </div>
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { BaseAlert, BaseTabs } from '@autobot/ui'
+import type { TabItem } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import { useKnowledgeController } from '@/models/controllers'
+import { useKnowledgeListStatus } from '@/stores/useKnowledgeListStatus'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
+import { useKnowledgeController } from '@/models/controllers'
+import { MANAGE_PAGE_SIZE, useKnowledgeManageList } from '@/composables/knowledge/useKnowledgeManageList'
+import { useKnowledgeEntryDialog } from '@/composables/knowledge/useKnowledgeEntryDialog'
+import { exportEntries } from '@/composables/knowledge/knowledgeEntryExport'
+import type { ExportFormat } from '@/composables/knowledge/knowledgeEntryExport'
+import { formatManPageTitle } from '@/utils/formatHelpers'
+import { createLogger } from '@/utils/debugUtils'
 import KnowledgeUploadTab from './KnowledgeUploadTab.vue'
 import WatchFoldersPanel from './WatchFoldersPanel.vue'
 import ConnectorManager from './connectors/ConnectorManager.vue'
-import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
-import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
-import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
-import { formatDate, formatDateTime, formatManPageTitle, isoDateStamp } from '@/utils/formatHelpers'
-// #9724: the FA-class variant rendered empty SVGs through <Icon :name>
-import { getDocumentTypeIconName as getDocumentTypeIcon } from '@/utils/iconMappings'
-import { useDebounce } from '@/composables/useDebounce'
-import { useVirtualScroll } from '@/composables/useVirtualScroll'
-import { useBatchSelection } from '@/composables/useBatchSelection'
-import EmptyState from '@/components/ui/EmptyState.vue'
-import { BaseModal, BaseButton } from '@autobot/ui'
-import { useModal } from '@/composables/useModal'
-import { createLogger } from '@/utils/debugUtils'
-import { escapeHtml, sanitizeKnowledgeHtml } from '@/utils/sanitize'
-
-type ExportFormat = 'json' | 'csv' | 'markdown'
+import BulkActionsToolbar from './BulkActionsToolbar.vue'
+import KnowledgeEntriesFilters from './KnowledgeEntriesFilters.vue'
+import KnowledgeEntriesTable from './KnowledgeEntriesTable.vue'
+import KnowledgeEntryDialog from './KnowledgeEntryDialog.vue'
+import BulkEditModal from './modals/BulkEditModal.vue'
+import type { BulkEditMode, BulkEditEntry } from './modals/BulkEditModal.vue'
+import DocumentExportModal from './modals/DocumentExportModal.vue'
+import type { ExportDocument } from './modals/DocumentExportModal.vue'
+import SourcePreviewPanel from './panels/SourcePreviewPanel.vue'
+import type { SourceDocument } from './panels/SourcePreviewPanel.vue'
 
 const logger = createLogger('KnowledgeEntries')
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
-
 const store = useKnowledgeStore()
+const listStatus = useKnowledgeListStatus()
 const controller = useKnowledgeController()
 const route = useRoute()
 
-// Manage tab state — initialized from ?tab= so /knowledge/manage?tab=watchFolders
-// (the redirect target for the retired /knowledge/watch-folders route) opens
-// directly on the right tab.
-// #16897: connectors joined the same way — connectors and uploads are both
-// "give the knowledge base a source", so they belong on one surface rather than
-// two sidebar entries.
+// The tab starts from ?tab= so /knowledge/manage?tab=watchFolders (the redirect target of the retired
+// watch-folders route) opens on the right tab. Connectors joined the same surface (#16897).
 type ManageTab = 'upload' | 'manage' | 'watchFolders' | 'connectors'
-const validManageTabs: ManageTab[] = ['upload', 'manage', 'watchFolders', 'connectors']
-const initialManageTab = validManageTabs.includes(route.query.tab as ManageTab)
-  ? (route.query.tab as ManageTab)
-  : 'upload'
-const manageTab = ref<ManageTab>(initialManageTab)
-
-// Search and filter state
-const searchQuery = ref('')
-const debouncedSearchQuery = useDebounce(searchQuery, 300) // Debounce search for better performance
-const filterCategory = ref('')
-const filterType = ref('')
-const sortBy = ref('updatedAt')
-
-// Pagination
-const currentPage = ref(1)
-const itemsPerPage = 20
-
-// Selection state — useBatchSelection's `items` source is the current page,
-// so `selection.selectAll` / `selection.allSelected` are page-level. Cross-page
-// "select all matching the filter" is handled below via setSelected(...).
-const selection = useBatchSelection<{ id: string }, string>(
-  () => paginatedEntries.value,
-  (item) => item.id
+const TAB_ICONS: Record<ManageTab, IconName> = { upload: 'upload', manage: 'edit', watchFolders: 'folder', connectors: 'plug' }
+const tabItems = computed<TabItem[]>(() =>
+  (Object.keys(TAB_ICONS) as ManageTab[]).map((value) => ({ value, label: t(`knowledge.entries.${value}Tab`) })),
 )
-const allMatchingSelected = ref(false)
+const manageTab = ref<ManageTab>(
+  (Object.keys(TAB_ICONS) as string[]).includes(route.query.tab as string) ? (route.query.tab as ManageTab) : 'upload',
+)
 
-// Bulk edit state (Issue #747)
+const list = useKnowledgeManageList(() => store.documents)
+const selection = list.selection
+const filtersActive = computed(() => !!(list.searchQuery.value || list.filterCategory.value || list.filterType.value))
+const dialog = useKnowledgeEntryDialog((id, updates) => controller.updateDocument(id, updates))
+
+// Bulk edit (#747)
 const showBulkEditModal = ref(false)
 const bulkEditMode = ref<BulkEditMode>('category')
-
-// Dialog state
-const { isOpen: showDialog, open: openDialog, close: closeDialogModal } = useModal({ id: 'entry-dialog' })
-const dialogMode = ref<'view' | 'edit'>('view')
-const currentEntry = ref<KnowledgeDocument | null>(null)
-
-const editForm = reactive({
-  title: '',
-  category: '',
-  source: '',
-  content: '',
-  tagsInput: ''
-})
-
-// Computed
-const filteredDocuments = computed(() => {
-  let docs = [...store.documents]
-
-  // Apply search filter (debounced for better performance)
-  if (debouncedSearchQuery.value) {
-    const query = debouncedSearchQuery.value.toLowerCase()
-    docs = docs.filter(doc =>
-      doc.title?.toLowerCase().includes(query) ||
-      doc.content.toLowerCase().includes(query) ||
-      doc.tags.some(tag => tag.toLowerCase().includes(query))
-    )
-  }
-
-  // Apply category filter
-  if (filterCategory.value) {
-    docs = docs.filter(doc => doc.category === filterCategory.value)
-  }
-
-  // Apply type filter
-  if (filterType.value) {
-    docs = docs.filter(doc => doc.type === filterType.value)
-  }
-
-  // Apply sorting
-  docs.sort((a, b) => {
-    switch (sortBy.value) {
-      case 'title':
-        return (a.title || '').localeCompare(b.title || '')
-      case 'category':
-        return a.category.localeCompare(b.category)
-      case 'createdAt':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      case 'updatedAt':
-      default:
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    }
-  })
-
-  return docs
-})
-
-const totalPages = computed(() =>
-  Math.ceil(filteredDocuments.value.length / itemsPerPage)
-)
-
-const scrollContainerRef = ref<HTMLElement | null>(null)
-
-// Virtual scroll for efficient rendering of large lists
-const ITEM_HEIGHT = 48
-const { visibleItems, visibleRange, totalSize } = useVirtualScroll({
-  items: filteredDocuments,
-  itemHeight: ITEM_HEIGHT,
-  buffer: 5
-})
-const spacerBefore = computed(() => visibleRange.value.startIndex * ITEM_HEIGHT)
-const spacerAfter = computed(() => Math.max(0, totalSize.value - (visibleRange.value.endIndex + 1) * ITEM_HEIGHT))
-
-// Extract KnowledgeDocument items from virtual scroll wrapper objects
-const displayedEntries = computed<KnowledgeDocument[]>(() =>
-  visibleItems.value.length > 0
-    ? visibleItems.value.map(v => v.item as KnowledgeDocument)
-    : paginatedEntries.value
-)
-
-const paginatedEntries = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  const end = start + itemsPerPage
-  return filteredDocuments.value.slice(start, end)
-})
-
-// `selection.allSelected` covers this — derived from selection × current page.
-const allSelected = selection.allSelected
-
-// Issue #747: Bulk edit computed properties
-const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
-  return store.documents
-    .filter(doc => selection.isSelected(doc))
-    .map(doc => ({
+const openBulkEdit = (mode: BulkEditMode) => {
+  bulkEditMode.value = mode
+  showBulkEditModal.value = true
+}
+const selectedBulkEditEntries = computed<BulkEditEntry[]>(() =>
+  store.documents
+    .filter((doc) => selection.isSelected(doc))
+    .map((doc) => ({
       id: doc.id,
       title: formatManPageTitle(doc.title, doc.metadata?.factType, t) || t('knowledge.entries.untitled'),
       category: doc.category,
-      tags: doc.tags
-    }))
-})
+      tags: doc.tags,
+    })),
+)
 
-// Methods
-const filterEntries = () => {
-  currentPage.value = 1
-}
-
-const clearFilters = () => {
-  searchQuery.value = ''
-  filterCategory.value = ''
-  filterType.value = ''
-  sortBy.value = 'updatedAt'
-  currentPage.value = 1
-}
-
-const sortEntries = () => {
-  // Sorting is handled in the computed property
-}
-
-const toggleSelectAll = () => {
-  if (selection.allSelected.value) {
-    // Deselect all on current page
-    paginatedEntries.value.forEach(entry => selection.deselectByKey(entry.id))
-  } else {
-    // Select all on current page
-    selection.selectAll()
+type BulkEditPayload = { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }
+async function handleBulkEditConfirm(payload: BulkEditPayload) {
+  try {
+    const ids = [...selection.selected.value]
+    if (payload.mode === 'category') await controller.bulkUpdateCategory(ids, payload.value as string)
+    else if (payload.mode === 'tags-add') await controller.bulkAddTags(ids, payload.value as string[])
+    else if (payload.mode === 'tags-remove') await controller.bulkRemoveTags(ids, payload.value as string[])
+    list.clearSelection()
+  } catch (error) {
+    logger.error('Bulk edit failed:', error)
   }
 }
 
-const viewEntry = (entry: KnowledgeDocument) => {
-  currentEntry.value = entry
-  dialogMode.value = 'view'
-  openDialog()
-}
-
-const editEntry = (entry: KnowledgeDocument) => {
-  currentEntry.value = entry
-  editForm.title = entry.title || ''
-  editForm.category = entry.category
-  editForm.source = entry.source
-  editForm.content = entry.content
-  editForm.tagsInput = entry.tags.join(', ')
-  dialogMode.value = 'edit'
-  openDialog()
-}
-
-const deleteEntry = async (entry: KnowledgeDocument) => {
-  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }) }))) return
-
+async function deleteEntry(entry: KnowledgeDocument) {
+  const message = t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') })
+  if (!(await confirm({ title: t('common.confirm'), message }))) return
   try {
     await controller.deleteDocument(entry.id)
   } catch (error) {
@@ -656,9 +186,9 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
   }
 }
 
-const deleteSelected = async () => {
-  if (selection.selectedCount.value && !(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
-
+async function deleteSelected() {
+  const message = t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value })
+  if (selection.selectedCount.value && !(await confirm({ title: t('common.confirm'), message }))) return
   try {
     await controller.bulkDeleteDocuments([...selection.selected.value])
     selection.clear()
@@ -667,692 +197,34 @@ const deleteSelected = async () => {
   }
 }
 
-// Issue #747: Enhanced export with multiple formats
-const handleExport = (format: ExportFormat) => {
-  const entries = store.documents.filter(doc =>
-    selection.selected.value.has(doc.id)
-  )
+const onBulkExport = (format: ExportFormat) =>
+  exportEntries(store.documents.filter((doc) => selection.selected.value.has(doc.id)), format)
 
-  let content: string
-  let mimeType: string
-  let extension: string
-
-  switch (format) {
-    case 'markdown':
-      content = generateMarkdownExport(entries)
-      mimeType = 'text/markdown'
-      extension = 'md'
-      break
-    case 'csv':
-      content = generateCsvExport(entries)
-      mimeType = 'text/csv'
-      extension = 'csv'
-      break
-    case 'json':
-    default:
-      content = JSON.stringify(entries.map(entry => ({
-        title: entry.title,
-        content: entry.content,
-        category: entry.category,
-        type: entry.type,
-        source: entry.source,
-        tags: entry.tags,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt
-      })), null, 2)
-      mimeType = 'application/json'
-      extension = 'json'
+// Quick preview (SourcePreviewPanel) and single-document export (DocumentExportModal)
+const showPreview = ref(false)
+const previewDocument = ref<SourceDocument | null>(null)
+const openPreview = (entry: KnowledgeDocument) => {
+  previewDocument.value = {
+    id: entry.id,
+    title: formatManPageTitle(entry.title, entry.metadata?.factType, t) || t('knowledge.entries.untitled'),
+    content: entry.content,
+    path: entry.source,
+    type: entry.type,
+    category: entry.category,
+    metadata: { wordCount: entry.metadata?.wordCount, source: entry.source },
   }
-
-  downloadFile(content, `knowledge-export-${isoDateStamp()}.${extension}`, mimeType)
+  showPreview.value = true
 }
 
-const generateMarkdownExport = (entries: KnowledgeDocument[]): string => {
-  const lines: string[] = ['# Knowledge Base Export', '']
-  lines.push(`> Exported on ${formatDate(new Date())}`)
-  lines.push(`> ${entries.length} entries`)
-  lines.push('')
-
-  entries.forEach((entry, index) => {
-    lines.push(`## ${index + 1}. ${entry.title || 'Untitled'}`)
-    lines.push('')
-    lines.push(`**Category:** ${entry.category}`)
-    lines.push(`**Type:** ${entry.type}`)
-    lines.push(`**Source:** ${entry.source}`)
-    if (entry.tags.length > 0) {
-      lines.push(`**Tags:** ${entry.tags.join(', ')}`)
-    }
-    lines.push(`**Created:** ${formatDateTime(entry.createdAt)}`)
-    lines.push(`**Updated:** ${formatDateTime(entry.updatedAt)}`)
-    lines.push('')
-    lines.push('### Content')
-    lines.push('')
-    lines.push(entry.content)
-    lines.push('')
-    lines.push('---')
-    lines.push('')
-  })
-
-  return lines.join('\n')
-}
-
-const generateCsvExport = (entries: KnowledgeDocument[]): string => {
-  const headers = ['Title', 'Category', 'Type', 'Source', 'Tags', 'Created', 'Updated', 'Content']
-  const rows = entries.map(entry => [
-    escapeCsvField(entry.title || 'Untitled'),
-    escapeCsvField(entry.category),
-    escapeCsvField(entry.type),
-    escapeCsvField(entry.source),
-    escapeCsvField(entry.tags.join('; ')),
-    escapeCsvField(formatDateTime(entry.createdAt)),
-    escapeCsvField(formatDateTime(entry.updatedAt)),
-    escapeCsvField(entry.content.substring(0, 500) + (entry.content.length > 500 ? '...' : ''))
-  ])
-
-  return [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
-}
-
-const escapeCsvField = (field: string): string => {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-    return `"${field.replace(/"/g, '""')}"`
-  }
-  return field
-}
-
-const downloadFile = (content: string, filename: string, mimeType: string) => {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-// Issue #747: Bulk actions toolbar handlers
-const selectAllPage = () => {
-  allMatchingSelected.value = false
-  selection.selectAll()
-}
-
-const selectAllMatching = () => {
-  allMatchingSelected.value = true
-  selection.setSelected(filteredDocuments.value.map(doc => doc.id))
-}
-
-const clearSelection = () => {
-  selection.clear()
-  allMatchingSelected.value = false
-}
-
-const openBulkCategoryChange = () => {
-  bulkEditMode.value = 'category'
-  showBulkEditModal.value = true
-}
-
-const openBulkAddTags = () => {
-  bulkEditMode.value = 'tags-add'
-  showBulkEditModal.value = true
-}
-
-const openBulkRemoveTags = () => {
-  bulkEditMode.value = 'tags-remove'
-  showBulkEditModal.value = true
-}
-
-const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }) => {
-  try {
-    const ids = [...selection.selected.value]
-
-    if (payload.mode === 'category') {
-      await controller.bulkUpdateCategory(ids, payload.value as string)
-    } else if (payload.mode === 'tags-add') {
-      await controller.bulkAddTags(ids, payload.value as string[])
-    } else if (payload.mode === 'tags-remove') {
-      await controller.bulkRemoveTags(ids, payload.value as string[])
-    }
-
-    // Clear selection after successful bulk edit
-    clearSelection()
-  } catch (error) {
-    logger.error('Bulk edit failed:', error)
-  }
-}
-
-const switchToEdit = () => {
-  if (!currentEntry.value) return
-  editEntry(currentEntry.value)
-}
-
-const cancelEdit = () => {
-  dialogMode.value = 'view'
-}
-
-const saveEdit = async () => {
-  if (!currentEntry.value) return
-
-  try {
-    const tags = editForm.tagsInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0)
-
-    await controller.updateDocument(currentEntry.value.id, {
-      title: editForm.title,
-      category: editForm.category,
-      source: editForm.source,
-      content: editForm.content,
-      tags
-    })
-
-    closeDialog()
-  } catch (error) {
-    logger.error('Failed to save changes:', error)
-  }
-}
-
-const closeDialog = () => {
-  closeDialogModal()
-  currentEntry.value = null
-  dialogMode.value = 'view'
-}
-
-const formatContent = (content: string): string => {
-  // #19118: escape, format, then sanitise (#2847 sanitiser) - stored content is untrusted
-  return sanitizeKnowledgeHtml(escapeHtml(content)
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>'))
-}
-
-// Icon mapping now centralized in @/utils/iconMappings
-// Use getDocumentTypeIcon() directly
-
-// Issue #1253: Provenance status helpers
-const getVerificationStatus = (
-  entry: KnowledgeDocument
-): string | null => {
-  const meta = entry.metadata as Record<string, unknown> | undefined
-  const status = meta?.verification_status as string | undefined
-  if (!status) return null
-  return status
-}
-
-const getVerificationLabel = (
-  entry: KnowledgeDocument
-): string => {
-  const status = getVerificationStatus(entry)
-  const labels: Record<string, string> = {
-    verified: t('knowledge.entries.verified'),
-    pending_review: t('knowledge.entries.pendingReview'),
-    unverified: t('knowledge.entries.unverified'),
-    rejected: t('knowledge.entries.rejected')
-  }
-  return labels[status || ''] || t('knowledge.entries.unknown')
-}
-
-const getCategoryStyle = (category: string) => {
-  const cat = store.categories.find(c => c.name === category)
-  return cat?.color ? { backgroundColor: cat.color, color: 'white' } : {}
-}
-
-// Load data on mount
-onMounted(async () => {
-  if (store.documents.length === 0) {
-    await controller.loadAllDocuments()
-  }
+const showDocumentExport = ref(false)
+const exportDocuments = computed<ExportDocument[]>(() => {
+  const entry = dialog.currentEntry.value
+  return entry ? [{ id: entry.id, title: entry.title || t('knowledge.entries.untitled'), content: entry.content, path: entry.source }] : []
 })
+const openDocumentExport = () => {
+  showDocumentExport.value = true
+}
 
-// Reset page when filters change (use debounced search for better performance)
-watch([debouncedSearchQuery, filterCategory, filterType], () => {
-  currentPage.value = 1
-})
+// Always re-read: the list is a projection of the server, not of this session's uploads (#17530).
+onMounted(() => controller.loadAllDocuments())
 </script>
-
-<style scoped>
-/**
- * Issue #704: CSS Design System - Using design tokens
- * All colors reference CSS custom properties from design-tokens.css
- */
-
-.knowledge-entries {
-  padding: var(--spacing-6);
-}
-
-.entries-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-4);
-  flex-wrap: wrap;
-  gap: var(--spacing-4);
-}
-
-.entries-header h3 {
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-}
-
-.total-count {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.search-box {
-  position: relative;
-}
-
-.search-icon {
-  position: absolute;
-  left: var(--spacing-3);
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-secondary);
-}
-
-/* Issue #901: Technical Precision search input */
-.search-input {
-  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xs);
-  width: 250px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  transition: all var(--duration-150) var(--ease-in-out);
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px var(--color-info-bg);
-}
-.search-input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Filter bar */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-4);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-default);
-  margin-bottom: var(--spacing-4);
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.filter-group label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-}
-
-.filter-select {
-  padding: var(--spacing-1-5) var(--spacing-3);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xs);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-  background: var(--bg-card);
-  color: var(--text-primary);
-  transition: all var(--duration-150) var(--ease-in-out);
-}
-
-.filter-select:focus {
-  outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px var(--color-info-bg);
-}
-.filter-select:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Loading and empty states */
-.loading-state {
-  text-align: center;
-  padding: var(--spacing-12);
-  color: var(--text-secondary);
-}
-
-/* Table styles */
-.entries-table {
-  background: var(--bg-card);
-  border-radius: var(--radius-default);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
-  background: var(--bg-secondary);
-  padding: var(--spacing-3);
-  text-align: left;
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  border-bottom: 1px solid var(--border-default);
-}
-
-td {
-  padding: var(--spacing-3);
-  border-bottom: 1px solid var(--border-default);
-}
-
-tr:hover {
-  background: var(--bg-hover);
-}
-
-/* Issue #901: Electric blue for selected rows */
-tr.selected {
-  background: var(--color-info-bg);
-}
-
-.checkbox-column {
-  width: 40px;
-  text-align: center;
-}
-
-.title-cell {
-  cursor: pointer;
-}
-
-/* Issue #901: Electric blue for entry titles */
-.entry-title {
-  color: var(--color-info);
-  font-weight: var(--font-medium);
-}
-
-.entry-title:hover {
-  text-decoration: underline;
-  color: var(--color-info-dark);
-}
-
-/* Issue #1253: Provenance status dot */
-.provenance-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-left: var(--spacing-2);
-  vertical-align: middle;
-}
-
-.provenance-verified {
-  background: var(--color-success);
-}
-
-.provenance-pending_review {
-  background: var(--color-warning);
-}
-
-.provenance-unverified {
-  background: var(--text-tertiary);
-}
-
-.provenance-rejected {
-  background: var(--color-error);
-}
-
-/* Issue #901: Technical Precision badges */
-.category-badge {
-  display: inline-block;
-  padding: var(--spacing-1) var(--spacing-3);
-  border-radius: var(--radius-xs);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  font-family: var(--font-sans);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.type-badge {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.tags-cell {
-  display: flex;
-  gap: var(--spacing-1);
-  align-items: center;
-}
-
-.tag-chip {
-  display: inline-block;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-xs);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-.more-tags {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-/* Issue #901: Monospace for dates */
-.date-cell {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  color: var(--text-secondary);
-}
-
-.actions-cell {
-  display: flex;
-  gap: var(--spacing-2);
-}
-
-/* Virtual scroll optimization - Issue #4011 */
-.entries-tbody-virtual {
-  contain: layout style paint;
-  will-change: transform;
-}
-
-.entries-tbody-virtual tr {
-  contain: layout style;
-}
-
-/* Pagination */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-4);
-  border-top: 1px solid var(--border-default);
-}
-
-.page-info {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-/* View mode styles */
-.entry-metadata {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-4);
-  margin-bottom: var(--spacing-8);
-  padding: var(--spacing-4);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-default);
-}
-
-.meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-}
-
-.meta-item label {
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
-.meta-item span {
-  color: var(--text-primary);
-}
-
-.tags-section {
-  grid-column: 1 / -1;
-}
-
-.tags-list {
-  display: flex;
-  gap: var(--spacing-2);
-  flex-wrap: wrap;
-  margin-top: var(--spacing-2);
-}
-
-.entry-content h4 {
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-4);
-}
-
-.content-viewer {
-  padding: var(--spacing-4);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  color: var(--text-primary);
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-/* Edit mode styles */
-.form-group {
-  margin-bottom: var(--spacing-5);
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: var(--spacing-2);
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  padding: var(--spacing-2-5);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-focus);
-}
-.form-input:focus-visible,
-.form-select:focus-visible,
-.form-textarea:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-.form-input:focus-visible,
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-4);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .entries-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    flex-direction: column;
-    gap: var(--spacing-2);
-  }
-
-  .search-input {
-    width: 100%;
-  }
-
-  .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-group {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .filter-select {
-    width: 100%;
-  }
-
-  .entries-table {
-    overflow-x: auto;
-  }
-
-  table {
-    min-width: 800px;
-  }
-}
-
-/* Manage Tabs */
-.manage-tabs {
-  display: flex;
-  gap: var(--spacing-2);
-  border-bottom: 2px solid var(--border-default);
-  padding: var(--spacing-4) var(--spacing-4) var(--spacing-2);
-  background: var(--bg-card);
-}
-
-.manage-tab-btn.active {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.entries-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-</style>

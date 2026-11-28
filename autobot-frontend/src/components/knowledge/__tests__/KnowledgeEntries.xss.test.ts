@@ -5,32 +5,26 @@
 
 /**
  * #19118: stored KB content must never reach the DOM as executable markup.
- * Mounts the real KnowledgeEntries and renders an entry in the view dialog.
+ * Mounts the real entry dialog (KnowledgeEntries renders it) and renders an entry in view mode.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
-import KnowledgeEntries from '../KnowledgeEntries.vue'
-
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {}, params: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}))
+import KnowledgeEntryDialog from '../KnowledgeEntryDialog.vue'
 
 async function renderEntry(content: string): Promise<HTMLElement> {
-  const wrapper = mount(KnowledgeEntries, {
+  mount(KnowledgeEntryDialog, {
     attachTo: document.body,
-    global: {
-      plugins: [createPinia(), createI18n({ legacy: false, locale: 'en', missingWarn: false, messages: { en: {} } })],
+    props: {
+      modelValue: true,
+      mode: 'view',
+      entry: { id: 'e1', title: 't', content, tags: [], metadata: {}, category: 'c', type: 'document', source: 's', createdAt: new Date(), updatedAt: new Date() },
+      categories: [],
+      canSave: true,
     },
+    global: { plugins: [createI18n({ legacy: false, locale: 'en', missingWarn: false, messages: { en: {} } })] },
   })
-  const vm = wrapper.vm as unknown as Record<string, unknown>
-  vm.currentEntry = { id: 'e1', title: 't', content, tags: [], metadata: {} }
-  vm.dialogMode = 'view'
-  vm.manageTab = 'manage'
-  vm.showDialog = true
   await nextTick()
   await nextTick()
   const viewer = document.body.querySelector('.content-viewer')

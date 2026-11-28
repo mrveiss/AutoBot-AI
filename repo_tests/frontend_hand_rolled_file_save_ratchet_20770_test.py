@@ -40,7 +40,7 @@ _ASSIGNMENT = re.compile(
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
-PIN = 5
+PIN = 4
 
 
 def _sources(root: Path) -> list[Path]:

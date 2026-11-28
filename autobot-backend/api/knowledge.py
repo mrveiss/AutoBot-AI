@@ -71,6 +71,8 @@ from autobot_shared.secret_redaction import redact_content
 from autobot_shared.ssot_constants import SecurityConstants
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.fact_aggregate import fact_rows
+from knowledge.fact_stream import fact_keys_only
 from knowledge.kb_ingest_result import ingest_in_kb, partial_note
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -174,8 +176,8 @@ def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
     and improve testability.
 
     Args:
-        fact_id: Redis key for the fact (bytes or string)
-        fact: Parsed fact dictionary with content and metadata
+        fact_id: Bare fact id (the ``<id>`` of ``fact:<id>``), the id the fact routes expect (#17530)
+        fact: Fact dict from the KB reader: ``content``, ``metadata`` and ``timestamp``
 
     Returns:
         Formatted entry dict with id, content, title, source, category,
@@ -189,22 +191,21 @@ def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
         "source": metadata.get("source", "unknown"),
         "category": metadata.get("category", CategoryDefaults.GENERAL),
         "type": metadata.get("type", "document"),
-        "created_at": metadata.get("created_at"),
+        "created_at": metadata.get("created_at") or fact.get("timestamp") or None,
         "metadata": metadata,
     }
 
 
-def _parse_man_page_fact(fact_json: bytes) -> tuple:
+def _parse_man_page_fact(fact: dict) -> tuple:
     """Parse a man page fact and extract counts (Issue #315: extracted).
 
     Args:
-        fact_json: JSON bytes of fact data
+        fact: Fact dict from the KB reader
 
     Returns:
         Tuple of (is_man_page, is_system_command, created_at) or (False, False, None) on error
     """
     try:
-        fact = json.loads(fact_json)
         metadata = fact.get("metadata", {})
         fact_type = metadata.get("type")
 
@@ -213,7 +214,7 @@ def _parse_man_page_fact(fact_json: bytes) -> tuple:
         created_at = metadata.get("created_at")
 
         return is_man_page, is_system_command, created_at
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
         logger.warning("Error parsing fact metadata: %s", e)
         return False, False, None
 
@@ -461,22 +462,16 @@ async def get_knowledge_categories(
     stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
     categories_list = stats.get("categories", [])
 
-    # Get all facts to count by category - async redis operation
-    try:
-        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
-    except Exception as redis_err:
-        logger.debug("Redis error getting facts: %s", redis_err)
-        all_facts_data = {}
-
+    # Count facts by category from the fact:<id> store, metadata only, cached (#17530)
     category_counts = {}
-    for fact_json in all_facts_data.values():
-        try:
-            fact = json.loads(fact_json)
-            category = fact.get("metadata", {}).get("category", "uncategorized")
+    degraded = False
+    try:
+        for fact in await fact_rows(kb_to_use):
+            category = (fact.get("metadata") or {}).get("category", "uncategorized")
             category_counts[category] = category_counts.get(category, 0) + 1
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning("Error parsing fact JSON: %s", e)
-            continue
+    except Exception as redis_err:
+        degraded = True
+        logger.warning("categories: fact counts unavailable, Redis read failed: %s", redis_err)
 
     # Format for frontend with counts
     categories = [{"name": cat, "count": category_counts.get(cat, 0), "id": cat} for cat in categories_list]
@@ -500,6 +495,7 @@ async def get_knowledge_categories(
     return KnowledgeCategoriesResponse(
         categories=categories,
         total=len(categories),
+        degraded=degraded,
     )
 
 
@@ -1523,19 +1519,20 @@ def _empty_entries_response(message: str = "", error: str = "") -> dict:
     return resp
 
 
-def _parse_and_filter_facts(items: dict, category: str | None, limit: int) -> list:
-    """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
+def _parse_and_filter_facts(facts: list, category: str | None) -> list:
+    """Format and category-filter the facts one scan step yielded (Issue #398: extracted).
+
+    Returns every matching fact. Truncating here would drop the remainder
+    while the cursor advances past it (#17530).
+    """
     entries = []
-    for fact_id, fact_json in items.items():
+    for fact in facts:
         try:
-            fact = json.loads(fact_json)
-            if category and fact.get("metadata", {}).get("category", "") != category:
+            if category and (fact.get("metadata") or {}).get("category", "") != category:
                 continue
-            entries.append(_format_knowledge_entry(fact_id, fact))
-            if len(entries) >= limit:
-                break
+            entries.append(_format_knowledge_entry(fact["fact_id"], fact))
         except Exception as e:
-            logger.warning("Error parsing fact %s: %s", fact_id, e)
+            logger.warning("Error formatting fact %s: %s", fact.get("fact_id"), e)
     return entries
 
 
@@ -1570,16 +1567,15 @@ async def get_knowledge_entries(
 
     try:
 
-        def _hscan():
-            return kb.redis_client.hscan("knowledge_base:facts", cursor=current_cursor, count=limit * 2)
+        from knowledge.fact_stream import get_facts_page
 
-        next_cursor, items = await asyncio.to_thread(_hscan)
-        entries = _parse_and_filter_facts(items, category, limit)
-        entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        next_cursor, facts = await get_facts_page(kb, current_cursor, limit)
+        entries = _parse_and_filter_facts(facts, category)
+        entries.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         return {
-            "entries": entries[:limit],
+            "entries": entries,
             "next_cursor": str(next_cursor),
-            "count": len(entries[:limit]),
+            "count": len(entries),
             "has_more": next_cursor != 0,
         }
     except Exception as e:
@@ -1600,7 +1596,7 @@ def _create_offline_stats_response() -> dict:
     }
 
 
-def _analyze_facts_for_stats(all_facts_data: dict) -> tuple:
+def _analyze_facts_for_stats(facts: list) -> tuple:
     """Analyze facts for detailed breakdowns (Issue #398: extracted).
 
     Returns:
@@ -1608,9 +1604,8 @@ def _analyze_facts_for_stats(all_facts_data: dict) -> tuple:
     """
     category_counts, source_counts, type_counts = {}, {}, {}
     fact_sizes = []
-    for fact_json in all_facts_data.values():
+    for fact in facts:
         try:
-            fact = json.loads(fact_json)
             metadata = fact.get("metadata", {})
             cat = metadata.get("category", "uncategorized")
             category_counts[cat] = category_counts.get(cat, 0) + 1
@@ -1618,8 +1613,8 @@ def _analyze_facts_for_stats(all_facts_data: dict) -> tuple:
             source_counts[src] = source_counts.get(src, 0) + 1
             ft = metadata.get("type", "document")
             type_counts[ft] = type_counts.get(ft, 0) + 1
-            fact_sizes.append(len(fact.get("content", "")))
-        except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+            fact_sizes.append(fact.get("size", 0))
+        except (KeyError, TypeError, AttributeError) as e:
             logger.warning("Error processing fact for size calculation: %s", e)
     return category_counts, source_counts, type_counts, fact_sizes
 
@@ -1659,6 +1654,9 @@ async def get_detailed_stats(
 
     Issue #744: Requires admin authentication.
     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
+    Issue #17530: ``size_metrics`` sizes are the content field's byte length (``HSTRLEN``), read without the
+    content text; they were character counts of the full content before. ``degraded`` is true when the fact store
+    could not be read, so empty breakdowns are not mistaken for an empty KB.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1670,12 +1668,14 @@ async def get_detailed_stats(
         return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
+    degraded = False
     try:
-        all_facts_data = await asyncio.to_thread(kb.redis_client.hgetall, "knowledge_base:facts")
-    except Exception:
-        all_facts_data = {}
-
-    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(all_facts_data)
+        rows = await fact_rows(kb)
+    except Exception as redis_err:
+        degraded = True
+        logger.warning("detailed_stats: fact breakdowns unavailable, Redis read failed: %s", redis_err)
+        rows = []
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(rows)
     return DetailedKnowledgeStats(
         status="online" if basic_stats.get("initialized") else "offline",
         basic_stats=basic_stats,
@@ -1684,6 +1684,7 @@ async def get_detailed_stats(
         type_breakdown=type_counts,
         size_metrics=_compute_size_metrics(sizes),
         rag_available=RAG_AVAILABLE,
+        degraded=degraded,
     )
 
 
@@ -1773,15 +1774,15 @@ async def get_man_pages_summary(
 
     # Get all facts and count man pages - async operation
     try:
-        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
+        all_facts = await fact_rows(kb_to_use)
 
         man_page_count = 0
         system_command_count = 0
         last_indexed = None
 
         # Process facts using helper (Issue #315)
-        for fact_json in all_facts_data.values():
-            is_man_page, is_system_command, created_at = _parse_man_page_fact(fact_json)
+        for fact in all_facts:
+            is_man_page, is_system_command, created_at = _parse_man_page_fact(fact)
             if is_man_page:
                 man_page_count += 1
             elif is_system_command:
@@ -2247,7 +2248,7 @@ async def _scan_all_fact_keys(kb) -> list:
     cursor = 0
     while True:
         cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="fact:*", count=1000)
-        all_fact_keys.extend(keys)
+        all_fact_keys.extend(fact_keys_only(keys))
         if cursor == 0:
             break
     return all_fact_keys

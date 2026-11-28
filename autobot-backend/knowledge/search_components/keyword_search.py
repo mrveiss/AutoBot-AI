@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from knowledge.fact_stream import fact_keys_only
 
 from .bm25 import BM25Scorer
 from .helpers import build_search_result, decode_redis_hash, matches_category
@@ -120,6 +121,7 @@ class KeywordSearcher:
             cursor = b"0"
             while True:
                 cursor, keys = await self.redis_client.scan(cursor=cursor, match="fact:*", count=100)
+                keys = fact_keys_only(keys)
                 if keys:
                     pipeline = self.redis_client.pipeline()
                     for key in keys:
@@ -255,6 +257,7 @@ class KeywordSearcher:
             while scanned < KEYWORD_SEARCH_MAX_SCAN:
                 cursor, keys = await self.redis_client.scan(cursor=cursor, match="fact:*", count=100)
                 scanned += len(keys)
+                keys = fact_keys_only(keys)
 
                 if keys:
                     batch_results = await self.process_keyword_batch(keys, query_terms, category, bm25)

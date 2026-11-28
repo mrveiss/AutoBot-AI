@@ -48,7 +48,7 @@ def _code_only(text: str) -> str:
 # 30 and 321 measured on bb5f0299e0; 15 and 317 after the first batch.
 PINS = {
     "local_keyframes_spin": 15,
-    "utility_spin_lines": 299,
+    "utility_spin_lines": 296,
 }  # #18244: -6, the Knowledge screen spinners moved to the kit; #20644: the SLM Batch/Vision views left (-4); #22179: the chat stream split (-3); #17566: two SLM spinners folded into one (-2)
 
 

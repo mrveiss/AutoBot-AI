@@ -17,8 +17,10 @@ import json
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.fact_key_families import FACT_COLLECTIONS_PREFIX
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from knowledge.fact_aggregate import invalidates_fact_rows
 
 if TYPE_CHECKING:
     import aioredis
@@ -260,13 +262,13 @@ class CollectionsMixin:
             logger.error("Failed to update collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
+    @invalidates_fact_rows
     async def _remove_facts_from_deleted_collection(self, collection_id: str, fact_ids: set, delete_facts: bool) -> int:
         """Remove or delete facts when collection is deleted (Issue #398: extracted)."""
         facts_deleted = 0
         for fid in fact_ids:
-            if isinstance(fid, bytes):
-                fid = fid.decode("utf-8")
-            await self.redis().srem(f"fact:collections:{fid}", collection_id)
+            fid = fid.decode("utf-8") if isinstance(fid, bytes) else fid
+            await self.redis().srem(f"{FACT_COLLECTIONS_PREFIX}{fid}", collection_id)
             if delete_facts:
                 await self.redis().delete(f"fact:{fid}")
                 facts_deleted += 1
@@ -337,7 +339,7 @@ class CollectionsMixin:
                 continue
 
             await self.redis().sadd(f"collection:facts:{collection_id}", fid)
-            await self.redis().sadd(f"fact:collections:{fid}", collection_id)
+            await self.redis().sadd(f"{FACT_COLLECTIONS_PREFIX}{fid}", collection_id)
             added_count += 1
 
         return added_count, already_in_collection, not_found
@@ -398,7 +400,7 @@ class CollectionsMixin:
                 continue
 
             await self.redis().srem(f"collection:facts:{collection_id}", fid)
-            await self.redis().srem(f"fact:collections:{fid}", collection_id)
+            await self.redis().srem(f"{FACT_COLLECTIONS_PREFIX}{fid}", collection_id)
             removed_count += 1
 
         return removed_count, not_in_collection
@@ -519,7 +521,7 @@ class CollectionsMixin:
                 return {"success": False, "message": f"Fact not found: {fact_id}"}
 
             # Get collection IDs
-            collection_ids = await self.redis().smembers(f"fact:collections:{fact_id}")
+            collection_ids = await self.redis().smembers(f"{FACT_COLLECTIONS_PREFIX}{fact_id}")
 
             collections = []
             for cid in collection_ids:
@@ -637,17 +639,16 @@ class CollectionsMixin:
             "message": f"Set confirm=True to delete {fact_count} facts",
         }
 
+    @invalidates_fact_rows
     async def _delete_fact_completely(self, fid: str) -> None:
         """Delete a fact and remove from all collections (Issue #398: extracted)."""
-        if isinstance(fid, bytes):
-            fid = fid.decode("utf-8")
-        collections = await self.redis().smembers(f"fact:collections:{fid}")
+        fid = fid.decode("utf-8") if isinstance(fid, bytes) else fid
+        collections = await self.redis().smembers(f"{FACT_COLLECTIONS_PREFIX}{fid}")
         for cid in collections:
-            if isinstance(cid, bytes):
-                cid = cid.decode("utf-8")
+            cid = cid.decode("utf-8") if isinstance(cid, bytes) else cid
             await self.redis().srem(f"collection:facts:{cid}", fid)
         await self.redis().delete(f"fact:{fid}")
-        await self.redis().delete(f"fact:collections:{fid}")
+        await self.redis().delete(f"{FACT_COLLECTIONS_PREFIX}{fid}")
 
     async def bulk_delete_collection_facts(
         self, collection_id: str, confirm: bool = False, approved: dict | None = None

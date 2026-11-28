@@ -52,6 +52,7 @@ _JOB_TTL_S = 86400  # 24 h
 # _store_ts()/read by _load_ts() — shared by connectors doing Redis-backed
 # incremental sync (confluence, gitlab, jira, slack, gdrive, nextcloud, ...).
 _TS_REDIS_TTL_SECONDS = 86400 * 30  # 30 days
+CONNECTOR_SOURCE_TYPE = "connector"  # metadata.source_type of every connector-synced fact; retention exempts it
 
 
 class RetryableError(Exception):
@@ -581,11 +582,10 @@ class AbstractConnector(ABC):
         from knowledge import get_knowledge_base
 
         kb = await get_knowledge_base()
-
         ingest_metadata = dict(content.metadata)
         ingest_metadata.update(
             {
-                "source_type": "connector",
+                "source_type": CONNECTOR_SOURCE_TYPE,
                 "source_connector_id": self.config.connector_id,
                 "connector_type": self.connector_type,
                 "source_id": content.source_id,
@@ -595,12 +595,12 @@ class AbstractConnector(ABC):
         )
         stamp_if_document(ingest_metadata)  # #16693: unclaimed connector content is a document
 
-        text = content.content
-        if not text.strip():
+        if not (text := content.content).strip():
             self.logger.debug("Skipping empty content for source %s", content.source_id)
             return
 
-        await kb.store_fact(text, ingest_metadata, fact_id=content.source_id)
+        if (stored := await kb.store_fact(text, ingest_metadata, fact_id=content.source_id)).get("status") == "error":
+            raise RuntimeError("store_fact failed for source %s: %s" % (content.source_id, stored.get("message")))
         self.logger.debug("Ingested source %s into KB (connector=%s)", content.source_id, self.config.connector_id)
 
     # ------------------------------------------------------------------

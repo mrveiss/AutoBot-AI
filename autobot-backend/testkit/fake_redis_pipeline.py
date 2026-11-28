@@ -59,6 +59,7 @@ COMMANDS = frozenset(
         "hincrby",
         "hincrbyfloat",
         "hset",
+        "hstrlen",
         "incrby",
         "lpush",
         "lrange",

@@ -132,6 +132,9 @@
   --aui-z-raised: 1;
   --aui-z-skip-link: calc(var(--aui-z-modal) + 1);
 
+  /* ---- Section layout (SectionShell) --------------------------------- */
+  --aui-section-nav-width: 220px;
+
   /* ---- Tooltip (BaseTooltip) ----------------------------------------- */
   --aui-tooltip-delay: 500ms;
   --aui-tooltip-hide-delay: 100ms;

@@ -33,6 +33,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
 from knowledge.embedding_space_binding import initial_collection
+from knowledge.fact_stream import FACT_KEY_PATTERN, fact_keys_only, is_fact_key
 from knowledge.index_scope import configured_kb_index_name
 from services.provider_key_vault import resolve_provider_key
 from utils.knowledge_base_timeouts import kb_timeouts
@@ -591,7 +592,7 @@ class KnowledgeBaseCore:
                     keys.append(key.decode("utf-8"))
                 else:
                     keys.append(str(key))
-            return keys
+            return fact_keys_only(keys) if pattern == FACT_KEY_PATTERN else keys
         except Exception as e:
             logger.error("Error scanning Redis keys: %s", e)
             return []
@@ -611,7 +612,7 @@ class KnowledgeBaseCore:
                     keys.append(str(key))
 
             logger.debug("Scanned %d keys matching pattern '%s'", len(keys), pattern)
-            return keys
+            return fact_keys_only(keys) if pattern == FACT_KEY_PATTERN else keys
 
         except redis.RedisError as e:
             logger.error("Redis error scanning keys with pattern '%s': %s", pattern, e)
@@ -638,8 +639,8 @@ class KnowledgeBaseCore:
 
         try:
             # Look for model metadata in existing facts
-            async for key in self.redis().scan_iter(match="fact:*", count=10):
-                metadata_json = await self.redis().hget(key, "metadata")
+            async for key in self.redis().scan_iter(match=FACT_KEY_PATTERN, count=10):
+                metadata_json = await self.redis().hget(key, "metadata") if is_fact_key(key) else None
                 model = _extract_embedding_model_from_metadata(metadata_json)
                 if model:
                     return model

@@ -132,9 +132,9 @@ describe('KnowledgeView mobile sidebar', () => {
 
   it('closes the open sidebar when a SectionNav link is clicked', async () => {
     const w = await mountAt('/knowledge/browser', true)
-    expect(w.get('.knowledge-sidebar').classes()).toContain('mobile-open')
+    expect(w.get('.aui-section-shell__sidebar').classes()).toContain('aui-section-shell__sidebar--open')
     await w.get('.aui-section-nav__link').trigger('click')
-    expect(w.get('.knowledge-sidebar').classes()).not.toContain('mobile-open')
+    expect(w.get('.aui-section-shell__sidebar').classes()).not.toContain('aui-section-shell__sidebar--open')
     expect(localStorage.getItem(STORAGE_KEY)).toBe('false')
   })
 })

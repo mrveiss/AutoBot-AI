@@ -288,7 +288,7 @@ def test_knowledge_search_returns_results_and_a_total():
 
 def test_knowledge_entries_returns_rows_and_the_next_cursor():
     body = KnowledgeEntriesResponse(
-        entries=[BackendKnowledgeEntry(key="k1", title="T", content="c", category="ops", type="fact")],
+        entries=[BackendKnowledgeEntry(id="k1", title="T", content="c", category="ops", type="fact")],
         next_cursor="512",
         count=1,
         has_more=True,
@@ -299,7 +299,7 @@ def test_knowledge_entries_returns_rows_and_the_next_cursor():
     assert result.count == 1
     assert result.next_cursor == "512", "without next_cursor on the model a caller cannot page at all"
     assert result.has_more is True
-    assert result.entries[0].key == "k1"
+    assert result.entries[0].id == "k1"
     assert result.entries[0].type == "fact"
 
 

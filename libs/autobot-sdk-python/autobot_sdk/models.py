@@ -311,15 +311,16 @@ class KnowledgeEntry(BaseModel):
     """One row inside ``KnowledgeEntries.entries``; mirrors the backend's
     ``knowledge.schemas.entries.KnowledgeEntry``.
 
-    The SDK named this ``id``/``source``; the route emits ``key``/``title``/
-    ``type`` and has never emitted either of those two (#15118).
+    The route emits ``id`` (the server identity) and ``source``; it never
+    emitted ``key`` (#17530, superseding #15118).
     """
 
     model_config = ConfigDict(extra="allow")
 
-    key: str | None = None
+    id: str | None = None
     title: str | None = None
     content: str | None = None
+    source: str | None = None
     category: str | None = None
     type: str | None = None
     created_at: str | None = None
