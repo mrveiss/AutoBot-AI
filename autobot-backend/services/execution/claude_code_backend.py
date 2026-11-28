@@ -405,6 +405,7 @@ class ClaudeCodeBackend(ExecutionBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                start_new_session=True,  # its own group, so a timeout kill reaches the CLI's tool children
             )
         except FileNotFoundError as exc:
             return "", f"Failed to start claude CLI: {exc}", False
@@ -420,7 +421,7 @@ class ClaudeCodeBackend(ExecutionBackend):
                 timeout=float(timeout),
             )
         except asyncio.TimeoutError:
-            await kill_and_reap(proc)
+            await kill_and_reap(proc, process_group=True, bounded=True)
             ok = False
             stderr_chunks.append(f"Timed out after {timeout}s")
         except Exception as exc:

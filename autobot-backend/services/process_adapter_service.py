@@ -26,6 +26,7 @@ Boundary with long_running_operations (#1751):
 """
 
 import asyncio
+import contextlib
 import os
 import signal as signal_module
 import uuid
@@ -223,7 +224,8 @@ class ProcessAdapterService:
             return stdout or b"", stderr or b"", False
         except asyncio.TimeoutError:
             logger.warning("Process %s timed out after %ss", run_id, timeout)
-            await kill_and_reap(proc)
+            with contextlib.suppress(OSError):  # a stop that fails must not turn the timeout result into a raise
+                await kill_and_reap(proc)
             return b"", b"timeout exceeded", True
 
     async def _finalize_run(

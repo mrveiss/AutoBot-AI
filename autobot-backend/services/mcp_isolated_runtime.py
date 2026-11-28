@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.ssot_config import config
@@ -23,6 +24,8 @@ from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_fo
 logger = get_logger(__name__)
 
 _JSONRPC = "2.0"
+# Seconds a stopping worker gets after SIGTERM before SIGKILL, and a kill gets to be reaped (was a literal 3.0).
+_STOP_GRACE_S = env_float_clamped("AUTOBOT_MCP_ISOLATED_STOP_GRACE_S", 3.0, min_v=0.1, max_v=60.0)
 _WORKER_SCRIPT = str(Path(__file__).parent / "mcp_bridge_workers" / "worker_entrypoint.py")
 
 _WORKER_ENV_ALLOW = frozenset(
@@ -150,7 +153,7 @@ class IsolatedBridgeClient:
         except Exception:
             pass
         if self._proc.returncode is None:
-            await kill_and_reap(self._proc, terminate_first=True, bounded=True)
+            await kill_and_reap(self._proc, terminate_first=True, bounded=True, grace=_STOP_GRACE_S)
         self._proc = None
 
     async def _ensure_alive(self) -> None:
@@ -242,7 +245,7 @@ class IsolatedBridgeClient:
                 metrics = get_metrics_manager()
                 metrics.set_mcp_circuit_breaker_activated(self._bridge, True)
                 if self._proc is not None and self._proc.returncode is None:
-                    await kill_and_reap(self._proc, bounded=True)
+                    await kill_and_reap(self._proc, bounded=True, grace=_STOP_GRACE_S)
                 return {"success": False, "result": str(exc), "bridge": self._bridge}
 
             if "error" in resp:

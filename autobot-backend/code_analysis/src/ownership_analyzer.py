@@ -53,7 +53,8 @@ except ImportError as _e:
 logger = get_logger(__name__)
 
 # Directories to skip during analysis
-# Canonical skip dirs plus extras: egg metadata and tool caches are not authored code (the worktree copies are in the canonical set, #13602).
+# Canonical skip dirs plus extras: egg metadata and tool caches are not authored code
+# (the worktree copies are in the canonical set, #13602).
 _SKIP_DIRECTORIES = SKIP_DIRS | {".eggs", ".mypy_cache", "egg-info", "env"}
 
 # #13602: two ceilings, because a file count alone is the wrong bound. Measured
@@ -624,7 +625,6 @@ class OwnershipAnalyzer:
 
         # Calculate scores
         now = datetime.now(tz=timezone.utc)
-        recency_cutoff = now - timedelta(days=days_for_recency)
 
         max_lines = max((d["lines"] for d in author_data.values()), default=1)
         max_commits = max((d["commits"] for d in author_data.values()), default=1)
@@ -724,7 +724,10 @@ class OwnershipAnalyzer:
                         area=do.directory_path,
                         gap_type="ownership_concentration",
                         risk_level="high",
-                        description=f"{do.primary_owner} owns {do.ownership_percentage}% of {do.directory_path} ({do.total_lines} lines)",
+                        description=(
+                            f"{do.primary_owner} owns {do.ownership_percentage}% of "
+                            f"{do.directory_path} ({do.total_lines} lines)"
+                        ),
                         recommendation="Distribute ownership by having others contribute or review code",
                         affected_lines=do.total_lines,
                     )

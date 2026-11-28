@@ -14,8 +14,9 @@ from pathlib import Path
 from autobot_shared.env_utils import env_int
 from autobot_shared.regex_whitespace import HSPACE, NOT_WS, WS
 from autobot_shared.ssot_config import config
+from autobot_shared.subprocess_reap import kill_and_reap
 from services.ansible_extra_vars import port_vars
-from services.process_group import kill_process_group
+from services.process_group import KILL_GRACE_S
 
 # Common install locations checked when ansible-playbook isn't on PATH
 # (Issue #12693 — shared between DeploymentService and PlaybookExecutor).
@@ -199,7 +200,7 @@ async def run_single_host_playbook(
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except (asyncio.TimeoutError, asyncio.CancelledError):
         # wait_for abandons communicate() but leaves ansible and its ssh children running (#19475).
-        await kill_process_group(process)
+        await kill_and_reap(process, process_group=True, terminate_first=True, bounded=True, grace=KILL_GRACE_S)
         raise
     return ansible_run_failure(stdout.decode("utf-8", errors="replace"), host, process.returncode)
 

@@ -8,9 +8,12 @@ import asyncio
 import os
 import signal
 import sys
+from unittest.mock import MagicMock
 
 import pytest
 
+from autobot_shared import subprocess_reap
+from autobot_shared.process_group import process_group_is_dead
 from autobot_shared.subprocess_reap import kill_and_reap
 
 
@@ -81,6 +84,79 @@ async def test_bounded_wait_returns_when_the_child_is_not_reaped_in_time(monkeyp
 
     real_wait = process.wait
     monkeypatch.setattr(process, "wait", _never_exits)
+    logger = MagicMock()
+    monkeypatch.setattr(subprocess_reap, "logger", logger)
     await asyncio.wait_for(kill_and_reap(process, bounded=True, grace=0.2), timeout=5)  # returns, does not hang
+    logger.warning.assert_called_once()  # the kill-but-not-reaped state is said once, by the helper
     monkeypatch.setattr(process, "wait", real_wait)
     await process.wait()
+
+
+def _spy_signals(monkeypatch) -> list[int]:
+    """Record every real signal os.killpg sends (the signal-0 liveness probes are left out)."""
+    sent: list[int] = []
+    real = os.killpg
+
+    def _killpg(pgid, sig):
+        if sig:
+            sent.append(sig)
+        return real(pgid, sig)
+
+    monkeypatch.setattr(os, "killpg", _killpg)
+    return sent
+
+
+_SPAWNS_SIGTERM_IGNORER = (
+    "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c'," + repr(_IGNORES_SIGTERM) + "]);"
+    "time.sleep(60)"
+)
+
+
+@pytest.mark.asyncio
+async def test_group_terminate_first_sigkills_a_sibling_that_ignores_sigterm(monkeypatch):
+    sent = _spy_signals(monkeypatch)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", _SPAWNS_SIGTERM_IGNORER, start_new_session=True
+    )
+    await asyncio.sleep(0.5)  # the sibling is up and has its handler installed
+    await kill_and_reap(process, process_group=True, terminate_first=True, bounded=True, grace=0.5)
+    assert process.returncode == -signal.SIGTERM  # the leader died on SIGTERM, the sibling did not
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert process_group_is_dead(process.pid)
+
+
+@pytest.mark.asyncio
+async def test_group_terminate_first_sends_no_sigkill_when_the_group_dies_on_sigterm(monkeypatch):
+    sent = _spy_signals(monkeypatch)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", "import time; time.sleep(60)", start_new_session=True
+    )
+    await kill_and_reap(process, process_group=True, terminate_first=True, grace=2.0)
+    assert sent == [signal.SIGTERM]
+    assert process_group_is_dead(process.pid)
+
+
+@pytest.mark.asyncio
+async def test_group_kill_of_an_already_gone_group_is_a_no_op(monkeypatch):
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "pass", start_new_session=True)
+    await process.wait()
+    sent = _spy_signals(monkeypatch)  # killpg raises ProcessLookupError: the group is gone
+    await kill_and_reap(process, process_group=True, terminate_first=True, grace=0.2)
+    assert process_group_is_dead(process.pid)
+    assert sent == [signal.SIGTERM]  # ProcessLookupError was swallowed and nothing escalated to SIGKILL
+
+
+@pytest.mark.asyncio
+async def test_group_that_survives_sigkill_is_logged_as_an_error(monkeypatch):
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", "import time; time.sleep(60)", start_new_session=True
+    )
+    logger = MagicMock()
+    monkeypatch.setattr(subprocess_reap, "logger", logger)
+
+    async def _never_dead(pgid, timeout_s):
+        return False
+
+    monkeypatch.setattr(subprocess_reap, "wait_for_process_group_death", _never_dead)
+    await kill_and_reap(process, process_group=True, terminate_first=True, grace=0.2)
+    logger.error.assert_called_once()

@@ -61,7 +61,7 @@ async def render_vegalite_to_svg(spec: dict, *, timeout: float = _DEFAULT_TIMEOU
             timeout=timeout,
         )
     except TimeoutError as exc:
-        await kill_and_reap(proc)
+        await kill_and_reap(proc, bounded=True)
         raise VegaRenderError(f"Vega render timed out after {timeout}s") from exc
 
     if proc.returncode != 0:

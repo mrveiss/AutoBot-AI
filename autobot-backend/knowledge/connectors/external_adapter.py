@@ -113,7 +113,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_CHECK_TIMEOUT)
             except asyncio.TimeoutError:
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
                 self.logger.warning("check command timed out after %ds", _CHECK_TIMEOUT)
                 return False
 
@@ -166,7 +166,7 @@ class ExternalConnectorAdapter(AbstractConnector):
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_DISCOVER_TIMEOUT)
             except asyncio.TimeoutError:
-                await kill_and_reap(proc)
+                await kill_and_reap(proc, bounded=True)
                 self.logger.warning("discover command timed out after %ds", _DISCOVER_TIMEOUT)
                 return []
 

@@ -13,6 +13,13 @@ REACH_ROOTS = {
         "autobot-backend/code_analysis",
         "autobot-backend/code_intelligence",
     ),
+    "repo_tests/asyncio_subprocess_kill_goes_through_reap_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/audit_action_vocabulary_18716_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/audit_integrity_wording_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/audit_writer_single_source_17225_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),

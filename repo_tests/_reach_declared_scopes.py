@@ -465,4 +465,11 @@ DECLARED_SCOPES = {
     "one-after-commit-queue-21107": ("autobot-backend", "autobot_shared"),
     "one-done-path": ("autobot-backend",),
     "scheduled-workflows-derived-for-failure-report-21592": (".github/workflows",),
+    "asyncio-subprocess-kill-through-reap": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+    ),
 }

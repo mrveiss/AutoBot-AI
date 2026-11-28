@@ -533,7 +533,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
         if self.process:
             try:
-                await kill_and_reap(self.process, terminate_first=True, bounded=True)
+                # SIGTERM, a brief MICRO_DELAY to exit gracefully, then SIGKILL (the pre-#20924 behaviour)
+                await kill_and_reap(self.process, terminate_first=True, bounded=True, grace=TimingConstants.MICRO_DELAY)
             except Exception as e:
                 logger.debug("Process termination during cleanup: %s", e)
 
