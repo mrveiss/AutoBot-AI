@@ -44,16 +44,18 @@ _HOMES = {
     "key_scope_allows": "autobot_shared/auth/key_scopes.py",
     "require_permission": _GATE,
     "require_any_permission": _GATE,
+    "require_all_permissions": "autobot_shared/user_management/middleware/rbac_decorators.py",
 }
 
 #: Still-defined second copies, each to be retired (#18263 remainder). Only shrinks.
-_PENDING = {
-    ("autobot_shared/user_management/middleware/rbac_decorators.py", "require_permission"),
-    ("autobot_shared/user_management/middleware/rbac_decorators.py", "require_any_permission"),
-}
+# Empty since #18088 retired the string-typed pair in rbac_decorators.py. A route module that
+# still has to migrate lists its (file, name) here with the issue that owns the migration.
+_PENDING: set[tuple[str, str]] = set()
 
 #: Factories whose permission argument must be a ``Permission`` member, never a string.
-_FACTORIES = frozenset({"require_permission", "require_any_permission", "require_key_permission"})
+_FACTORIES = frozenset(
+    {"require_permission", "require_any_permission", "require_all_permissions", "require_key_permission"}
+)
 
 
 def _definitions(tree: ast.AST) -> set[str]:
@@ -158,6 +160,7 @@ def test_each_name_is_defined_once_in_its_home(name: str) -> None:
 
 
 @pytest.mark.parametrize(("rel", "name"), sorted(_PENDING))
+@pytest.mark.skipif(not _PENDING, reason="no pending entries: every second definition is retired (#18088)")
 def test_a_pending_entry_still_exists(rel: str, name: str) -> None:
     """The allow-list shrinks: a retired definition must take its entry with it."""
     defined, _, _ = _scan()
