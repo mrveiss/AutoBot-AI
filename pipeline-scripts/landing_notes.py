@@ -475,6 +475,44 @@ def run_evidence(client: LandingClient, event: Dict[str, Any]) -> bool:
     return True
 
 
+EVENTS_MAX_PAGES = 5
+NOTE_MARKER_PREFIX = MARKER_TEMPLATE.split("{")[0]
+
+
+def label_applied_at(client: LandingClient, number: int, comments: List[Dict[str, Any]]) -> Optional[str]:
+    """When ``needs-ac-evidence`` was last applied: the latest ``labeled`` event, else the landing note's time.
+
+    ``None`` when neither can be read, so the caller fails closed.
+    """
+    stamps: List[str] = []
+    for page in range(1, EVENTS_MAX_PAGES + 1):
+        query = urllib.parse.urlencode({"per_page": COMMITS_PAGE_SIZE, "page": page})
+        batch = client.try_get(f"/repos/{client.repo}/issues/{number}/events?{query}")
+        if not isinstance(batch, list):
+            break
+        stamps += [
+            e["created_at"]
+            for e in batch
+            if e.get("event") == "labeled" and (e.get("label") or {}).get("name") == EVIDENCE_LABEL and e.get("created_at")
+        ]
+        if len(batch) < COMMITS_PAGE_SIZE:
+            break
+    if stamps:
+        return max(stamps)
+    notes = [c["created_at"] for c in comments if c.get("created_at") and NOTE_MARKER_PREFIX in (c.get("body") or "") and is_bot(c.get("user"))]
+    return max(notes) if notes else None
+
+
+def _evidence_after_label(client: LandingClient, number: int) -> bool:
+    """A trusted evidence comment posted AFTER the label was applied; fails closed when that time is unreadable."""
+    comments = client.comments(number)
+    applied = label_applied_at(client, number, comments)
+    if applied is None:
+        logger.warning("#%s: cannot read when %s was applied; label kept", number, EVIDENCE_LABEL)
+        return False
+    return any(is_trusted_evidence(c) and (c.get("created_at") or "") > applied for c in comments)
+
+
 def run_sweep(client: LandingClient) -> List[int]:
     """Clear ``needs-ac-evidence`` from every labelled issue that already holds trusted AC evidence (#20825).
 
@@ -487,7 +525,7 @@ def run_sweep(client: LandingClient) -> List[int]:
     cleared: List[int] = []
     for issue in issues:
         number = int(issue["number"])
-        if has_evidence_label(issue) and any(is_trusted_evidence(c) for c in client.comments(number)):
+        if has_evidence_label(issue) and _evidence_after_label(client, number):
             clear_label(client, number)
             cleared.append(number)
     logger.info("sweep: %d issue(s) labelled, %d cleared", len(issues), len(cleared))

@@ -51,6 +51,9 @@ class FakeApi:
         if parsed.path == "/search/issues":
             sha = urllib.parse.parse_qs(parsed.query)["q"][0].rsplit("sha:", 1)[1]
             return 200, {"items": [{"number": n} for n in self.data["search"].get(sha, [])]}
+        if len(parts) == 3 and parts[0] == "issues" and parts[2] == "events":
+            events = self.data.get("events", {}).get(parts[1])
+            return (200, events) if events is not None else (404, {"message": "Not Found"})
         if parts == ["issues"]:
             wanted = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)["labels"][0]
             return 200, [i for i in self.data["issues"].values() if wanted in {x["name"] for x in i.get("labels", [])}]
@@ -479,11 +482,21 @@ def _sweep_data(comments: dict[int, list[dict]], labelled=(101, 102), pr: int | 
     issues = {str(n): {"number": n, "state": "closed", "labels": labels} for n in labelled}
     if pr:
         issues[str(pr)] = {"number": pr, "state": "open", "labels": labels, "pull_request": {"url": "x"}}
-    return {"issues": issues, "comments": {str(k): v for k, v in comments.items()}, "labels": [ln.EVIDENCE_LABEL]}
+    events = {str(n): _labeled("2026-11-28T09:00:00Z") for n in labelled}
+    return {"issues": issues, "comments": {str(k): v for k, v in comments.items()}, "labels": [ln.EVIDENCE_LABEL], "events": events}
 
 
-def _owner(body: str = _TABLE, assoc: str = "OWNER", user: dict | None = None) -> dict:
-    return {"user": user or {"login": "mrveiss", "type": "User"}, "author_association": assoc, "body": body}
+def _owner(body: str = _TABLE, assoc: str = "OWNER", user: dict | None = None, at: str = "2026-11-28T10:00:00Z") -> dict:
+    return {
+        "user": user or {"login": "mrveiss", "type": "User"},
+        "author_association": assoc,
+        "body": body,
+        "created_at": at,
+    }
+
+
+def _labeled(at: str) -> list[dict]:
+    return [{"event": "labeled", "label": {"name": ln.EVIDENCE_LABEL}, "created_at": at}]
 
 
 def test_the_sweep_clears_only_the_issue_holding_trusted_evidence() -> None:
@@ -526,3 +539,32 @@ def test_a_sweep_cut_by_the_page_cap_fails_rather_than_passing(monkeypatch: pyte
     client, _ = _client(_sweep_data({}))
     with pytest.raises(ln.LandingNoteError):
         ln.run_sweep(client)
+
+
+def test_a_table_posted_before_the_label_does_not_clear_it() -> None:
+    data = _sweep_data({101: [_owner(at="2026-11-28T08:00:00Z")]}, labelled=(101,))
+    client, fake = _client(data)
+    assert ln.run_sweep(client) == []
+    assert fake.writes == []
+
+
+def test_a_table_posted_after_the_label_clears_it() -> None:
+    data = _sweep_data({101: [_owner(at="2026-11-28T08:00:00Z"), _owner(at="2026-11-28T09:30:00Z")]}, labelled=(101,))
+    client, _ = _client(data)
+    assert ln.run_sweep(client) == [101]
+
+
+def test_an_unreadable_label_time_does_not_clear() -> None:
+    data = _sweep_data({101: [_owner()]}, labelled=(101,))
+    data["events"] = {}
+    client, fake = _client(data)
+    assert ln.run_sweep(client) == []
+    assert fake.writes == []
+
+
+def test_the_landing_note_time_stands_in_when_the_events_are_unreadable() -> None:
+    note = {"user": BOT, "body": "<!-- landing-note:abc -->\nlanded", "created_at": "2026-11-28T09:00:00Z"}
+    data = _sweep_data({101: [_owner(at="2026-11-28T08:00:00Z"), note, _owner(at="2026-11-28T09:30:00Z")]}, labelled=(101,))
+    data["events"] = {}
+    client, _ = _client(data)
+    assert ln.run_sweep(client) == [101]

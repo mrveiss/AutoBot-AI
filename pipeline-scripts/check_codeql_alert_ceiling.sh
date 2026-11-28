@@ -211,7 +211,7 @@ alert_numbers() {
   local json
   json=$(gh api --paginate "repos/${REPO}/code-scanning/alerts?state=open&per_page=100&ref=$1" 2>/dev/null) \
     || fail "could not read code-scanning alerts for $1 (token scope, or the API errored)"
-  printf '%s' "$json" | jq -es 'if length > 0 and all(.[]; type == "array") then add | map(.number) | sort | .[] else error("expected arrays") end' 2>/dev/null \
+  printf '%s' "$json" | jq -s 'if length > 0 and all(.[]; type == "array") then add | map(.number) | sort | .[] else error("expected arrays") end' 2>/dev/null \
     || fail "the alerts API did not return a list of alerts for $1"
 }
 
