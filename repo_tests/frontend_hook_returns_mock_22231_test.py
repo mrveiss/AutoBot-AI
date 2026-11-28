@@ -30,7 +30,7 @@ _TEST_FILE = re.compile(r"\.(?:test|spec)\.(?:ts|tsx|js)$")
 _HOOK_ARROW_RETURNS_MOCK = re.compile(
     r"\b(?:beforeEach|beforeAll|afterEach|afterAll)\(\s*(?:async\s*)?\(\)\s*=>\s*(?!\{)[^{};\n]*\.mock[A-Z]\w*\("
 )
-_FLOOR = 500
+_FLOOR = 830
 
 
 def offending(text: str) -> int:
@@ -51,7 +51,7 @@ REACH = declare(
     "frontend-hook-returns-mock-scan",
     discover=_population,
     floor=_FLOOR,
-    growth=500,
+    growth=40,
     what="test and spec files in both frontends",
     roots=_ROOTS,
 )
