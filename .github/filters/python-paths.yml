@@ -56,6 +56,10 @@ python:
   - '.github/workflows/_gate-*.yml'
   - '.github/actions/gate-verdict/**'
   - '.github/filters/gate-paths.yml'
+  # #20825: pr_context_test.py drives the pr-context script; the dispatch guards read the satellite filters
+  - '.github/actions/pr-context/**'
+  - '.github/filters/satellite-paths.yml'
+  - '.github/filters/satellite-paths-ignore.yml'
   # #19868: proxy_upload_cap_one_home_19868_test.py reads it
   - 'docker/nginx/nginx-common.conf'
   - 'docker/nginx/nginx-locations.conf'
