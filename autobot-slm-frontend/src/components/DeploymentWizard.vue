@@ -257,7 +257,7 @@ function getCategoryIcon(category: string): string {
           :key="s"
           :class="[
             'flex-1 h-2 rounded-full transition-colors',
-            s <= step ? 'bg-primary-600' : 'bg-autobot-bg-active',
+            s <= step ? 'bg-autobot-primary' : 'bg-autobot-bg-active',
           ]"
         />
       </div>
@@ -280,7 +280,7 @@ function getCategoryIcon(category: string): string {
             <input
               v-model="manualMode"
               type="checkbox"
-              class="rounded-sm border-autobot-border-strong text-primary-600 focus:ring-primary-500"
+              class="rounded-sm border-autobot-border-strong text-autobot-primary focus:ring-autobot-primary"
             />
             <span class="text-autobot-text-secondary">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
           </label>
@@ -324,7 +324,7 @@ function getCategoryIcon(category: string): string {
             :class="[
               'p-4 border rounded-lg cursor-pointer transition-all',
               selectedNodeId === node.node_id
-                ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                ? 'border-autobot-primary bg-autobot-primary-bg ring-2 ring-autobot-primary-light'
                 : 'border-autobot-border hover:border-autobot-border-strong',
             ]"
           >
@@ -366,7 +366,7 @@ function getCategoryIcon(category: string): string {
         <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
 
         <div v-if="isLoadingRoles" class="flex items-center justify-center py-8">
-          <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
+          <div class="animate-spin w-6 h-6 border-2 border-autobot-primary border-t-transparent rounded-full" />
         </div>
 
         <div v-else class="space-y-6">
@@ -385,7 +385,7 @@ function getCategoryIcon(category: string): string {
                 :class="[
                   'p-3 border rounded-lg cursor-pointer transition-all',
                   isRoleSelected(role.name)
-                    ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                    ? 'border-autobot-primary bg-autobot-primary-bg ring-2 ring-autobot-primary-light'
                     : 'border-autobot-border hover:border-autobot-border-strong',
                 ]"
               >
@@ -394,7 +394,7 @@ function getCategoryIcon(category: string): string {
                     :class="[
                       'w-5 h-5 mt-0.5 rounded-sm border-2 flex items-center justify-center transition-colors',
                       isRoleSelected(role.name)
-                        ? 'border-primary-500 bg-primary-500'
+                        ? 'border-autobot-primary bg-autobot-primary'
                         : 'border-autobot-border-strong',
                     ]"
                   >
@@ -448,7 +448,7 @@ function getCategoryIcon(category: string): string {
               <span
                 v-for="role in selectedRoles"
                 :key="role"
-                class="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
+                class="px-3 py-1 bg-autobot-primary-bg text-autobot-primary-hover rounded-full text-sm font-medium"
               >
                 {{ role }}
               </span>

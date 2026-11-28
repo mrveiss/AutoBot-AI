@@ -42,8 +42,8 @@
           <option value="restricted">{{ $t('skills.approvalsTab.restricted') }}</option>
         </select>
         <button
-          class="px-3 py-1.5 bg-autobot-success-hover hover:bg-autobot-success-hover rounded text-sm
-                 text-autobot-text-primary transition-colors"
+          class="px-3 py-1.5 bg-autobot-success hover:bg-autobot-success-hover rounded text-sm
+                 text-(--text-on-success) transition-colors"
           @click="handleApprove(approval.id)"
         >
           {{ $t('skills.approvalsTab.approve') }}

@@ -229,7 +229,7 @@ async function handleDelete(): Promise<void> {
       </div>
       <button
         @click="openCreateModal"
-        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-lg hover:bg-autobot-primary-hover transition-colors"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -307,7 +307,7 @@ async function handleDelete(): Promise<void> {
                 <div class="flex items-center justify-end gap-2">
                   <button
                     @click="openEditModal(rule)"
-                    class="text-xs text-primary-600 hover:text-primary-800 transition-colors"
+                    class="text-xs text-autobot-primary hover:text-autobot-primary-dark transition-colors"
                   >
                     {{ $t('performance.alertRulesView.edit') }}
                   </button>
@@ -446,7 +446,7 @@ async function handleDelete(): Promise<void> {
             type="submit"
             form="alert-rule-form"
             :disabled="!form.name || loading"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
           >
             {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
           </button>

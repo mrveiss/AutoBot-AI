@@ -91,6 +91,9 @@
      carrying white text (--text-on-error) uses this darker shade of the same
      hue (4.62:1). --color-error stays for text, border and icon uses. */
   --color-error-solid: #da3535;
+  /* #17566: the pressed/hover shade of the solid fill; shared with the SLM console, measured by
+     scripts/check_token_contrast.py (#19953). */
+  --color-error-solid-hover: var(--color-error-dark);
 
   --color-info: #3b82f6;
   --color-info-hover: #2563eb;
@@ -1438,6 +1441,12 @@
   /* Danger tile */
   --danger-tile: #FBE5DF;
   --danger-tile-b: #F2C9BC;
+  /* Hover step of the opaque pill and tile fills: derived from the theme's own fill and text,
+     so it holds in every theme. The SLM declares the same names (#17566). */
+  --ok-bg-hover: color-mix(in srgb, var(--ok-bg) 90%, var(--text));
+  --warn-bg-hover: color-mix(in srgb, var(--warn-bg) 90%, var(--text));
+  --bad-bg-hover: color-mix(in srgb, var(--bad-bg) 90%, var(--text));
+  --i2t-hover: color-mix(in srgb, var(--i2t) 90%, var(--text));
 
   /* Breakpoints, grid and page frame */
   --bp-sm: 640px;

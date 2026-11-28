@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch, formatBytes } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseSwitch, formatBytes } from '@autobot/ui'
 /**
  * CacheSettings - Cache Management Component
  *
@@ -224,7 +224,7 @@ onMounted(async () => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -256,7 +256,7 @@ onMounted(async () => {
               type="number"
               min="10"
               max="86400"
-              class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             />
           </div>
 
@@ -271,7 +271,7 @@ onMounted(async () => {
               type="number"
               min="10"
               max="1000"
-              class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             />
           </div>
 
@@ -283,7 +283,7 @@ onMounted(async () => {
             </div>
             <select
               v-model="cacheConfig.eviction_policy"
-              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="lru">{{ $t('settings.admin.cacheSettings.lRULeastRecentlyUsed') }}</option>
               <option value="lfu">{{ $t('settings.admin.cacheSettings.lFULeastFrequentlyUsed') }}</option>
@@ -293,20 +293,14 @@ onMounted(async () => {
         </div>
 
         <div class="mt-6 flex justify-end">
-          <button
-            @click="saveCacheConfig"
-            :disabled="saving"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
+          <BaseButton :disabled="saving" :loading="saving" @click="saveCacheConfig">
+            <template #icon-left>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </template>
             {{ $t('settings.admin.cacheSettings.saveConfiguration') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -342,7 +336,7 @@ onMounted(async () => {
           </div>
           <div class="p-4 bg-autobot-bg-secondary rounded-lg">
             <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.cacheSettings.cacheHits') }}</p>
-            <p class="text-2xl font-semibold text-primary-600">{{ cacheStats.hits || 0 }}</p>
+            <p class="text-2xl font-semibold text-autobot-primary">{{ cacheStats.hits || 0 }}</p>
           </div>
         </div>
 
@@ -472,7 +466,7 @@ onMounted(async () => {
             <button
               @click="warmupCaches"
               :disabled="clearing"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
             >
               <svg v-if="clearing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

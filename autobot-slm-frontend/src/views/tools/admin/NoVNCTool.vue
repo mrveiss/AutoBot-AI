@@ -99,7 +99,7 @@ onMounted(() => fetchDynamicEndpoints())
           <select
             v-model="selectedHostId"
             :disabled="isConnected || loadingEndpoints || loading"
-            class="text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            class="text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary disabled:opacity-50"
           >
             <optgroup v-if="dynamicHosts.length > 0" :label="$t('tools.admin.noVNCTool.sLMManaged')">
               <option v-for="host in dynamicHosts" :key="host.id" :value="host.id">
@@ -131,7 +131,7 @@ onMounted(() => fetchDynamicEndpoints())
             :disabled="loading || !selectedHostId"
             :class="[
               'px-4 py-1.5 text-sm font-medium rounded-lg transition-colors',
-              isConnected ? 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-autobot-pill-bad-bg' : 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-autobot-pill-ok-bg'
+              isConnected ? 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-(--bad-bg-hover)' : 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-(--ok-bg-hover)'
             ]"
           >
             <span v-if="loading">{{ $t('tools.admin.noVNCTool.connecting') }}</span>

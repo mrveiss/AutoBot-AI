@@ -156,7 +156,7 @@ function formatChecked(value: string | undefined): string {
           :class="[
             'px-3 py-1 rounded-full text-xs font-medium border',
             verdictFilter === option
-              ? 'bg-primary-600 text-white border-primary-600'
+              ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-primary'
               : 'bg-white text-autobot-text-secondary border-autobot-border-strong',
           ]"
         >
