@@ -8,9 +8,9 @@ The sync proposes removals on every run, so two runs can both pass the "already 
 unique index on the proposal's ``scope`` (kind, project root and fact batch) is the only thing that makes the
 second insert fail; the proposer reads that failure as "already proposed".
 
-Chain: this revision descends from ``20261124_123`` (stale code-sync files, #22033), main's head when this was
-written. Open PRs also add ``124`` and ``125`` on the same chain; whichever lands later re-parents onto the
-then-current head, because a single head is required.
+Chain: this revision descends from ``20261124_125`` (#22225), which follows ``20261124_124`` (#22176), which
+follows ``20261124_123`` (stale code-sync files, #22033, main's head). A single head is required, so this one
+is re-parented whenever the revisions before it change.
 
 ``NO DATA REWRITE``: this adds one partial index only. No row or column is touched, and it constrains
 nothing except pending rows of its own action (none exist before the feature). If a dev install already
@@ -27,7 +27,7 @@ from alembic import op
 from migrations.guards import has_index, has_table
 
 revision: str = "20261124_126"
-down_revision: Union[str, None] = "20261124_123"
+down_revision: Union[str, None] = "20261124_125"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
