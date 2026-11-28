@@ -22,17 +22,18 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List
 
 from fastapi import HTTPException
 
 from autobot_shared.logging_manager import get_logger
-from knowledge_sync_replacement import SYNC_AUDIT_ACTOR, _is_protected
+from knowledge_sync_replacement import SYNC_AUDIT_ACTOR, SYNC_SERVICE_USER, _is_protected, record_fact_removal
 from models.approval import Approval
-from services.approval_execution import register_post_approval_action
+from services.approval_execution import register_post_approval_action, verified_decider
 from services.approval_gate_service import ApprovalGateService
-from services.audit_logger import audit_log
 from services.kb_cleanup_proposals import (
     cleanup_proposal,
     create_proposal_once,
@@ -61,12 +62,19 @@ _REASONS = {
     EXPIRED: "they passed their time-to-live and the source was re-indexed, so a newer copy exists",
     DIRECTORY_MISSING: "the directory of their source files is gone (deleted, or a tree that is not mounted)",
 }
-_SERVICE_USER = {"username": SYNC_AUDIT_ACTOR}
+_SERVICE_USER = SYNC_SERVICE_USER
+#: Where the sync keeps its tracked-file state, relative to the project root (see ``IncrementalKnowledgeSync``).
+_STATE_FILE = ("data", "file_metadata.json")
 _SAMPLE = 10
 
 
-def _scope(kind: str, project_root: Any) -> str:
-    return f"{kind}:{hashlib.sha256(str(project_root).encode('utf-8')).hexdigest()[:16]}"
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _scope(kind: str, project_root: Any, fact_ids: Iterable[str]) -> str:
+    """``<kind>:<root>:<batch>``: one open proposal per exact batch, so a new batch is never dropped (#20028)."""
+    return f"{kind}:{_digest(str(project_root))}:{_digest(chr(10).join(sorted(set(fact_ids))))}"
 
 
 async def live_fact_ids(kb: Any, fact_ids: Iterable[str]) -> List[str]:
@@ -86,7 +94,12 @@ def _text(kind: str, entries: Dict[str, List[str]]) -> tuple[str, str]:
 
 
 async def _create(
-    service: ApprovalGateService, kind: str, scope: str, entries: Dict[str, List[str]], approval_id: uuid.UUID
+    service: ApprovalGateService,
+    kind: str,
+    scope: str,
+    root: str,
+    entries: Dict[str, List[str]],
+    approval_id: uuid.UUID,
 ) -> Approval:
     """The durable audit row first (no row, no proposal), then the pending approval it names."""
     await record_cleanup_proposed(
@@ -97,6 +110,7 @@ async def _create(
         "action": ACTION,
         "kind": kind,
         SCOPE_KEY: scope,
+        "project_root": root,
         "sources": entries,
         "fact_ids": [fid for ids in entries.values() for fid in ids],
     }
@@ -107,14 +121,16 @@ async def _create(
     )
 
 
-async def _propose_in_session(session: "AsyncSession", kind: str, entries: Dict[str, List[str]], scope: str) -> None:
+async def _propose_in_session(
+    session: "AsyncSession", kind: str, root: str, entries: Dict[str, List[str]], scope: str
+) -> None:
     service = ApprovalGateService(session)
     await create_proposal_once(
         service,
         ACTION,
         SCOPE_KEY,
         scope,
-        lambda approval_id: _create(service, kind, scope, entries, approval_id),
+        lambda approval_id: _create(service, kind, scope, root, entries, approval_id),
         current_user=_SERVICE_USER,
         resource=f"kb-sync:{scope}",
     )
@@ -132,7 +148,8 @@ async def propose_removal(kind: str, project_root: Any, entries: Dict[str, List[
 
     try:
         async with get_async_session_factory()() as session:
-            await _propose_in_session(session, kind, entries, _scope(kind, project_root))
+            ids = [fid for batch in entries.values() for fid in batch]
+            await _propose_in_session(session, kind, str(project_root), entries, _scope(kind, project_root, ids))
         return True
     except HTTPException as exc:
         logger.error("KB sync removal (%s) was not proposed: %s", kind, exc.detail)
@@ -187,26 +204,47 @@ async def propose_expired_replaced(kb: Any, project_root: Any, prior: Dict[str, 
     return [fid for fid in replaced if fid not in expired_ids]
 
 
-async def _remove_one(kb: Any, fact_id: str, approval: Approval) -> str | None:
-    """Delete one approved fact; ``None`` when it went, else why it stayed."""
+def _tracked_state(root: Path) -> Dict[str, Dict[str, Any]]:
+    """The sync's own record of tracked files (relative path -> fact ids), as it is on disk now."""
+    try:
+        data = json.loads(root.joinpath(*_STATE_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {
+        str(meta.get("relative_path") or path): {*meta.get("fact_ids", []), *meta.get("shared_fact_ids", [])}
+        for path, meta in data.items()
+        if isinstance(meta, dict)
+    }
+
+
+def _still_needed(kind: str, root: Path, source: str, fact_id: str, tracked: Dict[str, Any]) -> str | None:
+    """Why a proposed fact must stay, or ``None``: what held at proposal time may not hold at approval."""
+    if not source or source.startswith(("/", "\\")) or ".." in Path(source).parts:
+        return "source path not verifiable, kept"
+    if kind != EXPIRED and (root / source).exists():
+        return "source is back, kept"  # a checkout or remount restored it between proposal and approval
+    held = [rel for rel, ids in tracked.items() if fact_id in ids and (kind == EXPIRED or rel != source)]
+    return "held by a tracked file, kept" if held else None
+
+
+async def _remove_one(
+    kb: Any, fact_id: str, approval: Approval, decider: uuid.UUID, source: str, tracked: Dict[str, Any]
+) -> str | None:
+    """Delete one approved fact; ``None`` when it went, else why it stayed.
+
+    ``is_replaceable`` is deliberately not applied: a human approved this exact fact explicitly, so the
+    "unmodified, created by the sync" test of the automatic path does not gate it. Protection still does.
+    """
     fact = await asyncio.to_thread(kb.get_fact, fact_id)
     if not fact:
         return "already gone"
     if _is_protected(fact.get("metadata") or {}):
         return "protected, kept"
-    details = {
-        "approval_id": str(approval.id),
-        "proposed_by": SYNC_AUDIT_ACTOR,
-        "kind": (approval.context or {}).get("kind"),
-    }
-    written = await audit_log(
-        "knowledge.remove",
-        user_id=approval.decided_by_user,
-        resource=f"fact:{fact_id}",
-        details=details,
-        durable=True,
-    )
-    if not written:
+    context = approval.context or {}
+    if (why := _still_needed(context.get("kind"), Path(context["project_root"]), source, fact_id, tracked)) is not None:
+        return why
+    details = {"approval_id": str(approval.id), "proposed_by": SYNC_AUDIT_ACTOR, "kind": context.get("kind")}
+    if not await record_fact_removal(fact_id, str(decider), details):
         return "audit row not written, kept"
     result = await kb.delete_fact(fact_id)
     if isinstance(result, dict) and result.get("status") == "error":
@@ -218,9 +256,14 @@ async def execute_sync_removal(approval: Approval, session: "AsyncSession") -> N
     """Delete exactly the facts an approved gate named, one audit row each, and record the outcome."""
     from knowledge_base import get_knowledge_base
 
-    (fact_ids,) = require_context(approval, "fact_ids")
+    decider = verified_decider(approval)
+    if not isinstance(decider, uuid.UUID):
+        raise ValueError("the removal needs a verified human decider")
+    fact_ids, sources, root = require_context(approval, "fact_ids", "sources", "project_root")
+    owner = {fid: src for src, ids in sources.items() for fid in ids}
     kb = await get_knowledge_base()
-    outcomes = [(fid, await _remove_one(kb, fid, approval)) for fid in fact_ids]
+    tracked = await asyncio.to_thread(_tracked_state, Path(root))
+    outcomes = [(fid, await _remove_one(kb, fid, approval, decider, owner.get(fid, ""), tracked)) for fid in fact_ids]
     kept = [f"{fid}: {why}" for fid, why in outcomes if why]
     removed = len(outcomes) - len(kept)
     await record_cleanup_outcome(

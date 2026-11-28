@@ -4,6 +4,8 @@
 # Author: mrveiss
 """Sync removals beyond a changed file's own chunks are proposed and applied only on approval (#20028)."""
 
+import json
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -13,6 +15,7 @@ import pytest
 import knowledge_base
 import knowledge_sync_incremental as sync_module
 import knowledge_sync_removal_proposals as removals
+from autobot_shared.principal import require_audit_actor_id
 from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics
 from models.approval import Approval
 from services import approval_execution
@@ -41,6 +44,11 @@ def world(monkeypatch):
     kb.get_fact = MagicMock(return_value={"content": "x", "metadata": {}})
     kb.delete_fact = AsyncMock(return_value={"status": "success"})
     audited = []
+    events = []
+
+    async def _record(event):
+        events.append(event)
+        return True
 
     async def _audit(operation, **kwargs):
         audited.append((operation, kwargs))
@@ -62,15 +70,31 @@ def world(monkeypatch):
     for target in (approval_execution, removals):
         monkeypatch.setattr(target, "audit_log", _audit)
     monkeypatch.setattr("services.kb_cleanup_proposals.audit_log", _audit)
+    monkeypatch.setattr("services.audit.audit.record", _record)
     monkeypatch.setattr("services.kb_cleanup_proposals.find_pending_proposal", _pending)
     monkeypatch.setattr("user_management.database.get_async_session_factory", lambda: _factory_session)
     monkeypatch.setattr(knowledge_base, "get_knowledge_base", _get_kb)
     removals.register_sync_removal()
-    return MagicMock(session=session, kb=kb, audited=audited)
+    return MagicMock(session=session, kb=kb, audited=audited, events=events)
+
+
+DECIDER = uuid.uuid4()
 
 
 def _approvals(world):
     return [o for o in world.session.added if isinstance(o, Approval)]
+
+
+async def _approve(world, approval):
+    """Approve as a verified human decider, as the route does."""
+    approval_execution.set_verified_decider(approval, DECIDER)
+    await ApprovalGateService(world.session).approve(approval.id, decided_by="alice", author_type="human", comment=None)
+
+
+def _write_state(root, *metas):
+    (root / "data").mkdir(exist_ok=True)
+    state = {m.path: m.__dict__ for m in metas}
+    (root / "data" / "file_metadata.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 def _sync(tmp_path, kb):
@@ -97,7 +121,7 @@ async def test_a_partial_tree_removal_creates_a_proposal_and_deletes_nothing(tmp
     assert approval.status == "pending" and approval.context["action"] == "kb_sync_removal"
     assert approval.context["kind"] == "partial_tree"
     assert approval.context["sources"] == {"gone.md": ["f1", "f2"]}
-    assert approval.requested_by_agent == "system:kb-sync"
+    assert approval.requested_by_agent == "service:kb-sync"
     world.kb.delete_fact.assert_not_awaited()
 
 
@@ -129,11 +153,11 @@ async def test_approving_deletes_exactly_those_facts_with_an_audit_row_each(tmp_
     sync.file_metadata[str(gone)] = _meta(gone, ["f1", "f2"])
     await sync._remove_obsolete_knowledge([str(gone)])
     (approval,) = _approvals(world)
-    await ApprovalGateService(world.session).approve(approval.id, decided_by="alice", author_type="human", comment=None)
+    await _approve(world, approval)
     assert [c.args[0] for c in world.kb.delete_fact.await_args_list] == ["f1", "f2"]
-    removed = [kw for op, kw in world.audited if op == "knowledge.remove"]
-    assert [kw["resource"] for kw in removed] == ["fact:f1", "fact:f2"]
-    assert all(kw["details"]["approval_id"] == str(approval.id) for kw in removed)
+    assert [e.resource_id for e in world.events] == ["f1", "f2"]
+    assert all(e.actor_id == str(DECIDER) for e in world.events)  # the verified decider, not the display name
+    assert all(e.metadata["approval_id"] == str(approval.id) for e in world.events)
 
 
 @pytest.mark.asyncio
@@ -198,3 +222,78 @@ async def test_a_proposal_that_cannot_be_audit_logged_is_not_created_and_does_no
 
 def test_the_executor_is_registered_with_this_module_as_its_proposer(world):
     assert approval_execution.registered_action_proposers()["kb_sync_removal"] == "knowledge_sync_removal_proposals"
+
+
+def test_the_real_resolver_accepts_the_sync_service_actor():
+    assert require_audit_actor_id(removals.SYNC_SERVICE_USER) == "service:kb-sync" == removals.SYNC_AUDIT_ACTOR
+
+
+@pytest.mark.asyncio
+async def test_a_path_that_reappeared_is_kept_and_a_still_missing_one_is_deleted(tmp_path, world):
+    sync = _sync(tmp_path, world.kb)
+    back, gone = tmp_path / "back.md", tmp_path / "gone.md"
+    sync.file_metadata.update({str(back): _meta(back, ["b1"]), str(gone): _meta(gone, ["g1"])})
+    await sync._remove_obsolete_knowledge([str(back), str(gone)])
+    back.write_text("restored by a checkout", encoding="utf-8")
+    (approval,) = _approvals(world)
+    _write_state(tmp_path, *sync.file_metadata.values())
+    await _approve(world, approval)
+    assert [c.args[0] for c in world.kb.delete_fact.await_args_list] == ["g1"]
+    bodies = [getattr(o, "body", "") for o in world.session.added]
+    assert any("b1: source is back, kept" in body for body in bodies)
+
+
+@pytest.mark.asyncio
+async def test_a_fact_a_tracked_file_now_holds_is_kept(tmp_path, world):
+    sync = _sync(tmp_path, world.kb)
+    gone, other = tmp_path / "gone.md", tmp_path / "other.md"
+    sync.file_metadata[str(gone)] = _meta(gone, ["g1"])
+    await sync._remove_obsolete_knowledge([str(gone)])
+    (approval,) = _approvals(world)
+    _write_state(tmp_path, _meta(gone, ["g1"]), _meta(other, ["g1"]))
+    await _approve(world, approval)
+    world.kb.delete_fact.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_expired_fact_is_deleted_only_while_superseded(tmp_path, world, monkeypatch):
+    sync = _sync(tmp_path, world.kb)
+    doc = tmp_path / "doc.md"
+    doc.write_text("still here", encoding="utf-8")  # an expired file exists: only supersession matters
+    sync.file_metadata[str(doc)] = _meta(doc, ["old", "again"], sync_time=1.0)
+    sync._scanned_paths = {str(doc)}
+    await _run_sync_step(sync, tmp_path, monkeypatch, [], ["new"])
+    (approval,) = _approvals(world)
+    _write_state(tmp_path, _meta(doc, ["new", "again"]))  # "again" is current again
+    await _approve(world, approval)
+    assert [c.args[0] for c in world.kb.delete_fact.await_args_list] == ["old"]
+
+
+@pytest.mark.asyncio
+async def test_a_new_batch_for_the_same_root_gets_its_own_proposal(tmp_path, world):
+    sync = _sync(tmp_path, world.kb)
+    one, two = tmp_path / "one.md", tmp_path / "two.md"
+    sync.file_metadata.update({str(one): _meta(one, ["a"]), str(two): _meta(two, ["b"])})
+    await sync._remove_obsolete_knowledge([str(one)])
+    await sync._remove_obsolete_knowledge([str(two)])
+    await sync._remove_obsolete_knowledge([str(two)])  # the exact batch again: still one proposal
+    assert sorted(a.context["fact_ids"][0] for a in _approvals(world)) == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_an_approval_without_a_verified_decider_deletes_nothing(tmp_path, world):
+    sync = _sync(tmp_path, world.kb)
+    gone = tmp_path / "gone.md"
+    sync.file_metadata[str(gone)] = _meta(gone, ["f1"])
+    await sync._remove_obsolete_knowledge([str(gone)])
+    (approval,) = _approvals(world)
+    with pytest.raises(ValueError):
+        await removals.execute_sync_removal(approval, world.session)
+    world.kb.delete_fact.assert_not_awaited()
+
+
+def test_the_model_declares_the_pending_unique_index():
+    from models.approval import PENDING_KB_SYNC_REMOVAL_INDEX, PENDING_KB_SYNC_REMOVAL_WHERE
+
+    assert PENDING_KB_SYNC_REMOVAL_INDEX == "uq_approvals_pending_kb_sync_removal"
+    assert "kb_sync_removal" in PENDING_KB_SYNC_REMOVAL_WHERE
