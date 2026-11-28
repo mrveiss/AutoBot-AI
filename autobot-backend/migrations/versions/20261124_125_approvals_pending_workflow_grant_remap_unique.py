@@ -14,9 +14,8 @@ pending rows an index cannot be built over them, and the migration FAILS naming 
 does not delete (no agent cleans data on its own, #17038). The fix is a person's: reject the extra pending
 proposals in the Approvals inbox, then run the upgrade again.
 
-Chain note: open PRs #22195 (``20261124_123``) and #22176 (an approvals index revision) also extend the chain.
-Whichever of them is main's head when this lands is this revision's ``down_revision``, so the chain keeps a
-single head.
+Chain note: this revision follows ``20261124_124`` (#22176's approvals index revision), so it lands after
+that PR; until then ``20261124_124`` is a dangling ``down_revision`` on main.
 """
 
 from typing import Sequence, Union
@@ -26,8 +25,8 @@ from alembic import op
 
 from migrations.guards import has_index, has_table
 
-revision: str = "20261124_124"
-down_revision: Union[str, None] = "20261122_122"
+revision: str = "20261124_125"
+down_revision: Union[str, None] = "20261124_124"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

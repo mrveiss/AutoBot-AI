@@ -155,7 +155,7 @@ def test_the_pending_proposal_index_matches_the_migration_and_the_adoption_marke
     from models import approval
 
     migration = importlib.import_module(
-        "migrations.versions.20261124_124_approvals_pending_workflow_grant_remap_unique"
+        "migrations.versions.20261124_125_approvals_pending_workflow_grant_remap_unique"
     )
     assert approval.PENDING_GRANT_REMAP_INDEX == migration._INDEX
     assert migration._where(migration._ACTION) == approval.PENDING_GRANT_REMAP_WHERE
