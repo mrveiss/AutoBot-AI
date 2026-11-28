@@ -216,7 +216,7 @@ onMounted(refreshAll)
             @change="setEnabled"
           />
           <span class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.webResearchSettings.enableSwitch') }}</span>
-          <button type="button" data-test="refresh" class="px-3 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50" :disabled="loading" @click="refreshAll">
+          <button type="button" data-test="refresh" class="px-3 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50" :disabled="loading" @click="refreshAll">
             {{ $t('settings.admin.webResearchSettings.refresh') }}
           </button>
         </div>
@@ -249,10 +249,10 @@ onMounted(refreshAll)
       </dl>
 
       <div class="flex flex-wrap items-center gap-3 mt-4">
-        <button type="button" data-test="clear-cache" class="px-4 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50" :disabled="working || statusState === 'unavailable'" @click="clearCache">
+        <button type="button" data-test="clear-cache" class="px-4 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50" :disabled="working || statusState === 'unavailable'" @click="clearCache">
           {{ $t('settings.admin.webResearchSettings.clearCache') }}
         </button>
-        <button v-if="breakers.length > 0" type="button" data-test="reset-breakers" class="px-4 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50" :disabled="working" @click="resetBreakers">
+        <button v-if="breakers.length > 0" type="button" data-test="reset-breakers" class="px-4 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50" :disabled="working" @click="resetBreakers">
           {{ $t('settings.admin.webResearchSettings.resetBreakers', { count: breakers.length }) }}
         </button>
       </div>
@@ -300,7 +300,7 @@ onMounted(refreshAll)
         <button type="submit" data-test="save" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50" :disabled="saving || !hasChanges || anyInvalid">
           {{ saving ? $t('settings.admin.webResearchSettings.saving') : $t('settings.admin.webResearchSettings.save') }}
         </button>
-        <button type="button" data-test="discard" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50" :disabled="saving || !hasChanges" @click="discard">
+        <button type="button" data-test="discard" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50" :disabled="saving || !hasChanges" @click="discard">
           {{ $t('settings.admin.webResearchSettings.discard') }}
         </button>
       </div>

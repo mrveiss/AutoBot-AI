@@ -540,7 +540,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             :class="[
               'px-4 py-2.5 font-medium text-sm border-b-2 transition-colors',
               activeTab === 'slm-admins'
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-autobot-primary text-autobot-primary'
                 : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
             ]"
           >
@@ -551,7 +551,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             :class="[
               'px-4 py-2.5 font-medium text-sm border-b-2 transition-colors',
               activeTab === 'autobot-users'
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-autobot-primary text-autobot-primary'
                 : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
             ]"
           >
@@ -562,7 +562,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             :class="[
               'px-4 py-2.5 font-medium text-sm border-b-2 transition-colors',
               activeTab === 'teams'
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-autobot-primary text-autobot-primary'
                 : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
             ]"
           >
@@ -573,7 +573,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             :class="[
               'px-4 py-2.5 font-medium text-sm border-b-2 transition-colors',
               activeTab === 'sso'
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-autobot-primary text-autobot-primary'
                 : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
             ]"
           >
@@ -584,7 +584,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
       <!-- Loading -->
       <div v-if="loading" class="flex items-center justify-center py-8">
-        <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
@@ -905,19 +905,19 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.username') }}</label>
-          <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.lowercaseLettersNumbersUnderscores')" />
+          <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" :placeholder="$t('settings.admin.userManagementSettings.lowercaseLettersNumbersUnderscores')" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.email') }}</label>
-          <input v-model="newUserForm.email" type="email" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="newUserForm.email" type="email" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.password') }}</label>
-          <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.min8CharsUpperLowerDigit')" />
+          <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" :placeholder="$t('settings.admin.userManagementSettings.min8CharsUpperLowerDigit')" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.confirmPassword') }}</label>
-          <input v-model="newUserForm.confirmPassword" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="newUserForm.confirmPassword" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
       </div>
       <template #actions>
@@ -945,11 +945,11 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.teamName') }}</label>
-          <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.eGEngineeringDesign')" />
+          <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" :placeholder="$t('settings.admin.userManagementSettings.eGEngineeringDesign')" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.descriptionOptional') }}</label>
-          <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.briefDescriptionOfTheTeamS')"></textarea>
+          <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" :placeholder="$t('settings.admin.userManagementSettings.briefDescriptionOfTheTeamS')"></textarea>
         </div>
       </div>
       <template #actions>
@@ -983,13 +983,13 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
       <div class="space-y-4">
         <div class="flex items-center gap-3">
-          <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500" />
+          <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary" />
           <label for="create-admin" class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.userManagementSettings.createInitialAdminUser') }}</label>
         </div>
 
         <div v-if="rbacInitOptions.createAdmin">
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.adminUsername') }}</label>
-          <input v-model="rbacInitOptions.adminUsername" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="rbacInitOptions.adminUsername" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
       </div>
       <template #actions>
@@ -1017,7 +1017,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.providerType') }}</label>
-          <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500">
+          <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary">
             <option value="google">{{ $t('settings.admin.userManagementSettings.googleOAuth') }}</option>
             <option value="github">{{ $t('settings.admin.userManagementSettings.gitHub') }}</option>
             <option value="microsoft_entra">{{ $t('settings.admin.userManagementSettings.microsoftEntraID') }}</option>
@@ -1029,22 +1029,22 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.displayName') }}</label>
-          <input v-model="newProviderForm.name" type="text" :placeholder="$t('settings.admin.userManagementSettings.eGCompanyGoogleSSO')" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="newProviderForm.name" type="text" :placeholder="$t('settings.admin.userManagementSettings.eGCompanyGoogleSSO')" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.clientID') }}</label>
-          <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
         <div>
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.userManagementSettings.clientSecret') }}</label>
-          <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+          <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
         </div>
         <div class="flex items-center gap-3">
-          <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500" />
+          <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary" />
           <label for="sso-active" class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.userManagementSettings.active') }}</label>
         </div>
         <div class="flex items-center gap-3">
-          <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500" />
+          <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary" />
           <label for="sso-provision" class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.userManagementSettings.allowAutomaticUserCreation') }}</label>
         </div>
       </div>

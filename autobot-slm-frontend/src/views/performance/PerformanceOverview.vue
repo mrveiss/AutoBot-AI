@@ -107,7 +107,7 @@ function statusBadgeClass(status: string): string {
       <button
         @click="poller.start('')"
         :disabled="loading"
-        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors disabled:opacity-50"
+        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-secondary border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors disabled:opacity-50"
       >
         <svg
           :class="['w-4 h-4', loading ? 'animate-spin' : '']"
@@ -129,7 +129,7 @@ function statusBadgeClass(status: string): string {
     <!-- Metric Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <!-- Avg Latency -->
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.avgLatency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(avgLatency)]">
           {{ formatDuration(avgLatency, { style: 'msSeconds2dp' }) }}
@@ -138,7 +138,7 @@ function statusBadgeClass(status: string): string {
       </div>
 
       <!-- P95 Latency -->
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.p95Latency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(p95Latency)]">
           {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}
@@ -149,7 +149,7 @@ function statusBadgeClass(status: string): string {
       </div>
 
       <!-- Throughput -->
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.throughput') }}</p>
         <p class="text-3xl font-bold text-autobot-text-primary">
           {{ throughput.toLocaleString() }}
@@ -158,7 +158,7 @@ function statusBadgeClass(status: string): string {
       </div>
 
       <!-- Error Rate -->
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+      <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
         <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.errorRate') }}</p>
         <p :class="['text-3xl font-bold', errorRateColor(errorRate)]">
           {{ errorRate.toFixed(2) }}%
@@ -168,7 +168,7 @@ function statusBadgeClass(status: string): string {
     </div>
 
     <!-- SLO Compliance -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-sm font-medium text-autobot-text-secondary">{{ $t('performance.performanceOverview.sLOCompliance') }}</h2>
         <span class="text-sm font-semibold text-autobot-text-primary">
@@ -185,7 +185,7 @@ function statusBadgeClass(status: string): string {
     </div>
 
     <!-- Top 10 Slowest Traces -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border">
       <div class="px-4 py-3 border-b border-autobot-border">
         <h2 class="text-sm font-medium text-autobot-text-secondary">{{ $t('performance.performanceOverview.top10SlowestTraces') }}</h2>
       </div>

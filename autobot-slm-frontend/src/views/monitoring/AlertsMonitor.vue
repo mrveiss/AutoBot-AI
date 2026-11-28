@@ -263,7 +263,7 @@ onMounted(() => refreshPoller.start(''))
         <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.alertsMonitor.filterBySeverity') }}</label>
         <select
           v-model="severityFilter"
-          class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         >
           <option v-for="level in severityLevels" :key="level" :value="level">
             {{ level === 'all' ? $t('monitoring.alertsMonitor.allSeverities') : level.charAt(0).toUpperCase() + level.slice(1) }}

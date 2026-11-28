@@ -19,8 +19,13 @@ any other startup crash.
 import errno
 import re
 import socket
+from typing import Any, Awaitable, Callable
 
-from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
+from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError, SQLAlchemyError
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def is_connection_level_db_error(exc: BaseException) -> bool:
@@ -28,6 +33,25 @@ def is_connection_level_db_error(exc: BaseException) -> bool:
     if isinstance(exc, (TimeoutError, OperationalError, InterfaceError)):
         return True
     return isinstance(exc, DBAPIError) and getattr(exc, "connection_invalidated", False)
+
+
+async def write_in_savepoint(db: Any, node_id: str, write: Callable[..., Awaitable[Any]], *args: Any) -> bool:
+    """Run ``write(db, node_id, *args)`` in its own SAVEPOINT; True when it landed (#22280).
+
+    A row-level DB failure rolls back only that write and is logged with the node and the exception,
+    so the caller's own changes (a heartbeat's liveness and metrics) still commit. A connection-level
+    failure is re-raised: the session is gone and nothing else can commit on it.
+    """
+    try:
+        async with db.begin_nested():
+            await write(db, node_id, *args)
+    except SQLAlchemyError as exc:
+        if is_connection_level_db_error(exc):
+            raise
+        name = getattr(write, "__name__", repr(write))
+        logger.warning("%s failed for node %s and was rolled back to its savepoint: %r", name, node_id, exc)
+        return False
+    return True
 
 
 def _causes(exc: BaseException) -> list[BaseException]:

@@ -394,3 +394,31 @@ env_registry.register_env_var(
         component="backend",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_CAPABILITY_AUDIT_SCHEDULE",
+        type=str,
+        default="40 3 * * *",
+        description=(
+            "5-field cron ('m h dom mon dow') for the daily agent capability-manifest consistency audit "
+            "(#22271). Findings are logged and returned as the task result. Default daily at 03:40 UTC. "
+            "A malformed value falls back to the daily 03:00 UTC schedule with a warning."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_SERVICE_HEALTH_PROBE_INTERVAL_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds between live probes of every registered service's health endpoint (#22273). Each "
+            "probe updates the registry's last_check and failure_count and stores a snapshot in Redis "
+            "for other planes to read. Values below 10 are raised to 10."
+        ),
+        component="orchestrator",
+    )
+)

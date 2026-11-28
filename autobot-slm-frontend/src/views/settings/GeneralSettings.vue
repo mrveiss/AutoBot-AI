@@ -286,7 +286,7 @@ onMounted(() => {
   <div class="p-6 space-y-6">
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -311,7 +311,7 @@ onMounted(() => {
             <input
               type="text"
               v-model="settings.system_name"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
             />
           </div>
 
@@ -323,7 +323,7 @@ onMounted(() => {
             </div>
             <select
               v-model="settings.default_timezone"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option v-for="tz in allTimezones" :key="tz" :value="tz">{{ tz }}</option>
             </select>
@@ -338,7 +338,7 @@ onMounted(() => {
             <select
               id="slm-theme"
               :value="theme.theme.value"
-              class="w-64 px-3 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-autobot-primary"
               @change="theme.set(($event.target as HTMLSelectElement).value as SlmTheme)"
             >
               <option v-for="name in theme.availableThemes" :key="name" :value="name">{{ $t(SLM_THEME_LABEL_KEYS[name]) }}</option>
@@ -363,7 +363,7 @@ onMounted(() => {
             <select
               v-model="settings.refresh_interval"
               :disabled="!settings.auto_refresh"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-autobot-bg-tertiary disabled:text-autobot-text-tertiary"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary disabled:bg-autobot-bg-tertiary disabled:text-autobot-text-tertiary"
             >
               <option value="10">{{ $t('settings.generalSettings.10Seconds') }}</option>
               <option value="30">{{ $t('settings.generalSettings.30Seconds') }}</option>
@@ -378,7 +378,7 @@ onMounted(() => {
         <div class="mt-8 pt-6 border-t border-autobot-border flex justify-end">
           <button
             @click="saveAllSettings"
-            class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            class="px-6 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors flex items-center gap-2 disabled:opacity-50"
             :disabled="saving"
           >
             <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -426,7 +426,7 @@ onMounted(() => {
             v-model="ntpServersText"
             rows="4"
             :placeholder="$t('settings.generalSettings.n0PoolNtpOrg1Pool')"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary font-mono text-sm"
           />
           <p class="text-xs text-autobot-text-tertiary mt-1">
             {{ $t('settings.generalSettings.serversAreTriedIn') }}
@@ -469,7 +469,7 @@ onMounted(() => {
         <div class="flex items-center gap-3">
           <button
             @click="launchWizard"
-            class="px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+            class="px-5 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors flex items-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

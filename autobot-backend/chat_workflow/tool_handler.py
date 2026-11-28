@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
-from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
@@ -34,6 +33,12 @@ from chat_workflow.browser_tool_handler import (
     handle_browser_tool,
     record_browser_success,
     validate_browser_params,
+)
+from chat_workflow.catalogue_tool_handlers import (
+    REGISTRY_CHAT_TOOL_NAMES,
+    REGISTRY_CHAT_TOOL_SCHEMAS,
+    handle_registry_tool,
+    read_spilled_output,
 )
 from chat_workflow.command_execution_record import (
     _create_execution_result,
@@ -81,6 +86,7 @@ from chat_workflow.tool_permission_gate import caller_identity, permission_denia
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
+from tools.tool_records import CATEGORY_WEB_RESEARCH, permission_value_for, tool_names_in_category
 from utils.errors import RepairableException
 from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
@@ -196,32 +202,6 @@ READ_SPILLED_OUTPUT_SCHEMA: dict = {
     },
     "required": ["anchor"],
 }
-
-#: What to tell the model when an anchor does not resolve, by reason.
-#: Module-level rather than rebuilt per call.
-_SPILL_MISS_ADVICE: dict[str, str] = {
-    # Bad offset/limit — the model can fix this itself, so mirror the
-    # self-correction hint the schema gate gives.
-    "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
-    # No run is bound to this context: an anchor cannot resolve here at all,
-    # and a different anchor would fare no better.
-    "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
-    # The artifact is genuinely gone or never existed.
-    "not_found": "Do not retry this anchor.",
-}
-
-#: The default, for a miss whose cause the reader could not determine.
-#:
-#: `read_spilled` swallows every exception into `None`, and a cross-run refusal
-#: returns `None` too, so an unknown reason covers a truncated artifact mid-write
-#: (spill_if_oversized writes with a bare write_text, no temp+rename, to a
-#: content-addressed path a re-spill rewrites), a transient OSError, a
-#: PermissionError, and a run-scope refusal. In every one of those the output is
-#: still on disk. Telling the model "do not retry" there is a permanent verdict
-#: on a cause nobody established — the shape this whole issue is about.
-_SPILL_MISS_UNKNOWN_ADVICE = (
-    "The read did not report why it failed. This may be transient — retrying once is reasonable."
-)
 
 # Issue #7509: Web research tool schemas — scrape, crawl, map, extract.
 # Agents have admin-grade power: no server-side caps on depth/pages/robots.
@@ -535,6 +515,7 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "execute_command": EXECUTE_COMMAND_SCHEMA,
     "read_spilled_output": READ_SPILLED_OUTPUT_SCHEMA,
     "command_manual": COMMAND_MANUAL_SCHEMA,  # #22253
+    **REGISTRY_CHAT_TOOL_SCHEMAS,  # #22278: query_self_model and the two read-only system tools
     "web_search": WEB_SEARCH_SCHEMA,
     "navigate": NAVIGATE_SCHEMA,
     "click": CLICK_SCHEMA,
@@ -635,7 +616,7 @@ def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) 
 BROWSER_TOOL_NAMES: frozenset[str] = frozenset(BROWSER_TOOLS)
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
-WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
+WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset(tool_names_in_category(CATEGORY_WEB_RESEARCH))  # #22276
 
 # Issue #11540: goal-directed extraction from the browser session's *current*
 # page — reads whatever the live DOM already shows, never re-fetches a URL.
@@ -661,6 +642,7 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     # and is a worse trade than one extra name in an error hint. With the flag
     # off nothing spills, so following the hint reports not-found.
     | frozenset({"web_search", "execute_command", "read_spilled_output", "command_manual"})
+    | REGISTRY_CHAT_TOOL_NAMES  # #22278: ToolRegistry tools the model could not reach from chat
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -1992,7 +1974,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             "execute_command",
             params,
             session_id,
-            tool_permission=Permission.SHELL_EXECUTE.value,
+            tool_permission=permission_value_for("execute_command"),  # the catalogue's one definition (#22278)
             user_role=role,
         )
         if not should_execute:
@@ -2414,7 +2396,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         # declaring the browser-read permission it requires.
         # #14529: folded onto the shared gate; also gains the execution_results record.
         denial = await permission_denial(
-            "web_search", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
+            "web_search", params, session_id, permission_value_for("web_search"), role, execution_results
         )
         if denial is not None:
             yield denial
@@ -2488,9 +2470,9 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         # #14491: reuses the exact TOOL_PERMISSIONS entry already declared for
         # this tool name on the MCP-registry path — no bridge_name here (this
         # is the builtin path), so only the exact-name lookup can hit.
-        declared_permission = required_permission(tool_name)
-        perm = declared_permission.value if declared_permission else None
-        denial = await permission_denial(tool_name, params, session_id, perm, role, execution_results)
+        denial = await permission_denial(
+            tool_name, params, session_id, permission_value_for(tool_name), role, execution_results
+        )
         if denial is not None:
             yield denial
             return
@@ -2726,81 +2708,9 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 metadata={"tool": "extract_content", "error": True},
             )
 
-    async def _handle_read_spilled_output(
-        self,
-        tool_call: dict[str, Any],
-        execution_results: list[dict[str, Any]],
-    ):
-        """Re-read a window of a tool result that was spilled out of context (#13919).
-        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
-
-        #13692 writes oversized tool output aside and leaves a bounded excerpt
-        plus an anchor, and the excerpt's note tells the model to call this tool.
-        #13754 made it dispatchable through ``ToolRegistry.execute_tool`` — which
-        has no production callers, so at this seam, the one every real tool call
-        funnels through, the instruction still named something unreachable. An
-        agent following it landed in ``_build_unknown_tool_error`` and burned its
-        invalid-call budget.
-
-        The run is bound server-side by the agent loop, never taken from
-        arguments: the anchor carries its owning run id in plaintext, so a
-        ``task_id`` parameter would let any holder of an anchor read the run it
-        came from by echoing the id back.
-
-        Yields:
-            WorkflowMessage for the read result.
-        """
-        params = tool_call.get("params", {})
-        anchor = str(params.get("anchor", ""))
-
-        try:
-            from agent_loop.tool_output_spill import read_spilled_window
-
-            # Off the event loop. read_spilled reads and json-parses the WHOLE
-            # artifact (up to SPILL_MAX_ARTIFACT_CHARS, 5,000,000) before
-            # slicing out at most 8,000 chars, so paging a large artifact means
-            # re-reading and re-parsing it once per call. The write side already
-            # took this decision — spill_results_async exists because a blocking
-            # write_text stalls every other coroutine in the process.
-            window = await asyncio.to_thread(
-                read_spilled_window, anchor, offset=params.get("offset", 0), limit=params.get("limit")
-            )
-        except Exception as exc:
-            logger.error("[#13919] read_spilled_output failed: %s", exc)
-            execution_results.append({"tool": "read_spilled_output", "status": "error", "error": str(exc)})
-            yield WorkflowMessage(
-                type="error",
-                content=f"read_spilled_output failed: {exc}",
-                metadata={"tool": "read_spilled_output", "error": True},
-            )
-            return
-
-        if not window.get("found"):
-            # The miss reasons need different responses. Flattening them into
-            # "do not retry" tells a model to abandon an anchor over a
-            # self-correctable argument error, or over a transient one.
-            reason = window.get("reason", "unknown")
-            advice = _SPILL_MISS_ADVICE.get(reason, _SPILL_MISS_UNKNOWN_ADVICE)
-            execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
-            yield WorkflowMessage(
-                type="command_output",
-                content=f"No spilled output for anchor {anchor!r} ({reason}). {advice}",
-                metadata={"tool": "read_spilled_output", "status": reason},
-            )
-            return
-
-        execution_results.append({"tool": "read_spilled_output", "status": "success", "output": window["content"]})
-        yield WorkflowMessage(
-            type="command_output",
-            content=window["content"],
-            metadata={
-                "tool": "read_spilled_output",
-                "status": "success",
-                "offset": window["offset"],
-                "total_chars": window["total_chars"],
-                "has_more": window["has_more"],
-            },
-        )
+    def _handle_read_spilled_output(self, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]):
+        """Re-read a window of spilled tool output (#13919); the body is in ``catalogue_tool_handlers``."""
+        return read_spilled_output(tool_call, execution_results)
 
     async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
         """Read (html, url) off the browser session's *current* page. Issue #11540.
@@ -3254,6 +3164,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 execution_results,
                 additional_response_parts,
                 role=role,
+                user_id=caller_identity(ctx, session_id)["user_id"],
             ):
                 yield msg
             return
@@ -3272,6 +3183,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
         role: str = "user",
+        user_id: str | None = None,
     ) -> AsyncIterator[Any]:
         """Return the handler async-generator for a uniform builtin tool (GH#11489).
 
@@ -3297,6 +3209,8 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "command_manual":  # #22253: read-only, ungated like read_spilled_output
             return handle_command_manual(tool_call, execution_results)
+        if tool_name in REGISTRY_CHAT_TOOL_NAMES:  # #22278
+            return handle_registry_tool(tool_name, tool_call, execution_results, session_id, role, user_id)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,

@@ -300,7 +300,7 @@ onUnmounted(() => {
           :class="[
             'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'bridges'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -314,7 +314,7 @@ onUnmounted(() => {
           :class="[
             'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'tools'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -328,7 +328,7 @@ onUnmounted(() => {
           :class="[
             'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'health'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -342,7 +342,7 @@ onUnmounted(() => {
 
     <!-- Loading State -->
     <div v-if="loading" class="text-center py-12">
-      <svg class="animate-spin w-8 h-8 mx-auto text-primary-500" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 mx-auto text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -357,7 +357,7 @@ onUnmounted(() => {
       <p class="mt-4 text-autobot-error font-medium">{{ loadError }}</p>
       <button
         @click="refreshPoller.start('')"
-        class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+        class="mt-4 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover text-sm"
       >
         {{ $t('tools.admin.mCPTool.retry') }}
       </button>
@@ -443,7 +443,7 @@ onUnmounted(() => {
             v-model="toolFilter"
             type="text"
             :placeholder="$t('tools.admin.mCPTool.searchTools')"
-            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
           />
         </div>
 

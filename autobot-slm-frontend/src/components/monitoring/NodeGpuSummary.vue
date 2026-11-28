@@ -34,9 +34,9 @@ function percent(value: number | null | undefined): string {
 
 function tone(value: number | null | undefined): string {
   if (value == null) return 'text-autobot-text-tertiary'
-  if (value >= 90) return 'text-error-600'
-  if (value >= 70) return 'text-warning-600'
-  return 'text-success-600'
+  if (value >= 90) return 'text-autobot-error'
+  if (value >= 70) return 'text-autobot-warning'
+  return 'text-autobot-success'
 }
 
 const summary = computed(() => {
@@ -53,7 +53,7 @@ const summary = computed(() => {
   if (!first) {
     return {
       text: t('monitoring.systemMonitor.gpuUnmonitored', { count: devices.length }),
-      tone: 'text-warning-600',
+      tone: 'text-autobot-warning',
     }
   }
   const parts = [

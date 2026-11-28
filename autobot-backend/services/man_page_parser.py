@@ -23,6 +23,7 @@ from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
+from utils.system_context import generate_unique_key
 
 logger = get_logger(__name__)
 
@@ -188,6 +189,11 @@ class ManPageContent:
                     "architecture": system_context.get("architecture", ""),
                 }
             )
+            if system_context.get("machine_id") and system_context.get("os_name"):
+                # Per-host dedup key (#22269)
+                metadata["unique_key"] = generate_unique_key(
+                    system_context["machine_id"], system_context["os_name"], self.command, self.section
+                )
 
         # Generate tags from command name and section
         tags = [

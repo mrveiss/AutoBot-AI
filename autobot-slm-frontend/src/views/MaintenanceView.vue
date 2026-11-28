@@ -488,7 +488,7 @@ function getNodeName(nodeId: string | null): string {
               type="checkbox"
               v-model="includeCompleted"
               @change="fetchMaintenanceWindows"
-              class="rounded-sm text-primary-600 focus:ring-primary-500"
+              class="rounded-sm text-autobot-primary focus:ring-autobot-primary"
             />
             {{ $t('maintenanceView.showCompleted') }}
           </label>
@@ -507,7 +507,7 @@ function getNodeName(nodeId: string | null): string {
 
       <!-- Loading State -->
       <div v-if="isLoading" class="p-6 text-center">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full mx-auto"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full mx-auto"></div>
         <p class="text-autobot-text-tertiary mt-2">{{ $t('maintenanceView.loadingMaintenanceWindows') }}</p>
       </div>
 
@@ -722,7 +722,7 @@ function getNodeName(nodeId: string | null): string {
             <input
               type="checkbox"
               v-model="formData.suppress_alerts"
-              class="rounded-sm text-primary-600 focus:ring-primary-500"
+              class="rounded-sm text-autobot-primary focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm font-medium text-autobot-text-primary">{{ $t('maintenanceView.suppressAlerts') }}</span>
@@ -734,7 +734,7 @@ function getNodeName(nodeId: string | null): string {
             <input
               type="checkbox"
               v-model="formData.suppress_remediation"
-              class="rounded-sm text-primary-600 focus:ring-primary-500"
+              class="rounded-sm text-autobot-primary focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm font-medium text-autobot-text-primary">{{ $t('maintenanceView.suppressAutoRemediation') }}</span>
@@ -746,7 +746,7 @@ function getNodeName(nodeId: string | null): string {
             <input
               type="checkbox"
               v-model="formData.auto_drain"
-              class="rounded-sm text-primary-600 focus:ring-primary-500"
+              class="rounded-sm text-autobot-primary focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm font-medium text-autobot-text-primary">{{ $t('maintenanceView.autoDrain') }}</span>

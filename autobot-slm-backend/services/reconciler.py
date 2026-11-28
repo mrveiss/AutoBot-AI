@@ -39,8 +39,7 @@ from models.database import (
     Setting,
     SystemdState,
 )
-from services.db_transaction_errors import is_connection_level_db_error
-from services.node_capability import apply_capability_profile
+from services.db_transaction_errors import is_connection_level_db_error, write_in_savepoint
 from services.node_health_status import (
     LEVEL_DEGRADED,
     LEVEL_ERROR,
@@ -58,6 +57,7 @@ from services.node_health_status import (
     strip_reserved,
 )
 from services.pending_role_provisioning import provisioner_holds, set_role_status_if_unchanged
+from services.self_model_store import apply_heartbeat_extra_data
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
@@ -1767,7 +1767,7 @@ class ReconcilerService:
             return False
 
         node.extra_data = {**(node.extra_data or {}), **extra_data}
-        await apply_capability_profile(db, node.node_id, extra_data)
+        await write_in_savepoint(db, node.node_id, apply_heartbeat_extra_data, extra_data)
         services_data = extra_data.get("discovered_services") or extra_data.get("services")
         if not services_data:
             return False

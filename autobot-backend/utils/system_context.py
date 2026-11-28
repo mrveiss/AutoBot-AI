@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 
 # Get centralized logger
@@ -59,32 +60,23 @@ def get_system_context(machine_id: str | None = None) -> Dict[str, any]:
 
 def get_machine_id() -> str:
     """
-    Get machine identifier from hostname or environment
+    Get this machine's identifier from the SSOT node placement (#22269).
+
+    The local IP is matched against the SSOT role hosts (``config.vm_definitions``);
+    a host carrying one or more roles is named after them (e.g. ``redis`` or
+    ``ai-stack+redis`` when co-located). A host the SSOT does not place falls
+    back to its own short hostname, with no hardcoded host map.
 
     Returns:
-        Machine identifier (e.g., 'main', 'vm1', etc.)
+        Machine identifier
     """
     try:
-        hostname = socket.gethostname().lower()
-
-        # Map common hostnames to machine IDs
-        hostname_map = {
-            "kali": "main",
-            "autobot-frontend": "vm1",
-            "autobot-npu": "vm2",
-            "autobot-redis": "vm3",
-            "autobot-ai": "vm4",
-            "autobot-browser": "vm5",
-        }
-
-        # Check for exact matches or partial matches
-        for host_pattern, machine_id in hostname_map.items():
-            if host_pattern in hostname:
-                return machine_id
-
-        # Default: use hostname
-        return hostname.split(".")[0]
-
+        ip = get_local_ip()
+        if ip != "unknown" and not ip.startswith("127."):
+            roles = sorted(role for role, host in config.vm_definitions.items() if host == ip)
+            if roles:
+                return "+".join(roles)
+        return socket.gethostname().lower().split(".")[0]
     except Exception as e:
         logger.warning("Failed to get machine ID: %s", e)
         return "unknown"

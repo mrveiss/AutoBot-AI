@@ -80,7 +80,7 @@ onMounted(load)
             v-model.number="policy.retention_days"
             type="number"
             min="0"
-            class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
           />
         </div>
 
@@ -99,7 +99,7 @@ onMounted(load)
         <button
           data-test="save-policy"
           :disabled="saving"
-          class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+          class="px-6 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors flex items-center gap-2 disabled:opacity-50"
           @click="save"
         >
           <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

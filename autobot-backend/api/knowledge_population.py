@@ -39,7 +39,7 @@ from knowledge.schemas.population import (
     TaskStatusResponse,
 )
 from knowledge_factory import get_or_create_knowledge_base
-from utils.encoding_utils import strip_ansi_escapes
+from services.man_page_ingestion import index_commands_in_batches
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = get_logger(__name__)
@@ -461,89 +461,6 @@ async def populate_system_commands(request: dict, req: Request):
     }
 
 
-def _get_man_page_metadata(command: str) -> dict:
-    """Create metadata dict for man page storage."""
-    return {
-        "title": f"man {command}",
-        "source": "manual_pages_population",
-        "category": "manpages",
-        "command": command,
-        "type": "manual_page",
-        "visibility": INGESTED_DOCUMENT_VISIBILITY,
-    }
-
-
-def _format_man_page_content(command: str, man_content: str) -> str:
-    """Format man page content for storage."""
-    return f"""Manual Page: {command}
-
-{man_content}
-
-Source: System Manual Pages
-Category: Manual Page
-Command: {command}
-"""
-
-
-async def _fetch_man_page(command: str) -> str | None:
-    """Fetch man page content for a command, returns None on failure."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "man",
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            logger.warning("Timeout getting man page for: %s", command)
-            return None
-
-        if proc.returncode != 0 or not stdout.strip():
-            logger.warning("No man page found for command: %s", command)
-            return None
-
-        man_content = stdout.decode("utf-8").strip()
-        # Remove ANSI escape sequences
-        return strip_ansi_escapes(man_content)
-
-    except Exception as e:
-        logger.error("Error fetching man page for %s: %s", command, e)
-        return None
-
-
-async def _store_man_page(kb_to_use, command: str, content: str) -> bool:
-    """Store a man page in knowledge base, returns success status."""
-    metadata = _get_man_page_metadata(command)
-    try:
-        if hasattr(kb_to_use, "store_fact"):
-            store_result = await kb_to_use.store_fact(content=content, metadata=metadata)
-        else:
-            store_result = await kb_to_use.store_fact(text=content, metadata=metadata)
-
-        if store_result and store_result.get("fact_id"):
-            logger.info("Added man page: %s", command)
-            return True
-        logger.warning("Failed to store man page: %s", command)
-        return False
-    except Exception as e:
-        logger.error("Error storing man page for %s: %s", command, e)
-        return False
-
-
-async def _process_single_man_page(kb_to_use, command: str) -> bool:
-    """Process a single man page: fetch and store."""
-    man_content = await _fetch_man_page(command)
-    if not man_content:
-        return False
-    content = _format_man_page_content(command, man_content)
-    return await _store_man_page(kb_to_use, command, content)
-
-
 # Common commands for man pages
 COMMON_MAN_PAGE_COMMANDS = [
     "ls",
@@ -597,22 +514,13 @@ COMMON_MAN_PAGE_COMMANDS = [
 
 
 async def _populate_man_pages_background(kb_to_use):
-    """Background task to populate man pages"""
+    """Populate the curated man pages through the one ingestion path (#22272); section None lets ``man`` resolve it."""
+    from utils.system_context import get_system_context
+
     try:
         logger.info("Starting manual pages population in background...")
-        items_added = 0
-
-        batch_size = 5
-        for i in range(0, len(COMMON_MAN_PAGE_COMMANDS), batch_size):
-            batch = COMMON_MAN_PAGE_COMMANDS[i : i + batch_size]
-
-            for command in batch:
-                if await _process_single_man_page(kb_to_use, command):
-                    items_added += 1
-
-            # Batch processing delay
-            await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
+        commands = [(command, None) for command in COMMON_MAN_PAGE_COMMANDS]
+        items_added = (await index_commands_in_batches(kb_to_use, commands, get_system_context())).indexed
         logger.info("Manual pages population completed. Added %s man pages.", items_added)
         return items_added
 
