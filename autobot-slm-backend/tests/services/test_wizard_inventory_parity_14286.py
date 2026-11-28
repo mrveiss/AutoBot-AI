@@ -80,6 +80,7 @@ def _load():
         "services.ansible_utils",
         "services.auth",
         "services.database",
+        "services.git_failure",
         "services.inventory_files",  # #22262
         "services.inventory_builder",
         "services.playbook_executor",

@@ -416,11 +416,6 @@ def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set
     return node_groups - (undeclared - declared_groups)
 
 
-def ssh_port_of(node: Any) -> int:
-    """The SSH port the update and provision inventories connect to *node* on (22 when unset)."""
-    return node.ssh_port or 22
-
-
 def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
     """Return the host-variable dict for one Node record.
 
@@ -435,7 +430,7 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
     hostvars: dict[str, Any] = {
         "ansible_host": node.ip_address,
         "ansible_user": node.ssh_user or "autobot",
-        "ansible_port": ssh_port_of(node),
+        "ansible_port": node.ssh_port or 22,
         "slm_node_id": node.node_id,
         # #9965: stamp the node's assigned role tokens so role_active_facts can
         # activate roles via node_roles, not group membership alone. Group-based

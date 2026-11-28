@@ -28,7 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
 from models.database import Node
-from services.inventory_builder import build_registry_inventory, ssh_port_of
+from services.inventory_builder import build_registry_inventory
 
 logger = get_logger(__name__)
 
@@ -57,10 +57,11 @@ def _target_hostvars(node_id: str, node: Any, target_roles: list[str], deps: lis
         "slm_node_id": node_id,  # the vnc role registers its credential only when this is set (#22211)
         "ansible_host": node.ip_address,
         "ansible_user": node.ssh_user or "autobot",
-        "ansible_port": ssh_port_of(node),  # the update inventory's rule (non-22 SSH)
+        "ansible_port": node.ssh_port or 22,  # the update inventory's rule (non-22 SSH)
         "ansible_ssh_private_key_file": config.path.ssh_key_path,  # the update inventory's key (#12429)
         "ansible_python_interpreter": "/usr/bin/python3",
         "node_roles": list(target_roles),
+        "node_roles_declared": list(target_roles),  # declared-only stamp, as every producer (#14594)
     }
     if deps:
         hostvars["node_dependencies"] = deps

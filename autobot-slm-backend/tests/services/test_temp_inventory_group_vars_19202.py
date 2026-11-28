@@ -265,7 +265,9 @@ def test_provision_inventory_for_builds_off_the_loop_from_plain_values(monkeypat
 
     monkeypatch.setattr(provision_inventory, "build_provision_inventory", _spy)
     target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=22)
-    out = asyncio.run(provision_inventory.provision_inventory_for(FakeAsyncSession(results=[_fleet()]), "n1", target, ["vnc"]))
+    out = asyncio.run(
+        provision_inventory.provision_inventory_for(FakeAsyncSession(results=[_fleet()]), "n1", target, ["vnc"])
+    )
     assert out == "inv"
     assert seen["thread"] is not threading.main_thread()
     assert all(type(n) is SimpleNamespace for n in [seen["node"], *seen["nodes"]])

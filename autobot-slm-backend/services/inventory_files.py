@@ -4,7 +4,6 @@
 # Author: mrveiss
 """Temp-file writers for Ansible inventories and extra-vars (split from inventory_builder, #22262)."""
 
-import logging
 import os
 import tempfile
 from pathlib import Path
@@ -12,9 +11,10 @@ from typing import Any
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from services.ansible_extra_vars import dump_extra_vars
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _write_inventory_file(inv: dict, path: Path) -> None:
