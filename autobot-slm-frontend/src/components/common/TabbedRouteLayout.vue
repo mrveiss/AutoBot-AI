@@ -93,7 +93,7 @@ function navigateTo(path: string): void {
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
-              ? 'bg-autobot-bg-secondary text-primary-600 border-t border-x border-autobot-border -mb-px'
+              ? 'bg-autobot-bg-secondary text-autobot-primary border-t border-x border-autobot-border -mb-px'
               : 'text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-hover'
           ]"
         >

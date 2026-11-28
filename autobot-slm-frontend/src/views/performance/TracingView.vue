@@ -232,7 +232,7 @@ onMounted(() => {
             :class="[
               'px-3 py-1.5 text-xs font-medium transition-colors',
               timeRange === opt.value
-                ? 'bg-primary-600 text-white'
+                ? 'bg-autobot-primary text-autobot-text-on-primary'
                 : 'bg-white text-autobot-text-secondary hover:bg-autobot-bg-hover'
             ]"
           >

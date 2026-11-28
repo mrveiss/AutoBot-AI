@@ -681,7 +681,7 @@ function getNodeHostname(nodeId: string): string {
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'standard'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -695,7 +695,7 @@ function getNodeHostname(nodeId: string): string {
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'blue-green'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -830,7 +830,7 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
+                      class="px-2 py-0.5 text-xs font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-sm"
                     >
                       {{ role }}
                     </span>
@@ -871,7 +871,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleRetry(deployment.deployment_id)"
                       :disabled="isRetrying === deployment.deployment_id"
-                      class="text-autobot-text-link hover:text-autobot-text-link disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -907,7 +907,7 @@ function getNodeHostname(nodeId: string): string {
       </div>
 
       <div v-if="isLoading" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
     </div>
 
@@ -1028,7 +1028,7 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.blue_roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
+                      class="px-2 py-0.5 text-xs font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-sm"
                     >
                       {{ role }}
                     </span>
@@ -1038,7 +1038,7 @@ function getNodeHostname(nodeId: string): string {
                   <div class="flex items-center gap-2">
                     <div class="w-24 bg-autobot-bg-active rounded-full h-2">
                       <div
-                        class="bg-primary-600 h-2 rounded-full transition-all"
+                        class="bg-autobot-primary h-2 rounded-full transition-all"
                         :style="{ width: `${deployment.progress_percent}%` }"
                       ></div>
                     </div>
@@ -1098,7 +1098,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleBgRetry(deployment.bg_deployment_id)"
                       :disabled="isRetryingBg === deployment.bg_deployment_id"
-                      class="text-autobot-text-link hover:text-autobot-text-link disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1122,7 +1122,7 @@ function getNodeHostname(nodeId: string): string {
       </div>
 
       <div v-if="isLoadingBg" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
       </div>
     </div>
 
@@ -1143,7 +1143,7 @@ function getNodeHostname(nodeId: string): string {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('deploymentsView.targetNode') }}</label>
           <select
             v-model="newDeployment.node_id"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="">{{ $t('deploymentsView.selectANode') }}</option>
             <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
@@ -1194,7 +1194,7 @@ function getNodeHostname(nodeId: string): string {
                     :class="[
                       'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
                       newDeployment.roles.includes(role.name)
-                        ? 'bg-primary-50 border border-primary-200'
+                        ? 'bg-autobot-primary-bg border border-autobot-primary-light'
                         : 'hover:bg-autobot-bg-hover border border-transparent'
                     ]"
                   >
@@ -1202,7 +1202,7 @@ function getNodeHostname(nodeId: string): string {
                     <div :class="[
                       'w-5 h-5 rounded-sm shrink-0 flex items-center justify-center mt-0.5',
                       newDeployment.roles.includes(role.name)
-                        ? 'bg-primary-600'
+                        ? 'bg-autobot-primary'
                         : 'border-2 border-autobot-border-strong'
                     ]">
                       <svg
@@ -1220,7 +1220,7 @@ function getNodeHostname(nodeId: string): string {
                       <div class="flex items-center gap-2">
                         <span :class="[
                           'text-sm font-medium',
-                          newDeployment.roles.includes(role.name) ? 'text-primary-700' : 'text-autobot-text-primary'
+                          newDeployment.roles.includes(role.name) ? 'text-autobot-primary-hover' : 'text-autobot-text-primary'
                         ]">
                           {{ role.name }}
                         </span>
@@ -1268,7 +1268,7 @@ function getNodeHostname(nodeId: string): string {
             type="checkbox"
             id="force-deploy"
             v-model="newDeployment.force"
-            class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+            class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
           />
           <label for="force-deploy" class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.forceDeploymentSkipChecksAndRedeploy') }}</label>
         </div>
@@ -1284,7 +1284,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           @click="handleCreateDeployment"
           :disabled="!newDeployment.node_id || newDeployment.roles.length === 0 || isCreatingDeployment"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <div v-if="isCreatingDeployment" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
       </template>
@@ -1310,7 +1310,7 @@ function getNodeHostname(nodeId: string): string {
           </label>
           <select
             v-model="newBgDeployment.blue_node_id"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="">{{ $t('deploymentsView.selectSourceNode') }}</option>
             <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
@@ -1330,7 +1330,7 @@ function getNodeHostname(nodeId: string): string {
               :class="[
                 'px-3 py-1 text-sm font-medium rounded-full border transition-colors',
                 (newBgDeployment.roles as string[]).includes(role)
-                  ? 'bg-primary-100 text-primary-700 border-primary-300'
+                  ? 'bg-autobot-primary-bg text-autobot-primary-hover border-autobot-primary-light'
                   : 'bg-autobot-bg-secondary text-autobot-text-secondary border-autobot-border hover:bg-autobot-bg-hover'
               ]"
             >
@@ -1353,7 +1353,7 @@ function getNodeHostname(nodeId: string): string {
           <div v-else-if="eligibleNodes.length > 0">
             <select
               v-model="newBgDeployment.green_node_id"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
             >
               <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
               <option
@@ -1368,7 +1368,7 @@ function getNodeHostname(nodeId: string): string {
           <div v-else>
             <select
               v-model="newBgDeployment.green_node_id"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
             >
               <option value="">{{ $t('deploymentsView.selectTargetNode') }}</option>
               <option
@@ -1388,7 +1388,7 @@ function getNodeHostname(nodeId: string): string {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('deploymentsView.deploymentType') }}</label>
           <select
             v-model="newBgDeployment.deployment_type"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="upgrade">{{ $t('deploymentsView.upgrade') }}</option>
             <option value="migration">{{ $t('deploymentsView.migration') }}</option>
@@ -1402,7 +1402,7 @@ function getNodeHostname(nodeId: string): string {
             <input
               type="checkbox"
               v-model="newBgDeployment.auto_rollback"
-              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <span class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.autoRollbackOnFailure') }}</span>
           </label>
@@ -1410,7 +1410,7 @@ function getNodeHostname(nodeId: string): string {
             <input
               type="checkbox"
               v-model="newBgDeployment.purge_on_complete"
-              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <span class="text-sm text-autobot-text-secondary">{{ $t('deploymentsView.purgeBlueRolesAfterCompletion') }}</span>
           </label>
@@ -1427,7 +1427,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           @click="handleCreateBgDeployment"
           :disabled="!newBgDeployment.blue_node_id || !newBgDeployment.green_node_id || newBgDeployment.roles.length === 0 || isCreatingBg"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <div v-if="isCreatingBg" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>{{ $t('deploymentsView.startDeployment') }}</button>
       </template>
@@ -1472,7 +1472,7 @@ function getNodeHostname(nodeId: string): string {
           <span
             v-for="role in selectedDeployment.roles"
             :key="role"
-            class="px-3 py-1 text-sm font-medium bg-primary-100 text-primary-700 rounded-full"
+            class="px-3 py-1 text-sm font-medium bg-autobot-primary-bg text-autobot-primary-hover rounded-full"
           >
             {{ role }}
           </span>
@@ -1497,7 +1497,7 @@ function getNodeHostname(nodeId: string): string {
           v-if="selectedDeployment.status === 'completed'"
           @click="handleRollback(selectedDeployment.deployment_id); closeDetails()"
           :disabled="isRollingBack === selectedDeployment.deployment_id"
-          class="btn bg-autobot-warning-hover text-(--text-on-warning) hover:bg-autobot-warning-hover disabled:opacity-50"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover disabled:opacity-50"
         >
           {{ isRollingBack === selectedDeployment.deployment_id ? $t('deploymentsView.rollingBack') : $t('deploymentsView.rollback') }}
         </button>
@@ -1549,7 +1549,7 @@ function getNodeHostname(nodeId: string): string {
         </div>
         <div class="w-full bg-autobot-bg-active rounded-full h-3">
           <div
-            class="bg-primary-600 h-3 rounded-full transition-all"
+            class="bg-autobot-primary h-3 rounded-full transition-all"
             :style="{ width: `${selectedBgDeployment.progress_percent}%` }"
           ></div>
         </div>
@@ -1594,7 +1594,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           v-if="selectedBgDeployment.status === 'active'"
           @click="handleBgRollback(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
-          class="btn bg-autobot-warning-hover text-(--text-on-warning) hover:bg-autobot-warning-hover"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover"
         >{{ $t('deploymentsView.rollback') }}</button>
         <button
           v-if="selectedBgDeployment.status === 'failed'"
