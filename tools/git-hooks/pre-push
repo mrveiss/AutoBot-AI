@@ -368,13 +368,31 @@ stage_track() {
   STAGE_PIDS+=("$1")
   [ "${AUTOBOT_PREPUSH_PARALLEL:-1}" = "1" ] || stage_wait_all
 }
+# #17641: a stage writes to its own log, printed only when it ends, so a slow stage looked like a
+# hang -- 4 to 10+ minutes of silence until the caller killed the push. This wait prints a line
+# every AUTOBOT_PREPUSH_HEARTBEAT seconds (default 60) naming the stage still running and its
+# budget, on the hook's own stderr. Returns the stage's exit code.
+stage_wait_one() {
+  local pid="$1" name="$2" every="${AUTOBOT_PREPUSH_HEARTBEAT:-60}" start now next
+  case "$every" in ''|*[!0-9]*|0) every=60 ;; esac
+  start=$(machine_slot_clock); next=$((start + every))
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    now=$(machine_slot_clock)
+    if [ "$now" -ge "$next" ]; then
+      log "${name}: still running after $((now - start))s (stage budget ${MAX_BUDGET}s, then DID NOT RUN)"
+      next=$((now + every))
+    fi
+  done
+  wait "$pid"
+}
 # Waits for every tracked stage in launch order, prints each log as one block, folds the
 # verdicts into EXIT_CODE, and records a marker for each pass.
 stage_wait_all() {
   local i rc
   for i in "${!STAGE_PIDS[@]}"; do
     rc=0
-    wait "${STAGE_PIDS[$i]}" || rc=$?
+    stage_wait_one "${STAGE_PIDS[$i]}" "${STAGE_NAMES[$i]}" || rc=$?
     cat "${STAGE_LOGS[$i]}" >&2
     rm -f "${STAGE_LOGS[$i]}"
     if [ "$rc" = "0" ]; then
@@ -514,7 +532,8 @@ remote_guard_pytest() {
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
 run_fast_guards() {
-  local guards missing guard_output out rc=0
+  local guards missing guard_output out rc=0 gate_start leg2_budget
+  gate_start=$(machine_slot_clock)  # #17641: both legs share ONE MAX_BUDGET, not one each (worst case 2x)
   if ! guards=$(fast_guard_tests) || [ -z "$guards" ]; then
     fail "no fast guard list: ${FAST_GUARD_LIST} is in neither ${local_sha:0:10} nor the working tree"
     EXIT_CODE=1
@@ -532,19 +551,21 @@ run_fast_guards() {
   if remote_guard_pytest "$guards" "$missing"; then where="on the remote test node"; else
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
-  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
+  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout -k 10 "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
   fi
   # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
   if [ "$where" = "locally" ] && ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
     could_not_run "fast guards" "${PYTEST_PYTHON} cannot import pytest, so the guard tests did not run"
-  elif [ "$rc" = "124" ]; then did_not_run "fast guards" "$MAX_BUDGET"
+  elif [ "$rc" = "124" ] || [ "$rc" = "137" ]; then did_not_run "fast guards" "$MAX_BUDGET"  # 137: timeout -k had to KILL it
   elif [ "$rc" != "0" ]; then fail "fast guards failed ${where}:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
   else ok "fast guards ${where}: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
-  out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
-  if [ "$rc" = "124" ]; then
-    did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
+  leg2_budget=$((MAX_BUDGET - ($(machine_slot_clock) - gate_start)))
+  [ "$leg2_budget" -ge 60 ] || leg2_budget=60  # a floor, so a slow first leg cannot starve the pins into an instant timeout
+  out=$(cd "$REPO_ROOT" && exec 9>&- && timeout -k 10 "$leg2_budget" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
+  if [ "$rc" = "124" ] || [ "$rc" = "137" ]; then
+    did_not_run "repin_reach_floors.py --check" "$leg2_budget"
   elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
     fail "reach floors are stale -- run scripts/repin_reach_floors.py and commit:"
     printf '%s\n' "$out" | grep -E '^(STALE|PIN)' | head -20 >&2
