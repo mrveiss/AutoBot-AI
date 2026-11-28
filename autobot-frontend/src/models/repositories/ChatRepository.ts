@@ -64,8 +64,8 @@ export interface SendMessageOptions {
  */
 export interface SendMessageResponse {
   type: 'streaming' | 'buffered'
-  response?: Response  // For streaming responses
-  data?: Record<string, unknown>  // For buffered responses (backward compatibility)
+  response?: Response // For streaming responses
+  data?: Record<string, unknown> // For buffered responses (backward compatibility)
 }
 
 /**
@@ -154,7 +154,7 @@ export class ChatRepository {
   async sendMessage(
     message: string,
     chatId?: string,
-    options?: SendMessageOptions | Record<string, unknown>
+    options?: SendMessageOptions | Record<string, unknown>,
   ): Promise<SendMessageResponse> {
     try {
       // Ensure we have a chat ID
@@ -178,7 +178,7 @@ export class ChatRepository {
         }
 
         // Include any other options (excluding attachments and metadata to avoid duplication)
-        Object.keys(options).forEach(key => {
+        Object.keys(options).forEach((key) => {
           if (key !== 'attachments' && key !== 'metadata') {
             metadata[key] = (options as Record<string, unknown>)[key]
           }
@@ -192,8 +192,8 @@ export class ChatRepository {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: message,
-          context: metadata
-        })
+          context: metadata,
+        }),
       })
 
       if (!response.ok) {
@@ -207,14 +207,14 @@ export class ChatRepository {
         // Return streaming response for SSE
         return {
           type: 'streaming',
-          response: response
+          response: response,
         }
       } else {
         // Return buffered response for backward compatibility
         const data = await response.json()
         return {
           type: 'buffered',
-          data: data
+          data: data,
         }
       }
     } catch (error: unknown) {
@@ -227,17 +227,14 @@ export class ChatRepository {
   async sendStreamingMessage(
     message: string,
     chatId?: string,
-    onChunk?: (chunk: ChatStreamResponse) => void
+    onChunk?: (chunk: ChatStreamResponse) => void,
   ): Promise<void> {
     try {
-      const response = await fetchWithAuth(
-        `${this.baseURL}${getApiBase()}/chat`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, chat_id: chatId, stream: true }),
-        }
-      )
+      const response = await fetchWithAuth(`${this.baseURL}${getApiBase()}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, chat_id: chatId, stream: true }),
+      })
 
       if (!response.ok) {
         throw new HttpError(response.status, response.statusText)
@@ -256,7 +253,7 @@ export class ChatRepository {
         if (done) break
 
         const chunk = decoder.decode(value)
-        const lines = chunk.split('\n').filter(line => line.trim())
+        const lines = chunk.split('\n').filter((line) => line.trim())
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -295,8 +292,8 @@ export class ChatRepository {
         {
           id,
           title: title || 'New Chat',
-          metadata: metadata || {}
-        }
+          metadata: metadata || {},
+        },
       )
       return (response.data?.data || response.data) as ChatSession
     } catch (error: unknown) {
@@ -353,7 +350,11 @@ export class ChatRepository {
         const rawType = msg.messageType || msg.type || 'message'
         const normalizedType = this.normalizeMessageType(rawType)
         const transformed = {
-          id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
+          id:
+            msg.id ||
+            msg.metadata?.message_id ||
+            msg.rawData?.message_id ||
+            `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
           content: storedMessageText(msg),
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
@@ -362,9 +363,11 @@ export class ChatRepository {
           // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {},
           // #4448, #21976: one reading of stored sources (unified entries and legacy knowledge-base ones)
-          sources: Array.isArray(msg.sources) ? msg.sources.map((s) => toSource(s)) : []
+          sources: Array.isArray(msg.sources) ? msg.sources.map((s) => toSource(s)) : [],
         }
-        logger.debug(`Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`)
+        logger.debug(
+          `Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`,
+        )
         return transformed
       })
 
@@ -425,7 +428,7 @@ export class ChatRepository {
   async deleteChat(
     chatId: string,
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
-    fileOptions?: Record<string, unknown>
+    fileOptions?: Record<string, unknown>,
   ): Promise<unknown> {
     try {
       const params: Record<string, string> = {}
@@ -470,15 +473,19 @@ export class ChatRepository {
     }
   }
 
-  async saveChatMessages(params: { chatId: string; messages: ChatMessage[]; name?: string }): Promise<unknown> {
+  async saveChatMessages(params: {
+    chatId: string
+    messages: ChatMessage[]
+    name?: string
+  }): Promise<unknown> {
     try {
       // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
       // Backend expects: { data: { messages: [...], name: "..." } }
       const response = await this.post(`${getApiBase()}/chats/${params.chatId}/save`, {
         data: {
           messages: params.messages,
-          name: params.name || ''
-        }
+          name: params.name || '',
+        },
       })
       return response.data || response
     } catch (error: unknown) {
@@ -498,7 +505,9 @@ export class ChatRepository {
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.get<SessionFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`)
+      const response = await this.get<SessionFactsResponse>(
+        `${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`,
+      )
       return (response.data || response) as SessionFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
@@ -513,14 +522,17 @@ export class ChatRepository {
   async preserveSessionFacts(
     sessionId: string,
     factIds: string[],
-    preserve: boolean = true
+    preserve: boolean = true,
   ): Promise<PreserveFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.post<PreserveFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
-        fact_ids: factIds,
-        preserve
-      })
+      const response = await this.post<PreserveFactsResponse>(
+        `${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`,
+        {
+          fact_ids: factIds,
+          preserve,
+        },
+      )
       return (response.data || response) as PreserveFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
@@ -572,7 +584,10 @@ export class ChatRepository {
         } catch {
           errorBody = await response.text().catch(() => undefined)
         }
-        const error: HttpError & { response?: { status: number; data: unknown } } = new HttpError(response.status, response.statusText)
+        const error: HttpError & { response?: { status: number; data: unknown } } = new HttpError(
+          response.status,
+          response.statusText,
+        )
         error.response = { status: response.status, data: errorBody }
         throw error
       }
@@ -616,7 +631,11 @@ export class ChatRepository {
     return this._request<T>('GET', url, undefined, config)
   }
 
-  private post<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
+  private post<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: RequestConfig,
+  ): Promise<ApiResponse<T>> {
     return this._request<T>('POST', url, data, config)
   }
 
@@ -624,7 +643,11 @@ export class ChatRepository {
     return this._request<T>('DELETE', url, undefined, config)
   }
 
-  private put<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
+  private put<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: RequestConfig,
+  ): Promise<ApiResponse<T>> {
     return this._request<T>('PUT', url, data, config)
   }
 }

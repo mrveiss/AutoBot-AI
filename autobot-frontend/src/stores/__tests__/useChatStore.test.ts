@@ -390,7 +390,10 @@ describe('useChatStore', () => {
       const store = useChatStore()
       store.createNewSession('Chat', 'imp-2')
       store.importSession({ ...store.exportSession('imp-2')!, unassigned: true })
-      const assigned = { ...store.exportSession('imp-2')!, companyId: 'c2' } as Record<string, unknown>
+      const assigned = { ...store.exportSession('imp-2')!, companyId: 'c2' } as Record<
+        string,
+        unknown
+      >
       delete assigned.unassigned
       store.importSession(assigned as never)
 
