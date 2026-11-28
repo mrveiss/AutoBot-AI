@@ -21,7 +21,7 @@ from knowledge.search_filters import filter_for_user_id
 class KnowledgeReadToolsMixin:
     """``search_knowledge_base`` and ``get_fact``; needs ``self.logger`` and ``self._resolve_knowledge_base``."""
 
-    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
+    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=8)
     async def search_knowledge_base(self, query: str, n_results: int = 5, user_id: str | None = None) -> Dict[str, Any]:
         """Agent tool: top-``n_results`` facts visible to ``user_id``, research quarantine excluded.
 
@@ -73,7 +73,7 @@ class KnowledgeReadToolsMixin:
                 "status": "error",
             }
 
-    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
+    @declares_tool("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=11)
     async def get_fact(
         self, fact_id: int | None = None, query: str | None = None, user_id: str | None = None
     ) -> Dict[str, Any]:

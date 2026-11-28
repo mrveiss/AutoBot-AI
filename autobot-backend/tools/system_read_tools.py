@@ -35,7 +35,7 @@ class SystemReadToolsMixin:
             self._system_integration = SystemIntegration()
         return await asyncio.to_thread(getattr(self._system_integration, method))
 
-    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ)
+    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ, prompt_rank=1)
     async def query_system_information(self) -> Dict[str, Any]:
         """Query system information (worker node, else SystemIntegration)."""
         result = await self._execute_system_read("system_query_info", "query_system_info")
@@ -46,7 +46,7 @@ class SystemReadToolsMixin:
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ, requires=("systemctl",))
+    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ, requires=("systemctl",), prompt_rank=2)
     async def list_system_services(self) -> Dict[str, Any]:
         """List system services (worker node, else SystemIntegration)."""
         result = await self._execute_system_read("system_list_services", "list_services")

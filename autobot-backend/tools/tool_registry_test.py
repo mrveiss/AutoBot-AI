@@ -203,19 +203,23 @@ def test_available_tools_derive_from_the_catalogue():
     assert set(REGISTRY_TOOLS) <= set(names)
 
 
-def test_the_prompt_lists_registry_tools_in_the_order_main_did():
-    """The derivation follows the class MRO (mixin tools first); the prompt order is pinned to the former one (#22280)."""
-    from tools.tool_records import REGISTRY_TOOLS
+def test_every_listed_tool_declares_a_unique_prompt_rank():
+    """Each prompt-listed tool carries its own ``prompt_rank`` beside its handler; ranks never collide (#22280)."""
+    from tools.tool_records import _all_specs
 
-    former = [
-        "execute_system_command", "query_system_information", "list_system_services", "manage_service",
-        "get_process_info", "terminate_process", "web_fetch", "web_search", "search_knowledge_base",
-        "add_file_to_knowledge_base", "store_fact", "get_fact", "query_self_model", "type_text", "click_element",
-        "bring_window_to_front", "read_text_from_region", "move_mouse", "ask_user_for_manual",
-        "respond_conversationally", "code_interpreter", "scrape_url", "crawl_site", "map_site",
-        "extract_structured_data", "content_reach",
-    ]  # fmt: skip
-    assert list(REGISTRY_TOOLS)[: len(former)] == former
+    listed = [s for s in _all_specs().values() if s.listed and not s.flag_gated]
+    assert all(s.prompt_rank is not None for s in listed), [s.name for s in listed if s.prompt_rank is None]
+    ranks = [s.prompt_rank for s in listed]
+    assert len(ranks) == len(set(ranks))
+
+
+def test_the_prompt_lists_registry_tools_by_declared_rank():
+    """The derivation follows the class MRO (mixin tools first); the prompt order is the declared rank (#22280)."""
+    from tools.tool_records import REGISTRY_TOOLS, _all_specs
+
+    specs = _all_specs()
+    assert list(REGISTRY_TOOLS) == sorted(REGISTRY_TOOLS, key=lambda n: specs[n].prompt_rank)
+    assert list(REGISTRY_TOOLS)[0] == "execute_system_command"
 
 
 def test_every_tool_record_names_where_it_runs():

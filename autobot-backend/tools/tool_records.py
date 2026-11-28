@@ -52,37 +52,6 @@ ToolEntry = Tuple[str, str, Optional[Permission]]  # (category, execution locati
 _DERIVED = ("REGISTRY_TOOLS", "TOOL_REQUIRES", "_UNLISTED_TOOLS", "SPILL_READ_TOOL", "CHAT_SHELL_TOOL")
 _cache: Dict[str, Any] = {}
 
-#: The order the model's prompt lists the registry tools (the derivation's own order follows the class MRO, which
-#: would put the mixin tools first). Tools not named here follow, in declaration order.
-PROMPT_ORDER = (
-    "execute_system_command",
-    "query_system_information",
-    "list_system_services",
-    "manage_service",
-    "get_process_info",
-    "terminate_process",
-    "web_fetch",
-    "web_search",
-    "search_knowledge_base",
-    "add_file_to_knowledge_base",
-    "store_fact",
-    "get_fact",
-    "query_self_model",
-    "type_text",
-    "click_element",
-    "bring_window_to_front",
-    "read_text_from_region",
-    "move_mouse",
-    "ask_user_for_manual",
-    "respond_conversationally",
-    "code_interpreter",
-    "scrape_url",
-    "crawl_site",
-    "map_site",
-    "extract_structured_data",
-    "content_reach",
-)
-
 #: SDK ``ToolPermission`` level -> the canonical ``Permission`` a role must hold to see the tool.
 #: ``role_has_permission`` knows only dot-style Permission values, so storing the bare level
 #: would hide every SDK tool from every role.
@@ -111,8 +80,8 @@ def _build() -> None:
     specs = _all_specs()
     gated = [s for s in specs.values() if s.flag_gated]
     listed = [n for n, s in specs.items() if s.listed and not s.flag_gated]
-    rank = {n: i for i, n in enumerate(PROMPT_ORDER)}
-    listed.sort(key=lambda n: rank.get(n, len(rank)))  # stable: unnamed tools keep declaration order
+    # The derivation follows the class MRO (mixin tools first); each tool's ``prompt_rank`` sets the prompt order.
+    listed.sort(key=lambda n: (specs[n].prompt_rank is None, specs[n].prompt_rank or 0))  # stable: unranked last
     _cache["REGISTRY_TOOLS"] = {n: _entry(specs[n]) for n in listed}
     _cache["TOOL_REQUIRES"] = {n: s.requires for n, s in specs.items() if s.requires}
     _cache["SPILL_READ_TOOL"] = (gated[0].name, _entry(gated[0]))

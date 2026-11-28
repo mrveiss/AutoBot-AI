@@ -2349,7 +2349,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         """
         return format_browser_action_text(tool_name, params, inner, result)
 
-    @declares_tool("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ, name="web_search")
+    @declares_tool("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ, name="web_search", prompt_rank=7)
     async def _handle_web_search_tool(
         self,
         tool_call: dict[str, Any],

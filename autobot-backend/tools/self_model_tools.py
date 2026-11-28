@@ -183,7 +183,7 @@ def format_result(data: Dict[str, Any]) -> str:
 class SelfModelToolsMixin:
     """``query_self_model`` for ToolRegistry; needs nothing from the registry beyond being a mixin."""
 
-    @declares_tool("self_model", LOCATION_BACKEND, None, name=SELF_MODEL_QUERY_TOOL_NAME)
+    @declares_tool("self_model", LOCATION_BACKEND, None, name=SELF_MODEL_QUERY_TOOL_NAME, prompt_rank=12)
     async def query_self_model(self, args: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
         """Agent tool: entities of the self-model filtered by kind, name, node and status (read-only)."""
         envelope = {"tool_name": SELF_MODEL_QUERY_TOOL_NAME, "tool_args": args}

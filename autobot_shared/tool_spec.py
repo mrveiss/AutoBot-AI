@@ -46,6 +46,9 @@ class ToolSpec:
     requires: Tuple[str, ...] = ()
     listed: bool = True  # False: dispatched and catalogued, but not offered through the registry prompt list
     flag_gated: bool = False  # offered only while its feature flag is on
+    prompt_rank: Optional[int] = (
+        None  # position in the model's prompt list; unranked tools follow, in declaration order
+    )
 
 
 def declares_tool(
@@ -57,11 +60,14 @@ def declares_tool(
     requires: Tuple[str, ...] = (),
     listed: bool = True,
     flag_gated: bool = False,
+    prompt_rank: Optional[int] = None,
 ) -> Callable[[_F], _F]:
     """Declare the decorated handler as a catalogue tool; *name* defaults to the method name."""
 
     def mark(handler: _F) -> _F:
-        spec = ToolSpec(name or handler.__name__, category, location, permission, requires, listed, flag_gated)
+        spec = ToolSpec(
+            name or handler.__name__, category, location, permission, requires, listed, flag_gated, prompt_rank
+        )
         setattr(handler, _SPEC_ATTR, spec)
         return handler
 

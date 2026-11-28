@@ -121,7 +121,7 @@ class ToolRegistry(
 
     # System Integration Tools
 
-    @declares_tool("system", LOCATION_WORKER, Permission.SHELL_EXECUTE)
+    @declares_tool("system", LOCATION_WORKER, Permission.SHELL_EXECUTE, prompt_rank=0)
     async def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Execute a system command."""
         task = self._create_base_task("system_execute_command")
@@ -162,7 +162,7 @@ class ToolRegistry(
             "status": "success" if window.get("found") else "not_found",
         }
 
-    @declares_tool("system", LOCATION_WORKER, None, requires=("systemctl",))
+    @declares_tool("system", LOCATION_WORKER, None, requires=("systemctl",), prompt_rank=3)
     async def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage a system service."""
         task = self._create_base_task("system_manage_service")
@@ -180,7 +180,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("system", LOCATION_WORKER, None)
+    @declares_tool("system", LOCATION_WORKER, None, prompt_rank=4)
     async def get_process_info(self, process_name: str | None = None, pid: str | None = None) -> Dict[str, Any]:
         """Get process information."""
         task = self._create_base_task("system_get_process_info")
@@ -197,7 +197,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("system", LOCATION_WORKER, None)
+    @declares_tool("system", LOCATION_WORKER, None, prompt_rank=5)
     async def terminate_process(self, pid: str) -> Dict[str, Any]:
         """Terminate a process by PID."""
         task = self._create_base_task("system_terminate_process")
@@ -211,7 +211,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("web", LOCATION_WORKER, None)
+    @declares_tool("web", LOCATION_WORKER, None, prompt_rank=6)
     async def web_fetch(self, url: str) -> Dict[str, Any]:
         """Fetch content from a web URL."""
         task = self._create_base_task("web_fetch")
@@ -227,7 +227,7 @@ class ToolRegistry(
 
     # Issue #7509: Web research tools — direct internal dispatch via web_fetch package.
 
-    @declares_tool("web", LOCATION_BACKEND, None)
+    @declares_tool("web", LOCATION_BACKEND, None, prompt_rank=25)
     async def content_reach(self, source: str, query: str = "", url: str = "", limit: int = 5) -> Dict[str, Any]:
         """Fetch external content via a Content Reach source chain (#10932)."""
         from content_reach.base import BackendError, ContentRequest
@@ -268,7 +268,7 @@ class ToolRegistry(
             self.logger.error("content_reach failed for %s: %s", source, exc)
             return {"tool_name": "content_reach", "tool_args": args, "result": f"Error: {exc}", "status": "error"}
 
-    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=21)
     async def scrape_url(self, url: str, render: str = "auto") -> Dict[str, Any]:
         """Fetch a URL and return its markdown content."""
         from web_fetch import RenderMode, WebFetcher
@@ -294,7 +294,7 @@ class ToolRegistry(
             self.logger.error("scrape_url failed for %s: %s", url, exc)
             return {"tool_name": "scrape_url", "tool_args": {"url": url}, "result": f"Error: {exc}", "status": "error"}
 
-    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE)
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE, prompt_rank=22)
     async def crawl_site(
         self,
         seed_urls: List[str],
@@ -340,7 +340,7 @@ class ToolRegistry(
                 "status": "error",
             }
 
-    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=23)
     async def map_site(self, domain: str, max_urls: int = 500, respect_robots: bool = True) -> Dict[str, Any]:
         """Discover URLs for a domain via sitemap.xml or BFS crawl fallback."""
         from chat_workflow.tool_handler import _format_map_results
@@ -363,7 +363,7 @@ class ToolRegistry(
                 "status": "error",
             }
 
-    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ, prompt_rank=24)
     async def extract_structured_data(self, url: str, schema: Dict[str, Any], render: str = "auto") -> Dict[str, Any]:
         """Extract structured data from a URL using a JSON Schema and LLM."""
         import json
@@ -392,7 +392,7 @@ class ToolRegistry(
 
     # GUI Automation Tools
 
-    @declares_tool("gui", LOCATION_WORKER, None)
+    @declares_tool("gui", LOCATION_WORKER, None, prompt_rank=13)
     async def type_text(self, text: str) -> Dict[str, Any]:
         """Type text into the active window."""
         task = self._create_base_task("gui_type_text")
@@ -406,7 +406,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("gui", LOCATION_WORKER, None)
+    @declares_tool("gui", LOCATION_WORKER, None, prompt_rank=14)
     async def click_element(self, image_path: str) -> Dict[str, Any]:
         """Click on a GUI element by image."""
         task = self._create_base_task("gui_click_element")
@@ -423,7 +423,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("gui", LOCATION_WORKER, None, requires=("xdotool",))
+    @declares_tool("gui", LOCATION_WORKER, None, requires=("xdotool",), prompt_rank=15)
     async def bring_window_to_front(self, window_title: str) -> Dict[str, Any]:
         """Bring a window to the front."""
         task = self._create_base_task("gui_bring_window_to_front")
@@ -442,7 +442,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("gui", LOCATION_WORKER, None, requires=("tesseract",))
+    @declares_tool("gui", LOCATION_WORKER, None, requires=("tesseract",), prompt_rank=16)
     async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
         """OCR-read text from a screen region (Issue #12070)."""
         task = self._create_base_task("gui_read_text_from_region")
@@ -459,7 +459,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("gui", LOCATION_WORKER, None)
+    @declares_tool("gui", LOCATION_WORKER, None, prompt_rank=17)
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
         """Move the mouse cursor to the specified coordinates (Issue #12070)."""
         task = self._create_base_task("gui_move_mouse")
@@ -480,7 +480,7 @@ class ToolRegistry(
 
     # User Interaction Tools
 
-    @declares_tool("conversation", LOCATION_WORKER, None)
+    @declares_tool("conversation", LOCATION_WORKER, None, prompt_rank=18)
     async def ask_user_for_manual(self, program_name: str, question_text: str) -> Dict[str, Any]:
         """Ask user for manual information."""
         task = self._create_base_task("ask_user_for_manual")
@@ -498,7 +498,7 @@ class ToolRegistry(
             "status": result.get("status", "success"),
         }
 
-    @declares_tool("conversation", LOCATION_WORKER, None)
+    @declares_tool("conversation", LOCATION_WORKER, None, prompt_rank=19)
     async def respond_conversationally(self, response_text: str) -> Dict[str, Any]:
         """Respond conversationally to the user."""
         task = self._create_base_task("respond_conversationally")
@@ -513,7 +513,7 @@ class ToolRegistry(
             "response_text": response_text,
         }
 
-    @declares_tool("code", LOCATION_BACKEND, None, name="code_interpreter")
+    @declares_tool("code", LOCATION_BACKEND, None, name="code_interpreter", prompt_rank=20)
     async def execute_code_tool(self, code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
         """Execute Python code in a sandboxed subprocess and return stdout/stderr."""
         result = execute_code(code, timeout_seconds=timeout_seconds)
