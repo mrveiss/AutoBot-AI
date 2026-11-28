@@ -342,3 +342,14 @@ Index(
     unique=True,
     postgresql_where=text(PENDING_STALE_SYNC_FILES_WHERE),
 ).ddl_if(dialect="postgresql")
+
+#: One PENDING sync-removal proposal per kind, project root and fact batch, enforced by the database (#20028): the
+#: sync proposes on every run and two runs can both pass the "already proposed" read.
+PENDING_KB_SYNC_REMOVAL_INDEX = "uq_approvals_pending_kb_sync_removal"
+PENDING_KB_SYNC_REMOVAL_WHERE = "status = 'pending' AND context ->> 'action' = 'kb_sync_removal'"
+Index(
+    PENDING_KB_SYNC_REMOVAL_INDEX,
+    Approval.context["scope"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_KB_SYNC_REMOVAL_WHERE),
+).ddl_if(dialect="postgresql")

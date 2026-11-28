@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import knowledge_sync_incremental as sync_module
 from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics
 
 
@@ -68,29 +67,34 @@ async def test_a_chunk_without_a_usable_id_still_counts_as_rejected(result):
     assert sync._is_durably_stored(chunks, fact_ids + shared, Path("a.md")) is False
 
 
+@pytest.fixture
+def proposed(monkeypatch):
+    seen = AsyncMock(return_value=True)
+    monkeypatch.setattr("knowledge_sync_removal_proposals.propose_removal", seen)
+    return seen
+
+
 @pytest.mark.asyncio
-async def test_removing_a_file_keeps_a_fact_another_file_relies_on(tmp_path, monkeypatch):
-    guarded = AsyncMock(return_value=0)
-    monkeypatch.setattr(sync_module, "delete_replaced_facts", guarded)
+async def test_removing_a_file_proposes_not_a_fact_another_file_relies_on(tmp_path, proposed):
     sync = _sync(tmp_path)
+    sync.kb.get_fact = MagicMock(return_value={"content": "x"})
     gone, other = tmp_path / "gone.md", tmp_path / "other.md"
     sync.file_metadata[str(gone)] = _metadata(gone, ["own", "both"])
     sync.file_metadata[str(other)] = _metadata(other, shared=["both"])
     await sync._remove_obsolete_knowledge([str(gone)])
-    sync.kb.delete_fact.assert_awaited_once_with("own")
+    sync.kb.delete_fact.assert_not_awaited()
+    assert proposed.await_args.args[2] == {"gone.md": ["own"]}
 
 
 @pytest.mark.asyncio
-async def test_the_last_file_relying_on_a_shared_fact_only_deletes_through_the_guard(tmp_path, monkeypatch):
-    """The fact may be a user's: a file that merely matched it must not delete it unchecked."""
-    guarded = AsyncMock(return_value=0)
-    monkeypatch.setattr(sync_module, "delete_replaced_facts", guarded)
+async def test_a_removed_file_with_no_stored_fact_left_only_drops_the_sync_record(tmp_path, proposed):
     sync = _sync(tmp_path)
+    sync.kb.get_fact = MagicMock(return_value=None)
     gone = tmp_path / "gone.md"
-    sync.file_metadata[str(gone)] = _metadata(gone, shared=["held"])
+    sync.file_metadata[str(gone)] = _metadata(gone, ["own"])
     await sync._remove_obsolete_knowledge([str(gone)])
-    sync.kb.delete_fact.assert_not_awaited()
-    guarded.assert_awaited_once_with(sync.kb, ["held"])
+    proposed.assert_not_awaited()
+    assert str(gone) not in sync.file_metadata
 
 
 def test_a_new_version_keeps_what_it_still_relies_on_or_another_file_does(tmp_path):

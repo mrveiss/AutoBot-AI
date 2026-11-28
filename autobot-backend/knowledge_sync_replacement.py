@@ -21,7 +21,10 @@ from autobot_shared.logging_manager import get_llm_logger
 logger = get_llm_logger("knowledge_sync_replacement")
 
 SYNC_INGEST_ROUTE = "incremental_sync"
-SYNC_AUDIT_ACTOR = "system:kb-sync"
+SYNC_AUDIT_ACTOR = "service:kb-sync"
+#: The sync as an admitted service principal (the shape ``auth_service_opt_in.admit_service`` mints), the only
+#: kind of non-human caller ``require_audit_actor_id`` accepts as an audit actor (#22222).
+SYNC_SERVICE_USER = {"username": SYNC_AUDIT_ACTOR, "role": "service", "service": True}
 
 #: Every metadata key a sync chunk carries from ``_store_chunks_in_knowledge_base`` and ``store_fact``.
 _SYNC_FACT_KEYS = frozenset(
@@ -95,24 +98,31 @@ def is_replaceable(metadata: Dict[str, Any]) -> bool:
     )
 
 
-async def _audit_deletion(fact_id: str, metadata: Dict[str, Any]) -> bool:
-    """Write the deletion's audit row and wait for it; ``False`` means the fact must stay."""
+async def record_fact_removal(fact_id: str, actor_id: str, metadata: Dict[str, Any]) -> bool:
+    """Write one fact removal's canonical audit row and wait for it; ``False`` means the fact must stay."""
     from services.audit import audit as canonical
     from services.audit.taxonomy import AuditAction, AuditCategory
 
     event = canonical.AuditEvent(
         category=AuditCategory.SECURITY,
         action=AuditAction.KNOWLEDGE_REMOVE.value,
-        actor_id=SYNC_AUDIT_ACTOR,
+        actor_id=actor_id,
         resource_type="knowledge_fact",
         resource_id=fact_id,
-        metadata={"reason": "replaced by re-index", "relative_path": metadata.get("relative_path")},
+        metadata=metadata,
     )
     try:
         return await canonical.record(event)
     except Exception as exc:
-        logger.warning("Audit failed, keeping replaced fact %s: %s", fact_id, exc)
+        logger.warning("Audit failed, keeping fact %s: %s", fact_id, exc)
         return False
+
+
+async def _audit_deletion(fact_id: str, metadata: Dict[str, Any]) -> bool:
+    """Write the deletion's audit row and wait for it; ``False`` means the fact must stay."""
+    return await record_fact_removal(
+        fact_id, SYNC_AUDIT_ACTOR, {"reason": "replaced by re-index", "relative_path": metadata.get("relative_path")}
+    )
 
 
 async def _delete_one(kb: Any, fact_id: str) -> bool:
