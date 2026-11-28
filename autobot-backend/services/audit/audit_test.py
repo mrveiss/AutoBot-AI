@@ -325,3 +325,20 @@ class TestOnePurgePath:
         redis.zremrangebyscore.assert_not_called()
         redis.zrem.assert_not_called()
         assert result.deleted == len(AuditCategory) + 1
+
+
+class TestThreatAnalysisFailureLog:
+    """#22188: a failed threat-analysis import names the missing module in the log."""
+
+    @pytest.mark.asyncio
+    async def test_log_names_the_missing_module(self, caplog: pytest.LogCaptureFixture) -> None:
+        failure = ModuleNotFoundError("No module named 'sklearn'", name="sklearn")
+        with patch.dict("sys.modules", {"security.enterprise.threat_detection.ingest": None}):
+            with patch.object(audit, "_failure_detail", wraps=audit._failure_detail):
+                assert audit._failure_detail(failure) == "ModuleNotFoundError (sklearn)"
+                with caplog.at_level("ERROR"):
+                    await audit._analyse_for_threats(_event())
+        assert "ModuleNotFoundError" in caplog.text
+
+    def test_non_import_failure_keeps_the_class_name_only(self) -> None:
+        assert audit._failure_detail(RuntimeError("x")) == "RuntimeError"
