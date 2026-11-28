@@ -204,12 +204,18 @@ async def propose_expired_replaced(kb: Any, project_root: Any, prior: Dict[str, 
     return [fid for fid in replaced if fid not in expired_ids]
 
 
-def _tracked_state(root: Path) -> Dict[str, Dict[str, Any]]:
-    """The sync's own record of tracked files (relative path -> fact ids), as it is on disk now."""
+def _tracked_state(root: Path) -> Dict[str, Dict[str, Any]] | None:
+    """The sync's own record of tracked files (relative path -> fact ids), as it is on disk now.
+
+    ``None`` when it is missing, unreadable, unparseable or an empty map (a real sync state with files has
+    entries): without it nothing can be shown to be unheld, so nothing may be deleted.
+    """
     try:
         data = json.loads(root.joinpath(*_STATE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
+        return None
+    if not isinstance(data, dict) or not data:
+        return None
     return {
         str(meta.get("relative_path") or path): {*meta.get("fact_ids", []), *meta.get("shared_fact_ids", [])}
         for path, meta in data.items()
@@ -228,7 +234,7 @@ def _still_needed(kind: str, root: Path, source: str, fact_id: str, tracked: Dic
 
 
 async def _remove_one(
-    kb: Any, fact_id: str, approval: Approval, decider: uuid.UUID, source: str, tracked: Dict[str, Any]
+    kb: Any, fact_id: str, approval: Approval, decider: uuid.UUID, source: str, tracked: Dict[str, Any] | None
 ) -> str | None:
     """Delete one approved fact; ``None`` when it went, else why it stayed.
 
@@ -240,6 +246,8 @@ async def _remove_one(
         return "already gone"
     if _is_protected(fact.get("metadata") or {}):
         return "protected, kept"
+    if tracked is None:
+        return "tracked state unreadable, kept"
     context = approval.context or {}
     if (why := _still_needed(context.get("kind"), Path(context["project_root"]), source, fact_id, tracked)) is not None:
         return why
@@ -263,6 +271,8 @@ async def execute_sync_removal(approval: Approval, session: "AsyncSession") -> N
     owner = {fid: src for src, ids in sources.items() for fid in ids}
     kb = await get_knowledge_base()
     tracked = await asyncio.to_thread(_tracked_state, Path(root))
+    if tracked is None:
+        logger.warning("KB sync removal: the sync state is unreadable, so every proposed fact is kept")
     outcomes = [(fid, await _remove_one(kb, fid, approval, decider, owner.get(fid, ""), tracked)) for fid in fact_ids]
     kept = [f"{fid}: {why}" for fid, why in outcomes if why]
     removed = len(outcomes) - len(kept)

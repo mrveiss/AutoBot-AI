@@ -153,6 +153,7 @@ async def test_approving_deletes_exactly_those_facts_with_an_audit_row_each(tmp_
     sync.file_metadata[str(gone)] = _meta(gone, ["f1", "f2"])
     await sync._remove_obsolete_knowledge([str(gone)])
     (approval,) = _approvals(world)
+    _write_state(tmp_path, _meta(tmp_path / "other.md", ["o1"]))
     await _approve(world, approval)
     assert [c.args[0] for c in world.kb.delete_fact.await_args_list] == ["f1", "f2"]
     assert [e.resource_id for e in world.events] == ["f1", "f2"]
@@ -267,6 +268,42 @@ async def test_an_expired_fact_is_deleted_only_while_superseded(tmp_path, world,
     _write_state(tmp_path, _meta(doc, ["new", "again"]))  # "again" is current again
     await _approve(world, approval)
     assert [c.args[0] for c in world.kb.delete_fact.await_args_list] == ["old"]
+
+
+async def _approve_with_state(tmp_path, world, write):
+    sync = _sync(tmp_path, world.kb)
+    gone = tmp_path / "gone.md"
+    sync.file_metadata[str(gone)] = _meta(gone, ["f1", "f2"])
+    await sync._remove_obsolete_knowledge([str(gone)])
+    (approval,) = _approvals(world)
+    write(tmp_path / "data" / "file_metadata.json")
+    await _approve(world, approval)
+    world.kb.delete_fact.assert_not_awaited()
+    assert not world.events
+
+
+def _write_raw(text):
+    def write(path):
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    return write
+
+
+@pytest.mark.asyncio
+async def test_a_missing_state_file_keeps_every_fact(tmp_path, world):
+    await _approve_with_state(tmp_path, world, lambda path: None)
+    assert any("tracked state unreadable, kept" in getattr(o, "body", "") for o in world.session.added)
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_state_file_keeps_every_fact(tmp_path, world):
+    await _approve_with_state(tmp_path, world, _write_raw("{not json"))
+
+
+@pytest.mark.asyncio
+async def test_an_empty_state_map_keeps_every_fact(tmp_path, world):
+    await _approve_with_state(tmp_path, world, _write_raw("{}"))
 
 
 @pytest.mark.asyncio
