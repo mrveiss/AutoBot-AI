@@ -327,7 +327,7 @@ watch(
         @click="requestStop"
         :disabled="!hasTarget || isActionInProgress || !isRunning"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-autobot-pill-bad-fg border-autobot-error-light bg-autobot-pill-bad-bg hover:bg-autobot-pill-bad-bg
+               text-autobot-pill-bad-fg border-autobot-error-light bg-autobot-pill-bad-bg hover:bg-(--bad-bg-hover)
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg v-if="currentAction === 'stop'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

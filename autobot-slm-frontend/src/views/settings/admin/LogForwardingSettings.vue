@@ -299,7 +299,7 @@ onMounted(refreshAll)
           <button
             @click="testAllDestinations"
             :disabled="testing"
-            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary disabled:opacity-50 flex items-center gap-2"
+            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
           >
             <svg v-if="testing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -372,7 +372,7 @@ onMounted(refreshAll)
 
       <!-- Loading -->
       <div v-if="loading" class="flex items-center justify-center py-12">
-        <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
@@ -386,7 +386,7 @@ onMounted(refreshAll)
         <p class="text-autobot-text-tertiary mb-4">{{ $t('settings.admin.logForwardingSettings.noLogForwardingDestinations') }}</p>
         <button
           @click="openAddModal"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('settings.admin.logForwardingSettings.addYourFirstDestination') }}
         </button>
@@ -435,7 +435,7 @@ onMounted(refreshAll)
               </button>
               <button
                 @click="openEditModal(dest)"
-                class="p-2 text-autobot-text-tertiary hover:text-primary-500 hover:bg-primary-50 rounded-sm"
+                class="p-2 text-autobot-text-tertiary hover:text-autobot-primary hover:bg-autobot-primary-bg rounded-sm"
                 :title="$t('settings.admin.logForwardingSettings.edit')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,7 +473,7 @@ onMounted(refreshAll)
           v-model="formData.name"
           type="text"
           :disabled="!!editingDestination"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-autobot-bg-tertiary"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary disabled:bg-autobot-bg-tertiary"
           :placeholder="$t('settings.admin.logForwardingSettings.eGProductionSyslog')"
         />
       </div>
@@ -484,7 +484,7 @@ onMounted(refreshAll)
         <select
           v-model="formData.type"
           :disabled="!!editingDestination"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         >
           <option v-for="dest in destinationTypes" :key="dest.value" :value="dest.value">
             {{ dest.labelKey ? t(dest.labelKey) : dest.label }}
@@ -499,7 +499,7 @@ onMounted(refreshAll)
           v-model="formData.url"
           type="text"
           data-test="field-url"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           :placeholder="getUrlPlaceholder(formData.type, t)"
         />
       </div>
@@ -508,7 +508,7 @@ onMounted(refreshAll)
         <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.protocol') }}</label>
         <select
           v-model="formData.syslog_protocol"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         >
           <option value="udp">{{ $t('settings.admin.logForwardingSettings.uDPUnreliableFast') }}</option>
           <option value="tcp">{{ $t('settings.admin.logForwardingSettings.tCPReliable') }}</option>
@@ -524,7 +524,7 @@ onMounted(refreshAll)
           autocomplete="new-password"
           data-test="field-api-key"
           :disabled="formData.clear_api_key"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         />
         <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
         <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
@@ -538,7 +538,7 @@ onMounted(refreshAll)
         <input
           v-model="formData.file_path"
           type="text"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           :placeholder="$t('settings.admin.logForwardingSettings.varLogAutobotForwardedLog')"
         />
       </div>
@@ -548,7 +548,7 @@ onMounted(refreshAll)
         <input
           v-model="formData.index"
           type="text"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           :placeholder="$t('settings.admin.logForwardingSettings.autobotLogs')"
         />
       </div>
@@ -559,7 +559,7 @@ onMounted(refreshAll)
           <input
             v-model="formData.username"
             type="text"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           />
         </div>
         <div>
@@ -570,7 +570,7 @@ onMounted(refreshAll)
             autocomplete="new-password"
             data-test="field-password"
             :disabled="formData.clear_password"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           />
           <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
           <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
@@ -585,7 +585,7 @@ onMounted(refreshAll)
         <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.minimumLogLevel') }}</label>
         <select
           v-model="formData.min_level"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
         >
           <option value="Debug">{{ $t('settings.admin.logForwardingSettings.debug') }}</option>
           <option value="Information">{{ $t('settings.admin.logForwardingSettings.information') }}</option>
@@ -609,7 +609,7 @@ onMounted(refreshAll)
         <button
           @click="saveDestination"
           :disabled="saving"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

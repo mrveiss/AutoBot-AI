@@ -248,14 +248,14 @@ onMounted(() => {
                 v-model="url"
                 @keydown="handleKeydown"
                 type="text"
-                class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-full focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary text-sm"
                 :placeholder="$t('tools.admin.browserTool.enterURL')"
               />
             </div>
             <button
               @click="navigate"
               :disabled="!isConnected || loading"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 text-sm"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 text-sm"
             >
               {{ $t('tools.admin.browserTool.go') }}
             </button>
@@ -308,7 +308,7 @@ onMounted(() => {
           <p class="text-autobot-text-tertiary">{{ $t('tools.admin.browserTool.noScreenshotAvailable') }}</p>
           <button
             @click="takeScreenshot"
-            class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
+            class="mt-4 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors text-sm"
           >
             {{ $t('tools.admin.browserTool.takeScreenshot') }}
           </button>

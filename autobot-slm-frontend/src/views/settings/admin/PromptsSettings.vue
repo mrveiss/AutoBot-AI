@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseButton } from '@autobot/ui'
 /**
  * PromptsSettings - Prompt Template Management
  *
@@ -178,7 +178,7 @@ onMounted(() => {
         <button
           @click="loadPrompts"
           :disabled="loading"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg v-if="loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -202,14 +202,14 @@ onMounted(() => {
               v-model="searchQuery"
               type="text"
               :placeholder="$t('settings.admin.promptsSettings.searchPrompts')"
-              class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             />
           </div>
         </div>
         <div class="sm:w-48">
           <select
             v-model="selectedCategory"
-            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           >
             <option :value="null">{{ $t('settings.admin.promptsSettings.allCategories') }}</option>
             <option v-for="cat in categories" :key="cat" :value="cat">
@@ -229,7 +229,7 @@ onMounted(() => {
 
         <!-- Loading -->
         <div v-if="loading" class="flex items-center justify-center py-12">
-          <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
@@ -253,7 +253,7 @@ onMounted(() => {
             @click="selectPrompt(prompt)"
             :class="[
               'w-full text-left p-4 hover:bg-autobot-bg-hover transition-colors',
-              selectedPrompt?.id === prompt.id ? 'bg-primary-50 border-l-4 border-primary-500' : '',
+              selectedPrompt?.id === prompt.id ? 'bg-autobot-primary-bg border-l-4 border-autobot-primary' : '',
             ]"
           >
             <div class="flex items-start justify-between gap-3">
@@ -329,27 +329,21 @@ onMounted(() => {
             <textarea
               v-model="editedContent"
               rows="12"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm resize-y"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary font-mono text-sm resize-y"
               :placeholder="$t('settings.admin.promptsSettings.enterPromptContent')"
             ></textarea>
           </div>
 
           <!-- Actions -->
           <div class="flex flex-wrap gap-3">
-            <button
-              @click="savePrompt"
-              :disabled="saving || !hasUnsavedChanges"
-              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
-            >
-              <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+            <BaseButton :disabled="saving || !hasUnsavedChanges" :loading="saving" @click="savePrompt">
+              <template #icon-left>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </template>
               {{ $t('settings.admin.promptsSettings.saveChanges') }}
-            </button>
+            </BaseButton>
 
             <button
               @click="revertToDefault"

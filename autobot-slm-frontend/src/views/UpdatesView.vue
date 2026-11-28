@@ -70,7 +70,7 @@ function navigateToTab(tab: UpdatesTab): void {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2',
             activeTab === tab.id
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >

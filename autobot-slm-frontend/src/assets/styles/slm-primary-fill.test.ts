@@ -76,19 +76,18 @@ describe('SLM primary fill and its ink (#21567)', () => {
     expect(() => contrast('#2CC5A800', '#000000')).toThrow(/opaque/)
   })
 
-  it('defines an ink for the base state, where --primary is the sky 500 (read from @theme)', () => {
-    const sky = block(MAIN, '@theme')['--color-primary-500']
-    expect(sky, '--color-primary-500 must be declared in main.css @theme').toBeDefined()
+  it('defines an ink for the base state, where --primary is the sky 500 (read from main.css :root)', () => {
+    const sky = block(MAIN, ':root')['--primary']
+    expect(sky, '--primary must be declared in main.css :root').toMatch(OPAQUE_HEX)
     expect(block(SCHEME, ':root')['--on-primary']).toBe('var(--color-black)')
     expect(contrast(sky, '#000000')).toBeGreaterThanOrEqual(4.5)
   })
 
   // With no scheme --primary-h is unset, so hover and pressed paint these fallbacks under the black ink.
   it.each(['--color-primary-hover', '--color-primary-active'])('%s falls back to a shade the black ink can be read on', (prop) => {
-    const fallback = /^var\(--primary-h, var\((--color-primary-\d+)\)\)$/.exec(block(SCHEME, ':root')[prop])
-    expect(fallback, `${prop} must be var(--primary-h, var(--color-primary-N))`).not.toBeNull()
-    const shade = block(MAIN, '@theme')[fallback![1]]
-    expect(contrast(shade, '#000000'), fallback![1]).toBeGreaterThanOrEqual(4.5)
+    const fallback = /^var\(--primary-h, (#[0-9a-f]{6})\)$/i.exec(block(SCHEME, ':root')[prop])
+    expect(fallback, `${prop} must be var(--primary-h, #rrggbb)`).not.toBeNull()
+    expect(contrast(fallback![1], '#000000'), prop).toBeGreaterThanOrEqual(4.5)
   })
 })
 
@@ -154,8 +153,8 @@ describe('SLM primary pair resolves through the cascade (#21567 review)', () => 
     expect(cascade('--on-primary', attrs)).toBe(light['--on-primary'])
   })
 
-  it('no scheme at all: --primary is the sky 500 and the ink is black', () => {
-    expect(cascade('--primary', {})).toBe('var(--color-primary-500)')
+  it('no scheme at all: --primary is the sky 500 literal and the ink is black', () => {
+    expect(cascade('--primary', {})).toBe('#0ea5e9')
     expect(cascade('--on-primary', {})).toBe('var(--color-black)')
   })
 

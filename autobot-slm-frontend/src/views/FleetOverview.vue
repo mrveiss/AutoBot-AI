@@ -460,7 +460,7 @@ const formatLastSeen = formatCompactRelativeTime
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'nodes'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -479,7 +479,7 @@ const formatLastSeen = formatCompactRelativeTime
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'npu'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -498,7 +498,7 @@ const formatLastSeen = formatCompactRelativeTime
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'infrastructure'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -532,7 +532,7 @@ const formatLastSeen = formatCompactRelativeTime
 
       <!-- Loading State -->
       <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" :aria-label="$t('fleetOverview.loadingFleetDataAria')">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
         <span class="sr-only">{{ $t('fleetOverview.loadingFleetData') }}</span>
       </div>
     </div>

@@ -88,7 +88,7 @@ onMounted(() => metricsPoller.start(''))
         <button
           @click="restartPolling"
           :disabled="isLoading"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <svg
             :class="['w-4 h-4', { 'animate-spin': isLoading }]"
@@ -113,14 +113,14 @@ onMounted(() => metricsPoller.start(''))
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="bg-error-50 border border-error-200 rounded-lg p-4">
+    <div v-if="error" class="bg-autobot-error-bg border border-autobot-error-light rounded-lg p-4">
       <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-error-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-autobot-error mt-0.5" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-error-800">{{ $t('monitoring.metricsDetailsView.errorLoadingMetrics') }}</h3>
-          <p class="text-sm text-error-700 mt-1">{{ error }}</p>
+          <h3 class="text-sm font-medium text-autobot-error-hover">{{ $t('monitoring.metricsDetailsView.errorLoadingMetrics') }}</h3>
+          <p class="text-sm text-autobot-error-hover mt-1">{{ error }}</p>
         </div>
       </div>
     </div>
@@ -162,8 +162,8 @@ onMounted(() => metricsPoller.start(''))
           <div
             :class="[
               'text-3xl font-bold',
-              performanceOverview.error_rate > 5 ? 'text-error-600' :
-              performanceOverview.error_rate > 1 ? 'text-warning-600' : 'text-success-600'
+              performanceOverview.error_rate > 5 ? 'text-autobot-error' :
+              performanceOverview.error_rate > 1 ? 'text-autobot-warning' : 'text-autobot-success'
             ]"
           >
             {{ performanceOverview.error_rate.toFixed(2) }}%
@@ -191,7 +191,7 @@ onMounted(() => metricsPoller.start(''))
         </div>
         <div class="space-y-2">
           <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.avgUtilization') }}</div>
-          <div class="text-3xl font-bold text-primary-600">
+          <div class="text-3xl font-bold text-autobot-primary">
             {{ npuFleetMetrics.avg_utilization_percent.toFixed(1) }}%
           </div>
         </div>
@@ -207,7 +207,7 @@ onMounted(() => metricsPoller.start(''))
     <!-- Loading State -->
     <div v-if="isLoading && !fleetMetrics" class="flex items-center justify-center py-12">
       <div class="text-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-autobot-primary mx-auto"></div>
         <p class="text-autobot-text-tertiary mt-4">{{ $t('monitoring.metricsDetailsView.loadingMetrics') }}</p>
       </div>
     </div>

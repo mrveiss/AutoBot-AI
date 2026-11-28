@@ -281,7 +281,7 @@ watch(
           <div class="flex-1">
             <div class="w-full h-4 bg-autobot-bg-active rounded-full overflow-hidden">
               <div
-                class="h-full bg-primary-500 transition-all"
+                class="h-full bg-autobot-primary transition-all"
                 :style="{ width: `${npuStatus?.capabilities?.utilization ?? 0}%` }"
               />
             </div>
@@ -310,7 +310,7 @@ watch(
                 type="checkbox"
                 :checked="workerConfig.assigned_models.includes(model)"
                 @change="toggleModel(model)"
-                class="rounded-sm border-autobot-border-strong text-primary-600 focus:ring-primary-500"
+                class="rounded-sm border-autobot-border-strong text-autobot-primary focus:ring-autobot-primary"
               />
               <span class="text-sm text-autobot-text-primary">{{ model }}</span>
             </div>
@@ -354,7 +354,7 @@ watch(
               <input
                 v-model.number="workerConfig.priority"
                 type="number" min="1" max="10"
-                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-autobot-primary"
               />
             </div>
             <div>
@@ -362,7 +362,7 @@ watch(
               <input
                 v-model.number="workerConfig.weight"
                 type="number" min="1" max="100"
-                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-autobot-primary"
               />
             </div>
           </div>
@@ -373,7 +373,7 @@ watch(
               <input
                 v-model.number="workerConfig.max_concurrent"
                 type="number" min="1"
-                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-autobot-primary"
               />
             </div>
             <div>
@@ -381,7 +381,7 @@ watch(
               <input
                 v-model.number="workerConfig.max_retries"
                 type="number" min="0" max="10"
-                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-autobot-primary"
               />
             </div>
           </div>
@@ -390,7 +390,7 @@ watch(
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.failureAction') }}</label>
             <select
               v-model="workerConfig.failure_action"
-              class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
+              class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-autobot-primary"
             >
               <option value="retry">{{ $t('fleet.nPUDetailsPanel.retryOnSameWorker') }}</option>
               <option value="failover">{{ $t('fleet.nPUDetailsPanel.failoverToAnotherWorker') }}</option>
@@ -402,7 +402,7 @@ watch(
           <button
             @click="saveConfig"
             :disabled="saving"
-            class="w-full px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            class="w-full px-3 py-2 bg-autobot-primary text-autobot-text-on-primary text-sm rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -435,7 +435,7 @@ watch(
         <button
           @click="refreshStatus"
           :disabled="loading"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           <svg
             v-if="loading"

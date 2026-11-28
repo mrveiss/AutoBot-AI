@@ -69,18 +69,18 @@ const nodeMetrics = computed(() => {
 
 function getStatusColor(status: string): string {
   switch (status) {
-    case 'healthy': return 'bg-success-500'
-    case 'degraded': return 'bg-warning-500'
-    case 'unhealthy': return 'bg-error-500'
+    case 'healthy': return 'bg-autobot-success'
+    case 'degraded': return 'bg-autobot-warning'
+    case 'unhealthy': return 'bg-autobot-error'
     case 'offline': return 'bg-autobot-dot-idle'
     default: return 'bg-autobot-dot-idle'
   }
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-error-500'
-  if (value >= 70) return 'text-warning-500'
-  return 'text-success-500'
+  if (value >= 90) return 'text-autobot-error'
+  if (value >= 70) return 'text-autobot-warning'
+  return 'text-autobot-success'
 }
 </script>
 
@@ -96,7 +96,7 @@ function getMetricColor(value: number): string {
           :class="[
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'grafana'
-              ? 'bg-primary-600 text-white'
+              ? 'bg-autobot-primary text-autobot-text-on-primary'
               : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
@@ -110,7 +110,7 @@ function getMetricColor(value: number): string {
           :class="[
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'details'
-              ? 'bg-primary-600 text-white'
+              ? 'bg-autobot-primary text-autobot-text-on-primary'
               : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
@@ -124,7 +124,7 @@ function getMetricColor(value: number): string {
           :class="[
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'metrics'
-              ? 'bg-primary-600 text-white'
+              ? 'bg-autobot-primary text-autobot-text-on-primary'
               : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
@@ -190,9 +190,9 @@ function getMetricColor(value: number): string {
         <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.systemMonitor.systemHealth') }}</p>
           <p class="text-2xl font-bold capitalize" :class="{
-            'text-success-600': systemHealth === 'healthy',
-            'text-warning-600': systemHealth === 'degraded',
-            'text-error-600': systemHealth === 'critical',
+            'text-autobot-success': systemHealth === 'healthy',
+            'text-autobot-warning': systemHealth === 'degraded',
+            'text-autobot-error': systemHealth === 'critical',
             'text-autobot-text-tertiary': systemHealth === 'unknown',
           }">{{ systemHealth }}</p>
         </div>

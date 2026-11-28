@@ -185,12 +185,12 @@ onMounted(() => {
               v-model="pathInput"
               @keydown.enter="goToPath"
               type="text"
-              class="flex-1 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono"
+              class="flex-1 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary text-sm font-mono"
               :placeholder="$t('tools.admin.fileBrowserTool.pathToDirectory')"
             />
             <button
               @click="goToPath"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors text-sm"
             >
               {{ $t('tools.admin.fileBrowserTool.go') }}
             </button>
@@ -215,10 +215,10 @@ onMounted(() => {
             v-for="(crumb, index) in breadcrumbs"
             :key="crumb.path"
             @click="navigateTo(crumb.path)"
-            class="flex items-center gap-1 hover:text-primary-600 transition-colors"
+            class="flex items-center gap-1 hover:text-autobot-primary transition-colors"
           >
             <span v-if="index > 0" class="text-autobot-text-tertiary">/</span>
-            <span :class="index === breadcrumbs.length - 1 ? 'font-medium text-primary-600' : 'text-autobot-text-secondary'">
+            <span :class="index === breadcrumbs.length - 1 ? 'font-medium text-autobot-primary' : 'text-autobot-text-secondary'">
               {{ crumb.name }}
             </span>
           </button>
@@ -229,7 +229,7 @@ onMounted(() => {
 
         <!-- Loading -->
         <div v-if="loading && !files.length" class="flex-1 flex items-center justify-center">
-          <svg class="animate-spin w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
@@ -254,7 +254,7 @@ onMounted(() => {
                 @dblclick="openEntry(entry)"
                 :class="[
                   'hover:bg-autobot-bg-hover cursor-pointer transition-colors',
-                  selectedFile?.name === entry.name ? 'bg-primary-50' : ''
+                  selectedFile?.name === entry.name ? 'bg-autobot-primary-bg' : ''
                 ]"
               >
                 <td class="px-4 py-3 whitespace-nowrap">

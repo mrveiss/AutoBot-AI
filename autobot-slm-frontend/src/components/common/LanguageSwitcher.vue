@@ -37,8 +37,8 @@ const options = computed(() => localeOptions(SUPPORTED_LOCALES))
 /* The sidebar is dark in every theme (Sidebar.vue bg-autobot-bg-tertiary), so the kit
    control wears the sidebar's greys here -- the values the SLM select had. */
 .slm-lang {
-  --aui-color-surface: var(--slm-gray-800);
-  --aui-color-text: var(--slm-gray-300);
-  --aui-color-border: var(--slm-gray-700);
+  --aui-color-surface: var(--slm-bar-hover);
+  --aui-color-text: var(--slm-bar-fg);
+  --aui-color-border: var(--slm-bar-line);
 }
 </style>
