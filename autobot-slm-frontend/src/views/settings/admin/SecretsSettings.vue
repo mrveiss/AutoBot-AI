@@ -328,7 +328,7 @@ onMounted(() => {
     </div>
 
     <!-- Secrets Table -->
-    <div v-else class="bg-white border border-autobot-border rounded-lg overflow-hidden">
+    <div v-else class="bg-autobot-bg-secondary border border-autobot-border rounded-lg overflow-hidden">
       <table class="min-w-full divide-y divide-autobot-border">
         <thead class="bg-autobot-bg-secondary">
           <tr>

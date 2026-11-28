@@ -96,7 +96,7 @@ async function handleAssign(): Promise<void> {
         <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.node') }}</label>
         <select
           v-model="selectedNodeId"
-          class="w-full border border-autobot-border-strong rounded-md p-2 bg-white text-autobot-text-primary"
+          class="w-full border border-autobot-border-strong rounded-md p-2 bg-autobot-bg-input text-autobot-text-primary"
         >
           <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
           <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
