@@ -17,6 +17,8 @@ The run is limited to ``PROVISION_TARGET``, so the manager is only a delegation 
 provisioned itself.
 """
 
+import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 import yaml
@@ -81,6 +83,11 @@ def build_provision_inventory(
 
     deps = sorted({d for r in target_roles for d in ROLE_DEPENDENCIES.get(r, [])})
     managers = slm_manager_hosts(nodes, local_ip_check)
+    if PROVISION_TARGET in managers:  # the dict merge below would silently replace the target's vars
+        raise ValueError(
+            f"SLM manager host {PROVISION_TARGET!r} clashes with the reserved provision inventory host name; "
+            "rename that node"
+        )
     if not managers:
         logger.warning(
             "provision inventory for %s has no SLM manager host: tasks delegated to the SLM will be unreachable",
@@ -95,7 +102,34 @@ def build_provision_inventory(
     return yaml.safe_dump(inventory, sort_keys=False, default_flow_style=False)
 
 
+#: The Node columns the inventory builders read; copied so the build can run in a worker thread.
+_NODE_FIELDS = ("node_id", "hostname", "ip_address", "ssh_user", "ssh_port", "roles", "detected_roles")
+
+
+def _plain(node: Any) -> SimpleNamespace:
+    """A plain-value copy of the Node row's inventory fields (no ORM state crosses to the thread)."""
+    return SimpleNamespace(**{f: getattr(node, f, None) for f in _NODE_FIELDS})
+
+
 async def provision_inventory_for(db: Any, node_id: str, node: Any, target_roles: list[str]) -> str:
-    """:func:`build_provision_inventory` over the node registry, as the fleet update reads it."""
-    nodes = list((await db.execute(select(Node))).scalars().all())
-    return build_provision_inventory(node_id, node, target_roles, nodes, is_local_ip)
+    """:func:`build_provision_inventory` over the node registry, as the fleet update reads it.
+
+    ``is_local_ip`` may block on DNS per node, so the build runs in a worker thread on plain copies.
+    """
+    rows = (await db.execute(select(Node))).scalars().all()
+    nodes = [_plain(n) for n in rows]
+    return await asyncio.to_thread(
+        build_provision_inventory, node_id, _plain(node), list(target_roles), nodes, is_local_ip
+    )
+
+
+def build_decommission_inventory(ip_address: str, ssh_user: str) -> str:
+    """YAML inventory for the decommission run: one ``decommission_target`` host, values safely quoted."""
+    hostvars = {
+        "ansible_host": ip_address,
+        "ansible_user": ssh_user,
+        "ansible_ssh_private_key_file": config.path.ssh_key_path,  # the update inventory's key
+        "ansible_python_interpreter": "/usr/bin/python3",
+    }
+    inventory = {"all": {"hosts": {"decommission_target": hostvars}}}
+    return yaml.safe_dump(inventory, sort_keys=False, default_flow_style=False)

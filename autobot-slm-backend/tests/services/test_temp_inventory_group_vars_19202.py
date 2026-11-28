@@ -236,6 +236,50 @@ def test_the_target_carries_the_nodes_ssh_port() -> None:
     assert _build_for(_fleet(), None)["hosts"]["provision_target"]["ansible_port"] == 22
 
 
+def test_a_manager_host_named_like_the_target_is_refused() -> None:
+    """#22262: a manager named provision_target would replace the target's vars in the hosts map."""
+    fleet = _fleet()
+    fleet.append(SimpleNamespace(**{**vars(fleet[0]), "node_id": "provision_target"}))
+    with pytest.raises(ValueError, match="provision_target"):
+        _build_for(fleet)
+
+
+def test_the_decommission_inventory_quotes_a_key_path_with_a_yaml_comment(monkeypatch) -> None:
+    """#22262: an unquoted ``fleet #1`` key path loaded as ``fleet``; the serializer quotes it."""
+    monkeypatch.setattr(provision_inventory.config.path, "ssh_key_path", "/etc/autobot/ssh/fleet #1")
+    text = provision_inventory.build_decommission_inventory("10.0.0.5", "svc")
+    host = yaml.safe_load(text)["all"]["hosts"]["decommission_target"]
+    assert host["ansible_ssh_private_key_file"] == "/etc/autobot/ssh/fleet #1"
+    assert (host["ansible_host"], host["ansible_user"]) == ("10.0.0.5", "svc")
+
+
+def test_provision_inventory_for_builds_off_the_loop_from_plain_values(monkeypatch) -> None:
+    """#22262: the blocking locality checks run in a worker thread on copies, not ORM rows."""
+    import threading
+
+    seen: dict = {}
+
+    def _spy(node_id, node, roles, nodes, check):
+        seen.update(thread=threading.current_thread(), node=node, nodes=nodes)
+        return "inv"
+
+    class _Result:
+        def scalars(self):
+            return SimpleNamespace(all=lambda: _fleet())
+
+    class _Db:
+        async def execute(self, _stmt):
+            return _Result()
+
+    monkeypatch.setattr(provision_inventory, "build_provision_inventory", _spy)
+    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=22)
+    out = asyncio.run(provision_inventory.provision_inventory_for(_Db(), "n1", target, ["vnc"]))
+    assert out == "inv"
+    assert seen["thread"] is not threading.main_thread()
+    assert all(type(n) is SimpleNamespace for n in [seen["node"], *seen["nodes"]])
+    assert [n.node_id for n in seen["nodes"]] == ["mgr", "n1"] and seen["node"].hostname == "node"
+
+
 _ANSIBLE_ADHOC = shutil.which("ansible")
 
 

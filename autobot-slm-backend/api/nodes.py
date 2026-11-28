@@ -84,7 +84,7 @@ from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.node_events import create_node_event, enrollment_details
-from services.provision_inventory import PROVISION_TARGET, provision_inventory_for
+from services.provision_inventory import PROVISION_TARGET, build_decommission_inventory, provision_inventory_for
 from services.reconciler import reconciler_service
 from services.role_removal_dir import record_role_report, role_removal_path
 from services.ssh_utils import build_ssh_base_cmd
@@ -1362,15 +1362,7 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    inventory_content = (
-        "all:\n"
-        "  hosts:\n"
-        "    decommission_target:\n"
-        f"      ansible_host: {ip_address}\n"
-        f"      ansible_user: {ssh_user}\n"
-        f"      ansible_ssh_private_key_file: {config.path.ssh_key_path}\n"  # the update inventory's key
-        "      ansible_python_interpreter: /usr/bin/python3\n"
-    )
+    inventory_content = build_decommission_inventory(ip_address, ssh_user)
     tmp_inv = write_linked_inventory(inventory_content, "decommission_inv_", executor.ansible_dir)  # #19202
     try:
         result = await executor.execute_playbook(
