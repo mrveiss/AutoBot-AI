@@ -84,6 +84,7 @@ from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.node_events import create_node_event, enrollment_details
+from services.provision_inventory import PROVISION_TARGET, provision_inventory_for
 from services.reconciler import reconciler_service
 from services.role_removal_dir import record_role_report, role_removal_path
 from services.ssh_utils import build_ssh_base_cmd
@@ -1006,43 +1007,21 @@ async def assign_role_to_node(
 async def _execute_provision_playbook(
     db: AsyncSession, node_id: str, node, roles: list, target_roles: list, **playbook_kwargs
 ) -> dict:
-    """Helper for provision_node_roles. Ref: #1088, #2678, #2959.
+    """Helper for provision_node_roles. Ref: #1088, #2678, #2959, #22262.
 
-    Builds a temp single-host inventory from the node's IP, ssh_user, and
-    node_roles (same pattern as setup_wizard.py) so provision-fleet-roles.yml
-    phase conditions evaluate correctly for the target node.
+    The inventory (``services.provision_inventory``) holds the node as ``provision_target`` plus
+    the SLM manager host roles delegate to; the run is limited to the node.
     """
-    import json
-
     from services.playbook_executor import get_playbook_executor
-    from services.role_registry import ROLE_DEPENDENCIES
 
     executor = get_playbook_executor()
-    ssh_user = node.ssh_user or "autobot"
-    roles_yaml = "".join(f"        - {r}\n" for r in target_roles)
-
-    deps: set = set()
-    for r in target_roles:
-        deps.update(ROLE_DEPENDENCIES.get(r, []))
-    deps_yaml = "".join(f"        - {d}\n" for d in sorted(deps))
-
-    inventory_content = (
-        "all:\n"
-        "  hosts:\n"
-        "    provision_target:\n"
-        f"      node_hostname: {json.dumps(node.hostname)}\n"  # the credential name uses it (#22211)
-        f"      slm_node_id: {node_id}\n"  # the vnc role registers its credential only when this is set (#22211)
-        f"      ansible_host: {node.ip_address}\n"
-        f"      ansible_user: {ssh_user}\n"
-        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
-        "      ansible_python_interpreter: /usr/bin/python3\n"
-        "      node_roles:\n" + roles_yaml + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
-    )
+    inventory_content = await provision_inventory_for(db, node_id, node, target_roles)
     tmp_inv = write_linked_inventory(inventory_content, "provision_inv_", executor.ansible_dir)  # #19202
     try:
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
             inventory_path=tmp_inv,
+            limit=[PROVISION_TARGET],
             **playbook_kwargs,
         )
     finally:
@@ -1389,7 +1368,7 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
         "    decommission_target:\n"
         f"      ansible_host: {ip_address}\n"
         f"      ansible_user: {ssh_user}\n"
-        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
+        f"      ansible_ssh_private_key_file: {config.path.ssh_key_path}\n"  # the update inventory's key
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
     tmp_inv = write_linked_inventory(inventory_content, "decommission_inv_", executor.ansible_dir)  # #19202
