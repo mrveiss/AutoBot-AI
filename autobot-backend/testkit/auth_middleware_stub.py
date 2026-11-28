@@ -23,6 +23,15 @@ shards asserted non-admin behaviour and passed on a MagicMock's stringified
 repr rather than the auth logic they name. The catch-all is gone; an
 unstubbed name now raises ``AttributeError`` naming itself, and
 ``repo_tests/conftest_stub_no_autovivify_test.py`` pins that it cannot return.
+
+Testing a refusal (#17343): this stub refuses NOTHING, by design -- its
+``check_admin_permission`` takes no request and returns, so a test left on it
+cannot see an unauthenticated caller turned away (the route body's own 501 would
+answer instead and read as a pass). To test a 401/403, load the real module with
+``load_real_auth_middleware`` / the ``real_auth_middleware`` fixture from
+``tests/conftest.py`` and override the route's stub dependencies with the real
+``get_current_user`` / ``check_admin_permission`` for that test only. Example:
+``api/long_running_operations_17017_test.py::test_an_unauthenticated_request_is_refused_by_the_real_gate``.
 """
 
 from __future__ import annotations

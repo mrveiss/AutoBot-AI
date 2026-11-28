@@ -12,10 +12,12 @@ for: ``get_current_user`` and ``check_admin_permission`` are overridden per test
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from api import long_running_operations as lro
@@ -347,21 +349,105 @@ def test_a_resumed_operation_keeps_its_original_creator(integration, caller, own
 # ---------------------------------------------------------------------------
 
 
-# The behavioural half of #17010's fourth criterion -- "unauthenticated requests
-# are refused" -- CANNOT be written here, and the reason is worth recording where
-# the next person will look for the test.
-#
-# `testkit/auth_middleware_stub.py` replaces the whole `auth_middleware` module in
-# `sys.modules` for backend tests, and its `check_admin_permission` stub takes no
-# request and refuses nothing. A test that mounted this router without the caller
-# overrides and posted to `/codebase/index` gets **501 from the route body** -- the
-# gate never ran, because in this process there is no gate. Asserting a refusal
-# against that stub would be asserting on the stub, and asserting the 501 would
-# read as "anonymous callers reach the route", which is a claim about the harness
-# dressed as a claim about production. Tracked as #17343.
-#
-# What CAN be checked here is that every route declares a gate, which is what the
-# router-level dependency #17010 asked for was meant to guarantee.
+# #17010's fourth criterion -- "unauthenticated requests are refused" -- is written
+# below against the REAL gate. Under pytest `auth_middleware` is the stub in
+# `testkit/auth_middleware_stub.py`, whose `check_admin_permission` takes no request
+# and refuses nothing, so a test left on the stub would get 501 from the route body
+# and prove nothing (#17343). The tests below swap in the real functions through
+# `real_auth_middleware` (tests/conftest.py), for their own test only.
+
+_PREFIX = "/api/long-running"
+_SAMPLE_ID = "op-1"
+_REFUSED = {401, 403}
+
+
+def _real_gate_client(real, routers, monkeypatch) -> TestClient:
+    """Routers mounted behind the REAL `get_current_user` / `check_admin_permission`.
+
+    The routes depend on the stub's functions, so those are the override keys; what
+    answers is the real code. The only thing stood in for is the identity it reads:
+    nobody. A route with no gate never consults either, so it is not refused.
+    """
+    middleware = SimpleNamespace(
+        get_user_from_request=lambda _request: None,
+        _extract_user_from_run_jwt=AsyncMock(return_value=None),
+        _extract_user_from_device_jwt=AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(real, "get_auth_middleware", lambda: middleware)
+    app = FastAPI()
+    for router in routers:
+        app.include_router(router, prefix=_PREFIX)
+    app.dependency_overrides[get_current_user] = real.get_current_user
+    app.dependency_overrides[check_admin_permission] = real.check_admin_permission
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _http_routes(router) -> list:
+    """`(method, path)` for every HTTP route on the router object itself, not a hand list."""
+    return sorted(
+        (method, route.path.replace("{operation_id}", _SAMPLE_ID))
+        for route in router.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    )
+
+
+def _anonymous(client, method, path):
+    return client.request(method, f"{_PREFIX}{path}", json=None if method == "GET" else {})
+
+
+def test_the_route_walk_reaches_every_http_route_on_the_router():
+    """The parametrised test below is only as good as its route list: cross-check it against the source."""
+    import ast
+    import inspect
+
+    declared = [
+        node
+        for node in _route_nodes(ast.parse(inspect.getsource(lro)))
+        if not any(
+            isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "websocket"
+            for d in node.decorator_list
+        )
+    ]
+    assert len(declared) >= _MIN_ROUTES_SEEN - 1
+    assert len(_http_routes(lro.router)) == len(declared)
+
+
+@pytest.mark.parametrize(("method", "path"), _http_routes(lro.router), ids=lambda value: str(value))
+def test_an_unauthenticated_request_is_refused_by_the_real_gate(real_auth_middleware, monkeypatch, method, path):
+    """#17010 (4th criterion), #17343: 401/403 -- NOT the 501 the route body answers for an unrelated reason."""
+    client = _real_gate_client(real_auth_middleware, [lro.router], monkeypatch)
+
+    response = _anonymous(client, method, path)
+
+    assert response.status_code in _REFUSED, f"{method} {path} answered {response.status_code}: {response.text}"
+
+
+def test_the_refusal_test_tells_a_gated_route_from_an_ungated_one(real_auth_middleware, monkeypatch):
+    """Contrast: the same harness must NOT refuse a route with no gate, or it proves nothing (#17343).
+
+    Deleting the gate from a real route turns that route's case above red for the same reason this
+    ungated twin answers 200: nothing consults the real functions.
+    """
+    probe = APIRouter()
+
+    @probe.get("/ungated")
+    async def ungated():
+        return {"reached": True}
+
+    @probe.get("/gated")
+    async def gated(user: dict = Depends(get_current_user)):
+        return {"reached": True}
+
+    @probe.post("/admin-gated", dependencies=[Depends(check_admin_permission)])
+    async def admin_gated():
+        return {"reached": True}
+
+    client = _real_gate_client(real_auth_middleware, [probe], monkeypatch)
+
+    assert _anonymous(client, "GET", "/ungated").status_code == 200
+    assert _anonymous(client, "GET", "/gated").status_code in _REFUSED
+    assert _anonymous(client, "POST", "/admin-gated").status_code in _REFUSED
 
 
 def test_every_route_on_this_router_declares_a_gate():
