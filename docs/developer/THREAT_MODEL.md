@@ -26,7 +26,7 @@ known base · `resolve_within_sandbox` (:291) the file-management sandbox ·
 - Upload **filenames** are their own gate: [`autobot_shared/security/upload_filename_policy.py`](../../autobot_shared/security/upload_filename_policy.py) `is_safe_file(filename, allowed)` / `require_safe_upload` (re-exported by `autobot-backend/security/upload_filename_policy.py`) — a bare name only (no `/`, no `\\`), a per-purpose allow-list (`ALLOWED_EXTENSIONS` documents, `AUDIO_EXTENSIONS`, `IMAGE_EXTENSIONS`, `ZIP_EXTENSIONS`, `TARBALL_EXTENSIONS`), a deny-list by name; every `UploadFile` route reaches it — `repo_tests/upload_routes_call_is_safe_file_guard_19088_test.py` fails on one that does not (#19088) — and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables (`﹒﹒`, `‥`), null byte via encoding,
-symlink pointing out of the root, a `MagicMock` or arbitrary object stringifying into a creatable tree (#14217).
+symlink pointing out of the root, a `MagicMock` or arbitrary object stringifying into a creatable tree (#14217). Validate-then-open by name is itself a TOCTOU (a component swapped for a symlink after the check): open below a root with `open_under_root` in `autobot_shared/security/safe_open.py`, and read code-intelligence sources only through `python_files.read_source_text` (#21289); a refusal is a `ContainmentError` (an `OSError`), so one `except OSError` covers a swapped component and an out-of-root link alike.
 
 ## 2. Session / chat ownership
 

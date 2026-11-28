@@ -13,10 +13,13 @@ uncached (sync) discovery paths cannot disagree (#20493).
 import fnmatch
 import os
 import re
+import threading
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, List, Set
+from typing import Callable, Dict, Iterable, Iterator, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.safe_open import open_under_root, read_text_under_root
 from autobot_shared.testfile_names import is_test_filename
 from utils.file_categorization import ALL_CODE_EXTENSIONS, PYTHON_EXTENSIONS, SKIP_DIRS
 
@@ -169,36 +172,51 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
     return any(_is_skipped_dir(root.joinpath(*parts[:i]), n, excluded, lambda _d: foreign) for i, n in enumerate(parts))
 
 
-def _escapes(path: Path, real_root: Path, excluded: Iterable[str]) -> bool:
-    """True if symlinked leaf *path* resolves outside the root or into an excluded dir."""
+def _leaf_location(real_root: Path, root: Path, dirpath: str, name: str, excluded: Set[str]) -> Path | None:
+    """The path to yield for file *name* in *dirpath*, or ``None`` when it is not a contained, wanted file.
+
+    Resolved through ``open_under_root`` (descriptor-relative, ``O_NOFOLLOW``), so a symlinked leaf is
+    followed only while it stays inside the root and never into an excluded directory (#13602), and a
+    component swapped for an out-of-root link after the walk listed it is refused, not read (#21289).
+    """
+    path = Path(dirpath) / name
+    parts = path.relative_to(root).parts
     try:
-        return is_excluded(path.resolve(), real_root, excluded)
-    except (OSError, RuntimeError):
-        return True  # a loop or unreadable link cannot be placed under the root
+        fd, final = open_under_root(str(real_root), parts)
+    except OSError:
+        return None
+    os.close(fd)
+    # The directory prune is only "may hold wanted files"; whether THIS file is excluded is
+    # ``is_excluded``'s per-file answer, the same one ``matches_exclusion`` gives (#21004).
+    if is_excluded(real_root.joinpath(*final), real_root, excluded) or is_excluded(path, root, excluded):
+        return None
+    return path
 
 
 def _walk_matches(root: Path, patterns: List[str], excluded: Set[str]) -> Iterator[Path]:
-    """Yield files under *root* matching a pattern, pruning excluded dirs while walking."""
+    """Yield files under *root* matching a pattern, pruning excluded dirs while walking.
+
+    ``os.fwalk`` descends by directory descriptor and refuses a subdirectory swapped for a link
+    after it was listed, so the walk itself never leaves the root (#21289).
+    """
     real_root = root.resolve()
+    register_discovery_root(root)
+    if not real_root.is_dir():
+        return
 
     def holds(directory: Path) -> bool:
         return _holds_foreign_source(directory, patterns)
 
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(Path(dirpath), d, excluded, holds)]
+    # Walked by real path (a symlinked root is trusted configuration), reported under the caller's spelling.
+    for real_dir, dirnames, filenames, _fd in os.fwalk(real_root, follow_symlinks=False):
+        shown = root / os.path.relpath(real_dir, real_root)
+        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(shown, d, excluded, holds)]
         for name in filenames:
             if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
                 continue
-            path = Path(dirpath) / name
-            if path.is_symlink() and _escapes(path, real_root, excluded):
-                continue
-            # The directory prune above is only "may hold wanted files"; whether THIS file is
-            # excluded is ``is_excluded``'s per-file answer, the same one ``matches_exclusion``
-            # gives, so ``dead.py`` beside ``view.vue`` in ``backup/`` is dropped by both (#21004).
-            if is_excluded(path, root, excluded):
-                continue
-            if path.is_file():
-                yield path
+            found = _leaf_location(real_root, root, str(shown), name, excluded)
+            if found is not None:
+                yield found
 
 
 def discover_files(
@@ -237,3 +255,47 @@ def cache_covers_exclusions(exclude_dirs: Iterable[str]) -> bool:
     so discovery must walk instead. ``exclude_dirs`` stays authoritative (#20493).
     """
     return ANALYSIS_EXCLUDE_DIRS <= set(exclude_dirs)
+
+
+# Roots that ``discover_files`` has walked (#21289). A detector later reads a discovered path through
+# ``read_source_text``, which looks the root up here: the read then walks from the root descriptor with
+# ``O_NOFOLLOW`` at every step, so a directory swapped for an out-of-root symlink between discovery and
+# read is refused rather than followed. Discovery has no per-file handle to give back: callers receive
+# plain ``Path``/``str`` values (the API stays compatible), so containment is re-established per read
+# from the root, and no file descriptor outlives a call (no leaks on large trees).
+_DISCOVERY_ROOTS: Dict[str, str] = {}  # a root as named (abspath) or resolved (realpath) -> its realpath
+logger = get_logger(__name__)
+_ROOTS_LOCK = threading.Lock()
+
+
+def register_discovery_root(root: str | Path) -> None:
+    """Remember *root* as a tree whose discovered files are read root-relative."""
+    with _ROOTS_LOCK:
+        real = os.path.realpath(root)
+        _DISCOVERY_ROOTS[os.path.abspath(root)] = real
+        _DISCOVERY_ROOTS[real] = real
+
+
+def _locate(path: str | Path) -> Tuple[str, Tuple[str, ...]] | None:
+    """``(root, parts)`` for the longest registered root containing *path*, or ``None`` if none does."""
+    text = os.path.abspath(path)
+    with _ROOTS_LOCK:
+        roots = sorted(_DISCOVERY_ROOTS.items(), key=lambda kv: len(kv[0]), reverse=True)
+    for named, real in roots:
+        if text.startswith(named.rstrip(os.sep) + os.sep):
+            return real, Path(text).relative_to(named).parts
+    return None
+
+
+def read_source_text(path: str | Path, encoding: str = "utf-8", errors: str = "strict") -> str:
+    """The one read of a source file for the code-intelligence detectors (#21289).
+
+    A path below a root ``discover_files`` walked is read descriptor-relative from that root (see above);
+    ``OSError`` (``ContainmentError`` for an out-of-root link) when a component was swapped. A path no discovery
+    covers (a file the caller named directly) is read by name, as ``Path.read_text`` always did.
+    """
+    located = _locate(path)
+    if located is None:
+        logger.debug("read_source_text: reading %s by name (no registered discovery root)", path)
+        return Path(path).read_text(encoding=encoding, errors=errors)
+    return read_text_under_root(located[0], located[1], encoding, errors)

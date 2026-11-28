@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import discover_files
+from code_intelligence.python_files import discover_files, read_source_text
 
 logger = get_logger(__name__)
 
@@ -261,8 +261,7 @@ class ConflictParser:
         """
         conflicts = []
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = read_source_text(file_path).splitlines(keepends=True)
         except Exception as e:
             logger.error("Failed to read file %s: %s", file_path, e)
             return conflicts
@@ -299,8 +298,7 @@ class ConflictParser:
     def has_conflicts(file_path: str) -> bool:
         """Check if file contains unresolved conflicts."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = read_source_text(file_path)
             return "<<<<<<<" in content and "=======" in content and ">>>>>>>" in content
         except Exception as e:
             logger.error("Failed to check conflicts in %s: %s", file_path, e)

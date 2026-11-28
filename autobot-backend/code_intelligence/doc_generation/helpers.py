@@ -17,6 +17,8 @@ import re
 from typing import FrozenSet, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.safe_open import read_text_under_root
+from code_intelligence.python_files import read_source_text
 
 # Issue #380: Module-level frozenset for enum base class checking
 ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
@@ -254,6 +256,18 @@ def extract_all_exports(tree: ast.Module) -> List[str]:
     return []
 
 
+def _read_below(root: str, name: str) -> str | None:
+    """Text of file *name* directly below directory *root*, or ``None`` when absent or refused.
+
+    Read through ``open_under_root`` rooted at *root*, so a *name* swapped for an out-of-root link
+    (``ContainmentError``, an ``OSError``) is skipped rather than followed (#21289).
+    """
+    try:
+        return read_text_under_root(root, (name,), encoding="utf-8")
+    except OSError:
+        return None
+
+
 class PackageContentCache:
     """Cache for pre-loaded package file contents.
 
@@ -284,34 +298,13 @@ class PackageContentCache:
         if self._loaded:
             return
 
-        # Read __init__.py
-        init_path = os.path.join(self.package_path, "__init__.py")
-        if os.path.exists(init_path):
-            try:
-                with open(init_path, "r", encoding="utf-8") as f:
-                    self._init_content = f.read()
-            except OSError:
-                pass
-
-        # Read setup.py (in parent dir)
-        setup_path = os.path.join(os.path.dirname(self.package_path), "setup.py")
-        if os.path.exists(setup_path):
-            try:
-                with open(setup_path, "r", encoding="utf-8") as f:
-                    self._setup_content = f.read()
-            except OSError:
-                pass
-
-        # Read README
+        self._init_content = _read_below(self.package_path, "__init__.py")
+        self._setup_content = _read_below(os.path.dirname(self.package_path), "setup.py")
         for readme_name in README_NAMES:
-            readme_path = os.path.join(self.package_path, readme_name)
-            if os.path.exists(readme_path):
-                try:
-                    with open(readme_path, "r", encoding="utf-8") as f:
-                        self._readme_content = f.read()
-                    break
-                except OSError:
-                    pass
+            content = _read_below(self.package_path, readme_name)
+            if content is not None:
+                self._readme_content = content
+                break
 
         self._loaded = True
 
@@ -453,8 +446,7 @@ def read_and_parse_module(file_path: str) -> Tuple[str, ast.Module] | None:
     logger = get_logger(__name__)
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
+        source = read_source_text(file_path)
     except OSError as e:
         logger.error("Failed to read file %s: %s", file_path, e)
         return None

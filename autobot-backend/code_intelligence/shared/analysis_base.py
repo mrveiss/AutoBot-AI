@@ -30,6 +30,7 @@ from code_intelligence.python_files import (
     TEST_FILE_PATTERN,
     discover_files,
     matches_exclusion,
+    read_source_text,
 )
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
 
@@ -130,7 +131,7 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
                 tree, content = get_ast_with_content(file_path)
                 lines = content.split("\n") if content else []
             else:
-                content = path.read_text(encoding="utf-8")
+                content = read_source_text(path)
                 lines = content.split("\n")
                 try:
                     tree = ast.parse(content)

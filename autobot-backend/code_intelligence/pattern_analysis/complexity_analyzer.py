@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files, read_source_text
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -298,8 +298,7 @@ class ComplexityAnalyzer:
                 if tree is None or not source:
                     return module
             else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    source = f.read()
+                source = read_source_text(file_path)
                 # Parse AST for custom analysis
                 tree = ast.parse(source, filename=file_path)
 

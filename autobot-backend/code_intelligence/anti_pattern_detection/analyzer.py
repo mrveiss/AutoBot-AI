@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import cache_covers_exclusions, collect_python_files, is_excluded
+from code_intelligence.python_files import cache_covers_exclusions, collect_python_files, is_excluded, read_source_text
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 
 from .detectors import (
@@ -135,9 +135,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             file_path: Path to the Python file to analyze
             patterns: List to append detected patterns to. Issue #620.
         """
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
-            lines = source.split("\n")
+        source = read_source_text(file_path)
+        lines = source.split("\n")
 
         result = self._bloater.check_large_file(file_path, len(lines))
         if result:
@@ -200,9 +199,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
                 return None, lines, "Failed to parse AST"
             return tree, lines, None
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
-            lines = source.split("\n")
+        source = read_source_text(file_path)
+        lines = source.split("\n")
         tree = ast.parse(source, filename=file_path)
         return tree, lines, None
 

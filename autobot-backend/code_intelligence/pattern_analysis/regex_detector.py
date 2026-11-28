@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files, read_source_text
 
 from .types import CodeLocation, PatternSeverity, RegexOpportunity
 
@@ -239,8 +239,7 @@ class RegexPatternDetector:
                     return opportunities
                 lines = source.split("\n")
             else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    source = f.read()
+                source = read_source_text(file_path)
                 # Parse AST
                 tree = ast.parse(source, filename=file_path)
                 lines = source.split("\n")

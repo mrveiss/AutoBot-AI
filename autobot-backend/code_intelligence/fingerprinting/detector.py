@@ -33,7 +33,7 @@ from code_intelligence.fingerprinting.types import (
     Fingerprint,
     FingerprintType,
 )
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, read_source_text
 from utils.cancel_tokens import raise_if_cancelled
 
 # Issue #607: Import shared caches for performance optimization
@@ -112,8 +112,7 @@ class CloneDetector:
                 fragments.extend(file_fragments)
                 total_files += 1
 
-                with open(py_file, "r", encoding="utf-8") as f:
-                    total_lines += len(f.readlines())
+                total_lines += len(read_source_text(py_file).splitlines(keepends=True))
             except Exception as e:
                 logger.warning("Failed to process %s: %s", py_file, e)
 
@@ -288,8 +287,7 @@ class CloneDetector:
                 return []
             lines = source.split("\n")
         else:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
+            source = read_source_text(file_path)
             lines = source.split("\n")
             tree = ast.parse(source, filename=file_path)
 

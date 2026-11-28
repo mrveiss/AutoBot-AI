@@ -329,5 +329,49 @@ class TestIntegration:
         assert ast_stats2["hits"] == initial_ast_hits + 3  # Three AST hits
 
 
+def test_nothing_is_cached_for_a_file_that_fails_containment(tmp_path):
+    """#21289: a directory swapped for an out-of-root link after discovery is refused; no AST or content is cached."""
+    import shutil
+
+    from code_intelligence.python_files import discover_files
+
+    ASTCache.reset_instance()
+    root, outside = tmp_path / "project", tmp_path / "outside"
+    (root / "pkg").mkdir(parents=True)
+    outside.mkdir()
+    (root / "pkg" / "mod.py").write_text("inside = 1\n", encoding="utf-8")
+    (outside / "mod.py").write_text("SECRET = 1\n", encoding="utf-8")
+    found = str(discover_files(root)[0])
+    shutil.rmtree(root / "pkg")
+    (root / "pkg").symlink_to(outside, target_is_directory=True)
+    tree, content = get_ast_with_content(found)
+    cache = get_ast_cache()
+    assert (tree, content) == (None, "")
+    assert found not in cache._content_cache
+    assert found not in cache._ast_cache
+    ASTCache.reset_instance()
+
+
+def test_nothing_is_cached_for_a_leaf_swapped_for_an_outside_link(tmp_path):
+    """#21289: a LEAF swapped for an out-of-root link after discovery is refused as OSError; nothing is cached."""
+    from code_intelligence.python_files import discover_files
+
+    ASTCache.reset_instance()
+    root, outside = tmp_path / "project", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "mod.py").write_text("inside = 1\n", encoding="utf-8")
+    (outside / "mod.py").write_text("SECRET = 1\n", encoding="utf-8")
+    found = str(discover_files(root)[0])
+    (root / "mod.py").unlink()
+    (root / "mod.py").symlink_to(outside / "mod.py")
+    tree, content = get_ast_with_content(found)
+    cache = get_ast_cache()
+    assert (tree, content) == (None, "")
+    assert found not in cache._content_cache
+    assert found not in cache._ast_cache
+    ASTCache.reset_instance()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

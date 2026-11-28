@@ -38,7 +38,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
-from code_intelligence.python_files import discover_files
+from code_intelligence.python_files import discover_files, read_source_text
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
@@ -736,7 +736,7 @@ class BugPredictor(_BaseClass):
             if not path.exists():
                 return self._get_default_complexity_result()
 
-            content = path.read_text(encoding="utf-8", errors="ignore")
+            content = read_source_text(path, errors="ignore")
             lines = content.split("\n")
             line_count = len(lines)
 
@@ -879,7 +879,7 @@ class BugPredictor(_BaseClass):
             if not path.exists():
                 return {"lines": 0, "score": 0}
 
-            content = path.read_text(encoding="utf-8", errors="ignore")
+            content = read_source_text(path, errors="ignore")
             lines = len(content.split("\n"))
             score = _calculate_threshold_score(lines, self._FILE_SIZE_THRESHOLDS)
 
@@ -902,7 +902,7 @@ class BugPredictor(_BaseClass):
             if not path.exists():
                 return {"count": 0, "score": 0}
 
-            content = path.read_text(encoding="utf-8", errors="ignore")
+            content = read_source_text(path, errors="ignore")
 
             # Count import statements (Issue #380: use pre-compiled pattern)
             imports = len(_IMPORT_PATTERN_RE.findall(content))
@@ -1165,7 +1165,7 @@ class BugPredictor(_BaseClass):
         path = Path(file_path)
         try:
             # #7467: was sync `path.read_text` blocking the event loop.
-            content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
+            content = await asyncio.to_thread(read_source_text, path, errors="ignore")
             content_sample = content[:1000]
 
             embedding = await self._get_embedding(content_sample)
