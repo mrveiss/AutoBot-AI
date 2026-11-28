@@ -214,7 +214,7 @@ function getNodeHostname(nodeId: string): string {
               <button
                 v-if="backup.status === 'completed' && backup.restorable"
                 @click="handleRestore(backup.backup_id)"
-                class="text-autobot-text-link hover:text-autobot-text-link font-medium"
+                class="text-autobot-text-link hover:text-(--text-link-hover) font-medium"
               >
                 {{ $t('backupsView.restore') }}
               </button>
@@ -239,7 +239,7 @@ function getNodeHostname(nodeId: string): string {
 
     <!-- Backups Loading -->
     <div v-if="isLoadingBackups" class="flex items-center justify-center py-12">
-      <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
     </div>
 
     <!-- Create Backup Dialog -->
@@ -256,7 +256,7 @@ function getNodeHostname(nodeId: string): string {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('backupsView.node') }}</label>
           <select
             v-model="newBackup.node_id"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="">{{ $t('backupsView.selectANode') }}</option>
             <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
@@ -270,7 +270,7 @@ function getNodeHostname(nodeId: string): string {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('backupsView.serviceType') }}</label>
           <select
             v-model="newBackup.service_type"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option v-for="svc in serviceTypes" :key="svc" :value="svc">
               {{ svc }}
@@ -288,7 +288,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           @click="handleCreateBackup"
           :disabled="!newBackup.node_id || isCreatingBackup"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <div v-if="isCreatingBackup" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
           {{ $t('backupsView.createBackup') }}

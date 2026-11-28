@@ -301,7 +301,7 @@ onMounted(() => {
         </div>
         <button
           @click="openAddModal"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -346,7 +346,7 @@ onMounted(() => {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.nPUWorkersSettings.strategy') }}</label>
           <select
             v-model="loadBalancingConfig.strategy"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           >
             <option value="round-robin">{{ $t('settings.admin.nPUWorkersSettings.roundRobin') }}</option>
             <option value="least-loaded">{{ $t('settings.admin.nPUWorkersSettings.leastLoaded') }}</option>
@@ -363,7 +363,7 @@ onMounted(() => {
             type="number"
             min="5"
             max="300"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           />
           <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.admin.nPUWorkersSettings.secondsBetweenHealthChecks') }}</p>
         </div>
@@ -373,7 +373,7 @@ onMounted(() => {
         <button
           @click="saveLoadBalancingConfig"
           :disabled="saving || !loadBalancingConfigLoaded"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -405,7 +405,7 @@ onMounted(() => {
 
       <!-- Loading -->
       <div v-if="loading && workers.length === 0" class="flex items-center justify-center py-12">
-        <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
@@ -419,7 +419,7 @@ onMounted(() => {
         <p class="text-autobot-text-tertiary mb-4">{{ $t('settings.admin.nPUWorkersSettings.noNPUWorkersRegistered') }}</p>
         <button
           @click="openAddModal"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('settings.admin.nPUWorkersSettings.pairYourFirstWorker') }}
         </button>
@@ -519,7 +519,7 @@ onMounted(() => {
                   </button>
                   <button
                     @click="viewMetrics(worker)"
-                    class="p-2 text-autobot-text-tertiary hover:text-primary-500 hover:bg-primary-50 rounded-sm"
+                    class="p-2 text-autobot-text-tertiary hover:text-autobot-primary hover:bg-autobot-primary-bg rounded-sm"
                     :title="$t('settings.admin.nPUWorkersSettings.viewMetrics')"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -529,7 +529,7 @@ onMounted(() => {
                   <!-- Restart returns with its route (#18725). -->
                   <button
                     @click="openEditModal(worker)"
-                    class="p-2 text-autobot-text-tertiary hover:text-primary-500 hover:bg-primary-50 rounded-sm"
+                    class="p-2 text-autobot-text-tertiary hover:text-autobot-primary hover:bg-autobot-primary-bg rounded-sm"
                     :title="$t('settings.admin.nPUWorkersSettings.edit')"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -568,7 +568,7 @@ onMounted(() => {
           <input
             v-model="workerForm.name"
             type="text"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             :placeholder="$t('settings.admin.nPUWorkersSettings.eGNPUWorkerVM2')"
           />
         </div>
@@ -578,7 +578,7 @@ onMounted(() => {
             <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.nPUWorkersSettings.platform') }}</label>
             <select
               v-model="workerForm.platform"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="linux">{{ $t('settings.admin.nPUWorkersSettings.linux') }}</option>
               <option value="windows">{{ $t('settings.admin.nPUWorkersSettings.windows') }}</option>
@@ -590,7 +590,7 @@ onMounted(() => {
             <input
               v-model.number="workerForm.port"
               type="number"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               placeholder="8081"
             />
           </div>
@@ -601,7 +601,7 @@ onMounted(() => {
           <input
             v-model="workerForm.ip_address"
             type="text"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             placeholder="10.0.0.22"
           />
         </div>
@@ -616,7 +616,7 @@ onMounted(() => {
         <button
           @click="saveWorker"
           :disabled="saving"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

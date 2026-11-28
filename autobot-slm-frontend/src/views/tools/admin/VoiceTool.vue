@@ -291,7 +291,7 @@ onUnmounted(() => {
               'w-32 h-32 rounded-full flex items-center justify-center transition-all transform hover:scale-105',
               isListening
                 ? 'bg-autobot-dot-bad hover:bg-autobot-error-solid ring-4 ring-autobot-error'
-                : 'bg-primary-600 hover:bg-primary-700'
+                : 'bg-autobot-primary hover:bg-autobot-primary-hover'
             ]"
           >
             <svg v-if="isListening" class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -315,7 +315,7 @@ onUnmounted(() => {
           <!-- AI Response -->
           <div v-if="spokenText" class="mt-4 p-4 bg-autobot-bg-secondary rounded-lg max-w-lg w-full">
             <div class="flex items-center justify-between mb-1">
-              <p class="text-sm text-primary-600">{{ $t('tools.admin.voiceTool.spoken') }}</p>
+              <p class="text-sm text-autobot-primary">{{ $t('tools.admin.voiceTool.spoken') }}</p>
               <button
                 v-if="isSpeaking"
                 @click="stopSpeaking"
@@ -374,7 +374,7 @@ onUnmounted(() => {
             <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.voiceTool.language') }}</label>
             <select
               v-model="settings.language"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary text-sm"
             >
               <option value="en-US">{{ $t('tools.admin.voiceTool.englishUS') }}</option>
               <option value="en-GB">{{ $t('tools.admin.voiceTool.englishUK') }}</option>
@@ -406,7 +406,7 @@ onUnmounted(() => {
             <input
               v-model="settings.voice"
               type="text"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary text-sm"
             />
           </div>
 
@@ -417,7 +417,7 @@ onUnmounted(() => {
               @click="settings.autoListen = !settings.autoListen"
               :class="[
                 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                settings.autoListen ? 'bg-primary-600' : 'bg-autobot-bg-active'
+                settings.autoListen ? 'bg-autobot-primary' : 'bg-autobot-bg-active'
               ]"
             >
               <span

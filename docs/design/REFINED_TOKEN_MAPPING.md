@@ -139,14 +139,15 @@ All declared once in `design-tokens.css`; none has an existing equivalent except
 apply in every theme and the SLM is always distinguishable from the user frontend.
 
 - Same token **names** as the user frontend: the Refined names and the same existing-name bridge as `refined-map.css`
-  (`--bg-primary`, `--text-primary`, `--border-default`, `--card-bg`, ...), with SLM values. Its `--a11y-*` set now
-  derives from them.
+  (`--bg-primary`, `--text-primary`, `--border-default`, `--card-bg`, ...), with SLM values. Its former `--a11y-*` set is gone: components
+  read the shared names directly (#17566).
 - Themes: no `data-theme` or `light`, `dark`, `contrast`, `mono`. The SLM's own `data-theme="high-contrast"`
   (`useAccessibility.ts`) is left as it is and excluded from the bridge; unifying it with `contrast` is a theme-switching
   change for the SLM, not a token change.
-- Not changed: the sky `--color-primary-*` ramp that Tailwind utilities (`bg-primary-600`) compile against, and the
-  `--aui-*` adapter. Re-pointing the brand ramp at the teal scheme needs a visual pass in every theme (dark has a light
-  teal primary that white text does not suit), and belongs with the component sweep (#17566).
+- The sky `--color-primary-*` ramp is gone (#17566): the Tailwind utilities that compiled against it
+  (`bg-primary-600`) became `bg-autobot-primary` and its `-hover`/`-light`/`-dark`/`-bg` siblings, so they follow the
+  active scheme. Fills carrying text use `text-autobot-text-on-primary`, as dark has a light teal primary. The `--aui-*`
+  adapter is unchanged.
 - SLM-only Refined names are the `--slm-*` identity-bar tokens; they are in the handoff and have no user-frontend use.
 - Sizes (grid, table, form, tooltip) are not declared in the SLM: no SLM component reads them yet.
 
