@@ -4,6 +4,7 @@ import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
 import type { ChatListEntry } from './sessionDates'
 import { fetchChatList } from './sessionList'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
@@ -230,10 +231,9 @@ export class ChatRepository {
     onChunk?: (chunk: ChatStreamResponse) => void,
   ): Promise<void> {
     try {
-      const response = await fetchWithAuth(`${this.baseURL}${getApiBase()}/chat`, {
+      const response = await apiClient.rawRequest('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, chat_id: chatId, stream: true }),
+        body: { message, chat_id: chatId, stream: true },
       })
 
       if (!response.ok) {
@@ -505,10 +505,12 @@ export class ChatRepository {
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.get<SessionFactsResponse>(
-        `${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`,
+      const response = await apiClient.call(
+        'get',
+        '/api/chat-knowledge/chat/sessions/{session_id}/facts',
+        { path: { session_id: sessionId } },
       )
-      return (response.data || response) as SessionFactsResponse
+      return ((response as { data?: unknown }).data || response) as SessionFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
       throw error
@@ -526,14 +528,12 @@ export class ChatRepository {
   ): Promise<PreserveFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.post<PreserveFactsResponse>(
-        `${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`,
-        {
-          fact_ids: factIds,
-          preserve,
-        },
+      const response = await apiClient.call(
+        'post',
+        '/api/chat-knowledge/chat/sessions/{session_id}/facts/preserve',
+        { path: { session_id: sessionId }, body: { fact_ids: factIds, preserve } },
       )
-      return (response.data || response) as PreserveFactsResponse
+      return ((response as { data?: unknown }).data || response) as PreserveFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
       throw error

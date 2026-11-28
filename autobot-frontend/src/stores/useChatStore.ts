@@ -86,1096 +86,1058 @@ export interface ChatSettings {
   persistHistory: boolean
 }
 
-export const useChatStore = defineStore(
-  'chat',
-  () => {
-    // State
-    const sessions = ref<ChatSession[]>([])
-    const currentSessionId = ref<string | null>(null)
-    const isTyping = ref(false)
-    // #11690: extra request-context merged into every send (e.g. { company_id }
-    // when the CEO-chat route is active). Empty by default so the general /chat
-    // is unaffected; scoped views set it on mount and clear it on unmount.
-    const activeChatContext = ref<Record<string, unknown>>({})
-    function setActiveChatContext(ctx: Record<string, unknown>) {
-      activeChatContext.value = { ...ctx }
+export const useChatStore = defineStore('chat', () => {
+  // State
+  const sessions = ref<ChatSession[]>([])
+  const currentSessionId = ref<string | null>(null)
+  const isTyping = ref(false)
+  // #11690: extra request-context merged into every send (e.g. { company_id }
+  // when the CEO-chat route is active). Empty by default so the general /chat
+  // is unaffected; scoped views set it on mount and clear it on unmount.
+  const activeChatContext = ref<Record<string, unknown>>({})
+  function setActiveChatContext(ctx: Record<string, unknown>) {
+    activeChatContext.value = { ...ctx }
+  }
+  // Issue #691: Track streaming preview text for real-time feedback
+  const streamingPreview = ref<string>('')
+  // Issue #680: pending approval, per chat (#21357), to prevent polling race conditions
+  const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(currentSessionId, sessions)
+  const sidebarCollapsed = ref(false)
+  // Issue #671: Track initialization state for loading indicators
+  const isInitializing = ref(false)
+  const initializationError = ref<string | null>(null)
+  // #9724: agent type selected from the command palette (personality display).
+  // CommandPalette.startAgent() called setCurrentAgentType() which did not
+  // exist on this store — a guaranteed runtime TypeError.
+  const currentAgentType = ref<string | null>(null)
+  const settings = ref<ChatSettings>({
+    model: 'gpt-4',
+    temperature: 0.7,
+    maxTokens: 2048,
+    systemPrompt: '',
+    persistHistory: true
+  })
+
+  // Computed
+  const currentSession = computed(() =>
+    sessions.value.find(session => session.id === currentSessionId.value)
+  )
+
+  // #21846: backend-internal bookkeeping is filtered here, so counts, previews and export never see it either
+  const currentMessages = computed(() => visibleMessages(currentSession.value?.messages ?? []))
+
+  const sessionCount = computed(() => sessions.value.length)
+
+  const hasActiveSessions = computed(() => sessionCount.value > 0)
+
+  const _sessionTitles = computed(() =>
+    sessions.value.map(s => ({
+      id: s.id,
+      title: s.title,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }))
+  )
+
+  // Actions
+  function createNewSession(title?: string, sessionId?: string): string {
+    // MVA-164: Accept optional client-minted UUID; generate only if not provided
+    const finalSessionId = sessionId || generateChatId()
+    const newSession: ChatSession = {
+      id: finalSessionId,
+      title: title || `Chat ${sessions.value.length + 1}`,
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true
     }
-    // Issue #691: Track streaming preview text for real-time feedback
-    const streamingPreview = ref<string>('')
-    // Issue #680: pending approval, per chat (#21357), to prevent polling race conditions
-    const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(
-      currentSessionId,
-      sessions,
-    )
-    const sidebarCollapsed = ref(false)
-    // Issue #671: Track initialization state for loading indicators
-    const isInitializing = ref(false)
-    const initializationError = ref<string | null>(null)
-    // #9724: agent type selected from the command palette (personality display).
-    // CommandPalette.startAgent() called setCurrentAgentType() which did not
-    // exist on this store — a guaranteed runtime TypeError.
-    const currentAgentType = ref<string | null>(null)
-    const settings = ref<ChatSettings>({
-      model: 'gpt-4',
-      temperature: 0.7,
-      maxTokens: 2048,
-      systemPrompt: '',
-      persistHistory: true,
-    })
 
-    // Computed
-    const currentSession = computed(() =>
-      sessions.value.find((session) => session.id === currentSessionId.value),
-    )
+    // Deactivate other sessions
+    sessions.value.forEach(session => { session.isActive = false })
 
-    // #21846: backend-internal bookkeeping is filtered here, so counts, previews and export never see it either
-    const currentMessages = computed(() => visibleMessages(currentSession.value?.messages ?? []))
+    sessions.value.unshift(newSession)
+    currentSessionId.value = finalSessionId
 
-    const sessionCount = computed(() => sessions.value.length)
+    // Issue #709: Reset typing state when creating new session
+    // This prevents stale typing indicator from previous session
+    isTyping.value = false
+    streamingPreview.value = ''
 
-    const hasActiveSessions = computed(() => sessionCount.value > 0)
+    return finalSessionId
+  }
 
-    const _sessionTitles = computed(() =>
-      sessions.value.map((s) => ({
-        id: s.id,
-        title: s.title,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      })),
-    )
-
-    // Actions
-    function createNewSession(title?: string, sessionId?: string): string {
-      // MVA-164: Accept optional client-minted UUID; generate only if not provided
-      const finalSessionId = sessionId || generateChatId()
-      const newSession: ChatSession = {
-        id: finalSessionId,
-        title: title || `Chat ${sessions.value.length + 1}`,
-        messages: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isActive: true,
+  /**
+   * #14820: create a session the backend owns, and adopt the id it assigns.
+   *
+   * `createNewSession` mints an id in the browser, which is why two clients
+   * could never converge — each was its own source of truth. Prefer this for
+   * any new conversation; it falls back to the local path only when the
+   * backend is unreachable, and says so rather than pretending it succeeded.
+   */
+  async function createServerSession(title?: string): Promise<{ id: string; authoritative: boolean }> {
+    try {
+      // ApiClient returns the parsed body directly (Promise<T>), not an
+      // axios-style { data } envelope — the backend's own DataResponse wrapper
+      // is the single `data` level here.
+      const body = await apiClient.post<{ data?: { session_id?: string; id?: string } }>(
+        '/api/chat/sessions',
+        { title }
+      )
+      const serverId = body?.data?.session_id ?? body?.data?.id
+      if (serverId) {
+        return { id: createNewSession(title, serverId), authoritative: true }
       }
+      logger.warn('Session create returned no id; falling back to a local session')
+    } catch (error: unknown) {
+      logger.warn('Session create failed; falling back to a local session', error)
+    }
+    // Local fallback: usable offline, but this session is NOT synchronized to
+    // other clients until it is reconciled with the backend.
+    return { id: createNewSession(title), authoritative: false }
+  }
 
+  function switchToSession(sessionId: string) {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
       // Deactivate other sessions
-      sessions.value.forEach((session) => {
-        session.isActive = false
-      })
+      sessions.value.forEach(s => { s.isActive = false })
+      session.isActive = true
+      currentSessionId.value = sessionId
 
-      sessions.value.unshift(newSession)
-      currentSessionId.value = finalSessionId
-
-      // Issue #709: Reset typing state when creating new session
+      // Issue #709: Reset typing state when switching sessions
       // This prevents stale typing indicator from previous session
       isTyping.value = false
       streamingPreview.value = ''
-
-      return finalSessionId
     }
+  }
 
-    /**
-     * #14820: create a session the backend owns, and adopt the id it assigns.
-     *
-     * `createNewSession` mints an id in the browser, which is why two clients
-     * could never converge — each was its own source of truth. Prefer this for
-     * any new conversation; it falls back to the local path only when the
-     * backend is unreachable, and says so rather than pretending it succeeded.
-     */
-    async function createServerSession(
-      title?: string,
-    ): Promise<{ id: string; authoritative: boolean }> {
-      try {
-        // ApiClient returns the parsed body directly (Promise<T>), not an
-        // axios-style { data } envelope — the backend's own DataResponse wrapper
-        // is the single `data` level here.
-        const body = await apiClient.post<{ data?: { session_id?: string; id?: string } }>(
-          '/api/chat/sessions',
-          { title },
-        )
-        const serverId = body?.data?.session_id ?? body?.data?.id
-        if (serverId) {
-          return { id: createNewSession(title, serverId), authoritative: true }
-        }
-        logger.warn('Session create returned no id; falling back to a local session')
-      } catch (error: unknown) {
-        logger.warn('Session create failed; falling back to a local session', error)
+  /**
+   * #14821: ids of locally-applied messages the server has not confirmed yet.
+   *
+   * The store renders these immediately so typing still feels instant, but they
+   * are not confirmed state. A server echo promotes one (`confirmMessage`); a
+   * rejection removes it and reverts its optimistic effect (`rejectMessage`).
+   * Conflicts are server-wins — the backend is the authority (#14820).
+   *
+   * This is what replaces the #11843 id-matching dedup: identity is now
+   * explicit rather than inferred by comparing two id fields after the fact.
+   */
+  const pendingMessageIds = ref<Set<string>>(new Set())
+
+  /** True while any locally-applied message is still unconfirmed. */
+  const hasPendingMessages = computed(() => pendingMessageIds.value.size > 0)
+
+  /**
+   * #14821: mark a locally-applied message as confirmed by the server.
+   * Optionally rewrites the local id to the server-assigned one so later
+   * echoes match by identity rather than by heuristic.
+   */
+  function confirmMessage(localId: string, serverId?: string): boolean {
+    if (!pendingMessageIds.value.has(localId)) return false
+    pendingMessageIds.value.delete(localId)
+    if (serverId && serverId !== localId) {
+      const session = sessions.value.find(s => s.messages.some(m => m.id === localId))
+      const message = session?.messages.find(m => m.id === localId)
+      if (message) message.id = serverId
+    }
+    // Reassign to trigger Vue reactivity on the Set.
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
+    return true
+  }
+
+  /**
+   * #14821: the server refused a locally-applied message. Remove it and say
+   * why — a silent revert leaves the user believing it was sent.
+   */
+  function rejectMessage(localId: string, reason?: string): boolean {
+    if (!pendingMessageIds.value.has(localId)) return false
+    pendingMessageIds.value.delete(localId)
+    for (const session of sessions.value) {
+      const index = session.messages.findIndex(m => m.id === localId)
+      if (index !== -1) {
+        session.messages.splice(index, 1)
+        break
       }
-      // Local fallback: usable offline, but this session is NOT synchronized to
-      // other clients until it is reconciled with the backend.
-      return { id: createNewSession(title), authoritative: false }
     }
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
+    logger.warn(`Message ${localId} rejected by server: ${reason || 'no reason given'}`)
+    return true
+  }
 
-    function switchToSession(sessionId: string) {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (session) {
-        // Deactivate other sessions
-        sessions.value.forEach((s) => {
-          s.isActive = false
-        })
-        session.isActive = true
-        currentSessionId.value = sessionId
+  /**
+   * #14820: replace a session's contents with the server's version.
+   *
+   * Used on initial load and after a resync directive, when the local view is
+   * known to be untrustworthy. Pending messages are dropped deliberately —
+   * after a resync we cannot know whether they landed, and the server snapshot
+   * is the authority.
+   */
+  function applyServerSnapshot(sessionId: string, messages: ChatMessage[]): void {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return
+    session.messages = [...messages]
+    session.updatedAt = new Date()
+    // The snapshot is authoritative, so nothing can still be awaiting an answer
+    // against it. A pending message that appears in the snapshot has landed —
+    // it is confirmed, not still pending; one that does not appear did not land,
+    // and has just been replaced away. Either way the pending set is empty.
+    //
+    // Retaining the ones present in the snapshot (as this did) left them stuck
+    // in a permanent 'sending' state for messages the server already held.
+    pendingMessageIds.value = new Set()
+  }
 
-        // Issue #709: Reset typing state when switching sessions
-        // This prevents stale typing indicator from previous session
-        isTyping.value = false
-        streamingPreview.value = ''
+  /**
+   * #14821: correlate an inbound server message with a message we sent.
+   *
+   * Our optimistic copy carries a locally generated id while the echo carries
+   * the server's, so ids alone cannot match them. Correlating on
+   * (sender, content) among *pending* messages only — confirmed history is
+   * never rescanned — keeps the echo from rendering a second bubble.
+   *
+   * LIMITATION, stated rather than hidden: two identical unconfirmed messages
+   * from the same sender are indistinguishable here, and the older one is
+   * confirmed first. The complete fix is a client-supplied correlation id that
+   * the backend echoes back (AHP calls this `origin.clientSeq`); this function
+   * is the seam that fix would replace, and nothing else needs to change.
+   *
+   * Returns the local id it confirmed, or null when the message is genuinely
+   * from another client.
+   */
+  function correlatePendingMessage(sessionId: string, message: ChatMessage): string | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+    for (const localId of pendingMessageIds.value) {
+      const candidate = session.messages.find(m => m.id === localId)
+      if (!candidate) continue
+      if (candidate.sender === message.sender && candidate.content === message.content) {
+        confirmMessage(localId, message.id)
+        return localId
       }
     }
+    return null
+  }
 
-    /**
-     * #14821: ids of locally-applied messages the server has not confirmed yet.
-     *
-     * The store renders these immediately so typing still feels instant, but they
-     * are not confirmed state. A server echo promotes one (`confirmMessage`); a
-     * rejection removes it and reverts its optimistic effect (`rejectMessage`).
-     * Conflicts are server-wins — the backend is the authority (#14820).
-     *
-     * This is what replaces the #11843 id-matching dedup: identity is now
-     * explicit rather than inferred by comparing two id fields after the fact.
-     */
-    const pendingMessageIds = ref<Set<string>>(new Set())
+  /**
+   * #14820: apply a message that originated on another client.
+   *
+   * Ignores one we already hold, and first checks whether it is really the
+   * echo of something we sent — otherwise our own message would come back as
+   * a duplicate bubble.
+   */
+  function applyRemoteMessage(sessionId: string, message: ChatMessage): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+    if (session.messages.some(m => m.id === message.id)) return false
+    if (correlatePendingMessage(sessionId, message) !== null) return false
+    session.messages.push(message)
+    session.updatedAt = new Date()
+    return true
+  }
 
-    /** True while any locally-applied message is still unconfirmed. */
-    const hasPendingMessages = computed(() => pendingMessageIds.value.size > 0)
+  /**
+   * #21357: the session a write targets. An explicit `sessionId` pins the write to the chat that
+   * originated it (a response stream keeps writing to its own chat after the person switches away);
+   * omitted, it is the open chat. An explicit id that no longer exists resolves to undefined, so the
+   * write is dropped instead of landing in whichever chat is open.
+   */
+  function resolveSession(sessionId?: string): ChatSession | undefined {
+    if (sessionId === undefined) return currentSession.value
+    return sessions.value.find(s => s.id === sessionId)
+  }
 
-    /**
-     * #14821: mark a locally-applied message as confirmed by the server.
-     * Optionally rewrites the local id to the server-assigned one so later
-     * echoes match by identity rather than by heuristic.
-     */
-    function confirmMessage(localId: string, serverId?: string): boolean {
-      if (!pendingMessageIds.value.has(localId)) return false
-      pendingMessageIds.value.delete(localId)
-      if (serverId && serverId !== localId) {
-        const session = sessions.value.find((s) => s.messages.some((m) => m.id === localId))
-        const message = session?.messages.find((m) => m.id === localId)
-        if (message) message.id = serverId
-      }
-      // Reassign to trigger Vue reactivity on the Set.
-      pendingMessageIds.value = new Set(pendingMessageIds.value)
-      return true
-    }
-
-    /**
-     * #14821: the server refused a locally-applied message. Remove it and say
-     * why — a silent revert leaves the user believing it was sent.
-     */
-    function rejectMessage(localId: string, reason?: string): boolean {
-      if (!pendingMessageIds.value.has(localId)) return false
-      pendingMessageIds.value.delete(localId)
-      for (const session of sessions.value) {
-        const index = session.messages.findIndex((m) => m.id === localId)
-        if (index !== -1) {
-          session.messages.splice(index, 1)
-          break
-        }
-      }
-      pendingMessageIds.value = new Set(pendingMessageIds.value)
-      logger.warn(`Message ${localId} rejected by server: ${reason || 'no reason given'}`)
-      return true
-    }
-
-    /**
-     * #14820: replace a session's contents with the server's version.
-     *
-     * Used on initial load and after a resync directive, when the local view is
-     * known to be untrustworthy. Pending messages are dropped deliberately —
-     * after a resync we cannot know whether they landed, and the server snapshot
-     * is the authority.
-     */
-    function applyServerSnapshot(sessionId: string, messages: ChatMessage[]): void {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return
-      session.messages = [...messages]
-      session.updatedAt = new Date()
-      // The snapshot is authoritative, so nothing can still be awaiting an answer
-      // against it. A pending message that appears in the snapshot has landed —
-      // it is confirmed, not still pending; one that does not appear did not land,
-      // and has just been replaced away. Either way the pending set is empty.
-      //
-      // Retaining the ones present in the snapshot (as this did) left them stuck
-      // in a permanent 'sending' state for messages the server already held.
-      pendingMessageIds.value = new Set()
-    }
-
-    /**
-     * #14821: correlate an inbound server message with a message we sent.
-     *
-     * Our optimistic copy carries a locally generated id while the echo carries
-     * the server's, so ids alone cannot match them. Correlating on
-     * (sender, content) among *pending* messages only — confirmed history is
-     * never rescanned — keeps the echo from rendering a second bubble.
-     *
-     * LIMITATION, stated rather than hidden: two identical unconfirmed messages
-     * from the same sender are indistinguishable here, and the older one is
-     * confirmed first. The complete fix is a client-supplied correlation id that
-     * the backend echoes back (AHP calls this `origin.clientSeq`); this function
-     * is the seam that fix would replace, and nothing else needs to change.
-     *
-     * Returns the local id it confirmed, or null when the message is genuinely
-     * from another client.
-     */
-    function correlatePendingMessage(sessionId: string, message: ChatMessage): string | null {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return null
-      for (const localId of pendingMessageIds.value) {
-        const candidate = session.messages.find((m) => m.id === localId)
-        if (!candidate) continue
-        if (candidate.sender === message.sender && candidate.content === message.content) {
-          confirmMessage(localId, message.id)
-          return localId
-        }
-      }
+  function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>, sessionId?: string): string | null {
+    // #6746: don't auto-create a session as a side effect of addMessage.
+    // The previous fallback was a major source of session_id churn (#6745):
+    // any state path that nulled currentSession (page mount, sync, race)
+    // caused subsequent stream chunks to spawn a new session, scattering
+    // assistant replies across blank "Chat N" sidebar entries. Now callers
+    // must own session lifecycle explicitly.
+    const target = resolveSession(sessionId)
+    if (!target) {
+      logger.error(
+        'addMessage called with no target session — message dropped. ' +
+          'Caller must invoke createNewSession() first.',
+        message,
+      )
       return null
     }
 
-    /**
-     * #14820: apply a message that originated on another client.
-     *
-     * Ignores one we already hold, and first checks whether it is really the
-     * echo of something we sent — otherwise our own message would come back as
-     * a duplicate bubble.
-     */
-    function applyRemoteMessage(sessionId: string, message: ChatMessage): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return false
-      if (session.messages.some((m) => m.id === message.id)) return false
-      if (correlatePendingMessage(sessionId, message) !== null) return false
-      session.messages.push(message)
-      session.updatedAt = new Date()
-      return true
+    const newMessage: ChatMessage = {
+      id: generateMessageId(),
+      timestamp: new Date(),
+      ...message
     }
 
-    /**
-     * #21357: the session a write targets. An explicit `sessionId` pins the write to the chat that
-     * originated it (a response stream keeps writing to its own chat after the person switches away);
-     * omitted, it is the open chat. An explicit id that no longer exists resolves to undefined, so the
-     * write is dropped instead of landing in whichever chat is open.
-     */
-    function resolveSession(sessionId?: string): ChatSession | undefined {
-      if (sessionId === undefined) return currentSession.value
-      return sessions.value.find((s) => s.id === sessionId)
+    target.messages.push(newMessage)
+    target.updatedAt = new Date()
+
+    // #14821: applied optimistically — the UI shows it now, but it is not
+    // confirmed state until the server echoes it back.
+    pendingMessageIds.value.add(newMessage.id)
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
+
+    return newMessage.id
+  }
+
+  /**
+   * Issue #650: Add or update a message with ID-based deduplication.
+   * Issue #656: Enhanced with version-based updates to prevent processing old chunks.
+   * Issue #11843: Dedup by the STABLE backend server id so a re-hydration / poll /
+   *   live-event echo updates the existing bubble instead of rendering a second one.
+   *
+   * Used for streaming messages where chunks arrive with the same ID, and for any
+   * backend-originated message that may be delivered twice by the two event buses
+   * (RedisEventStreamManager vs LiveEventManager). The server id can surface either
+   * as the frontend `id` (stream/normal path) or as `message_id` (poll/echo path);
+   * both are treated as the same identity. The version field ensures we only process
+   * newer streaming updates.
+   *
+   * @param message - Message with optional id, message_id and version fields
+   * @returns The message ID (new or existing)
+   */
+  function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }, sessionId?: string): string {
+    if (sessionId === undefined && !currentSession.value) {
+      createNewSession()
+    }
+    const target = resolveSession(sessionId)
+    if (!target) {
+      logger.warn(`addOrUpdateMessage: session ${sessionId} is gone, message dropped`)
+      return ''
     }
 
-    function addMessage(
-      message: Omit<ChatMessage, 'id' | 'timestamp'>,
-      sessionId?: string,
-    ): string | null {
-      // #6746: don't auto-create a session as a side effect of addMessage.
-      // The previous fallback was a major source of session_id churn (#6745):
-      // any state path that nulled currentSession (page mount, sync, race)
-      // caused subsequent stream chunks to spawn a new session, scattering
-      // assistant replies across blank "Chat N" sidebar entries. Now callers
-      // must own session lifecycle explicitly.
-      const target = resolveSession(sessionId)
-      if (!target) {
-        logger.error(
-          'addMessage called with no target session — message dropped. ' +
-            'Caller must invoke createNewSession() first.',
-          message,
-        )
-        return null
-      }
+    // #11843: Resolve the stable server identity. The stream/normal path carries
+    // it as `id`; a poll or live-event echo carries it as `message_id`. Match an
+    // existing message on either field so the same reply never double-renders.
+    const serverId = message.id ?? message.message_id
+    if (serverId) {
+      const existingIndex = target.messages.findIndex(
+        m => m.id === serverId || m.message_id === serverId
+      )
+      if (existingIndex >= 0) {
+        const existing = target.messages[existingIndex]
 
-      const newMessage: ChatMessage = {
-        id: generateMessageId(),
-        timestamp: new Date(),
-        ...message,
-      }
+        // Issue #656: Version-based deduplication - skip if we already have this or newer version
+        const incomingVersion = message.metadata?.version ?? 0
+        const existingVersion = existing.metadata?.version ?? 0
 
-      target.messages.push(newMessage)
-      target.updatedAt = new Date()
-
-      // #14821: applied optimistically — the UI shows it now, but it is not
-      // confirmed state until the server echoes it back.
-      pendingMessageIds.value.add(newMessage.id)
-      pendingMessageIds.value = new Set(pendingMessageIds.value)
-
-      return newMessage.id
-    }
-
-    /**
-     * Issue #650: Add or update a message with ID-based deduplication.
-     * Issue #656: Enhanced with version-based updates to prevent processing old chunks.
-     * Issue #11843: Dedup by the STABLE backend server id so a re-hydration / poll /
-     *   live-event echo updates the existing bubble instead of rendering a second one.
-     *
-     * Used for streaming messages where chunks arrive with the same ID, and for any
-     * backend-originated message that may be delivered twice by the two event buses
-     * (RedisEventStreamManager vs LiveEventManager). The server id can surface either
-     * as the frontend `id` (stream/normal path) or as `message_id` (poll/echo path);
-     * both are treated as the same identity. The version field ensures we only process
-     * newer streaming updates.
-     *
-     * @param message - Message with optional id, message_id and version fields
-     * @returns The message ID (new or existing)
-     */
-    function addOrUpdateMessage(
-      message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] },
-      sessionId?: string,
-    ): string {
-      if (sessionId === undefined && !currentSession.value) {
-        createNewSession()
-      }
-      const target = resolveSession(sessionId)
-      if (!target) {
-        logger.warn(`addOrUpdateMessage: session ${sessionId} is gone, message dropped`)
-        return ''
-      }
-
-      // #11843: Resolve the stable server identity. The stream/normal path carries
-      // it as `id`; a poll or live-event echo carries it as `message_id`. Match an
-      // existing message on either field so the same reply never double-renders.
-      const serverId = message.id ?? message.message_id
-      if (serverId) {
-        const existingIndex = target.messages.findIndex(
-          (m) => m.id === serverId || m.message_id === serverId,
-        )
-        if (existingIndex >= 0) {
-          const existing = target.messages[existingIndex]
-
-          // Issue #656: Version-based deduplication - skip if we already have this or newer version
-          const incomingVersion = message.metadata?.version ?? 0
-          const existingVersion = existing.metadata?.version ?? 0
-
-          if (incomingVersion <= existingVersion) {
-            // Already processed this version (or an echo of it) - no-op, keep one bubble
-            logger.debug(
-              `[#11843] Skipping duplicate/old version for serverId=${serverId}: incoming=${incomingVersion}, existing=${existingVersion}`,
-            )
-            return existing.id
-          }
-
-          // Update existing message (streaming chunk accumulation)
-          target.messages[existingIndex] = {
-            ...existing,
-            content: message.content, // Replace with accumulated content
-            type: message.type || existing.type, // Issue #650: Preserve display type
-            // #11843: persist the backend id so later echoes on either field match
-            message_id: message.message_id ?? existing.message_id ?? serverId,
-            metadata: {
-              ...existing.metadata,
-              ...message.metadata,
-              version: incomingVersion, // Track version for next comparison
-            },
-          }
-          target.updatedAt = new Date()
-          logger.debug(
-            `[#11843] Reconciled message ${existing.id} (serverId=${serverId}) to version ${incomingVersion}`,
-          )
+        if (incomingVersion <= existingVersion) {
+          // Already processed this version (or an echo of it) - no-op, keep one bubble
+          logger.debug(`[#11843] Skipping duplicate/old version for serverId=${serverId}: incoming=${incomingVersion}, existing=${existingVersion}`)
           return existing.id
         }
-      }
 
-      // Add new message
-      const newMessage: ChatMessage = {
-        id: message.id || generateMessageId(),
-        timestamp: new Date(),
-        content: message.content,
-        sender: message.sender,
-        type: message.type,
-        status: message.status,
-        // #11843: persist the backend id so a later poll/echo dedups against it
-        message_id: message.message_id,
-        metadata: message.metadata,
-      }
-
-      target.messages.push(newMessage)
-      target.updatedAt = new Date()
-      logger.debug(
-        `[#11843] Added new message: ${newMessage.id}, serverId=${serverId ?? 'none'}, version: ${message.metadata?.version ?? 0}`,
-      )
-
-      return newMessage.id
-    }
-
-    function updateMessage(messageId: string, updates: Partial<ChatMessage>, sessionId?: string) {
-      const target = resolveSession(sessionId)
-      if (!target) return
-      const msgs = target.messages
-
-      // Issue #1316: Fast path — streaming always updates the last message
-      const lastIdx = msgs.length - 1
-      if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
-        msgs[lastIdx] = { ...msgs[lastIdx], ...updates }
-        target.updatedAt = new Date()
-        return
-      }
-
-      // Fallback for non-streaming updates
-      const messageIndex = msgs.findIndex((m) => m.id === messageId)
-      if (messageIndex !== -1) {
-        msgs[messageIndex] = { ...msgs[messageIndex], ...updates }
-        target.updatedAt = new Date()
-      }
-    }
-
-    /**
-     * Update metadata for a specific message.
-     * Properly triggers Vue reactivity for nested metadata updates.
-     *
-     * @param messageId - The message ID to update
-     * @param metadataUpdates - Partial metadata to merge
-     * @returns true if message was found and updated
-     */
-    function updateMessageMetadata(
-      messageId: string,
-      metadataUpdates: Record<string, unknown>,
-      sessionId?: string,
-    ): boolean {
-      const target = resolveSession(sessionId)
-      if (!target) return false
-      const msgs = target.messages
-
-      // Issue #1316: Fast path — check last message first
-      const lastIdx = msgs.length - 1
-      let idx = -1
-      if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
-        idx = lastIdx
-      } else {
-        idx = msgs.findIndex((m) => m.id === messageId)
-      }
-
-      if (idx !== -1) {
-        const message = msgs[idx]
-        msgs[idx] = {
-          ...message,
+        // Update existing message (streaming chunk accumulation)
+        target.messages[existingIndex] = {
+          ...existing,
+          content: message.content,  // Replace with accumulated content
+          type: message.type || existing.type,  // Issue #650: Preserve display type
+          // #11843: persist the backend id so later echoes on either field match
+          message_id: message.message_id ?? existing.message_id ?? serverId,
           metadata: {
+            ...existing.metadata,
             ...message.metadata,
-            ...(metadataUpdates as Record<string, string | number | boolean | undefined>),
-          },
+            version: incomingVersion  // Track version for next comparison
+          }
         }
         target.updatedAt = new Date()
-        logger.debug(`[METADATA] Updated message ${messageId} metadata:`, metadataUpdates)
-        return true
+        logger.debug(`[#11843] Reconciled message ${existing.id} (serverId=${serverId}) to version ${incomingVersion}`)
+        return existing.id
       }
-      logger.warn(`[METADATA] Message not found for metadata update: ${messageId}`)
+    }
+
+    // Add new message
+    const newMessage: ChatMessage = {
+      id: message.id || generateMessageId(),
+      timestamp: new Date(),
+      content: message.content,
+      sender: message.sender,
+      type: message.type,
+      status: message.status,
+      // #11843: persist the backend id so a later poll/echo dedups against it
+      message_id: message.message_id,
+      metadata: message.metadata
+    }
+
+    target.messages.push(newMessage)
+    target.updatedAt = new Date()
+    logger.debug(`[#11843] Added new message: ${newMessage.id}, serverId=${serverId ?? 'none'}, version: ${message.metadata?.version ?? 0}`)
+
+    return newMessage.id
+  }
+
+  function updateMessage(messageId: string, updates: Partial<ChatMessage>, sessionId?: string) {
+    const target = resolveSession(sessionId)
+    if (!target) return
+    const msgs = target.messages
+
+    // Issue #1316: Fast path — streaming always updates the last message
+    const lastIdx = msgs.length - 1
+    if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
+      msgs[lastIdx] = { ...msgs[lastIdx], ...updates }
+      target.updatedAt = new Date()
+      return
+    }
+
+    // Fallback for non-streaming updates
+    const messageIndex = msgs.findIndex(m => m.id === messageId)
+    if (messageIndex !== -1) {
+      msgs[messageIndex] = { ...msgs[messageIndex], ...updates }
+      target.updatedAt = new Date()
+    }
+  }
+
+  /**
+   * Update metadata for a specific message.
+   * Properly triggers Vue reactivity for nested metadata updates.
+   *
+   * @param messageId - The message ID to update
+   * @param metadataUpdates - Partial metadata to merge
+   * @returns true if message was found and updated
+   */
+  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, unknown>, sessionId?: string): boolean {
+    const target = resolveSession(sessionId)
+    if (!target) return false
+    const msgs = target.messages
+
+    // Issue #1316: Fast path — check last message first
+    const lastIdx = msgs.length - 1
+    let idx = -1
+    if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
+      idx = lastIdx
+    } else {
+      idx = msgs.findIndex(m => m.id === messageId)
+    }
+
+    if (idx !== -1) {
+      const message = msgs[idx]
+      msgs[idx] = {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          ...(metadataUpdates as Record<string, string | number | boolean | undefined>)
+        }
+      }
+      target.updatedAt = new Date()
+      logger.debug(`[METADATA] Updated message ${messageId} metadata:`, metadataUpdates)
+      return true
+    }
+    logger.warn(`[METADATA] Message not found for metadata update: ${messageId}`)
+    return false
+  }
+
+  /**
+   * Find a message by metadata criteria.
+   * Helper for finding messages to update (e.g., approval status).
+   *
+   * @param criteria - Metadata key-value pairs to match
+   * @returns The matching message or undefined
+   */
+  function findMessageByMetadata(criteria: Record<string, unknown>): ChatMessage | undefined {
+    if (!currentSession.value) return undefined
+
+    return currentSession.value.messages.find(msg => {
+      if (!msg.metadata) return false
+      return Object.entries(criteria).every(
+        ([key, value]) => msg.metadata?.[key] === value
+      )
+    })
+  }
+
+  function deleteMessage(messageId: string, sessionId?: string) {
+    const target = resolveSession(sessionId)
+    if (!target) return
+
+    const messageIndex = target.messages.findIndex(m => m.id === messageId)
+    if (messageIndex !== -1) {
+      target.messages.splice(messageIndex, 1)
+      target.updatedAt = new Date()
+    }
+  }
+
+  function deleteSession(sessionId: string): boolean {
+    // CRITICAL FIX: Enhanced session deletion with validation and persistence verification
+    logger.debug(`🗑️ Attempting to delete session: ${sessionId}`)
+
+    const sessionIndex = sessions.value.findIndex(s => s.id === sessionId)
+    if (sessionIndex === -1) {
+      logger.warn(`⚠️ Session ${sessionId} not found in store`)
+      return false // Session doesn't exist
+    }
+
+    const session = sessions.value[sessionIndex]
+    logger.debug(`📝 Found session to delete: "${session.title}" (${sessionId})`)
+
+    // Store count before deletion for verification
+    const beforeCount = sessions.value.length
+
+    // Remove session from array
+    sessions.value.splice(sessionIndex, 1)
+
+    // CRITICAL FIX: Reset typing indicator to prevent stuck "AI is typing..." state
+    isTyping.value = false
+
+    // Verify deletion occurred
+    const afterCount = sessions.value.length
+    const deletionSucceeded = afterCount === beforeCount - 1
+
+    if (!deletionSucceeded) {
+      logger.error(`❌ Session deletion failed - count before: ${beforeCount}, after: ${afterCount}`)
       return false
     }
 
-    /**
-     * Find a message by metadata criteria.
-     * Helper for finding messages to update (e.g., approval status).
-     *
-     * @param criteria - Metadata key-value pairs to match
-     * @returns The matching message or undefined
-     */
-    function findMessageByMetadata(criteria: Record<string, unknown>): ChatMessage | undefined {
-      if (!currentSession.value) return undefined
+    logger.debug(`✅ Session removed from array (${beforeCount} → ${afterCount})`)
 
-      return currentSession.value.messages.find((msg) => {
-        if (!msg.metadata) return false
-        return Object.entries(criteria).every(([key, value]) => msg.metadata?.[key] === value)
-      })
-    }
-
-    function deleteMessage(messageId: string, sessionId?: string) {
-      const target = resolveSession(sessionId)
-      if (!target) return
-
-      const messageIndex = target.messages.findIndex((m) => m.id === messageId)
-      if (messageIndex !== -1) {
-        target.messages.splice(messageIndex, 1)
-        target.updatedAt = new Date()
-      }
-    }
-
-    function deleteSession(sessionId: string): boolean {
-      // CRITICAL FIX: Enhanced session deletion with validation and persistence verification
-      logger.debug(`🗑️ Attempting to delete session: ${sessionId}`)
-
-      const sessionIndex = sessions.value.findIndex((s) => s.id === sessionId)
-      if (sessionIndex === -1) {
-        logger.warn(`⚠️ Session ${sessionId} not found in store`)
-        return false // Session doesn't exist
-      }
-
-      const session = sessions.value[sessionIndex]
-      logger.debug(`📝 Found session to delete: "${session.title}" (${sessionId})`)
-
-      // Store count before deletion for verification
-      const beforeCount = sessions.value.length
-
-      // Remove session from array
-      sessions.value.splice(sessionIndex, 1)
-
-      // CRITICAL FIX: Reset typing indicator to prevent stuck "AI is typing..." state
-      isTyping.value = false
-
-      // Verify deletion occurred
-      const afterCount = sessions.value.length
-      const deletionSucceeded = afterCount === beforeCount - 1
-
-      if (!deletionSucceeded) {
-        logger.error(
-          `❌ Session deletion failed - count before: ${beforeCount}, after: ${afterCount}`,
-        )
-        return false
-      }
-
-      logger.debug(`✅ Session removed from array (${beforeCount} → ${afterCount})`)
-
-      // If deleted session was current, switch to another or clear
-      if (currentSessionId.value === sessionId) {
-        if (sessions.value.length > 0) {
-          logger.debug(`🔄 Switching to first available session: ${sessions.value[0].id}`)
-          switchToSession(sessions.value[0].id)
-        } else {
-          logger.debug(`🔄 No sessions remaining, clearing current session`)
-          currentSessionId.value = null
-        }
-      }
-
-      // Force reactivity trigger to ensure Pinia persistence activates
-      // This is critical for ensuring localStorage is updated
-      sessions.value = [...sessions.value]
-
-      logger.debug(`✅ Session ${sessionId} successfully deleted from store`)
-      return true
-    }
-
-    function updateSessionTitle(sessionId: string, title: string) {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (session) {
-        session.title = title
-        session.updatedAt = new Date()
-      }
-    }
-
-    function clearAllSessions() {
-      logger.debug(`🗑️ Clearing all ${sessions.value.length} sessions`)
-      sessions.value = []
-      currentSessionId.value = null
-      isTyping.value = false // Reset typing indicator
-      logger.debug(`✅ All sessions cleared`)
-    }
-
-    function updateSettings(newSettings: Partial<ChatSettings>) {
-      settings.value = { ...settings.value, ...newSettings }
-    }
-
-    function toggleSidebar() {
-      sidebarCollapsed.value = !sidebarCollapsed.value
-    }
-
-    function setTyping(typing: boolean) {
-      isTyping.value = typing
-      // Issue #691: Clear streaming preview when typing stops
-      if (!typing) {
-        streamingPreview.value = ''
-      }
-    }
-
-    // Issue #691: Set streaming preview text for real-time feedback during LLM generation
-    function setStreamingPreview(preview: string) {
-      streamingPreview.value = preview
-    }
-
-    // Issue #671: Initialization state management for loading feedback
-    function setInitializing(value: boolean) {
-      isInitializing.value = value
-      if (value) {
-        // Clear any previous error when starting initialization
-        initializationError.value = null
-      }
-    }
-
-    function setInitializationError(error: string | null) {
-      initializationError.value = error
-      if (error) {
-        // Stop initializing when error occurs
-        isInitializing.value = false
-      }
-    }
-
-    // Persistence helpers
-    function exportSession(sessionId: string): ChatSession | null {
-      return sessions.value.find((s) => s.id === sessionId) || null
-    }
-
-    function importSession(session: ChatSession) {
-      // Skip if session already exists (prevent duplicate imports)
-      const existingSession = sessions.value.find((s) => s.id === session.id)
-      if (existingSession) return refreshExistingCompany(existingSession, session)
-
-      sessions.value.push(session)
-    }
-
-    /**
-     * Synchronize store sessions with backend sessions.
-     *
-     * **MVA-164 Phase 3**: Enforces strict merge-only semantics except for explicit logout.
-     * - Default behavior (intentionalEmpty=false): Merge backend sessions with local, never overwrite
-     * - Explicit empty (intentionalEmpty=true): Clear all local sessions (logout)
-     *
-     * This prevents accidental data loss when backend returns incomplete results.
-     *
-     * @param backendSessions - Sessions returned by the backend
-     * @param intentionalEmpty - When true, backend confirmed user has 0 sessions (explicit logout).
-     *   When false/undefined, treat any backend response as incomplete — add missing sessions to local
-     *   store instead of removing them.
-     */
-    function syncSessionsWithBackend(backendSessions: ChatSession[], intentionalEmpty = false) {
-      // MVA-164: Enforce strict rule: only overwrite local when intentionalEmpty=true
-      // All other cases merge (add backend sessions to local, never remove local)
-      if (!intentionalEmpty) {
-        // Merge mode: add backend sessions that don't exist locally
-        logger.debug(
-          `🔄 Merge mode: Syncing sessions. Store has ${sessions.value.length}, Backend has ${backendSessions.length}`,
-        )
-        const storeIds = new Set(sessions.value.map((s) => s.id))
-        const sessionsToAdd = backendSessions.filter((s) => !storeIds.has(s.id))
-        if (sessionsToAdd.length > 0) {
-          logger.debug(`➕ Adding ${sessionsToAdd.length} backend sessions to store (merge mode)`)
-          sessions.value.push(...sessionsToAdd)
-        }
+    // If deleted session was current, switch to another or clear
+    if (currentSessionId.value === sessionId) {
+      if (sessions.value.length > 0) {
+        logger.debug(`🔄 Switching to first available session: ${sessions.value[0].id}`)
+        switchToSession(sessions.value[0].id)
       } else {
-        // Explicit empty mode: backend confirmed 0 sessions (user deleted all)
-        logger.debug(`🔄 Explicit empty mode (intentionalEmpty=true): Clearing all sessions`)
-        sessions.value = backendSessions // Replace with empty backend result
+        logger.debug(`🔄 No sessions remaining, clearing current session`)
         currentSessionId.value = null
       }
-
-      // Issue #709: Reset typing state after sync to clear any stale state
-      // Issue #820: Only reset if not actively streaming to prevent interrupting active streams
-      const isActivelyStreaming = isTyping.value && streamingPreview.value.length > 0
-      if (!hasPendingApproval.value && !isActivelyStreaming) {
-        isTyping.value = false
-        streamingPreview.value = ''
-      }
-
-      logger.debug(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
     }
 
+    // Force reactivity trigger to ensure Pinia persistence activates
+    // This is critical for ensuring localStorage is updated
+    sessions.value = [...sessions.value]
+
+    logger.debug(`✅ Session ${sessionId} successfully deleted from store`)
+    return true
+  }
+
+  function updateSessionTitle(sessionId: string, title: string) {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.title = title
+      session.updatedAt = new Date()
+    }
+  }
+
+  function clearAllSessions() {
+    logger.debug(`🗑️ Clearing all ${sessions.value.length} sessions`)
+    sessions.value = []
+    currentSessionId.value = null
+    isTyping.value = false // Reset typing indicator
+    logger.debug(`✅ All sessions cleared`)
+  }
+
+  function updateSettings(newSettings: Partial<ChatSettings>) {
+    settings.value = { ...settings.value, ...newSettings }
+  }
+
+  function toggleSidebar() {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+
+  function setTyping(typing: boolean) {
+    isTyping.value = typing
+    // Issue #691: Clear streaming preview when typing stops
+    if (!typing) {
+      streamingPreview.value = ''
+    }
+  }
+
+  // Issue #691: Set streaming preview text for real-time feedback during LLM generation
+  function setStreamingPreview(preview: string) {
+    streamingPreview.value = preview
+  }
+
+  // Issue #671: Initialization state management for loading feedback
+  function setInitializing(value: boolean) {
+    isInitializing.value = value
+    if (value) {
+      // Clear any previous error when starting initialization
+      initializationError.value = null
+    }
+  }
+
+  function setInitializationError(error: string | null) {
+    initializationError.value = error
+    if (error) {
+      // Stop initializing when error occurs
+      isInitializing.value = false
+    }
+  }
+
+  // Persistence helpers
+  function exportSession(sessionId: string): ChatSession | null {
+    return sessions.value.find(s => s.id === sessionId) || null
+  }
+
+  function importSession(session: ChatSession) {
+    // Skip if session already exists (prevent duplicate imports)
+    const existingSession = sessions.value.find(s => s.id === session.id)
+    if (existingSession) return refreshExistingCompany(existingSession, session)
+
+    sessions.value.push(session)
+  }
+
+  /**
+   * Synchronize store sessions with backend sessions.
+   *
+   * **MVA-164 Phase 3**: Enforces strict merge-only semantics except for explicit logout.
+   * - Default behavior (intentionalEmpty=false): Merge backend sessions with local, never overwrite
+   * - Explicit empty (intentionalEmpty=true): Clear all local sessions (logout)
+   *
+   * This prevents accidental data loss when backend returns incomplete results.
+   *
+   * @param backendSessions - Sessions returned by the backend
+   * @param intentionalEmpty - When true, backend confirmed user has 0 sessions (explicit logout).
+   *   When false/undefined, treat any backend response as incomplete — add missing sessions to local
+   *   store instead of removing them.
+   */
+  function syncSessionsWithBackend(backendSessions: ChatSession[], intentionalEmpty = false) {
+    // MVA-164: Enforce strict rule: only overwrite local when intentionalEmpty=true
+    // All other cases merge (add backend sessions to local, never remove local)
+    if (!intentionalEmpty) {
+      // Merge mode: add backend sessions that don't exist locally
+      logger.debug(`🔄 Merge mode: Syncing sessions. Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
+      const storeIds = new Set(sessions.value.map(s => s.id))
+      const sessionsToAdd = backendSessions.filter(s => !storeIds.has(s.id))
+      if (sessionsToAdd.length > 0) {
+        logger.debug(`➕ Adding ${sessionsToAdd.length} backend sessions to store (merge mode)`)
+        sessions.value.push(...sessionsToAdd)
+      }
+    } else {
+      // Explicit empty mode: backend confirmed 0 sessions (user deleted all)
+      logger.debug(`🔄 Explicit empty mode (intentionalEmpty=true): Clearing all sessions`)
+      sessions.value = backendSessions // Replace with empty backend result
+      currentSessionId.value = null
+    }
+
+    // Issue #709: Reset typing state after sync to clear any stale state
+    // Issue #820: Only reset if not actively streaming to prevent interrupting active streams
+    const isActivelyStreaming = isTyping.value && streamingPreview.value.length > 0
+    if (!hasPendingApproval.value && !isActivelyStreaming) {
+      isTyping.value = false
+      streamingPreview.value = ''
+    }
+
+    logger.debug(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
+  }
+
+  // Desktop session management
+  function createDesktopSession(sessionId: string): string {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return ''
+
+    // Generate unique desktop session ID (#821: add random suffix to prevent collision)
+    const desktopSessionId = `desktop-${sessionId}-${Date.now()}-${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('').slice(0, 6)}`
+
+    // Initialize desktop session if not exists
+    if (!session.desktopSession) {
+      session.desktopSession = {
+        sessionId: desktopSessionId,
+        lastActivity: new Date(),
+        automationContext: {}
+      }
+    }
+
+    return desktopSessionId
+  }
+
+  /**
+   * noVNC URL for the host selected in the chat Desktop picker: AutoBot's desktop VM or one of the
+   * user's /secrets hosts. The address, scheme, port and path come from the one URL builder
+   * (config/vnc-client.ts); this adds the chat-session context. No host, no URL.
+   */
+  function getDesktopUrl(sessionId: string, host: VncClientHost | null | undefined): string {
+    if (!host) return ''
+    let session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.desktopSession) {
+      createDesktopSession(sessionId)
+      session = sessions.value.find(s => s.id === sessionId)
+    }
+    // #16299: no password here -- the backend authenticates to the VNC server itself.
+    const params = new URLSearchParams({
+      resize: 'remote',
+      reconnect: 'true',
+      quality: '9',
+      compression: '9',
+      chatSession: sessionId,
+      desktopSession: session?.desktopSession?.sessionId || '',
+      automationMode: 'true'
+    })
+    const desktopUrl = `${buildVncClientUrl(host)}&${params.toString()}`
+    if (session?.desktopSession) {
+      session.desktopSession.vncUrl = desktopUrl
+      session.desktopSession.lastActivity = new Date()
+    }
+    return desktopUrl
+  }
+
+  function updateDesktopContext(sessionId: string, context: Record<string, unknown>) {
+    let session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.desktopSession) {
+      createDesktopSession(sessionId)
+      // Re-fetch session after creation
+      session = sessions.value.find(s => s.id === sessionId)
+    }
+
+    // Guard: Exit if session doesn't exist
+    if (!session) return
+
+    if (session.desktopSession) {
+      session.desktopSession.automationContext = {
+        ...session.desktopSession.automationContext,
+        ...context
+      }
+      session.desktopSession.lastActivity = new Date()
+    }
+  }
+
+  function getDesktopContext(sessionId: string): Record<string, unknown> {
+    const session = sessions.value.find(s => s.id === sessionId)
+    return session?.desktopSession?.automationContext || {}
+  }
+
+  // ==================== ISSUE #608: USER-CENTRIC SESSION TRACKING ====================
+
+  /**
+   * Set the owner of a session.
+   * Issue #608: User-centric session tracking.
+   *
+   * @param sessionId - The session to update
+   * @param owner - The owner user context
+   */
+  function setSessionOwner(sessionId: string, owner: UserContext): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    session.owner = owner
+    session.mode = session.collaborators?.length ? 'collaborative' : 'single_user'
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Set session ${sessionId} owner to ${owner.username}`)
+    return true
+  }
+
+  /**
+   * Add a collaborator to a session.
+   * Issue #608: Multi-user collaborative mode support.
+   *
+   * @param sessionId - The session to update
+   * @param collaborator - The collaborator user context
+   */
+  function addSessionCollaborator(sessionId: string, collaborator: UserContext): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    if (!session.collaborators) {
+      session.collaborators = []
+    }
+
+    // Check if already a collaborator
+    if (session.collaborators.some(c => c.id === collaborator.id)) {
+      logger.debug(`[Issue #608] User ${collaborator.username} is already a collaborator`)
+      return false
+    }
+
+    session.collaborators.push({ ...collaborator, role: 'collaborator' })
+    session.mode = 'collaborative'
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added collaborator ${collaborator.username} to session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Remove a collaborator from a session.
+   * Issue #608: Multi-user collaborative mode support.
+   *
+   * @param sessionId - The session to update
+   * @param collaboratorId - The collaborator user ID to remove
+   */
+  function removeSessionCollaborator(sessionId: string, collaboratorId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session || !session.collaborators) return false
+
+    const index = session.collaborators.findIndex(c => c.id === collaboratorId)
+    if (index === -1) return false
+
+    session.collaborators.splice(index, 1)
+
+    // Update mode if no more collaborators
+    if (session.collaborators.length === 0) {
+      session.mode = 'single_user'
+    }
+
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Removed collaborator ${collaboratorId} from session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Add an activity to a session.
+   * Issue #608: Activity tracking within sessions.
+   *
+   * @param sessionId - The session to update
+   * @param activity - The activity to add (without id and timestamp)
+   */
+  function addSessionActivity(
+    sessionId: string,
+    activity: Omit<SessionActivity, 'id' | 'timestamp'>
+  ): string | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+
+    if (!session.activities) {
+      session.activities = []
+    }
+
+    const newActivity: SessionActivity = {
+      id: generateMessageId(), // Reuse message ID generator
+      timestamp: new Date(),
+      ...activity
+    }
+
+    session.activities.push(newActivity)
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added ${activity.type} activity to session ${sessionId}`)
+    return newActivity.id
+  }
+
+  /**
+   * Get activities for a session with optional filtering.
+   * Issue #608: Activity tracking within sessions.
+   *
+   * @param sessionId - The session to query
+   * @param filters - Optional filters for activity type and user
+   */
+  function getSessionActivities(
+    sessionId: string,
+    filters?: { type?: SessionActivity['type']; userId?: string }
+  ): SessionActivity[] {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.activities) return []
+
+    let activities = [...session.activities]
+
+    if (filters?.type) {
+      activities = activities.filter(a => a.type === filters.type)
+    }
+
+    if (filters?.userId) {
+      activities = activities.filter(a => a.userId === filters.userId)
+    }
+
+    // Sort by timestamp descending
+    return activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+  }
+
+  /**
+   * Add a session-scoped secret reference.
+   * Issue #608: Secret ownership model.
+   * Note: This only stores metadata, not the actual secret value.
+   *
+   * @param sessionId - The session to update
+   * @param secret - The secret reference (without usage count)
+   */
+  function addSessionSecret(
+    sessionId: string,
+    secret: Omit<SessionSecret, 'usageCount'>
+  ): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    if (!session.sessionSecrets) {
+      session.sessionSecrets = []
+    }
+
+    // Check if secret already added
+    if (session.sessionSecrets.some(s => s.id === secret.id)) {
+      logger.debug(`[Issue #608] Secret ${secret.name} already in session`)
+      return false
+    }
+
+    session.sessionSecrets.push({ ...secret, usageCount: 0 })
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added session secret ${secret.name} to session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Remove a session-scoped secret reference.
+   * Issue #608: Secret ownership model.
+   *
+   * @param sessionId - The session to update
+   * @param secretId - The secret ID to remove
+   */
+  function removeSessionSecret(sessionId: string, secretId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.sessionSecrets) return false
+
+    const index = session.sessionSecrets.findIndex(s => s.id === secretId)
+    if (index === -1) return false
+
+    session.sessionSecrets.splice(index, 1)
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Removed secret ${secretId} from session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Increment the usage count for a session secret.
+   * Issue #608: Secret usage tracking.
+   *
+   * @param sessionId - The session containing the secret
+   * @param secretId - The secret ID to update
+   */
+  function incrementSecretUsage(sessionId: string, secretId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.sessionSecrets) return false
+
+    const secret = session.sessionSecrets.find(s => s.id === secretId)
+    if (!secret) return false
+
+    secret.usageCount++
+    logger.debug(`[Issue #608] Secret ${secretId} usage count: ${secret.usageCount}`)
+    return true
+  }
+
+  /**
+   * Get the current user context for a session.
+   * Issue #608: User-centric session tracking.
+   *
+   * @param sessionId - The session to query
+   * @param userId - The user ID to check
+   * @returns The user's role in the session, or null if not a participant
+   */
+  function getUserSessionRole(sessionId: string, userId: string): UserContext['role'] | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+
+    if (session.owner?.id === userId) {
+      return 'owner'
+    }
+
+    const collaborator = session.collaborators?.find(c => c.id === userId)
+    return collaborator?.role || null
+  }
+
+  // CRITICAL FIX: Debug method to verify persistence state
+  function debugPersistenceState(): void {
+    debugPersistenceStateCheck(sessions.value, currentSessionId.value)
+  }
+
+  function setCurrentAgentType(type: string): void {
+    currentAgentType.value = type
+  }
+
+  return {
+    // State
+    sessions,
+    currentSessionId,
+    isTyping,
+    activeChatContext,       // #11690: request-context merged into sends
+    setActiveChatContext,    // #11690
+    streamingPreview,  // Issue #691: Streaming preview text
+    hasPendingApproval,  // Issue #680: the open chat's pending approval
+    isPendingApproval,   // #21357: any chat's
+    sidebarCollapsed,
+    settings,
+    // Issue #671: Initialization state for loading indicators
+    isInitializing,
+    initializationError,
+    currentAgentType,
+
+    // Computed
+    currentSession,
+    currentMessages,
+    sessionCount,
+    hasActiveSessions,
+
+    // #14821: reconciliation state
+    hasPendingMessages,
+
+    // Actions
+    createNewSession,
+    createServerSession,     // #14820: server-assigned session id
+    switchToSession,
+    addMessage,
+    confirmMessage,          // #14821
+    rejectMessage,           // #14821
+    applyServerSnapshot,     // #14820
+    applyRemoteMessage,      // #14820
+    correlatePendingMessage, // #14821
+    addOrUpdateMessage,  // Issue #650: ID-based deduplication for streaming
+    updateMessage,
+    updateMessageMetadata,
+    findMessageByMetadata,
+    deleteMessage,
+    deleteSession,
+    updateSessionTitle,
+    clearAllSessions,
+    updateSettings,
+    toggleSidebar,
+    setTyping,
+    setCurrentAgentType,
+    setStreamingPreview,  // Issue #691: Streaming preview text management
+    setPendingApproval,  // Issue #680 / #21357: (pending, sessionId?)
+    // Issue #671: Initialization state management
+    setInitializing,
+    setInitializationError,
+    exportSession,
+    importSession,
+    syncSessionsWithBackend,
     // Desktop session management
-    function createDesktopSession(sessionId: string): string {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return ''
-
-      // Generate unique desktop session ID (#821: add random suffix to prevent collision)
-      const desktopSessionId = `desktop-${sessionId}-${Date.now()}-${Array.from(
-        crypto.getRandomValues(new Uint8Array(8)),
-        (b) => b.toString(16).padStart(2, '0'),
-      )
-        .join('')
-        .slice(0, 6)}`
-
-      // Initialize desktop session if not exists
-      if (!session.desktopSession) {
-        session.desktopSession = {
-          sessionId: desktopSessionId,
-          lastActivity: new Date(),
-          automationContext: {},
-        }
-      }
-
-      return desktopSessionId
-    }
-
-    /**
-     * noVNC URL for the host selected in the chat Desktop picker: AutoBot's desktop VM or one of the
-     * user's /secrets hosts. The address, scheme, port and path come from the one URL builder
-     * (config/vnc-client.ts); this adds the chat-session context. No host, no URL.
-     */
-    function getDesktopUrl(sessionId: string, host: VncClientHost | null | undefined): string {
-      if (!host) return ''
-      let session = sessions.value.find((s) => s.id === sessionId)
-      if (!session?.desktopSession) {
-        createDesktopSession(sessionId)
-        session = sessions.value.find((s) => s.id === sessionId)
-      }
-      // #16299: no password here -- the backend authenticates to the VNC server itself.
-      const params = new URLSearchParams({
-        resize: 'remote',
-        reconnect: 'true',
-        quality: '9',
-        compression: '9',
-        chatSession: sessionId,
-        desktopSession: session?.desktopSession?.sessionId || '',
-        automationMode: 'true',
-      })
-      const desktopUrl = `${buildVncClientUrl(host)}&${params.toString()}`
-      if (session?.desktopSession) {
-        session.desktopSession.vncUrl = desktopUrl
-        session.desktopSession.lastActivity = new Date()
-      }
-      return desktopUrl
-    }
-
-    function updateDesktopContext(sessionId: string, context: Record<string, unknown>) {
-      let session = sessions.value.find((s) => s.id === sessionId)
-      if (!session?.desktopSession) {
-        createDesktopSession(sessionId)
-        // Re-fetch session after creation
-        session = sessions.value.find((s) => s.id === sessionId)
-      }
-
-      // Guard: Exit if session doesn't exist
-      if (!session) return
-
-      if (session.desktopSession) {
-        session.desktopSession.automationContext = {
-          ...session.desktopSession.automationContext,
-          ...context,
-        }
-        session.desktopSession.lastActivity = new Date()
-      }
-    }
-
-    function getDesktopContext(sessionId: string): Record<string, unknown> {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      return session?.desktopSession?.automationContext || {}
-    }
-
-    // ==================== ISSUE #608: USER-CENTRIC SESSION TRACKING ====================
-
-    /**
-     * Set the owner of a session.
-     * Issue #608: User-centric session tracking.
-     *
-     * @param sessionId - The session to update
-     * @param owner - The owner user context
-     */
-    function setSessionOwner(sessionId: string, owner: UserContext): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return false
-
-      session.owner = owner
-      session.mode = session.collaborators?.length ? 'collaborative' : 'single_user'
-      session.updatedAt = new Date()
-      logger.debug(`[Issue #608] Set session ${sessionId} owner to ${owner.username}`)
-      return true
-    }
-
-    /**
-     * Add a collaborator to a session.
-     * Issue #608: Multi-user collaborative mode support.
-     *
-     * @param sessionId - The session to update
-     * @param collaborator - The collaborator user context
-     */
-    function addSessionCollaborator(sessionId: string, collaborator: UserContext): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return false
-
-      if (!session.collaborators) {
-        session.collaborators = []
-      }
-
-      // Check if already a collaborator
-      if (session.collaborators.some((c) => c.id === collaborator.id)) {
-        logger.debug(`[Issue #608] User ${collaborator.username} is already a collaborator`)
-        return false
-      }
-
-      session.collaborators.push({ ...collaborator, role: 'collaborator' })
-      session.mode = 'collaborative'
-      session.updatedAt = new Date()
-      logger.debug(
-        `[Issue #608] Added collaborator ${collaborator.username} to session ${sessionId}`,
-      )
-      return true
-    }
-
-    /**
-     * Remove a collaborator from a session.
-     * Issue #608: Multi-user collaborative mode support.
-     *
-     * @param sessionId - The session to update
-     * @param collaboratorId - The collaborator user ID to remove
-     */
-    function removeSessionCollaborator(sessionId: string, collaboratorId: string): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session || !session.collaborators) return false
-
-      const index = session.collaborators.findIndex((c) => c.id === collaboratorId)
-      if (index === -1) return false
-
-      session.collaborators.splice(index, 1)
-
-      // Update mode if no more collaborators
-      if (session.collaborators.length === 0) {
-        session.mode = 'single_user'
-      }
-
-      session.updatedAt = new Date()
-      logger.debug(`[Issue #608] Removed collaborator ${collaboratorId} from session ${sessionId}`)
-      return true
-    }
-
-    /**
-     * Add an activity to a session.
-     * Issue #608: Activity tracking within sessions.
-     *
-     * @param sessionId - The session to update
-     * @param activity - The activity to add (without id and timestamp)
-     */
-    function addSessionActivity(
-      sessionId: string,
-      activity: Omit<SessionActivity, 'id' | 'timestamp'>,
-    ): string | null {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return null
-
-      if (!session.activities) {
-        session.activities = []
-      }
-
-      const newActivity: SessionActivity = {
-        id: generateMessageId(), // Reuse message ID generator
-        timestamp: new Date(),
-        ...activity,
-      }
-
-      session.activities.push(newActivity)
-      session.updatedAt = new Date()
-      logger.debug(`[Issue #608] Added ${activity.type} activity to session ${sessionId}`)
-      return newActivity.id
-    }
-
-    /**
-     * Get activities for a session with optional filtering.
-     * Issue #608: Activity tracking within sessions.
-     *
-     * @param sessionId - The session to query
-     * @param filters - Optional filters for activity type and user
-     */
-    function getSessionActivities(
-      sessionId: string,
-      filters?: { type?: SessionActivity['type']; userId?: string },
-    ): SessionActivity[] {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session?.activities) return []
-
-      let activities = [...session.activities]
-
-      if (filters?.type) {
-        activities = activities.filter((a) => a.type === filters.type)
-      }
-
-      if (filters?.userId) {
-        activities = activities.filter((a) => a.userId === filters.userId)
-      }
-
-      // Sort by timestamp descending
-      return activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-    }
-
-    /**
-     * Add a session-scoped secret reference.
-     * Issue #608: Secret ownership model.
-     * Note: This only stores metadata, not the actual secret value.
-     *
-     * @param sessionId - The session to update
-     * @param secret - The secret reference (without usage count)
-     */
-    function addSessionSecret(
-      sessionId: string,
-      secret: Omit<SessionSecret, 'usageCount'>,
-    ): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return false
-
-      if (!session.sessionSecrets) {
-        session.sessionSecrets = []
-      }
-
-      // Check if secret already added
-      if (session.sessionSecrets.some((s) => s.id === secret.id)) {
-        logger.debug(`[Issue #608] Secret ${secret.name} already in session`)
-        return false
-      }
-
-      session.sessionSecrets.push({ ...secret, usageCount: 0 })
-      session.updatedAt = new Date()
-      logger.debug(`[Issue #608] Added session secret ${secret.name} to session ${sessionId}`)
-      return true
-    }
-
-    /**
-     * Remove a session-scoped secret reference.
-     * Issue #608: Secret ownership model.
-     *
-     * @param sessionId - The session to update
-     * @param secretId - The secret ID to remove
-     */
-    function removeSessionSecret(sessionId: string, secretId: string): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session?.sessionSecrets) return false
-
-      const index = session.sessionSecrets.findIndex((s) => s.id === secretId)
-      if (index === -1) return false
-
-      session.sessionSecrets.splice(index, 1)
-      session.updatedAt = new Date()
-      logger.debug(`[Issue #608] Removed secret ${secretId} from session ${sessionId}`)
-      return true
-    }
-
-    /**
-     * Increment the usage count for a session secret.
-     * Issue #608: Secret usage tracking.
-     *
-     * @param sessionId - The session containing the secret
-     * @param secretId - The secret ID to update
-     */
-    function incrementSecretUsage(sessionId: string, secretId: string): boolean {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session?.sessionSecrets) return false
-
-      const secret = session.sessionSecrets.find((s) => s.id === secretId)
-      if (!secret) return false
-
-      secret.usageCount++
-      logger.debug(`[Issue #608] Secret ${secretId} usage count: ${secret.usageCount}`)
-      return true
-    }
-
-    /**
-     * Get the current user context for a session.
-     * Issue #608: User-centric session tracking.
-     *
-     * @param sessionId - The session to query
-     * @param userId - The user ID to check
-     * @returns The user's role in the session, or null if not a participant
-     */
-    function getUserSessionRole(sessionId: string, userId: string): UserContext['role'] | null {
-      const session = sessions.value.find((s) => s.id === sessionId)
-      if (!session) return null
-
-      if (session.owner?.id === userId) {
-        return 'owner'
-      }
-
-      const collaborator = session.collaborators?.find((c) => c.id === userId)
-      return collaborator?.role || null
-    }
-
-    // CRITICAL FIX: Debug method to verify persistence state
-    function debugPersistenceState(): void {
-      debugPersistenceStateCheck(sessions.value, currentSessionId.value)
-    }
-
-    function setCurrentAgentType(type: string): void {
-      currentAgentType.value = type
-    }
-
-    return {
-      // State
-      sessions,
-      currentSessionId,
-      isTyping,
-      activeChatContext, // #11690: request-context merged into sends
-      setActiveChatContext, // #11690
-      streamingPreview, // Issue #691: Streaming preview text
-      hasPendingApproval, // Issue #680: the open chat's pending approval
-      isPendingApproval, // #21357: any chat's
-      sidebarCollapsed,
-      settings,
-      // Issue #671: Initialization state for loading indicators
-      isInitializing,
-      initializationError,
-      currentAgentType,
-
-      // Computed
-      currentSession,
-      currentMessages,
-      sessionCount,
-      hasActiveSessions,
-
-      // #14821: reconciliation state
-      hasPendingMessages,
-
-      // Actions
-      createNewSession,
-      createServerSession, // #14820: server-assigned session id
-      switchToSession,
-      addMessage,
-      confirmMessage, // #14821
-      rejectMessage, // #14821
-      applyServerSnapshot, // #14820
-      applyRemoteMessage, // #14820
-      correlatePendingMessage, // #14821
-      addOrUpdateMessage, // Issue #650: ID-based deduplication for streaming
-      updateMessage,
-      updateMessageMetadata,
-      findMessageByMetadata,
-      deleteMessage,
-      deleteSession,
-      updateSessionTitle,
-      clearAllSessions,
-      updateSettings,
-      toggleSidebar,
-      setTyping,
-      setCurrentAgentType,
-      setStreamingPreview, // Issue #691: Streaming preview text management
-      setPendingApproval, // Issue #680 / #21357: (pending, sessionId?)
-      // Issue #671: Initialization state management
-      setInitializing,
-      setInitializationError,
-      exportSession,
-      importSession,
-      syncSessionsWithBackend,
-      // Desktop session management
-      createDesktopSession,
-      getDesktopUrl,
-      updateDesktopContext,
-      getDesktopContext,
-      // Issue #608: User-centric session tracking
-      setSessionOwner,
-      addSessionCollaborator,
-      removeSessionCollaborator,
-      addSessionActivity,
-      getSessionActivities,
-      addSessionSecret,
-      removeSessionSecret,
-      incrementSecretUsage,
-      getUserSessionRole,
-      // Debug method
-      debugPersistenceState,
-    }
-  },
-  {
-    persist: {
-      key: 'autobot-chat-store',
-      storage: localStorage,
-      pick: ['currentSessionId', 'sidebarCollapsed', 'sessions'],
-      serializer: {
-        deserialize: (value: string) => {
-          try {
-            const parsed = JSON.parse(value)
-            // Reconstruct sessions with empty messages (discarding persisted message bodies)
-            if (parsed.sessions && Array.isArray(parsed.sessions)) {
-              parsed.sessions = parsed.sessions.map((session: Record<string, unknown>) => ({
-                id: session.id,
-                title: session.title,
-                messages: [],
-                createdAt: session.createdAt ? new Date(session.createdAt as string) : undefined,
-                updatedAt: session.updatedAt ? new Date(session.updatedAt as string) : undefined,
-                isActive: false,
-              }))
-            }
-            return parsed
-          } catch {
-            return {}
-          }
-        },
-        serialize: (value: Record<string, unknown>) => {
-          const copy = { ...value }
-          // MVA-164: Strip message bodies before persisting
-          if (copy.sessions && Array.isArray(copy.sessions)) {
-            copy.sessions = (copy.sessions as Array<Record<string, unknown>>).map((session) => ({
+    createDesktopSession,
+    getDesktopUrl,
+    updateDesktopContext,
+    getDesktopContext,
+    // Issue #608: User-centric session tracking
+    setSessionOwner,
+    addSessionCollaborator,
+    removeSessionCollaborator,
+    addSessionActivity,
+    getSessionActivities,
+    addSessionSecret,
+    removeSessionSecret,
+    incrementSecretUsage,
+    getUserSessionRole,
+    // Debug method
+    debugPersistenceState
+  }
+}, {
+  persist: {
+    key: 'autobot-chat-store',
+    storage: localStorage,
+    pick: ['currentSessionId', 'sidebarCollapsed', 'sessions'],
+    serializer: {
+      deserialize: (value: string) => {
+        try {
+          const parsed = JSON.parse(value)
+          // Reconstruct sessions with empty messages (discarding persisted message bodies)
+          if (parsed.sessions && Array.isArray(parsed.sessions)) {
+            parsed.sessions = parsed.sessions.map((session: Record<string, unknown>) => ({
               id: session.id,
               title: session.title,
-              createdAt: session.createdAt,
-              updatedAt: session.updatedAt,
-              isActive: session.isActive,
-              // Explicitly exclude: messages, owner, collaborators, activities, sessionSecrets, desktopSession
+              messages: [],
+              createdAt: session.createdAt ? new Date(session.createdAt as string) : undefined,
+              updatedAt: session.updatedAt ? new Date(session.updatedAt as string) : undefined,
+              isActive: false
             }))
           }
-          return JSON.stringify(copy)
-        },
+          return parsed
+        } catch {
+          return {}
+        }
       },
-    },
-  },
-)
+      serialize: (value: Record<string, unknown>) => {
+        const copy = { ...value }
+        // MVA-164: Strip message bodies before persisting
+        if (copy.sessions && Array.isArray(copy.sessions)) {
+          copy.sessions = (copy.sessions as Array<Record<string, unknown>>).map(session => ({
+            id: session.id,
+            title: session.title,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            isActive: session.isActive
+            // Explicitly exclude: messages, owner, collaborators, activities, sessionSecrets, desktopSession
+          }))
+        }
+        return JSON.stringify(copy)
+      }
+    }
+  }
+})
