@@ -118,7 +118,7 @@ function getCategoryColor(category: string): string {
 
     <!-- Loading State -->
     <div v-if="isLoading" class="flex items-center justify-center py-12">
-      <div class="animate-spin w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full" />
+      <div class="animate-spin w-8 h-8 border-2 border-autobot-primary border-t-transparent rounded-full" />
     </div>
 
     <!-- Playbooks Grid -->

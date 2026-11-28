@@ -281,7 +281,7 @@ onMounted(() => refreshPoller.start(''))
           <select
             id="lb-strategy"
             v-model="selectedStrategy"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary bg-white text-sm"
           >
             <option value="round-robin">{{ $t('fleet.loadBalancingView.roundRobin') }}</option>
             <option value="least-loaded">{{ $t('fleet.loadBalancingView.leastLoaded') }}</option>
@@ -295,7 +295,7 @@ onMounted(() => refreshPoller.start(''))
         <button
           @click="saveStrategy"
           :disabled="saving || selectedStrategy === currentConfig?.strategy"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
         >
           {{ saving ? $t('fleet.loadBalancingView.saving') : $t('fleet.loadBalancingView.saveStrategy') }}
         </button>
@@ -369,7 +369,7 @@ onMounted(() => refreshPoller.start(''))
         <div
           v-for="worker in sortedWorkers"
           :key="worker.node_id"
-          class="border border-autobot-border rounded-lg p-4 hover:border-primary-300 transition-colors"
+          class="border border-autobot-border rounded-lg p-4 hover:border-autobot-primary-light transition-colors"
         >
           <!-- Header: hostname + IP -->
           <div class="mb-3">
@@ -440,7 +440,7 @@ onMounted(() => refreshPoller.start(''))
         <button
           @click="rebalanceNow"
           :disabled="loading || workerMetrics.length === 0"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
         >
           <svg
             :class="['w-4 h-4', loading ? 'animate-spin' : '']"

@@ -96,7 +96,7 @@ async function assignRole(): Promise<void> {
         </label>
         <select
           v-model="selectedNodeId"
-          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
         >
           <option value="">{{ $t('fleet.assignNPURoleModal.selectANode') }}</option>
           <option
@@ -149,7 +149,7 @@ async function assignRole(): Promise<void> {
       <button
         @click="assignRole"
         :disabled="loading || !selectedNodeId"
-        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+        class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 flex items-center gap-2"
       >
         <svg
           v-if="loading"

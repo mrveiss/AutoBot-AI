@@ -44,9 +44,12 @@ const combinedUpdateCount = computed(() =>
 
 const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
-// Badge color: orange when system updates present, amber when only code sync
-const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? 'var(--slm-orange-500)' : 'var(--slm-amber-500)',
+// Badge fill and its paired ink: the bar accent with its dark badge ink when system
+// updates are present, warning with its dark ink when only code sync is pending
+const badgeStyle = computed(() =>
+  systemUpdates.updateCount.value > 0
+    ? { background: 'var(--slm-bar-on)', color: 'var(--slm-badge-fg)' }
+    : { background: 'var(--color-warning)', color: 'var(--text-on-warning)' },
 )
 
 interface NavItem {
@@ -103,9 +106,9 @@ function isItemActive(itemPath: string): boolean {
 
 const healthClass = computed(() => {
   switch (fleetStore.overallHealth) {
-    case 'healthy': return 'bg-success-500'
-    case 'degraded': return 'bg-warning-500'
-    case 'unhealthy': return 'bg-error-500'
+    case 'healthy': return 'bg-autobot-success'
+    case 'degraded': return 'bg-autobot-warning'
+    case 'unhealthy': return 'bg-autobot-error'
     default: return 'bg-autobot-dot-idle'
   }
 })
@@ -199,15 +202,15 @@ onMounted(() => {
           <span>{{ fleetStore.fleetSummary.total_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-success-500">{{ $t('common.sidebar.healthy') }}</span>
+          <span class="text-autobot-success">{{ $t('common.sidebar.healthy') }}</span>
           <span>{{ fleetStore.fleetSummary.healthy_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-warning-500">{{ $t('common.sidebar.degraded') }}</span>
+          <span class="text-autobot-warning">{{ $t('common.sidebar.degraded') }}</span>
           <span>{{ fleetStore.fleetSummary.degraded_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-error-500">{{ $t('common.sidebar.unhealthy') }}</span>
+          <span class="text-autobot-error">{{ $t('common.sidebar.unhealthy') }}</span>
           <span>{{ fleetStore.fleetSummary.unhealthy_nodes }}</span>
         </div>
       </div>
@@ -228,7 +231,7 @@ onMounted(() => {
             :class="[
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg border-l-(length:--nav-on-bw) transition-colors',
               isItemActive(item.path)
-                ? 'bg-primary-600 text-white border-(--slm-bar-on)'
+                ? 'bg-autobot-primary text-autobot-text-on-primary border-(--slm-bar-on)'
                 : 'text-(--slm-bar-fg) border-transparent hover:bg-(--slm-bar-hover)'
             ]"
           >
@@ -314,7 +317,7 @@ onMounted(() => {
             <span
               v-if="item.showBadge && hasCombinedUpdates"
               class="nav-badge"
-              :style="{ background: badgeColor }"
+              :style="badgeStyle"
               :aria-label="$t('common.sidebar.updatesAvailableAria', { count: combinedUpdateCount })"
               role="status"
             >
@@ -346,7 +349,7 @@ onMounted(() => {
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <div
-            class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium"
+            class="w-8 h-8 bg-autobot-primary text-autobot-text-on-primary rounded-full flex items-center justify-center text-sm font-medium"
             aria-hidden="true"
           >
             {{ authStore.user?.username?.charAt(0).toUpperCase() || $t('common.sidebar.user').charAt(0) }}
@@ -377,7 +380,6 @@ onMounted(() => {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  color: white;
   border-radius: 9px;
   font-size: 11px;
   font-weight: 600;

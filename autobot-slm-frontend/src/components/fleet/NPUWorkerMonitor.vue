@@ -224,7 +224,7 @@ onMounted(() => refresh())
         v-for="node in npuNodes"
         :key="node.node_id"
         @click="emit('select-node', node)"
-        class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+        class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-autobot-primary-light transition-all"
       >
         <!-- Header: hostname, IP, status dot -->
         <div class="flex items-start justify-between mb-3">

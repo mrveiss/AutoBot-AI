@@ -8,29 +8,6 @@
 /* Refined SLM scheme: teal identity, shared token names (#18223, #17566) */
 @import './slm-scheme.css';
 
-@theme {
-  --color-primary-50: #f0f9ff;
-  --color-primary-100: #e0f2fe;
-  --color-primary-200: #bae6fd;
-  --color-primary-300: #7dd3fc;
-  --color-primary-400: #38bdf8;
-  --color-primary-500: #0ea5e9;
-  --color-primary-600: #0284c7;
-  --color-primary-700: #0369a1;
-  --color-primary-800: #075985;
-  --color-primary-900: #0c4a6e;
-
-  --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-
-  --color-warning-500: #eab308;
-  --color-warning-600: #ca8a04;
-
-  --color-error-500: #ef4444;
-  --color-error-600: #dc2626;
-  --color-error-700: #b91c1c;
-}
-
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
@@ -45,7 +22,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--slm-gray-200, currentcolor);
+    border-color: var(--border, currentcolor);
   }
 
   body {
@@ -58,7 +35,7 @@
 }
 
 @utility btn-primary {
-  @apply bg-primary-600 text-white enabled:hover:bg-primary-700;
+  @apply bg-autobot-primary text-autobot-text-on-primary enabled:hover:bg-autobot-primary-hover;
 }
 
 @utility btn-secondary {
@@ -66,7 +43,7 @@
 }
 
 @utility btn-success {
-  @apply bg-success-500 text-(--text-on-success) enabled:hover:bg-success-600;
+  @apply bg-autobot-success text-(--text-on-success) enabled:hover:bg-autobot-success-hover;
 }
 
 @utility btn-error {
@@ -78,7 +55,7 @@
 }
 
 @utility input {
-  @apply w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500;
+  @apply w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary;
 }
 
 @utility label {
@@ -90,81 +67,46 @@
 }
 
 @utility health-healthy {
-  @apply bg-success-500;
+  @apply bg-autobot-success;
 }
 
 @utility health-degraded {
-  @apply bg-warning-500;
+  @apply bg-autobot-warning;
 }
 
 @utility health-unhealthy {
-  @apply bg-error-500;
+  @apply bg-autobot-error;
 }
 
 @utility health-unknown {
   @apply bg-autobot-dot-idle;
 }
 
-/* ─── Accessibility: CSS Custom Properties (Issue #754) ──────── */
-
+/* ─── Base state and legacy aliases (#11515 Task 2.1, #17566) ─────
+ * slm-scheme.css holds the shared token names for every scheme (--text-primary,
+ * --bg-secondary, --color-success-bg, ...). What stays here is only what that file
+ * does not define: the base-state brand and status colours the Tailwind fill
+ * utilities and the scheme-less no-data-app case fall back to, and the aliases
+ * components still read (--border-color, --primary-color, --success-color, ...).
+ * Values are literal here because this file is a token source (stylelint ignores it);
+ * every component reads the names, never the hex. */
 :root {
-  --a11y-focus-ring: #0284c7;
-  --a11y-focus-width: 2px;
-  --a11y-bg: #ffffff;
-  --a11y-bg-surface: #f9fafb;
-  --a11y-bg-muted: #f3f4f6;
-  --a11y-text: #111827;
-  --a11y-text-muted: #6b7280;
-  --a11y-border: #d1d5db;
-  --a11y-sidebar-bg: #111827;
-  --a11y-sidebar-text: #f3f4f6;
-  --a11y-sidebar-active: #0284c7;
-}
-
-/* ─── Semantic token aliases (#11515 Task 2.1) ────────────────────
- * SLM components were written against user-frontend token names
- * (--text-primary, --bg-secondary, --border-color, --color-primary, …)
- * that were never defined here, so every `var(--text-primary, #fallback)`
- * silently used its hardcoded fallback and ignored the theme. Map those
- * names onto the real SLM tokens: the theme-adaptive --a11y-* set (redefined
- * per :root / [data-theme='dark'] / [data-theme='contrast']) for
- * surface/text/border, and the --color-*-500 scale for brand/status. var() is
- * resolved at use-time, so these resolve to the ACTIVE theme's values. */
-:root {
-  /* Text */
-  --text-primary: var(--a11y-text);
-  --text-secondary: var(--a11y-text-muted);
-  --text-muted: var(--a11y-text-muted);
-  /* Surfaces */
-  --bg-primary: var(--a11y-bg);
-  --bg-secondary: var(--a11y-bg-surface);
-  --bg-tertiary: var(--a11y-bg-muted);
-  --bg-hover: var(--a11y-bg-muted);
-  /* Border */
-  --border-color: var(--a11y-border);
-  /* Brand / accent */
+  --border-color: var(--border);
   /* #21567: the fill utilities paint the active scheme's --primary (slm-scheme.css
    * redefines --primary / --primary-h / --on-primary per scheme); the sky below is
    * only the base state when no scheme applies. */
   --color-primary: var(--primary);
-  --primary-color: var(--color-primary-500);
-  --primary: var(--color-primary-500);
-  --color-accent: var(--color-primary-500);
+  --primary: #0ea5e9;
+  --primary-color: var(--color-primary);
   /* Status foregrounds */
-  --color-success: var(--color-success-500);
-  --success-color: var(--color-success-500);
-  --color-warning: var(--color-warning-500);
-  --warning-color: var(--color-warning-500);
-  --color-error: var(--color-error-500);
-  --error-color: var(--color-error-500);
-  --color-info: var(--color-primary-500);
-  --info-color: var(--color-primary-500);
-  /* Status backgrounds — tint the status hue over the active surface so they
-   * stay theme-aware (dark themes get a dark-tinted chip, not a light one). */
-  --success-bg: color-mix(in srgb, var(--color-success-500) 14%, var(--a11y-bg));
-  --warning-bg: color-mix(in srgb, var(--color-warning-500) 14%, var(--a11y-bg));
-  --error-bg: color-mix(in srgb, var(--color-error-500) 14%, var(--a11y-bg));
-  --info-bg: color-mix(in srgb, var(--color-primary-500) 14%, var(--a11y-bg));
+  --color-success: #22c55e;
+  --success-color: var(--color-success);
+  --color-warning: #eab308;
+  --warning-color: var(--color-warning);
+  --color-error: #ef4444;
+  --error-color: var(--color-error);
+  --color-info: var(--color-primary);
+  --info-color: var(--color-info);
 }
 
 /* ─── Sizing scales (#11515 Task 2.3) ─────────────────────────────
@@ -226,190 +168,110 @@
   --z-maximum: 10000;
 }
 
-/* ─── Component literal captures (#11858 / #11896 / #11515 Task 4) ─────
-   * Scoped --slm-* namespace (NOT Tailwind --color-* palette names) so these
-   * fixed hexes do NOT override Tailwind v4's oklch palette globally (#11896).
- * Exact-value tokens for hardcoded colors migrated out of SLM components
- * (SetupWizardView.vue first). Each value is byte-identical to the original
- * literal, so the migration is a pure rename with zero pixel change. Grouped
- * here for later consolidation into the semantic scale. */
+/* ─── Tailwind built-ins ───────────────────────────────────────────
+ * --color-white / --color-black are Tailwind's own theme variables, restated so the
+ * scheme (--on-primary, --text-on-error, --brand-fg) has them when the build
+ * tree-shakes the theme. They are framework names, not SLM tokens. Every other
+ * colour a component paints comes from a shared token (docs/developer/DESIGN_SYSTEM.md,
+ * "SLM token vocabulary"). */
 :root {
-  /* Neutral constant (white text on coloured surfaces). */
   --color-white: #ffffff;
-  /* Ink for text on a light status fill (#19872). */
   --color-black: #000000;
-  /* Blue action shades used by the setup wizard's buttons/badges — distinct
-   * from the sky --color-primary; captured verbatim pending palette
-   * consolidation (#11515). */
-  --slm-blue-400: #60a5fa;
-  --slm-blue-500: #3b82f6;
-  --slm-blue-600: #2563eb;
-  /* Console / provision-log semantics for terminal-style output panels. */
-  --color-log-bg: #0d0d0d;
-  --color-log-info: #a0d0a0;
-  --color-log-success: #4ade80;
-  --color-log-error: #f87171;
-  --color-log-warning: #fbbf24;
-  --color-log-phase: #a78bfa;
-  --color-log-current-task: #93c5fd;
-  /* Scoped fixed-shade component-chrome captures (AgentsView #11892, OrgChartTab
-   * #11893, …) that must stay a fixed shade regardless of the active theme —
-   * unlike the theme-adaptive --a11y-* set. Tailwind-scale values, captured
-   * verbatim (byte-identical, zero pixel change) pending semantic consolidation
-   * (#11515). */
-  --slm-gray-50: #f9fafb;
-  --slm-gray-100: #f3f4f6;
-  --slm-gray-200: #e5e7eb;
-  --slm-gray-300: #d1d5db;
-  --slm-gray-500: #6b7280;
-  --slm-gray-700: #374151;
-  --slm-gray-800: #1f2937;
-  --slm-red-100: #fee2e2;
-  --slm-red-700: #b91c1c;
-  --slm-blue-100: #dbeafe;
-  /* Indigo action shades (agent badges / edit button / focused endpoint input). */
-  --slm-indigo-100: #e0e7ff;
-  --slm-indigo-500: #6366f1;
-  --slm-indigo-600: #4f46e5;
-  --slm-violet-100: #ede9fe;
-  --slm-violet-600: #7c3aed;
-  /* Emerald save-action + red error-banner tints. */
-  --slm-emerald-100: #d1fae5;
-  --slm-emerald-500: #10b981;
-  --slm-emerald-600: #059669;
-  --slm-orange-100: #ffedd5;
-  /* Sidebar update badge: system updates pending (amber-500 is code sync only). */
-  --slm-orange-500: #f97316;
-  --slm-orange-600: #ea580c;
-  /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
-  --slm-amber-500: #f59e0b;
-  --slm-amber-600: #d97706;
-  --slm-slate-200: #e2e8f0;
-  --slm-slate-800: #1e293b;
 }
 
 /* ─── High contrast (#754, folded into the Refined `contrast` theme, #18239) ───
  * The legacy yellow-on-black `high-contrast` palette is gone: `contrast` is the one
  * high-contrast theme and its palette lives in slm-scheme.css. What stays here maps the
- * theme-adaptive --a11y-* set, and the raw palette classes that views still use, onto
- * the Refined tokens of that theme. */
-
-:root[data-theme='contrast'] {
-  --a11y-focus-ring: var(--focus);
-  --a11y-focus-width: 3px;
-  --a11y-bg: var(--bg);
-  --a11y-bg-surface: var(--surface);
-  --a11y-bg-muted: var(--surface2);
-  --a11y-text: var(--text);
-  --a11y-text-muted: var(--muted);
-  --a11y-border: var(--border);
-  --a11y-sidebar-bg: var(--slm-bar);
-  --a11y-sidebar-text: var(--slm-bar-fg);
-  --a11y-sidebar-active: var(--slm-bar-on);
-}
+ * raw palette classes that views still use onto the Refined tokens of that theme. */
 
 :root[data-theme='contrast'] body {
-  background-color: var(--a11y-bg);
-  color: var(--a11y-text);
+  background-color: var(--bg);
+  color: var(--text);
 }
 
 :root[data-theme='contrast'] .card {
-  background-color: var(--a11y-bg-surface);
-  border-color: var(--a11y-border);
-  color: var(--a11y-text);
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :root[data-theme='contrast'] .bg-white {
-  background-color: var(--a11y-bg-surface) !important;
+  background-color: var(--surface) !important;
 }
 
 :root[data-theme='contrast'] .input {
-  background-color: var(--a11y-bg-surface);
-  border-color: var(--a11y-border);
-  color: var(--a11y-text);
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :root[data-theme='contrast'] select {
-  background-color: var(--a11y-bg-surface);
-  border-color: var(--a11y-border);
-  color: var(--a11y-text);
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :root[data-theme='contrast'] table thead {
-  background-color: var(--a11y-bg-muted) !important;
+  background-color: var(--surface2) !important;
 }
 
 :root[data-theme='contrast'] table th,
 :root[data-theme='contrast'] table td {
-  color: var(--a11y-text) !important;
-  border-color: var(--a11y-border) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
 }
 
 /* ─── Dark Mode (Issue #3305) ───────────────────────────────── */
 
-:root[data-theme='dark'] {
-  --a11y-focus-ring: #38bdf8;
-  --a11y-focus-width: 2px;
-  --a11y-bg: #111827;
-  --a11y-bg-surface: #1f2937;
-  --a11y-bg-muted: #374151;
-  --a11y-text: #f9fafb;
-  --a11y-text-muted: #9ca3af;
-  --a11y-border: #374151;
-  --a11y-sidebar-bg: #030712;
-  --a11y-sidebar-text: #f3f4f6;
-  --a11y-sidebar-active: #38bdf8;
-}
-
 :root[data-theme='dark'] body {
-  background-color: var(--a11y-bg);
-  color: var(--a11y-text);
+  background-color: var(--bg);
+  color: var(--text);
 }
 
 :root[data-theme='dark'] .card {
-  background-color: var(--a11y-bg-surface);
-  border-color: var(--a11y-border);
-  color: var(--a11y-text);
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :root[data-theme='dark'] .bg-white {
-  background-color: var(--a11y-bg-surface) !important;
+  background-color: var(--surface) !important;
 }
 
 :root[data-theme='dark'] .btn-secondary {
-  background-color: var(--a11y-bg-muted) !important;
-  color: var(--a11y-text) !important;
-  border-color: var(--a11y-border) !important;
+  background-color: var(--surface2) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
 }
 
 :root[data-theme='dark'] .input {
-  background-color: var(--a11y-bg-surface);
-  border-color: var(--a11y-border);
-  color: var(--a11y-text);
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :root[data-theme='dark'] select,
 :root[data-theme='dark'] input,
 :root[data-theme='dark'] textarea {
-  background-color: var(--a11y-bg-surface) !important;
-  border-color: var(--a11y-border) !important;
-  color: var(--a11y-text) !important;
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
 }
 
 :root[data-theme='dark'] table thead {
-  background-color: var(--a11y-bg-muted) !important;
+  background-color: var(--surface2) !important;
 }
 
 :root[data-theme='dark'] table th,
 :root[data-theme='dark'] table td {
-  color: var(--a11y-text) !important;
-  border-color: var(--a11y-border) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
 }
 
 /* ─── Global Focus Indicators (Issue #754) ───────────────────── */
 
 *:focus-visible {
-  outline: var(--a11y-focus-width) solid var(--a11y-focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -459,27 +321,28 @@ p {
 /* ─── Shared view layout primitive (#11515 Task 3) ────────────────
  * A consistent page container + header for every SLM view, so views stop
  * rolling their own padding / max-width / title styling (Tailwind p-6, ad-hoc
- * `.*-view` classes). Token-driven: adapts to the active theme via --a11y-* and
+ * `.*-view` classes). Token-driven: adapts to the active theme via the shared --bg/--text/--border names and
  * uses the sizing scales added in Task 2.3. Mirrors the user frontend's
  * view.css so both frontends' views are structured the same way. Adopt by
  * adding `view-container` (or `view-container-constrained`) to a view root and
  * `view-header`/`view-title`/`view-description` to its heading (Task 3.2). */
 :root {
   --content-max-width: 1400px;
-  --content-padding: var(--spacing-6);
+  --content-padding-x: var(--spacing-6);
+  --content-padding-y: var(--spacing-6);
 }
 
 .view-container {
-  padding: var(--content-padding);
-  color: var(--a11y-text);
+  padding: var(--content-padding-y) var(--content-padding-x);
+  color: var(--text);
 }
 
 /* Centred, width-capped content for wide dashboards. */
 .view-container-constrained {
   max-width: var(--content-max-width);
   margin-inline: auto;
-  padding: var(--content-padding);
-  color: var(--a11y-text);
+  padding: var(--content-padding-y) var(--content-padding-x);
+  color: var(--text);
 }
 
 .view-header {
@@ -490,13 +353,13 @@ p {
   margin: 0 0 var(--spacing-2) 0;
   font-size: var(--text-2xl);
   font-weight: 700;
-  color: var(--a11y-text);
+  color: var(--text);
 }
 
 .view-description {
   margin: 0;
   font-size: var(--text-base);
-  color: var(--a11y-text-muted);
+  color: var(--muted);
 }
 
 /* Sub-nav tab row within a view. */
@@ -511,18 +374,18 @@ p {
   padding: var(--spacing-2) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--a11y-text-muted);
+  color: var(--muted);
   text-decoration: none;
   border-bottom: 2px solid transparent;
 }
 
 .view-nav-link:hover {
-  color: var(--a11y-text);
+  color: var(--text);
 }
 
 .view-nav-link.is-active {
-  color: var(--color-primary-500);
-  border-bottom-color: var(--color-primary-500);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 /* Links in body text carry a cue that is not colour (WCAG 1.4.1, #18223): the link

@@ -128,7 +128,7 @@ function onError(message: string) {
           <select
             v-model="selectedHostId"
             :disabled="isConnected || nodeListState !== 'ready'"
-            class="text-sm px-3 py-1 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            class="text-sm px-3 py-1 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary disabled:opacity-50"
           >
             <option v-for="host in hosts" :key="host.id" :value="host.id">
               {{ host.name }} ({{ host.ip }})
