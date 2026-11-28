@@ -44,6 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
@@ -78,9 +79,9 @@ router = APIRouter(
 # Cache Configuration (Issue #50 - MCP Registry Caching Optimization)
 # ============================================================================
 
-# Load cache configuration from environment
 CACHE_ENABLED = bool(config.mcp_registry_cache_enabled)
 CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "60")
+_PROBE_TIMEOUT = aiohttp.ClientTimeout(total=config.misc.mcp_bridge_probe_timeout_s)  # env-backed (#18810)
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
@@ -397,12 +398,12 @@ def discover_bridges() -> List[Tuple[str, str, str, List[str]]]:
         if manifest is None:
             manifest = MCPBridgeManifest(
                 name=name,
-                version="0.0.0",
+                version="unknown",
                 description="",
                 features=features,
                 endpoint=endpoint,
             )
-            logger.warning("Bridge '%s' has no MANIFEST attribute — using minimal fallback (version=0.0.0)", name)
+            logger.warning("Bridge '%s' has no MANIFEST attribute — using minimal fallback (version=unknown)", name)
 
         manifests.append(manifest)
         _MANIFEST_REGISTRY[name] = (manifest, module_path)
@@ -477,7 +478,7 @@ async def _fetch_bridge_tools(
     """Fetch tools from a single bridge. Returns (tools_list, success). (Issue #315 - extracted)"""
     try:
         async with await http_client.get(
-            f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+            f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
         ) as response:
             if response.status != 200:
                 logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
@@ -571,7 +572,7 @@ async def _fetch_bridges_info() -> Metadata:
         else:
             try:
                 async with await http_client.get(
-                    f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+                    f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
                 ) as response:
                     if response.status == 200:
                         tools = await response.json()
@@ -835,7 +836,7 @@ async def _fetch_tools_from_bridge(backend_url: str, endpoint: str) -> list:
     """
     http_client = get_http_client()
     async with await http_client.get(
-        f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+        f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
     ) as response:
         if response.status != 200:
             raise HTTPException(
@@ -1026,8 +1027,7 @@ async def reload_mcp_bridge(name: str) -> Metadata:
             ),
         )
     logger.warning(
-        "reload_mcp_bridge('%s'): importlib.reload affects only the current uvicorn worker. "
-        "Other workers retain the previous module state until restarted.",
+        "reload_mcp_bridge('%s'): importlib.reload affects only this uvicorn worker; others keep the old module.",
         name,
     )
     try:
@@ -1041,7 +1041,7 @@ async def reload_mcp_bridge(name: str) -> Metadata:
             logger.warning("Reloaded bridge '%s' has no MANIFEST attribute", name)
     except Exception as e:
         logger.error("Failed to reload bridge '%s': %s", name, e)
-        raise HTTPException(status_code=500, detail=f"Failed to reload bridge '{name}': {e}")
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, f"Failed to reload bridge '{name}'"))
     mcp_cache.invalidate_all()
     toggle_svc = get_toggle_service()
     enabled = await toggle_svc.is_bridge_enabled(name)
@@ -1142,7 +1142,7 @@ async def get_mcp_registry_info() -> Metadata:
     """
     return {
         "name": "AutoBot MCP Registry",
-        "version": "1.1.0",  # Updated for Issue #50 caching
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "description": "Centralized registry for all AutoBot MCP tools and bridges",
         "architecture": {
             "purpose": "Aggregate and manage MCP tools from multiple bridges",

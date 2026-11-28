@@ -22,7 +22,7 @@ accident of ordering.
 
 from __future__ import annotations
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_float, env_int
 
 #: Maximum multi-step continuation iterations for one turn (#352, #17468).
 #: Env-backed per the project's configuration rule -- a budget written as a bare
@@ -37,6 +37,10 @@ _DEPRECATED_PARSE_RETRY_BUDGET: int = env_int("AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
 #: whose TOOL_CALL did not parse is re-asked this many times on both the graph path and the legacy loop, and the
 #: unknown-tool counter (#20848) is to read the same constant. Past it the user gets ``NO_ANSWER_FALLBACK``.
 INVALID_CALL_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_CALL_LIMIT", default=_DEPRECATED_PARSE_RETRY_BUDGET)
+
+#: Consecutive unknown-tool calls after which the turn stops with an honest failure instead of looping on a reminder
+#: (#20848). The reminder starts at ``INVALID_CALL_LIMIT``; this is the point it has demonstrably not helped.
+INVALID_TOOL_ABORT_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_TOOL_ABORT_LIMIT", default=4)
 
 #: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
 PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
@@ -75,3 +79,7 @@ ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE
 
 #: Files whose extracted text the in-process cache holds at once (#20195); the oldest is dropped first.
 ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
+
+#: Share of the chat window the prompt budget keeps free for the reply (#22016), clamped to 0.05-0.5 as documented.
+#: The budget reserves it, and ``chat_request_options`` also sends it as ``num_predict``: it caps the reply length.
+OUTPUT_RESERVE_SHARE: float = min(0.5, max(0.05, env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)))

@@ -6106,6 +6106,30 @@
         "title": "IdleSubscribersResponse",
         "type": "object"
       },
+      "KeptFileOut": {
+        "description": "A file under an old target that is NOT offered, and why.",
+        "properties": {
+          "old_target": {
+            "title": "Old Target",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "old_target",
+          "path",
+          "reason"
+        ],
+        "title": "KeptFileOut",
+        "type": "object"
+      },
       "LDAPLoginRequest": {
         "description": "Request model for LDAP login.",
         "properties": {
@@ -14240,6 +14264,221 @@
         "title": "SlmLLMConfigResponse",
         "type": "object"
       },
+      "StaleFileOut": {
+        "description": "A file offered for removal: byte-identical to a version git tracked at that path.",
+        "properties": {
+          "blob": {
+            "title": "Blob",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "old_target": {
+            "title": "Old Target",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "old_target",
+          "role",
+          "path",
+          "size_bytes",
+          "modified_at",
+          "blob"
+        ],
+        "title": "StaleFileOut",
+        "type": "object"
+      },
+      "StaleFileResult": {
+        "description": "What happened to one approved file.",
+        "properties": {
+          "old_target": {
+            "title": "Old Target",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "old_target",
+          "path",
+          "result"
+        ],
+        "title": "StaleFileResult",
+        "type": "object"
+      },
+      "StaleFilesListing": {
+        "description": "The read-only listing for one node; ``error`` set means it could not be trusted and nothing is offered.",
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "kept": {
+            "items": {
+              "$ref": "#/components/schemas/KeptFileOut"
+            },
+            "title": "Kept",
+            "type": "array"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "stale": {
+            "items": {
+              "$ref": "#/components/schemas/StaleFileOut"
+            },
+            "title": "Stale",
+            "type": "array"
+          },
+          "total_stale": {
+            "title": "Total Stale",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node_id",
+          "commit",
+          "stale",
+          "kept",
+          "total_stale"
+        ],
+        "title": "StaleFilesListing",
+        "type": "object"
+      },
+      "StaleFilesProposalResponse": {
+        "description": "What the admin trigger did for a node; an empty list means nothing stale was found.",
+        "properties": {
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/StaleFilesProposed"
+            },
+            "title": "Proposals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "node_id",
+          "proposals"
+        ],
+        "title": "StaleFilesProposalResponse",
+        "type": "object"
+      },
+      "StaleFilesProposed": {
+        "description": "One proposal per old sync location: the backend's approval, and how many of the found files it lists.",
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "old_target": {
+            "title": "Old Target",
+            "type": "string"
+          },
+          "proposed": {
+            "title": "Proposed",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_found": {
+            "title": "Total Found",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "old_target",
+          "approval_id",
+          "status",
+          "created",
+          "proposed",
+          "total_found"
+        ],
+        "title": "StaleFilesProposed",
+        "type": "object"
+      },
+      "StaleFilesRemovalResponse": {
+        "description": "The report of an approved removal.",
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/StaleFileResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "node_id",
+          "approval_id",
+          "removed",
+          "results"
+        ],
+        "title": "StaleFilesRemovalResponse",
+        "type": "object"
+      },
       "StepCompleteRequest": {
         "description": "Request to mark a wizard step as completed.",
         "properties": {
@@ -21745,6 +21984,136 @@
         ]
       }
     },
+    "/api/code-sync/stale-files/{node_id}": {
+      "get": {
+        "description": "The node's stale files, read-only; ``error`` is set when the listing could not be trusted.",
+        "operationId": "get_stale_files_api_code_sync_stale_files__node_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFilesListing"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Stale Files",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/stale-files/{node_id}/proposal": {
+      "post": {
+        "description": "Propose removing the node's stale files, one proposal per old sync location; 503 when the backend is down.",
+        "operationId": "propose_stale_files_removal_api_code_sync_stale_files__node_id__proposal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFilesProposalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Propose Stale Files Removal",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/status": {
       "get": {
         "description": "Get current code sync status.\n\nReturns the latest version, local version, and count of outdated nodes.",
@@ -24581,6 +24950,76 @@
         ],
         "summary": "Delete Node Ssh Password",
         "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/api/internal/nodes/{node_id}/stale-sync-files/removal": {
+      "post": {
+        "description": "Remove the approved stale files that are still byte-identical to what git tracked.",
+        "operationId": "remove_node_stale_sync_files_api_internal_nodes__node_id__stale_sync_files_removal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFilesRemovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Node Stale Sync Files",
+        "tags": [
+          "health",
           "internal"
         ]
       }
@@ -30437,6 +30876,22 @@
               "default": false,
               "title": "Include Inactive",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
             }
           }
         ],
@@ -38736,6 +39191,22 @@
               "title": "Credential Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -38785,6 +39256,22 @@
               "title": "Include Inactive",
               "type": "boolean"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -38832,6 +39319,22 @@
             "schema": {
               "title": "Token",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
             }
           }
         ],

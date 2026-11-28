@@ -3,8 +3,7 @@
 """Registry for AUTOBOT_* environment variables.
 
 Discovery and type-safe access; ``check_env_var_registry`` requires every var to be registered. New vars go in an
-``env_registry_<component>.py`` sibling imported below; this file is at its ceiling (#14236). Closes GH#7081.
-"""
+``env_registry_<component>.py`` sibling imported below; this file is at its ceiling (#14236). Closes GH#7081."""
 
 from __future__ import annotations
 
@@ -56,11 +55,11 @@ def env(name: str, default: Any = None) -> Any:
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
+from autobot_shared import env_registry_ai_stack  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_host_binding  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
-from autobot_shared import env_registry_llc  # noqa: E402,F401
-from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_admin_files,
     env_registry_agent_tools,
@@ -75,6 +74,8 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_gateway,
     env_registry_kb_graph,
     env_registry_ledger,
+    env_registry_llc,
+    env_registry_logging,
     env_registry_memory,
     env_registry_mesh_reembed,
     env_registry_npu,
@@ -90,6 +91,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_testing,
     env_registry_tls,
     env_registry_transcriber,
+    env_registry_vnc,
     env_registry_worker_loop,
 )
 
@@ -141,7 +143,6 @@ register_env_var(
 )
 
 # --- backend: env_registry_backend.py (#22030: folded to make room for the slm_client import) --- chat ---
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
@@ -329,8 +330,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OTEL_SERVICE_VERSION",
         type=str,
-        default="1.5.0",
-        description="Service version tag attached to all OTel spans.",
+        default="",
+        description="Service version tag attached to all OTel spans; unset omits `service.version` (#17821).",
         component="otel",
     )
 )
@@ -341,8 +342,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_PROMETHEUS_URL",
         type=str,
-        default="http://10.0.0.4:9090",
-        description="Base URL of the Prometheus metrics server.",
+        default="",
+        description="Base URL of the Prometheus metrics server (unset: the SSOT monitoring node).",
         component="monitoring",
     )
 )
@@ -1028,17 +1029,16 @@ register_env_var(
     )
 )
 
-# Stays here rather than moving to env_registry_backend with the rest of its
-# component: its default is a baselined hardcoded value, and the baseline refuses
-# an entry for a file the same change created — correctly, since it cannot tell a
-# moved value from a new one. Moving this spec would mean either stranding the
-# record or rewriting a default that is out of scope here (#15624).
+# Stays here rather than moving to env_registry_backend with the rest of its component: its default is a
+# baselined hardcoded value, and the baseline refuses an entry for a file the same change created -- correctly,
+# since it cannot tell a moved value from a new one. Moving this spec would mean either stranding the record or
+# rewriting a default that is out of scope here (#15624).
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_BACKEND_URL",
         type=str,
-        default="http://10.255.255.254:8001",
-        description="Full base URL of the AutoBot backend service (overrides HOST+PORT).",
+        default="",
+        description="Full base URL of the AutoBot backend service (overrides HOST+PORT; unset: built from those two).",
         component="backend",
     )
 )

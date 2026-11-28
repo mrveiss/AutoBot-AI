@@ -25,10 +25,7 @@ These tests assert the real fix:
   call genuinely fails -- never on a successful real embedding.
 """
 
-import importlib.util
-import sys
 from pathlib import Path
-from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -43,6 +40,7 @@ import pytest
 # entirely, matching the module ``analyzer.py``'s local
 # ``from services.npu_client import ...`` actually resolves via sys.modules.
 import services.npu_client as npu_client_module  # noqa: E402
+from testkit.real_pattern_analysis import load_real_pattern_analysis_package
 
 
 # ---------------------------------------------------------------------------
@@ -53,28 +51,7 @@ import services.npu_client as npu_client_module  # noqa: E402
 # ---------------------------------------------------------------------------
 def _load_real_pattern_analysis_package():
     base = Path(__file__).resolve().parent  # code_intelligence/pattern_analysis/
-    pkg_name = "_real_pattern_analysis_12407"
-
-    if pkg_name not in sys.modules:
-        pkg = ModuleType(pkg_name)
-        pkg.__path__ = [str(base)]
-        pkg.__package__ = pkg_name
-        sys.modules[pkg_name] = pkg
-        for sub in (
-            "types",
-            "complexity_analyzer",
-            "refactoring_generator",
-            "regex_detector",
-            "storage",
-            "analyzer",
-        ):
-            spec = importlib.util.spec_from_file_location(f"{pkg_name}.{sub}", base / f"{sub}.py")
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[f"{pkg_name}.{sub}"] = module
-            spec.loader.exec_module(module)
-            setattr(pkg, sub, module)
-
-    return sys.modules[pkg_name]
+    return load_real_pattern_analysis_package(base, "_real_pattern_analysis_12407")
 
 
 @pytest.fixture

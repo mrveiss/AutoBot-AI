@@ -19,14 +19,18 @@ from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
+import redis.asyncio as async_redis
+
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import note_chat_turn_model
+from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
+from chat_workflow.generation_timing import log_generation_timing
+from chat_workflow.invalid_call_abort import abort_message, should_abort
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.reply_persistence import (
@@ -34,9 +38,19 @@ from chat_workflow.reply_persistence import (
     iteration_reply_entries,
     later_respond_entries,
     stamp_model,
+    stamp_usage,
+    surviving_reply,
 )
+from chat_workflow.step_collapse import render_history
+from chat_workflow.step_guidance import latest_step_guidance, return_code_line
 from chat_workflow.step_outcome import executed_count, not_run_note
-from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
+from chat_workflow.stream_identity import (
+    stream_identity_marker,
+    streamed_prose_identity,
+    streamed_prose_model,
+    streamed_prose_usage,
+    usage_marker,
+)
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
@@ -47,14 +61,13 @@ from chat_workflow.tool_call_grammar import (
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .answer_sources import answer_target, attach_answer_proof, kb_source, proof_message
-from .attachment_context import apply_attachments, take_notices
+from .attachment_context import NOTICE_TYPE, apply_attachments, take_notices
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .kb_sources import _kb_sources_from_citations
@@ -68,7 +81,9 @@ from .models import (
     build_governed_identity,
     filter_internal_prompts,
 )
+from .output_offload import offload_oversized_output
 from .plan_runner import open_for_ctx
+from .prompt_window import chat_request_options, note_prompt_eval
 from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role, stamp_verified_identity
@@ -288,7 +303,10 @@ class ChatWorkflowManager(
     async def _init_redis_client(self) -> None:
         """Initialize Redis client for conversation history."""
         try:
-            self.redis_client = await get_redis_manager(async_client=True, database="main")
+            client = get_redis_manager(async_client=True, database="main")
+            if isinstance(client, async_redis.Redis):  # an async client is connected by awaiting it
+                client = await client
+            self.redis_client = client
             logger.info("✅ Redis client initialized for conversation history")
         except Exception as redis_error:
             logger.warning(
@@ -467,10 +485,12 @@ class ChatWorkflowManager(
             return None
 
         try:
-            return json.loads(line_str)
+            chunk = json.loads(line_str)
         except json.JSONDecodeError as e:
             logger.error("Failed to parse stream chunk: %s", e)
             return None
+        log_generation_timing(chunk, chunk.get("model", ""))  # #22254: the final chunk carries the timings
+        return chunk
 
     def _handle_type_transition(
         self,
@@ -1673,6 +1693,7 @@ class ChatWorkflowManager(
             chunk_data = self._parse_stream_chunk(line)
             if not chunk_data:
                 continue
+            note_prompt_eval(chunk_data, selected_model)  # #22016: the final chunk says how much input was kept
             params = self._build_chunk_iteration_params(
                 chunk_data,
                 llm_response,
@@ -1713,7 +1734,7 @@ class ChatWorkflowManager(
                     break
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)
-                yield (None, llm_response, True, False)
+                yield (usage_marker(chunk_data, selected_model), llm_response, True, False)  # #21880
                 break
 
     def _format_execution_step(self, step_num: int, result: Dict[str, Any]) -> str:
@@ -1757,7 +1778,10 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
+        return (
+            f"**Step {step_num}:** `{cmd}`\n- Status: {status}{return_code_line(result)}"  # #22252
+            f"\n- Output:{framed_tool_output(output_text)}"
+        )
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.
@@ -1841,12 +1865,15 @@ before summarizing.
         Issue #3784: system_prompt removed — sent via Ollama system field to avoid
         double-injection on continuation iterations.
         """
-        history_parts = [self._format_execution_step(i, result) for i, result in enumerate(execution_history, 1)]
+        history_parts = render_history(self._format_execution_step, execution_history)  # #16621
         history_text = "\n\n".join(history_parts)
         steps_completed = executed_count(execution_history)  # #21959: a step that did not run is not completed
         instructions = self._get_continuation_instructions(
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
+
+        guidance = latest_step_guidance(execution_history)  # #22252, #22253
+        history_text += f"\n\n{guidance}" if guidance else ""
 
         return f"""## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
 
@@ -1905,24 +1932,22 @@ before summarizing.
         actually consumes (see _attach_vision_payload) — vision-capable models get it,
         non-vision models keep the existing text-only "prompt" field, unaffected.
         """
-        note_chat_turn_model(selected_model)  # #21878: this model is resident now; side calls match its context
         payload = {
             "model": selected_model,
             "prompt": current_prompt,
             "stream": True,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "num_ctx": ModelConfig.CHAT_NUM_CTX,
-            },
+            "options": chat_request_options(selected_model),  # #22016: num_ctx and num_predict from one module
         }
         if system_prompt:
             payload["system"] = system_prompt
         if api_kwargs:
             payload.update(api_kwargs)
         supports_vision = vision_capable if vision_capable is not None else _model_supports_vision(selected_model)
-        vision_ready = image_b64 and supports_vision
-        if vision_ready and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE):
+        if (
+            image_b64
+            and supports_vision
+            and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE)
+        ):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
 
@@ -2130,58 +2155,8 @@ before summarizing.
             return None
 
     async def _offload_oversized_output(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Write oversized tool output aside before it enters the model's context (#13997).
-
-        #13692 built this and wired it only into ``AgentLoop``, which is
-        documented as never instantiated in production — so on the live chat path
-        it never fired, and its re-read tool could never resolve an anchor. This
-        is the seam that actually assembles what the model sees.
-
-        Worth knowing what it replaces: the chat path has **no general cap** on
-        tool output today. ``execute_command`` — the likeliest source of a
-        window-consuming result — is unbounded, and the per-tool caps that do
-        exist (``web_search`` at 3000 chars, subagent results at 1000) discard
-        the remainder permanently. The spill is non-lossy: the excerpt carries an
-        anchor and the full output stays retrievable.
-
-        Off by default and non-fatal: with the flag unset this returns *results*
-        unchanged, so a turn is byte-identical to one without this call.
-        """
-        try:
-            from agent_loop.tool_output_spill import _EXECUTION_RESULT_TEXT_KEYS as _SPILL_PAYLOAD_KEYS
-            from agent_loop.tool_output_spill import (
-                spill_execution_results_async,
-            )
-
-            run_id = self._spill_run_id()
-            if not run_id:
-                # No run bound: an artifact written now could never be re-read,
-                # so writing it would be pure cost. The agent loop makes the
-                # same call for the same reason.
-                return results
-            rewritten, spilled = await spill_execution_results_async(run_id, results)
-        except Exception:
-            # Losing the offload is always better than losing the observation.
-            logger.warning("Tool-output offload failed; keeping full output", exc_info=True)
-            return results
-
-        if spilled:
-            # Summed over the SAME keys the adapter offloads, not just `output`.
-            # Reading only `output` reported 0 -> 0 for every shell result, since
-            # those carry `stdout`/`stderr` — so the one measurement this change
-            # exists to produce was blind to its most common case.
-            def _payload_chars(entries: List[Dict[str, Any]]) -> int:
-                return sum(len(v) for e in entries for k in _SPILL_PAYLOAD_KEYS if isinstance((v := e.get(k)), str))
-
-            before = _payload_chars(results)
-            after = _payload_chars(rewritten)
-            logger.info(
-                "Offloaded %d oversized tool result(s): %d -> %d chars (#13997)",
-                spilled,
-                before,
-                after,
-            )
-        return rewritten
+        """Write oversized tool output aside before it enters the model's context (#13997); see ``output_offload``."""
+        return await offload_oversized_output(self._spill_run_id, results)
 
     async def _handle_execution_summary(
         self,
@@ -2268,7 +2243,7 @@ before summarizing.
         Yields:
             WorkflowMessage items, then (results, has_pending_approval, should_break, break_loop_requested)
         """
-        new_execution_results = []
+        new_execution_results: List[Dict[str, Any]] = []
         has_pending_approval = False
         break_loop_requested = False
 
@@ -2324,7 +2299,9 @@ before summarizing.
         tool_calls = None
 
         # #8993 thinking mode / #9017 reasoning effort (see reasoning_kwargs).
-        api_kwargs = await build_reasoning_api_kwargs(ctx.context, ctx.selected_model)
+        api_kwargs = await build_reasoning_api_kwargs(
+            ctx.context, ctx.selected_model, ctx.ollama_endpoint, ctx.session_id
+        )
         # Issue #11538: thread the most recent browser/VNC screenshot (last
         # VISION_TOOL_LOOKBACK_MESSAGES tool results) into this iteration's payload.
         latest_screenshot = _extract_latest_tool_screenshot(ctx.execution_history)
@@ -2468,12 +2445,8 @@ before summarizing.
             len(tool_calls),
         )
 
-        new_results, has_pending_approval, should_break, break_loop_requested = (
-            [],
-            False,
-            False,
-            False,
-        )
+        new_results: List[Dict[str, Any]] = []
+        has_pending_approval, should_break, break_loop_requested = False, False, False
 
         async for item in self._process_tool_results(
             tool_calls,
@@ -2578,7 +2551,7 @@ before summarizing.
         Yields:
             WorkflowMessages, then should_continue boolean. Issue #620.
         """
-        new_results = []
+        new_results: List[Dict[str, Any]] = []
         has_pending_approval = False
         should_break = False
         break_loop_requested = False
@@ -2638,7 +2611,7 @@ before summarizing.
             return
 
         should_continue = False
-        async for item in self._yield_tool_results_and_decide(tool_calls, iteration, ctx):
+        async for item in self._yield_tool_results_and_decide(tool_calls or [], iteration, ctx):
             if isinstance(item, bool):
                 should_continue = item
             else:
@@ -2780,7 +2753,7 @@ before summarizing.
         Build continuation prompt and log debug info.
         """
         current_prompt = self._build_continuation_prompt(
-            ctx.message,
+            ctx.message or "",
             execution_history,
             ctx.consecutive_invalid_tool_calls,
         )
@@ -2824,8 +2797,8 @@ before summarizing.
         Yields messages, then (all_responses, history, error).
         """
         execution_history = ctx.execution_history
-        all_llm_responses = []
-        current_prompt = ctx.initial_prompt
+        all_llm_responses: List[str] = []
+        current_prompt = ctx.initial_prompt or ""
 
         self._log_iteration_start(ctx)
         plan = await open_for_ctx(self, ctx)  # #21023: the same plan_runner as the graph; NoPlan when off
@@ -2869,6 +2842,10 @@ before summarizing.
 
             if not should_continue:
                 self._log_task_complete(iteration, len(execution_history))
+                break
+
+            if should_abort(ctx.consecutive_invalid_tool_calls):  # #20848: a reminder did not help; stop honestly
+                yield await abort_message(ctx, iteration)
                 break
 
             current_prompt = plan.with_block(self._build_and_log_continuation_prompt(ctx, execution_history))
@@ -2938,8 +2915,9 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers: internal stream control, empty content (Issue #1141).
-            if wf_msg.type == "segment_complete":
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141). Skip notices
+            # too: ``persist_notices`` stored them once as system entries; this copy is the live display only (#22016).
+            if wf_msg.type in ("segment_complete", NOTICE_TYPE):
                 continue
 
             sender = "system" if wf_msg.type == "terminal_output" else "assistant"
@@ -2952,8 +2930,8 @@ before summarizing.
                 clean_reply_text(wf_msg.content) if sender == "assistant" else strip_unparsed_tool_tags(wf_msg.content)
             )
             # Issue #4448: Extract KB-only citations into top-level sources list.
-            # metadata.citations includes the always-appended llm_training entry —
-            # filter it out so sources contains only knowledge-base references.
+            # metadata.citations holds knowledge-base entries only (#21976: the answer's own
+            # sources, tool steps included, are attached at the turn's end) — keep those here.
             raw_citations = (wf_msg.metadata or {}).get("citations", [])
             kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
             batch.append(
@@ -3008,6 +2986,7 @@ before summarizing.
         entries.extend(tool_entries)
         for entry in tool_entries:
             stamp_model(entry, model)
+        stamp_usage(surviving_reply(final_entry, tool_entries), streamed_prose_usage(iter_messages))  # #21880
         return entries, consumed, final_entry
 
     def _build_persist_batch(
@@ -3278,9 +3257,9 @@ before summarizing.
         stamp_verified_identity(session.metadata, context)
         if context:
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
-            # #11501 T2: CEO-chat path carries company_id — used to append the
-            # board-tool teaching to the system prompt for this turn only.
-            session.metadata["company_id"] = context.get("company_id") or ""
+            # #11501 T2: the board-tool teaching is appended for this turn only. The company is the VERIFIED one, never
+            # the request body's own ``company_id`` (#16692).
+            session.metadata["company_id"] = context.get(VERIFIED_COMPANY_KEY) or ""
             # #11585: per-request model override — persisted on the session so
             # later messages in this conversation inherit the choice.
             if context.get("model"):
@@ -3391,7 +3370,7 @@ before summarizing.
             llm_params, session_id, terminal_session_id, message, workflow_messages, context
         )
 
-        all_llm_responses = []
+        all_llm_responses: List[str] = []
         async for item in self._execute_llm_continuation_loop(ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 all_llm_responses, _, error = item
@@ -3636,7 +3615,7 @@ before summarizing.
 
         Issue #620: Original implementation preserved as fallback.
         """
-        workflow_messages = []
+        workflow_messages: List[Any] = []
 
         try:
             (

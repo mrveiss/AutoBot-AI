@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge_web import SiteMapRequest, SiteMapResponse, SiteMapUrlEntry
 from auth_middleware import get_current_user
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 
@@ -71,7 +72,7 @@ async def get_site_map(request: SiteMapRequest) -> SiteMapResponse:
         )
     except Exception as exc:
         logger.error("site-map failed for domain %s: %s", request.domain, exc)
-        raise HTTPException(status_code=500, detail=f"site-map extraction failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=safe_http_detail(exc, "site-map extraction failed")) from exc
 
     urls = _entries_to_response_urls(result.entries)
     return SiteMapResponse(

@@ -5,7 +5,7 @@
 # Author: mrveiss
 """The one safe way to clone an external repository (#16488).
 
-The `/autobot-dev-skills:lifecycle research` and `adopt` workflows read other people's repositories, and planting
+The `/research-hub technical` and `adopt` workflows read other people's repositories, and planting
 a prompt injection in a README, a commit message, or `.git` itself is a known
 technique. This module is the **only** path either workflow takes when a clone is
 unavoidable (they prefer `gh api repos/{o}/{r}/contents/...` and raw files —
@@ -66,6 +66,7 @@ from typing import List, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autobot_shared.html_comments import HTML_COMMENT  # noqa: E402
 from autobot_shared.paths import strict_git_env  # noqa: E402
 
 __all__ = [
@@ -255,9 +256,8 @@ _ZERO_WIDTH = re.compile("[\u200b-\u200d\u2060\ufeff]")
 #: from its underlying byte order (the "Trojan Source" class of attack).
 _BIDI_CONTROL = re.compile("[\u202a-\u202e\u2066-\u2069]")
 
-#: HTML comments in markdown — invisible when rendered, plainly visible to
-#: whatever reads the raw source, exactly the asymmetry an injection wants.
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+# HTML comments in markdown are invisible when rendered, plainly visible to whatever reads the raw source, exactly
+# the asymmetry an injection wants; the pattern is the shared ``HTML_COMMENT`` (#22261).
 
 #: Minimum run length before a base64-alphabet blob is worth flagging. Below
 #: this, ordinary identifiers and hashes false-positive; measured against this
@@ -270,7 +270,7 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
     "unicode_tag_characters": _TAG_CHARACTERS,
     "zero_width": _ZERO_WIDTH,
     "bidi_control": _BIDI_CONTROL,
-    "html_comment": _HTML_COMMENT,
+    "html_comment": HTML_COMMENT,
 }
 
 
@@ -323,7 +323,7 @@ def strip_hidden_payloads(text: str, *, base64_threshold: int = BASE64_BLOB_THRE
     text = _TAG_CHARACTERS.sub("", text)
     text = _ZERO_WIDTH.sub("", text)
     text = _BIDI_CONTROL.sub("", text)
-    text = _HTML_COMMENT.sub("", text)
+    text = HTML_COMMENT.sub("", text)
     text = _BASE64_RUN.sub(
         lambda m: m.group(0) if len(m.group(0)) < base64_threshold else "[base64 blob stripped]",
         text,

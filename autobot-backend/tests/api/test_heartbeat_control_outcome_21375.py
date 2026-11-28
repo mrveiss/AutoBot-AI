@@ -16,7 +16,7 @@ from api.heartbeat_controls import RECONCILE_FAILED, SCHEDULER_FAILED_DETAIL, SU
 from api.heartbeat_scope import AgentScope
 from api.schemas_heartbeat import AgentPauseRequest, AgentResumeRequest, AgentTerminateRequest
 from models.heartbeat import HeartbeatStatus
-from services.audit import outcome
+from services.audit import audit as audit_store
 from services.audit.outcome import OUTCOME_MISSING_MARKER
 from services.heartbeat_scheduler import _get_or_create_state
 
@@ -47,7 +47,7 @@ def harness(monkeypatch):
         rows.append(SimpleNamespace(id=event.id, action=event.action, outcome=event.outcome, meta=event.metadata))
         return True
 
-    monkeypatch.setattr(outcome, "record_committed", _record)
+    monkeypatch.setattr(audit_store, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_state_to_response", lambda state, *a: state)
     monkeypatch.setattr(heartbeat, "_paused_by_name", AsyncMock(return_value=None))
     session = MagicMock(commit=AsyncMock(), refresh=AsyncMock(), rollback=AsyncMock())
@@ -186,7 +186,7 @@ async def test_a_missing_outcome_row_is_logged_with_a_findable_marker(harness, m
         harness.rows.append(event)
         return event.outcome == "attempted"
 
-    monkeypatch.setattr(outcome, "record_committed", _only_the_attempt)
+    monkeypatch.setattr(audit_store, "record_committed", _only_the_attempt)
     await harness.call("pause", _state("pause"))
     (line,) = [r.getMessage() for r in caplog.records if OUTCOME_MISSING_MARKER in r.getMessage()]
     attempt = harness.rows[0]

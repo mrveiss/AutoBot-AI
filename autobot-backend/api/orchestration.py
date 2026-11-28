@@ -11,8 +11,21 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
-from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    AgentRecommendationRequest,
+    OrchestrationActiveWorkflowsResponse,
+    OrchestrationAgentPerformanceResponse,
+    OrchestrationAgentRecommendResponse,
+    OrchestrationCapabilitiesResponse,
+    OrchestrationExamplesResponse,
+    OrchestrationStatusResponse,
+    OrchestrationStrategiesResponse,
+    OrchestrationWorkflowPlanResponse,
+    WorkflowRequest,
+)
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import optional_import
 
@@ -28,40 +41,25 @@ else:
     _ORCHESTRATOR_AVAILABLE = False
     get_logger(__name__).warning("orchestrator module not available")
 
-from api.schemas_common import DataResponse
-from api.schemas_workflows import (
-    OrchestrationActiveWorkflowsResponse,
-    OrchestrationAgentPerformanceResponse,
-    OrchestrationAgentRecommendResponse,
-    OrchestrationCapabilitiesResponse,
-    OrchestrationExamplesResponse,
-    OrchestrationStatusResponse,
-    OrchestrationStrategiesResponse,
-    OrchestrationWorkflowPlanResponse,
-)
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-
 router = APIRouter()
 logger = get_logger(__name__)
 
 
 def _with_identity(context: dict | None, current_user: dict) -> dict:
-    """Return *context* augmented with the caller's tenant/user identity (#11015).
+    """Return *context* with the caller's VERIFIED tenant/user identity (#11015, #16692).
 
-    Threads ``org_id``/``user_id`` from the authenticated user into the planning
-    context so trajectory capture + retrieval stay isolated to the owning tenant.
-    Reuses the canonical ``extract_user_context_from_request`` (single precedence
-    for user/org resolution) rather than re-deriving it here (#11036 audit
-    follow-up). Never overrides a caller-supplied value.
+    Reuses the canonical ``extract_user_context_from_request`` for user/org resolution. The body's own
+    ``tenant_id`` / ``user_id`` are client claims: the verified value replaces them, and none is dropped.
     """
     from knowledge.search_filters import extract_user_context_from_request  # noqa: PLC0415
 
     ctx = dict(context or {})
     user_id, org_id, _ = extract_user_context_from_request(current_user)
-    if org_id and not ctx.get("tenant_id"):
-        ctx["tenant_id"] = str(org_id)
-    if user_id and not ctx.get("user_id"):
-        ctx["user_id"] = str(user_id)
+    for key, verified in (("tenant_id", org_id), ("user_id", user_id)):
+        if verified:
+            ctx[key] = str(verified)
+        else:
+            ctx.pop(key, None)
     return ctx
 
 

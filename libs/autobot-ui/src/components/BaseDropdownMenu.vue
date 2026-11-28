@@ -35,6 +35,8 @@ export type MenuItemVariant = 'default' | 'danger'
 export interface MenuItem {
   key: string
   label: string
+  /** Optional hint shown as the item's native tooltip (translated by the app). */
+  description?: string
   disabled?: boolean
   variant?: MenuItemVariant
   /** Draw a separator above this item. */
@@ -84,6 +86,7 @@ const direction = computed(() => resolveDirection(props.dir))
             class="aui-menu__item"
             :class="`aui-menu__item--${item.variant ?? 'default'}`"
             :disabled="item.disabled"
+            :title="item.description"
             @select="emit('select', item.key)"
           >
             <slot name="item" :item="item">{{ item.label }}</slot>

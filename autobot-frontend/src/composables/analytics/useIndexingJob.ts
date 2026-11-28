@@ -19,6 +19,7 @@ import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { clearDuplicateResults } from './duplicatePayload'
 import { jobBelongsToSource } from './indexingJobSource'
 import { createPollSession } from './pollSession'
 import { endedRunOutcome, type RunStateHandle } from './useRunState'
@@ -535,7 +536,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     deps.problemsReport.value = []
     deps.codebaseStats.value = null
     deps.declarationAnalysis.value = []
-    deps.duplicateAnalysis.value = []
+    clearDuplicateResults(deps.duplicateAnalysis)
     deps.hardcodeAnalysis.value = []
     deps.chartData.value = null
 

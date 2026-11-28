@@ -84,7 +84,7 @@ datasketch>=2.0.0
 ddgs>=9.16.1
 defusedxml>=0.7.1
 docker>=7.2.0
-fakeredis>=2.40.0
+fakeredis>=2.41.0  # >=2.41.0: handles redis 8.2 deprecated_args wrapper (#22120)
 faiss-cpu>=1.15.1
 greenlet>=3.5.6
 httpx>=0.28.1
@@ -108,6 +108,8 @@ openai>=2.54.0,<3
 opencv-python>=5.0.0.93
 opentelemetry-api==1.45.2
 opentelemetry-exporter-otlp-proto-grpc==1.45.2
+# Declared by requirements.txt (production) and requirements-ci/storage.txt (CI: the instrumentation test needs it, #21685).
+opentelemetry-instrumentation-fastapi>=0.66b2,<0.67  # paired with opentelemetry-api/sdk 1.45.x (0.N pairs with 1.(N-21)); bump together
 opentelemetry-proto==1.45.2
 opentelemetry-sdk==1.45.2
 paramiko>=5.1.0

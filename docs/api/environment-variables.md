@@ -6,7 +6,8 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_BACKEND_HOST` | `0.0.0.0` | Backend server host |
+| `AUTOBOT_BACKEND_HOST` | `127.0.0.1` | Address clients dial; never `0.0.0.0` (#18810) |
+| `AUTOBOT_BACKEND_BIND_HOST` | `127.0.0.1` | Address the backend listens on |
 | `AUTOBOT_BACKEND_PORT` | `8443` | Backend server port |
 | `AUTOBOT_BACKEND_API_ENDPOINT` | `https://localhost:8443` | Full API endpoint URL |
 | `AUTOBOT_BACKEND_TIMEOUT` | `60` | Request timeout in seconds |

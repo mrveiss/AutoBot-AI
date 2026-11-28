@@ -76,7 +76,7 @@ async def test_a_handshake_failure_closes_the_socket_before_any_relay():
         patch("api.vnc_proxy._forward_client_to_vnc", new=AsyncMock()) as mock_fwd_in,
         patch("api.vnc_proxy._forward_vnc_to_client", new=AsyncMock()) as mock_fwd_out,
     ):
-        await websocket_proxy(ws, "desktop")
+        await websocket_proxy(ws, "browser")
 
     mock_fwd_in.assert_not_awaited()
     mock_fwd_out.assert_not_awaited()
@@ -109,7 +109,7 @@ async def test_a_successful_handshake_reaches_the_relay():
         patch("api.vnc_proxy._forward_client_to_vnc", new=AsyncMock()) as mock_fwd_in,
         patch("api.vnc_proxy._forward_vnc_to_client", new=AsyncMock()) as mock_fwd_out,
     ):
-        await websocket_proxy(ws, "desktop")
+        await websocket_proxy(ws, "browser")
 
     mock_auth.assert_awaited_once_with(vnc_ws, ws, b"the-password")
     mock_fwd_in.assert_awaited_once()

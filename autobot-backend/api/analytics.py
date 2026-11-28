@@ -55,6 +55,7 @@ from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
@@ -1222,10 +1223,7 @@ async def analyze_root_cause(
         raise
     except Exception as e:
         logger.error(f"Root cause analysis failed for task {task_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Root cause analysis service error: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, "Root cause analysis service error"))
 
 
 # ------------------------------------------------------------------

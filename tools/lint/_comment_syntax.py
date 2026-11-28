@@ -44,9 +44,17 @@ behaviour matches what the seven call sites already relied on.
 from __future__ import annotations
 
 import re
+import sys
 from bisect import bisect_left
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple, Sequence
+
+# Run as a bare script by pre-commit and CI, where the repo root is not on sys.path; the lexer lives in autobot_shared.
+if str(Path(__file__).resolve().parents[2]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from autobot_shared.html_comments import HTML_COMMENT_PATTERN  # noqa: E402
+from autobot_shared.js_lexer import BLOCK_COMMENT, LINE_COMMENT, blank_block_comment, lex_js  # noqa: E402
 
 #: Comment markers by file suffix. Selected by file type rather than assumed,
 #: because the whole point is that the caller's file may not be Python.
@@ -75,6 +83,9 @@ _MARKERS: dict[str, tuple[str, ...]] = {
 #: Files with no suffix -- git hooks, `install.sh`-style scripts invoked by
 #: name. Hash is the only sane default and is what every such file here uses.
 _DEFAULT_MARKERS: tuple[str, ...] = ("#",)
+
+#: A Jinja template: `{# ... #}` comments are removed on top of the host format's line marker (#22099).
+JINJA_SUFFIX = ".j2"
 
 #: Suffixes whose quoting rules include a backslash escape outside quotes.
 #: In shell `echo \# x` prints a literal `#`; in Python it does not.
@@ -133,148 +144,33 @@ def strip_trailing_comment(line: str, markers: Sequence[str], *, escapes: bool =
     return line
 
 
-#: A `/` after one of these (or after nothing, or a newline) begins a regex literal, not a division. `<` and `>`
-#: are left out: `</tag>` and `<br/>` are everywhere in `.vue`, `a < /re/` is not (`=>` is handled apart, as are
-#: `++`/`--` and a postfix `!`). `of` and `in` are left out of the words: `of` is an ordinary identifier, and a regex
-#: literal is neither iterable nor a sensible right operand of `in`.
-_REGEX_AFTER = frozenset("(,=:[!&|?{};+-*%~^")
-_REGEX_AFTER_WORDS = frozenset({"return", "typeof", "case", "void", "delete", "throw"})
-_TRAILING_WORD = re.compile(r"[A-Za-z0-9_$]+$")
-
-
-def _ends_with_regex_word(before: str) -> bool:
-    """Whether *before* ends in a keyword after which an expression, and so a regex, may start."""
-    word = _TRAILING_WORD.search(before)
-    return word is not None and word.group() in _REGEX_AFTER_WORDS
-
-
-def _prefix_position(prior: str) -> bool:
-    """Whether a `!` that follows *prior* negates (so a regex may follow it) rather than asserts non-null (`x!`)."""
-    if not prior or prior[-1] not in ")]" and _TRAILING_WORD.search(prior) is None:
-        return True
-    return _ends_with_regex_word(prior)
-
-
 class _BlockScan:
-    """Position and string/comment state of one `strip_block_comments` pass; each method consumes one construct."""
+    """One `strip_block_comments` pass, read off the shared JS-family lexer (``autobot_shared.js_lexer``, #22194).
+
+    The lexer decides strings, template nesting, regex literals and comments; this keeps its own output contract:
+    each `/* */` comment becomes the blanks of its body (newlines kept), a `//` comment stays and its output offset is
+    recorded in ``cuts``, and ``unterminated`` names what the text ended inside.
+    """
 
     def __init__(self, text: str, line_comments: bool) -> None:
         self.text = text
         self.line_comments = line_comments
-        self.out: list[str] = []
-        self.recent = ""  # the last few emitted characters, runs of blanks collapsed to one
-        self.size = 0  # characters emitted so far
         self.cuts: list[int] = []  # output offsets where a `//` comment starts: the one source for "where it begins"
-        self.quote: str | None = None
-        self.in_block = False
-        self.i = 0
-
-    @property
-    def unterminated(self) -> str | None:
-        """What the pass ended inside, ``"block comment"`` or ``"quote"``; ``None`` when it ended in code."""
-        if self.in_block:
-            return "block comment"
-        return "quote" if self.quote is not None else None
+        self.unterminated: str | None = None  # ``"block comment"`` or ``"quote"`` once run() ended inside one
 
     def run(self) -> str:
-        while self.i < len(self.text):
-            if self.in_block:
-                self._in_block()
-            elif self.quote is not None:
-                self._in_string()
-            else:
-                self._in_code()
-        return "".join(self.out)
-
-    def _emit(self, piece: str) -> None:
-        self.out.append(piece)
-        self.size += len(piece)
-        if piece.strip(" \t"):
-            self.recent = (self.recent + piece)[-16:]
-        elif not self.recent.endswith(" "):
-            self.recent += " "
-
-    def _in_block(self) -> None:
-        """Inside `/* ... */`: blank everything but newlines, leave at the closing `*/`."""
-        if self.text.startswith("*/", self.i):
-            self.in_block = False
-            self.i += 2
-            return
-        self._emit("\n" if self.text[self.i] == "\n" else " ")
-        self.i += 1
-
-    def _in_string(self) -> None:
-        """Inside a string literal: keep it, honour a backslash escape, leave at the matching quote."""
-        char = self.text[self.i]
-        if char == "\\":
-            size = 3 if self.text.startswith("\r\n", self.i + 1) else 2  # a CRLF continuation is one escape
-            self._emit(self.text[self.i : self.i + size])
-            self.i += size
-            return
-        if char == self.quote or (char == "\n" and self.quote != "`"):
-            self.quote = None  # only a template literal runs past a newline; an apostrophe in prose must not (#21571)
-        self._emit(char)
-        self.i += 1
-
-    def _in_code(self) -> None:
-        """Outside any string or block: open a string, a block, step over a `//` comment or a regex; else keep."""
-        char = self.text[self.i]
-        if char in ("'", '"', "`"):
-            self.quote = char
-        elif self.text.startswith("/*", self.i):
-            self.in_block = True
-            self.i += 2
-            return
-        elif self.line_comments and self.text.startswith("//", self.i):
-            self.cuts.append(self.size)
-            self._keep_to(self._line_end())
-            return
-        elif self.line_comments and char == "/" and self._regex_allowed() and self._regex_end():
-            self._keep_to(self._regex_end())
-            return
-        self._emit(char)
-        self.i += 1
-
-    def _keep_to(self, end: int) -> None:
-        self._emit(self.text[self.i : end])
-        self.i = end
-
-    def _line_end(self) -> int:
-        end = self.text.find("\n", self.i)
-        return len(self.text) if end < 0 else end
-
-    def _regex_allowed(self) -> bool:
-        """Whether a `/` here opens a regex literal: at a line start, or after an operator or a keyword."""
-        before = self.recent.rstrip(" \t")
-        if before[-2:] in ("++", "--"):
-            return False  # a postfix increment ends an operand, so the slash divides
-        if before[-2:] == "=>":
-            return True  # an arrow function's body
-        if before[-1:] == "!":
-            return _prefix_position(before[:-1].rstrip(" \t"))
-        if not before or before[-1] == "\n" or before[-1] in _REGEX_AFTER:
-            return True
-        return _ends_with_regex_word(before)
-
-    def _regex_end(self) -> int:
-        """Index after the closing `/` of the regex literal opening here, 0 when there is none to accept.
-
-        0 when it does not close on this line, or when the close is followed by `/` or `*`: that is a division
-        whose operand is followed by a comment opener, and the comment rules must see it.
-        """
-        in_class, j = False, self.i + 1
-        while j < len(self.text) and self.text[j] != "\n":
-            char = self.text[j]
-            if char == "\\":
-                j += 1
-            elif char == "[":
-                in_class = True
-            elif char == "]":
-                in_class = False
-            elif char == "/" and not in_class:
-                return 0 if self.text[j + 1 : j + 2] in ("/", "*") else j + 1
-            j += 1
-        return 0
+        lexed = lex_js(self.text, line_comments=self.line_comments)
+        self.unterminated = lexed.unterminated
+        out: list[str] = []
+        size = 0
+        for kind, piece in lexed.pieces:
+            if kind == BLOCK_COMMENT:
+                piece = blank_block_comment(piece)
+            elif kind == LINE_COMMENT:
+                self.cuts.append(size)
+            out.append(piece)
+            size += len(piece)
+        return "".join(out)
 
 
 def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
@@ -318,7 +214,7 @@ _SFC_MARKUP = re.compile(
     rf"(?P<code>^{SCRIPT_OR_STYLE_ELEMENT})"
     r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$"
     r"|(?P<body>(?:(?!^<(?:script|style)(?=[\s>/])).)*)</template\s*>)"
-    r"|(?P<comment>^<!--.*?-->)",
+    rf"|(?P<comment>^{HTML_COMMENT_PATTERN})",
     re.DOTALL | re.IGNORECASE | re.MULTILINE,
 )
 
@@ -375,8 +271,57 @@ def _scan_file(text: str, suffix: str) -> _FileScan | None:
     return _FileScan(out, scan.cuts, scan.unterminated)
 
 
+#: Jinja's delimiters: a comment, and the two constructs whose body is Jinja code (strings live only there).
+_JINJA_COMMENT = ("{#", "#}")
+_JINJA_CODE = {"{{": "}}", "{%": "%}"}
+
+
+def _jinja_code_end(text: str, i: int, close: str) -> int:
+    """The offset just past the *close* of the Jinja expression whose body starts at *i*; quoted text is skipped."""
+    quote = None
+    while i < len(text):
+        char = text[i]
+        if quote is not None and char == "\\":
+            i += 1  # the escaped character is data
+        elif quote is not None:
+            quote = None if char == quote else quote
+        elif char in ("'", '"'):
+            quote = char
+        elif text.startswith(close, i):
+            return i + len(close)
+        i += 1
+    return len(text)
+
+
+def blank_jinja_comments(text: str) -> str:
+    """*text* with each Jinja `{# ... #}` comment (single- or multi-line) blanked, newlines kept (#22099).
+
+    Text outside `{{ }}` / `{% %}` has no quotes in Jinja, so a `{#` there opens a comment whatever surrounds it; in
+    an expression a quoted `"{#"` is a string and is data. An unclosed `{#` blanks to the end of the text.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        opener = next((o for o in (*_JINJA_CODE, _JINJA_COMMENT[0]) if text.startswith(o, i)), None)
+        if opener is None:
+            out.append(text[i])
+            i += 1
+            continue
+        if opener in _JINJA_CODE:
+            end = _jinja_code_end(text, i + 2, _JINJA_CODE[opener])
+            out.append(text[i:end])
+        else:
+            found = text.find(_JINJA_COMMENT[1], i + 2)
+            end = len(text) if found < 0 else found + 2
+            out.append(_blank(text[i:end]))
+        i = end
+    return "".join(out)
+
+
 def _scan_block_syntax(text: str, suffix: str) -> tuple[str, list[int] | None]:
     """*text* with block comments blanked, and the offsets where `//` comments start; `None` for other syntaxes."""
+    if suffix == JINJA_SUFFIX:
+        return blank_jinja_comments(text), None
     scanned = _scan_file(text, suffix)
     return (text, None) if scanned is None else (scanned.text, scanned.cuts)
 
@@ -502,7 +447,7 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
 #: A ``<script>`` element (group 1, whole) or an HTML comment, whichever starts first. Markup has no line comments, so
 #: the comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'``
 #: in JavaScript is a string and not a comment. A comment that wraps a script element starts first and goes whole.
-_HTML_SCRIPT_OR_COMMENT = re.compile(f"({SCRIPT_ELEMENT})|<!--.*?-->", SCRIPT_ELEMENT_FLAGS)
+_HTML_SCRIPT_OR_COMMENT = re.compile(f"({SCRIPT_ELEMENT})|{HTML_COMMENT_PATTERN}", SCRIPT_ELEMENT_FLAGS)
 
 
 def strip_html_comments(text: str) -> str:
@@ -512,7 +457,7 @@ def strip_html_comments(text: str) -> str:
 
 
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_HTML_OR_BLOCK_COMMENT = re.compile(rf"({SCRIPT_ELEMENT})|<!--.*?-->|/\*.*?\*/", SCRIPT_ELEMENT_FLAGS)
+_HTML_OR_BLOCK_COMMENT = re.compile(rf"({SCRIPT_ELEMENT})|{HTML_COMMENT_PATTERN}|/\*.*?\*/", SCRIPT_ELEMENT_FLAGS)
 
 
 def _blank(text: str) -> str:

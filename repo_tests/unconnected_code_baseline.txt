@@ -25,10 +25,7 @@
 module:autobot-backend/agents/ac_verification_run.py	#10603
 module:autobot-backend/agents/browser/captcha_solver.py	#10603
 module:autobot-backend/agents/dev_loop_issue_gate.py	#10603
-module:autobot-backend/agents/hierarchical_agent.py	#10603
 module:autobot-backend/agents/knowledge_retrieval_agent.py	#10603
-module:autobot-backend/agents/task_retry_strategy.py	#10603
-module:autobot-backend/chat_intent_detector.py	#10603
 module:autobot-backend/code_analysis/auto-tools/tool_base.py	#10603
 module:autobot-backend/code_analysis/setup.py	#10603
 module:autobot-backend/code_analysis/src/performance_analyzer.py	#10603
@@ -47,8 +44,6 @@ module:autobot-backend/llc/adapters/http_adapter.py	#10603
 module:autobot-backend/llc/adapters/process_adapter.py	#10603
 module:autobot-backend/llc/services/attachment_test_support_19756.py	#10603
 module:autobot-backend/media/manager.py	#10603
-module:autobot-backend/middleware/analytics_middleware.py	#10603
-module:autobot-backend/middleware/tracing_middleware.py	#10603
 module:autobot-backend/models/document_version.py	#10603
 module:autobot-backend/models/settings.py	#10603
 module:autobot-backend/operator_dashboard/gmail_service.py	#10603
@@ -91,7 +86,6 @@ module:autobot-backend/skills/builtin/document_analysis.py	#10603
 module:autobot-backend/skills/builtin/note_taking.py	#10603
 module:autobot-backend/skills/builtin/skill_researcher.py	#10603
 module:autobot-backend/skills/builtin/voice_transcription.py	#10603
-module:autobot-backend/tools/delegate_tool.py	#10603
 module:autobot-backend/utils/adaptive_memory_manager.py	#10603
 module:autobot-backend/utils/async_database_pool.py	#10603
 module:autobot-backend/utils/chat_exceptions.py	#10603
@@ -106,7 +100,6 @@ module:autobot-backend/utils/pipeline_profiler.py	#10603
 module:autobot-backend/utils/security_patterns.py	#10603
 module:autobot-backend/utils/token_budget_chunking.py	#10603
 module:autobot-backend/utils/traced_http_client.py	#10603
-module:autobot-backend/utils/websocket_heartbeat.py	#10603
 module:autobot-slm-backend/_slm_stub_lifetime.py	#10603
 module:autobot-slm-backend/monitoring/benchmark_types.py	#10603
 module:autobot-slm-backend/monitoring/metrics/api_requests.py	#10603
@@ -150,8 +143,6 @@ table:service_dependencies	#10603
 table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
-route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#20904
-route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
 route:autobot-backend/api/a2a.py:DELETE /tasks/{task_id}	#10603
@@ -757,9 +748,6 @@ route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_screenshot	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_special_key	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/get_browser_vnc_context	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/observe_vnc_activity	#10603
-route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/control/status	#10603
-route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/acquire	#10603
-route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/release	#10603
 route:autobot-backend/api/vnc_proxy.py:WEBSOCKET /{vnc_type}/websockify	#10603
 route:autobot-backend/api/voice_bundle_user.py:GET /users/{user_id}/bundle	#10603
 route:autobot-backend/api/voice_bundle_user.py:PUT /users/{user_id}/bundle	#10603
@@ -874,9 +862,7 @@ route:autobot-backend/api/a2a.py:GET /tasks	#20970
 route:autobot-backend/api/a2a.py:POST /tasks	#20970
 route:autobot-backend/api/adapters.py:DELETE /agent/{agent_id}/override	#20970
 route:autobot-backend/api/adapters.py:POST /agent/{agent_id}/override	#20970
-route:autobot-backend/api/admin_event_logs.py:GET /event-logs	#20971
 route:autobot-backend/api/admin_oauth_bundle_strip.py:GET /oauth-bundle-strip	#20971
-route:autobot-backend/api/admin_ownerless_chat_sessions.py:GET /ownerless-chat-sessions	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-settings	#20971
 route:autobot-backend/api/admin_retention_policies.py:POST /retention-policies	#20971
@@ -1002,12 +988,10 @@ route:autobot-backend/api/auth.py:GET /permissions/{operation}	#20971
 route:autobot-backend/api/auth.py:GET /roles	#20971
 route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#20971
 route:autobot-backend/api/auth.py:POST /revoke-rs256-token	#20971
-route:autobot-backend/api/auth.py:POST /signup	#20971
 route:autobot-backend/api/auth.py:POST /validate	#20971
 route:autobot-backend/api/cache_management.py:GET /advanced-stats	#20974
 route:autobot-backend/api/cache_management.py:POST /clear-all	#20974
 route:autobot-backend/api/cache_management.py:POST /warm	#20974
-route:autobot-backend/api/captcha.py:GET /pending	#20971
 route:autobot-backend/api/chat_knowledge_delete.py:DELETE /context-orphans	#20975
 route:autobot-backend/api/chat_knowledge_delete.py:GET /context-orphans	#20975
 route:autobot-backend/api/code_intelligence.py:GET /evolution/patterns	#20973
@@ -1052,9 +1036,6 @@ route:autobot-backend/api/embeddings.py:POST /switch	#20975
 route:autobot-backend/api/embeddings.py:PUT /settings	#20975
 route:autobot-backend/api/enterprise_features.py:GET /features	#20971
 route:autobot-backend/api/entity_extraction.py:POST /extract-batch	#20975
-route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:PUT /system/{secret_id}	#20971
 route:autobot-backend/api/error_resilience.py:GET /circuit-breakers	#20974
 route:autobot-backend/api/error_resilience.py:GET /error-budgets	#20974
 route:autobot-backend/api/gpu_monitoring.py:GET /capabilities	#20974
@@ -1109,7 +1090,6 @@ route:autobot-backend/api/knowledge_audit.py:GET /compliance-summary	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /permission-changes	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /user-activity	#20975
 route:autobot-backend/api/knowledge_audit.py:POST /compliance-report	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /expired	#20975
 route:autobot-backend/api/knowledge_claude_memory.py:POST /import_claude_memory	#20975
 route:autobot-backend/api/knowledge_collections.py:GET /collections	#20975
 route:autobot-backend/api/knowledge_collections.py:POST /collections	#20975
@@ -1252,7 +1232,6 @@ route:autobot-backend/api/search.py:POST /benchmark	#20975
 route:autobot-backend/api/search.py:POST /optimize	#20975
 route:autobot-backend/api/search.py:POST /semantic	#20975
 route:autobot-backend/api/security.py:GET /audit-log	#20971
-route:autobot-backend/api/security.py:GET /command-history	#20971
 route:autobot-backend/api/security.py:GET /pending-approvals	#20971
 route:autobot-backend/api/security.py:POST /approve-command	#20971
 route:autobot-backend/api/security_assessment.py:GET /phases	#20971

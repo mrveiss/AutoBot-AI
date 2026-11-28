@@ -173,6 +173,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "delete": "Delete message",
+      "saveAsDocument": "Save as document",
       "tokens": "{count} tokens",
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
@@ -397,9 +398,9 @@
       "typeMessage": "Type a message...",
       "generate": "Generate",
       "generateImage": "Generate image",
-      "generateImageTitle": "generate Image",
+      "generateImageTitle": "Generate image",
       "generating": "Generating",
-      "imagePromptLabel": "image Prompt",
+      "imagePromptLabel": "Describe the image",
       "imagePromptPlaceholder": "Enter image prompt...",
       "imageProvider": "Image provider",
       "selectPromptTemplate": "Select prompt template",
@@ -412,7 +413,48 @@
       "stopFailed": "Couldn't stop the reply",
       "fileTooLarge": "File \"{name}\" is too large (max {max})",
       "voiceUnsupported": "Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.",
-      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings."
+      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings.",
+      "uploadsInProgress": "Uploads in progress",
+      "removeFileNamed": "Remove {name}",
+      "uploadStatus": {
+        "preparing": "Preparing…",
+        "uploading": "Uploading…",
+        "uploadingPercent": "Uploading… {percent}%",
+        "complete": "Complete",
+        "failed": "Failed",
+        "retrying": "Retrying…"
+      },
+      "imageGenerationFailed": "Image generation failed",
+      "quickActionText": {
+        "help": "Can you help me with ",
+        "summarize": "Please summarize our conversation",
+        "explain": "Can you explain "
+      },
+      "emoji": {
+        "u1f600": "grinning face",
+        "u1f602": "face with tears of joy",
+        "u1f60a": "smiling face with smiling eyes",
+        "u1f60d": "smiling face with heart-eyes",
+        "u1f914": "thinking face",
+        "u1f44d": "thumbs up",
+        "u1f44e": "thumbs down",
+        "u2764": "red heart",
+        "u1f525": "fire",
+        "u2b50": "star",
+        "u1f4a1": "light bulb",
+        "u2705": "check mark button"
+      },
+      "imageProviders": {
+        "dalle": "DALL·E 3",
+        "flux": "Flux",
+        "stable_diffusion": "Stable Diffusion"
+      },
+      "slashSuggestions": "Slash command suggestions",
+      "slashPresets": "Presets",
+      "slashHint": "↑ ↓ move · Enter insert · Esc close",
+      "keyboardHintAdvanced": "type / for commands and MCP tools",
+      "charactersLeft": "{count} left",
+      "hiddenActive": "Active: {options}"
     },
     "translate": {
       "title": "Translate Text",
@@ -426,11 +468,14 @@
       "error": "Translation failed. Please try again."
     },
     "messages": {
+      "newMessageAnnouncement": "New message from {sender}: {preview}",
+      "saveAsDocumentFailed": "Could not save the message as a document.",
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",
       "editMessage": "Edit Message",
       "enterMessage": "Enter your message...",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
+      "downloadAttachment": "Download {name}",
       "tokens": "{count} tokens",
       "attachments": "{count} attachment | {count} attachments",
       "thinking": "Thinking...",
@@ -456,6 +501,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
+      "copyFailed": "Could not copy the message to the clipboard",
       "thinkingUsed": "Thinking used"
     },
     "stallQuestion": {
@@ -637,6 +683,8 @@
     },
     "overseer": {
       "executionPlan": "Execution Plan",
+      "stepOf": "Step {current} of {total}",
+      "exitCode": "Exit: {code}",
       "stepsProgress": "{completed} of {total} steps",
       "copyCommand": "Copy command",
       "whatCommandDoes": "What this command does",
@@ -829,7 +877,7 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "lightweightModeTooltip": "About 90% cheaper than standard mode",
     "streamPreview": {
       "thought": "Thinking: {text}",
       "planning": "Planning: {text}"
@@ -877,8 +925,10 @@
       "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
       "unreadable": "\"{filename}\" could not be read, so it was not used.",
       "empty": "\"{filename}\" has no readable text, so it was not used.",
-      "truncated": "\"{filename}\" is long, so only the start of it was used.",
-      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
+      "truncated": "\"{filename}\" is long, so only the first {used} of {total} characters were used.",
+      "truncated_legacy": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used.",
+      "over_window": "The conversation is too long for the model's window, so some earlier text may not reach it."
     },
     "header": {
       "voiceControls": "Voice controls",
@@ -888,7 +938,42 @@
       "overseerOff": "Overseer off",
       "overseerTip": "Overseer plans multi-step tasks and asks before risky commands",
       "startedAt": "started {time}",
-      "connectedTip": "Connected to the backend — replies stream live"
+      "sessionId": "Session {id}",
+      "connectedTip": "Connected to the backend — replies stream live",
+      "knowledgeOn": "Knowledge on",
+      "knowledgeOff": "Knowledge off",
+      "knowledgeTip": "Answers draw on your knowledge base"
+    },
+    "newChatTip": "New chat · Ctrl ⇧ O",
+    "composer": {
+      "knowledgeTip": "Ground answers in your knowledge base (RAG)",
+      "thinkingLabel": "Thinking",
+      "thinkingTip": "Extended reasoning before answering — slower, more thorough",
+      "budgetTokens": "{label} tokens",
+      "budget": {
+        "b1000": "1k",
+        "b5000": "5k",
+        "b10000": "10k",
+        "b32000": "32k",
+        "b128000": "max"
+      }
+    },
+    "mcpPrompts": {
+      "title": "Prompt templates",
+      "loading": "Loading templates…",
+      "loadFailed": "Failed to load prompt templates. Please try again.",
+      "requiredParam": "Please fill in required parameter: {name}",
+      "insertFailed": "Failed to load prompt template. Please try again.",
+      "source": "Source",
+      "bridges": {
+        "git": "Git",
+        "knowledge": "Knowledge",
+        "filesystem": "Filesystem"
+      },
+      "empty": "No templates available from {bridge}",
+      "parameters": "Parameters:",
+      "insert": "Insert template",
+      "bridgesFailed": "Could not load prompts from: {bridges}"
     }
   },
   "settings": {
@@ -2475,8 +2560,28 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
+      "clusters": "clusters",
+      "totalClusters": "Total Clusters",
+      "exactClusters": "{count} exact (identical code)",
+      "structuralClusters": "{count} structural (identical once string text is ignored)",
+      "totalLocations": "{count} locations",
+      "excluded": "Excluded from the scan: {dirs}",
+      "export": {
+        "heading": "Duplicate Code Analysis",
+        "totalFound": "Total Duplicate Clusters Found",
+        "showing": "Showing {shown} of {total} clusters.",
+        "columns": {
+          "locations": "Locations",
+          "kind": "Kind",
+          "similarity": "Similarity",
+          "lines": "Lines"
+        }
+      },
+      "kind": {
+        "exact": "exact",
+        "structural": "structural",
+        "similar": "similar"
+      },
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -4613,6 +4718,16 @@
       "loadingDocument": "Loading document…",
       "copy": "Copy",
       "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {
@@ -6232,7 +6347,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Username missing: set it in Secrets",
+      "desktopVm": "AutoBot desktop VM",
+      "desktopVmDesc": "AutoBot's own desktop",
+      "noDesktopVm": "No desktop VM is registered, so only your Secrets hosts are listed."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6490,7 +6609,10 @@
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
       "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
-      "initError": "Failed to initialize audit data"
+      "initError": "Failed to initialize audit data",
+      "eventLogs": "Event Logs",
+      "commandHistory": "Command History",
+      "tabsLabel": "Audit sections"
     },
     "browserAutomation": {
       "title": "Browser Automation",
@@ -7032,6 +7154,8 @@
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
       "skipSource": "Skip Source",
+      "restoreFailed": "Pending CAPTCHAs could not be checked.",
+      "retry": "Try again",
       "types": {
         "recaptcha": "reCAPTCHA",
         "hcaptcha": "hCaptcha",
@@ -7334,6 +7458,9 @@
       "hidePassword": "Hide password",
       "showPassword": "Show password",
       "vncPasswordPlaceholder": "VNC password (optional)",
+      "vncCompanionName": "{name} (VNC credential)",
+      "vncCompanionDescription": "VNC credential for {host}",
+      "vncCompanionNoHostId": "The host was saved but its id was not returned, so the VNC credential was not stored.",
       "osPlaceholder": "e.g., Ubuntu 22.04, CentOS 8",
       "hideValue": "Hide value",
       "showValue": "Show value",
@@ -7378,7 +7505,8 @@
         "slackDesc": "Slack bot token",
         "serverLabel": "Server Host",
         "serverDesc": "SSH/VNC server access"
-      }
+      },
+      "vncRetry": "The host was saved, but its VNC password was not. Save again to retry; the host will not be created twice."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -8247,6 +8375,38 @@
       "hideDetails": "Hide Details",
       "showDetails": "Show Details",
       "refresh": "Refresh"
+    },
+    "eventLogs": {
+      "caption": "Compliance events, newest first",
+      "userFilter": "User ID",
+      "userPlaceholder": "Filter by user ID",
+      "typeFilter": "Event type",
+      "allTypes": "All event types",
+      "refresh": "Refresh",
+      "loading": "Loading event logs",
+      "empty": "No compliance events",
+      "emptyHint": "No events match the current filters.",
+      "error": "Event logs could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "event": "Event",
+      "outcome": "Outcome"
+    },
+    "commandHistory": {
+      "caption": "Command execution history, newest first",
+      "userFilter": "User",
+      "userPlaceholder": "Filter by user",
+      "refresh": "Refresh",
+      "loading": "Loading command history",
+      "empty": "No commands recorded",
+      "emptyHint": "No command executions match the current filter.",
+      "error": "Command history could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "action": "Action",
+      "outcome": "Outcome"
     }
   },
   "slm": {
@@ -8338,12 +8498,19 @@
       "download": "Download",
       "cancel": "Cancel",
       "errorServiceTimeout": "Desktop service timed out. Please try again.",
+      "noHostSelected": "Select a host with VNC to use the desktop.",
       "errorServiceDisabled": "Desktop service is currently disabled.",
       "errorInitFailed": "Failed to initialize desktop connection.",
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "vncCredentialMissing": "No VNC password is stored for this host. Add it in Secrets.",
+      "hostNotFound": "This host is not one of your Secrets hosts.",
+      "hostFieldsMissing": "This host is missing a username or capabilities. Set them in Secrets.",
+      "hostVncUnavailable": "This host has no VNC capability or port in Secrets.",
+      "desktopVmUnavailable": "No VNC desktop is registered, so the desktop VM is not available.",
+      "registryUnavailable": "The desktop registry could not be read. Try again shortly."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -9253,7 +9420,6 @@
       "attachRoleLabel": "Role",
       "attachRolePlaceholder": "Choose a role…",
       "attachWorkflowLabel": "Workflow id",
-      "attachWorkflowPlaceholder": "Workflow id",
       "attachError": "Could not attach that workflow.",
       "detachError": "Could not detach that workflow.",
       "processDetach": "Detach {workflow} from {role}",
@@ -10448,6 +10614,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {
@@ -10775,7 +10953,6 @@
     "endTenure": "End tenure",
     "holderIdPlaceholder": "Holder id",
     "permissionPlaceholder": "e.g. knowledge.read",
-    "workflowPlaceholder": "Workflow id",
     "toolPlaceholder": "Tool name",
     "credentialPlaceholder": "Secret id",
     "errorAssign": "Could not assign that holder.",
@@ -11168,5 +11345,27 @@
     "requestFailed": "Drift prune request failed",
     "result": "Removed {removed} file(s); {left} left in place",
     "title": "{count} file(s) would be removed from {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "These controls pause or resume every agent, not a single one",
+    "loadFailed": "Failed to load agents",
+    "noLastActivity": "No activity reported",
+    "notReported": "Not reported",
+    "pauseAll": "Pause all agents",
+    "pauseFailed": "Failed to pause agents",
+    "resumeAll": "Resume all agents",
+    "resumeFailed": "Failed to resume agents",
+    "successRate": "Success Rate",
+    "tasksCompleted": "Tasks Completed"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Enter a full web address that starts with http:// or https://",
+    "recognitionUnsupported": "Speech recognition is not supported in this browser",
+    "recognitionError": "Speech recognition error: {error}",
+    "speakFailed": "Failed to speak the text",
+    "playbackFailed": "Audio playback failed",
+    "spoken": "Spoken:",
+    "speakToInteractWith": "Speak, and hear it read back",
+    "voiceId": "Voice ID"
   }
 }

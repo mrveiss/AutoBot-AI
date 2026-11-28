@@ -233,10 +233,13 @@ def _turn_user_principal(session: Any):
     return None if principal is SYSTEM_SCOPE else principal
 
 
-async def prepend_memory_context(system_prompt: str, session: Any, message: str, model_name: str) -> str:
-    """Prepend the memory context to the system prompt; any failure leaves it unchanged.
+async def append_memory_context(system_prompt: str, session: Any, message: str, model_name: str) -> str:
+    """Append the memory context after the stable system prompt; any failure leaves it unchanged.
 
-    When ``TIERED_CONTEXT_ENABLED`` the TieredContextBuilder owns all context prepending
+    The block is re-ranked against the clock every turn, so it goes last: a prefix cache
+    reuses only the common leading bytes and the stable text must come first (#17278).
+
+    When ``TIERED_CONTEXT_ENABLED`` the TieredContextBuilder owns all context appending
     (L0 identity + L1 essential story + L2/L3 on-demand); otherwise the pre-existing
     unconditional EssentialStory path is used. Moved out of ``llm_handler`` in #18825.
     """
@@ -252,7 +255,7 @@ async def prepend_memory_context(system_prompt: str, session: Any, message: str,
             prefix = await EssentialStoryGenerator().generate(
                 model_name=model_name, principal=_turn_user_principal(session)
             )
-        return prefix + "\n\n" + system_prompt if prefix else system_prompt
+        return system_prompt + "\n\n" + prefix if prefix else system_prompt
     except Exception as ctx_exc:
         logger.warning("Context injection failed: %s", ctx_exc)
         return system_prompt

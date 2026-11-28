@@ -17,6 +17,17 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from models.database import Base as SLMBase  # noqa: E402
+from testkit.module_stubs import StubSet  # noqa: E402
+
+# #22157: the dashboard tests' stub bootstrap, loaded by path through StubSet (#13596) and removed again
+# in pytest_unconfigure (`tests/` is not a package root).
+_stubs = StubSet()
+_stubs.real_load("_slm_bi_dashboard_loader", Path(__file__).parent / "_bi_dashboard_loader.py")
+
+
+def pytest_unconfigure(config) -> None:  # noqa: ARG001
+    """Remove the loader module this file installed."""
+    _stubs.restore()
 
 
 @pytest.fixture(scope="function")

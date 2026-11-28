@@ -199,7 +199,7 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 - `senior-developer` — backend, frontend, database, devops, testing, performance, ai-ml, multimodal, refactoring
 - `reviewer` — `/autobot-dev-skills:review code-reviewer` (MANDATORY on every PR), `/autobot-dev-skills:review code-skeptic`, `/autobot-dev-skills:review security-auditor`
 - `planner` — `/autobot-dev-skills:engineering systems-architect`, `/autobot-dev-skills:engineering project-manager`, `/autobot-dev-skills:engineering project-task-planner`, `/autobot-dev-skills:engineering prd-writer`, `/autobot-dev-skills:engineering frontend-designer`
-- `researcher` — `/autobot-dev-skills:lifecycle research-to-issues`, research, adopt hand-off
+- `researcher` — `/research-hub to-issues`, `/research-hub technical`, adopt hand-off
 - `writer` — `/autobot-dev-skills:engineering documentation-engineer`, `/autobot-dev-skills:engineering content-writer`
 - `sweeper` — `/autobot-dev-skills:engineering repo-sweeper`, `/autobot-dev-skills:engineering conversation-compacter` (read-only)
 - `memory` — `/autobot-dev-skills:engineering memory-monitor`, `/autobot-dev-skills:engineering memory-curator`
@@ -311,7 +311,7 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**No preflight by hand (owner rule 2026-10-25, [OWNER_RULES.md](OWNER_RULES.md) rule 23).** Push and let CI run; run only the test you changed. The commands below are reference for what the checks do, not a per-push step; the commit and pre-push hooks still run.
+*Local runs of these checks are superseded by [`OWNER_RULES.md`](OWNER_RULES.md) row 32 (2026-11-27): CI runs them. The commands below are reference for what the checks do (what CI checks), not a per-push step.*
 
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
@@ -439,12 +439,12 @@ grep -r "old_function_name" --include="*.py" autobot-backend/ autobot_shared/
 grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-frontend/src/
 ```
 
-### Gate 3: Targeted Tests
+### Gate 3: Tests
 
-Run tests only for changed files to keep validation fast:
+CI runs the tests for the head; there is no local run ([OWNER_RULES.md](OWNER_RULES.md) row 32):
 
 ```bash
-python -m pytest <the changed test file> -x -q   # a file, never a directory or the full suite
+# superseded by OWNER_RULES.md row 32 (2026-11-27): no local test runs; CI is the gate
 ```
 
 ### Gate 4: Linting

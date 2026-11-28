@@ -19,7 +19,7 @@ from .types import AgentCapabilities, AgentCard, AgentSkill
 
 logger = get_logger(__name__)
 
-AUTOBOT_VERSION = "1.0.0"
+AUTOBOT_VERSION = "unknown"  # the repo declares no version; never an invented number (#17821)
 
 # Curated examples per agent type (keyed by AgentType.value string)
 _SKILL_EXAMPLES = {

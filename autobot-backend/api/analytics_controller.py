@@ -18,7 +18,7 @@ import asyncio
 import json
 import sys
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Dict, List
 
@@ -27,7 +27,7 @@ import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
 from autobot_shared.endpoint_normalization import collapse_dynamic_segments
-from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.subprocess_reap import kill_and_reap
@@ -54,12 +54,15 @@ _CODE_INDEX_TIMEOUT_S = env_float_clamped("AUTOBOT_CODE_INDEX_RUN_TIMEOUT_SECOND
 # After normalization these should stay well under the cap, but it acts as a
 # last-resort safety net against truly novel path shapes.
 MAX_API_FREQUENCY_ENTRIES = 2000
+#: Recent API calls kept in process; the middleware records every /api call, so this must be a ring (#21684).
+API_CALL_PATTERNS_BOUNDS = (100, 1_000_000)  # an unbounded value overflows deque(maxlen=...) at import
+MAX_API_CALL_PATTERNS = env_int_clamped("AUTOBOT_API_CALL_PATTERNS_MAX", 10000, *API_CALL_PATTERNS_BOUNDS)
 
 
 # Global analytics state management (shared with analytics.py)
 analytics_state = {
     "websocket_connections": set(),
-    "api_call_patterns": [],
+    "api_call_patterns": deque(maxlen=MAX_API_CALL_PATTERNS),
     "performance_history": [],
     "communication_chains": defaultdict(list),
     "code_analysis_cache": {},
@@ -187,12 +190,11 @@ class AnalyticsController:
                         "timestamp": timestamp,
                     }
                 )
-                # Issue #483: Parallelize independent Redis operations
-                await asyncio.gather(
-                    redis_conn.lpush("analytics:api_calls", call_data),
-                    redis_conn.ltrim("analytics:api_calls", 0, 9999),  # Keep last 10k
-                    return_exceptions=True,
-                )
+                # One pipeline: LPUSH is applied before LTRIM, so the bound always holds (#483)
+                pipe = redis_conn.pipeline()
+                pipe.lpush("analytics:api_calls", call_data)
+                pipe.ltrim("analytics:api_calls", 0, MAX_API_CALL_PATTERNS - 1)  # same bound as the in-process ring
+                await pipe.execute()
         except Exception as e:
             logger.error("Failed to store API call analytics: %s", e)
 

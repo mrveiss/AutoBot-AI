@@ -212,3 +212,30 @@ def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
         pos = match.end()
     rest.append(text[pos:])
     return blocks, "".join(rest).strip()
+
+
+#: Wrapper tags the model invents (``[TAG]x[/TAG]``, #22249): a PAIRED upper-case word, ``[X]...[/X]``.
+#: An unpaired ``[ERROR]`` / ``[OK]`` / ``[API]`` is prose or a log line, and a bracket followed by ``(`` or ``:``
+#: is a link or a reference (``[README](url)``); none of those is touched.
+#: The families the system handles itself keep their own handling and are never unwrapped.
+_HANDLED_TAG_NAMES: FrozenSet[str] = frozenset(BRACKET_MARKER_FAMILIES | {"TOOL_CALL", "DEBUG", "SOURCES"})
+_INVENTED_PAIR_RE = re.compile(r"\[([A-Z][A-Z0-9_]{1,31})\](?![(:])(.*?)\[/\1\](?![(:])", re.DOTALL)
+
+
+def unwrap_invented_tags(text: str) -> str:
+    """*text* with each paired ``[TAG]x[/TAG]`` replaced by its content ``x`` (#22249).
+
+    The one cleaner for streamed and stored text. Unpaired tags, links and references are kept, and so are
+    markers in code regions (examples, #17513).
+    """
+    if not text or "[" not in text:
+        return text
+    out, pos = [], 0
+    for match in _INVENTED_PAIR_RE.finditer(mask_code_regions(text)):
+        if match.group(1) in _HANDLED_TAG_NAMES:
+            continue
+        out.append(text[pos : match.start()])
+        out.append(unwrap_invented_tags(text[match.start(2) : match.end(2)]))
+        pos = match.end()
+    out.append(text[pos:])
+    return "".join(out)

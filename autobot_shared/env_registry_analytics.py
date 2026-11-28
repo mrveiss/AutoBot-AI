@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Codebase-analytics AUTOBOT_* environment variables.
+"""Codebase-analytics AUTOBOT_* environment variables (added with #18013; sibling rationale recorded per #18571).
 
 A new ``env_registry_<component>.py`` sibling rather than an addition to
 ``env_registry_backend.py``, which sits 5 lines under the 600-line ceiling.
@@ -56,8 +56,8 @@ register_env_var(
         type=int,
         default=5000,
         description=(
-            "Maximum duplicate pairs a scan RETURNS (0 = unlimited). The count and the "
-            "statistics always describe every pair found; the analysis reports "
+            "Maximum duplicate clusters a scan RETURNS (0 = unlimited). The count and the "
+            "statistics always describe every cluster found; the analysis reports "
             "`truncated` when the list is shorter (#18067)."
         ),
         component="backend",
@@ -180,5 +180,48 @@ register_env_var(
         ),
         component="analytics",
         range=(3600, 7776000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_CALL_PATTERNS_MAX",
+        type=int,
+        default=10000,
+        description=(
+            "Most recent API calls the in-process analytics state keeps (analytics_controller.py). Older calls drop "
+            "off; the persisted copy in Redis is trimmed to the same count (#21684)."
+        ),
+        component="analytics",
+        range=(100, 1000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH",
+        type=int,
+        default=128,
+        description=(
+            "Longest include_pattern (characters) the bug-prediction routes accept before it reaches the file walk "
+            "(#18030); a longer one is refused with 422."
+        ),
+        component="analytics",
+        range=(1, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS",
+        type=int,
+        default=7200,
+        description=(
+            "How long a realtime voice session that never ended (a dropped connection) stays in the in-memory "
+            "session map before it is evicted (voice_realtime_telemetry.py, #21678). Never effective below "
+            "AUTOBOT_VOICE_REALTIME_MAX_SECONDS plus a 300 s margin. Finished sessions are released at once."
+        ),
+        component="voice",
+        range=(60, 604800),
     )
 )

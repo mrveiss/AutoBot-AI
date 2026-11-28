@@ -302,4 +302,15 @@ def test_the_router_is_authenticated_and_mounted():
     # are read through effective_routes(), which resolves nesting (router.routes would hold a wrapper).
     from autobot_shared.api_routing.router_routes import effective_routes
 
-    assert "/claims" in [r.path for r in effective_routes(router)]
+    # The exact set, so an unexpected extra route on the router fails here (#18571).
+    assert sorted(r.path for r in effective_routes(router)) == [
+        "/claims",
+        "/ledger/activity",
+        "/ledger/claims",
+        "/ledger/claims/yield-request",
+        "/ledger/conflicts",
+        "/ledger/idle-subscribers",
+        "/ledger/peer-messages",
+        "/ledger/presence",
+        "/ledger/waitlists",
+    ]

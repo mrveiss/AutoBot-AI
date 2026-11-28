@@ -21,7 +21,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
-from chat_workflow.thought_markers import mask_code_regions
+from chat_workflow.thought_markers import mask_code_regions, unwrap_invented_tags
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
@@ -219,7 +219,18 @@ def clean_reply_text(text: str) -> str:
 
     normalized = normalize_tool_call_brackets(text or "")  # `[TOOL_CALL ...]` must meet the same parse check
     kept = TOOL_CALL_PATTERN.sub(_drop_if_failed, normalized)
-    return strip_unparsed_tool_tags(_drop_unmatched_fragments(kept)).strip()
+    return _unwrap_outside_calls(strip_unparsed_tool_tags(_drop_unmatched_fragments(kept))).strip()
+
+
+def _unwrap_outside_calls(text: str) -> str:
+    """``unwrap_invented_tags`` on the prose only; a kept call's params (a regex like ``[AB]``) stay (#22249)."""
+    out, pos = [], 0
+    for match in TOOL_CALL_PATTERN.finditer(text):
+        out.append(unwrap_invented_tags(text[pos : match.start()]))
+        out.append(match.group(0))
+        pos = match.end()
+    out.append(unwrap_invented_tags(text[pos:]))
+    return "".join(out)
 
 
 def _drop_unmatched_fragments(text: str) -> str:

@@ -26,7 +26,7 @@ from api.schemas_code import (
 from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission, get_current_user
 from auth_service_opt_in import service_opt_in
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
@@ -129,8 +129,9 @@ async def _synthesized_audio_response(text: str, voice_id: str, language: str, s
     operation="voice_listen_api",
     error_code_prefix="VOICE",
 )
-async def voice_listen_api(request: Request, user_role: str = Form("user")):
+async def voice_listen_api(request: Request, current_user: dict = Depends(get_current_user)):
     """Listen and convert speech to text"""
+    user_role = role_value(current_user.get("role"))
     security_layer = request.app.state.security_layer
     voice_interface = getattr(request.app.state, "voice_interface", None)
     if voice_interface is None:
@@ -195,7 +196,7 @@ async def voice_speak_api(
     text: str = Form(...),
     voice_id: str = Form(""),
     language: str = Form(""),
-    user_role: str = Form("user"),
+    current_user: dict = Depends(get_current_user),
     stream: bool = Form(False),
     play_locally: bool = Form(False),
 ):
@@ -215,6 +216,7 @@ async def voice_speak_api(
     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
             "voice_speak",
@@ -263,7 +265,7 @@ async def voice_synthesize_api(
     text: str = Form(...),
     voice_id: str = Form(""),
     language: str = Form(""),
-    user_role: str = Form("user"),
+    current_user: dict = Depends(get_current_user),
     stream: bool = Form(False),
 ):
     """Synthesize speech via the Pocket TTS worker.
@@ -275,6 +277,7 @@ async def voice_synthesize_api(
     utterance (#13215).
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log("voice_synthesize", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(
@@ -303,10 +306,11 @@ async def voice_clone_api(
     request: Request,
     text: str = Form(...),
     reference_audio: UploadFile = File(...),
-    user_role: str = Form("user"),
+    current_user: dict = Depends(get_current_user),
 ):
     """Zero-shot voice cloning via TTS worker. Returns audio/wav stream."""
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log("voice_clone", user_role, "denied", {"reason": "permission_denied"})
         return JSONResponse(
@@ -497,6 +501,7 @@ async def voice_transcribe_api(
     request: Request,
     audio: UploadFile = File(...),
     language: str = Form(""),
+    current_user: dict = Depends(get_current_user),
 ):
     """Transcribe audio blob to text via Whisper (#1030, #1329).
 
@@ -504,7 +509,8 @@ async def voice_transcribe_api(
         language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
     """
     security_layer = request.app.state.security_layer
-    if not security_layer.check_permission("user", "allow_voice_listen"):
+    user_role = role_value(current_user.get("role"))
+    if not security_layer.check_permission(user_role, "allow_voice_listen"):
         return JSONResponse(
             status_code=403,
             content={"text": "", "error": "Permission denied."},
@@ -523,11 +529,11 @@ async def voice_transcribe_api(
     try:
         result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
     except TranscriptionFailed as exc:
-        security_layer.audit_log("voice_transcribe", "user", "failure", {"reason": str(exc)})
+        security_layer.audit_log("voice_transcribe", user_role, "failure", {"reason": str(exc)})
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     security_layer.audit_log(
         "voice_transcribe",
-        "user",
+        user_role,
         "success",
         {"text_preview": result.get("text", "")[:50]},
     )

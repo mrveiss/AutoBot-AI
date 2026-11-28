@@ -269,3 +269,82 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_VM_REQUEST_TIMEOUT_S",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds the browser automation MCP bridge waits for one Browser VM action before it answers with a "
+            "timeout (#18056). Must be a positive finite number; anything else falls back to the default."
+        ),
+        component="agent_tools",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_VM_HEALTH_TIMEOUT_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds the browser MCP status route waits for the Browser VM health probe before it reports the VM "
+            "unavailable. Must be a positive finite number; anything else falls back to the default."
+        ),
+        component="agent_tools",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_BROWSER_RATE_WINDOW_S",
+        type=int,
+        default=60,
+        range=(1, 86400),
+        description=(
+            "Length in seconds of the sliding window that AUTOBOT_MCP_BROWSER_RATE_LIMIT counts requests over "
+            "(#18087). Out-of-range values fall back to the default."
+        ),
+        component="agent_tools",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_INVALID_TOOL_ABORT_LIMIT",
+        type=int,
+        default=4,
+        description=(
+            "Consecutive unknown-tool calls after which a chat turn stops with an honest failure and an audit "
+            "entry instead of repeating the tools reminder (#20848). Must exceed AUTOBOT_CHAT_INVALID_CALL_LIMIT, "
+            "where the reminder starts."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_CONTINUATION_FULL_STEPS",
+        type=int,
+        default=3,
+        description=(
+            "Newest tool steps a chat continuation prompt renders in full (#16621); older steps are collapsed to a "
+            "digest and an anchor read back with read_spilled_output."
+        ),
+        component="chat_workflow",
+        range=(1, 50),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_COLLAPSED_STEP_END_CHARS",
+        type=int,
+        default=300,
+        description=("Characters of a collapsed continuation step's output kept at each end, head and tail (#16621)."),
+        component="chat_workflow",
+        range=(1, 5000),
+    )
+)

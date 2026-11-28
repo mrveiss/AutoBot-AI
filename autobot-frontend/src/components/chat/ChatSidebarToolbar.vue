@@ -9,7 +9,7 @@
 <template>
   <div class="mb-2 flex shrink-0 flex-col gap-2">
     <div class="flex gap-2">
-      <BaseTooltip :text="$t('chat.newChat')" placement="bottom" class="grow">
+      <BaseTooltip :text="$t('chat.newChatTip')" placement="bottom" class="grow">
         <template #default="{ describedby }">
           <BaseButton block variant="primary" size="sm" :aria-describedby="describedby" @click="emit('new-chat')">
             <template #icon-left><Icon name="plus" /></template>

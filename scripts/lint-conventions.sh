@@ -107,10 +107,10 @@ if [ "$MODE" = "--commit-msg" ]; then
   # itself authored; it now rejects 1, and that one is genuinely malformed —
   # capitalised, with no type at all. A linter whose own repository cannot
   # satisfy it gets ignored, which is worse than not having it.
-  if ! printf '%s' "$SUBJECT" | grep -qE "$SUBJECT_ERE"; then
+  if ! grep -qE "$SUBJECT_ERE" <<<"$SUBJECT"; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
-  if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
+  if ! grep -qE '#[0-9]{3,}' <<<"$SUBJECT"; then
     echo "  FAIL  subject carries no issue reference (#NNNN)"; exit 1
   fi
   # #19645: no automation session ids or internal process roles. The one detector
@@ -295,12 +295,12 @@ else
       case "$sha_full" in
         59f4be872c9c2288714a67c665f50f8eefaf694c) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE "$SUBJECT_ERE"; then
+      if ! grep -qE "$SUBJECT_ERE" <<<"$subj"; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.
         fail "commit $sha (author='$author' <$email>): subject is not '<type>(scope): <description>'"; BAD=1
-      elif ! printf '%s' "$subj" | grep -qE '#[0-9]{3,}'; then
+      elif ! grep -qE '#[0-9]{3,}' <<<"$subj"; then
         fail "commit $sha (author='$author' <$email>): no issue reference"; BAD=1
       fi
     done <<< "$LOGLINES"

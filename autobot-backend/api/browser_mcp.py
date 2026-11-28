@@ -5,7 +5,7 @@
 """
 Browser Automation MCP Bridge
 Exposes browser automation operations as MCP tools for LLM agents
-Integrates with AutoBot's Browser VM (uses NetworkConstants.BROWSER_VM_IP) using Playwright
+Integrates with AutoBot's Browser VM (uses ServiceURLs.BROWSER_SERVICE) using Playwright
 
 Provides comprehensive browser automation capabilities:
 - Navigation (navigate, go_back, go_forward)
@@ -76,14 +76,15 @@ from api.schemas_system import (
     BrowserWaitForSelectorResponse,
 )
 from auth_middleware import check_admin_permission
-from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.env_registry import env
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
 from autobot_shared.url_safety import is_public_url_async
-from constants.network_constants import NetworkConstants
+from constants.network_constants import ServiceURLs
 from research_browser_manager import get_research_browser_manager
 from services import browser_url_guard as _guard
 from services.fleet_registry import fleet_snapshot
@@ -94,14 +95,15 @@ from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
     name="browser_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Browser Automation - Secure Web Interaction via Playwright",
     features=["navigate", "click", "fill", "screenshot", "evaluate", "wait", "scraping"],
     endpoint="/api/browser/mcp/tools",
 )
 
 logger = get_logger(__name__)
-_BROWSER_VM_REQUEST_TIMEOUT_S = 60.0  # one value for the request and its timeout message (#18056)
+_BROWSER_VM_REQUEST_TIMEOUT_S = env_float_clamped("AUTOBOT_BROWSER_VM_REQUEST_TIMEOUT_S", 60.0, positive_finite=True)
+_BROWSER_VM_HEALTH_TIMEOUT_S = env_float_clamped("AUTOBOT_BROWSER_VM_HEALTH_TIMEOUT_S", 5.0, positive_finite=True)
 router = APIRouter(
     tags=["browser_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],
@@ -123,9 +125,7 @@ ALLOWED_URL_SCHEMES = _guard.ALLOWED_URL_SCHEMES
 INTERNAL_HOST_EXCEPTIONS = _guard.INTERNAL_HOST_EXCEPTIONS
 is_url_allowed = _guard.is_url_allowed
 classify_url = _guard.classify_url
-
-# Security Configuration
-BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+BROWSER_VM_URL = ServiceURLs.BROWSER_SERVICE
 
 # #11539: the browser-worker keys one isolated BrowserContext per session_id
 # (cookies/localStorage/auth state never cross conversations). Every call
@@ -135,7 +135,7 @@ DEFAULT_BROWSER_SESSION_ID = "default"
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = env_int_clamped("AUTOBOT_MCP_BROWSER_RATE_LIMIT", 60, min_v=1, max_v=1_000_000)
-RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_WINDOW_SECONDS = env("AUTOBOT_MCP_BROWSER_RATE_WINDOW_S")  # registered range: out of range -> 60
 # One global Redis-backed count shared by every worker (#18087); fails open when Redis is down.
 _rate_limiter = RateLimiter("mcp:browser", log_label="mcp:browser")
 _RATE_LIMIT_KEY = "global"
@@ -620,7 +620,7 @@ async def send_to_browser_vm(
     Send automation command to Browser VM
 
     This is the core communication layer with the Playwright server
-    running on the Browser VM (NetworkConstants.BROWSER_VM_IP)
+    running on the Browser VM (ServiceURLs.BROWSER_SERVICE)
 
     Issue #11539: ``session_id`` is threaded on every call so the worker
     routes to the BrowserContext dedicated to that conversation instead of a
@@ -1193,7 +1193,7 @@ async def get_browser_mcp_status() -> Metadata:
         http_client = get_http_client()
         async with await http_client.get(
             f"{BROWSER_VM_URL}/health",
-            timeout=aiohttp.ClientTimeout(total=5),
+            timeout=aiohttp.ClientTimeout(total=_BROWSER_VM_HEALTH_TIMEOUT_S),
         ) as response:
             if response.status == 200:
                 vm_status = BROWSER_VM_HEALTHY

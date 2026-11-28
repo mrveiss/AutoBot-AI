@@ -76,3 +76,11 @@ class TestHardSizeCap:
         """Below the ceiling, cap_unmatched_output returns the output unchanged."""
         small = "tiny"
         assert cap_unmatched_output("weird_cmd", small, 0) == small
+
+
+def test_filter_markdown_body_drops_single_and_multi_line_html_comments_and_keeps_the_rest() -> None:
+    """#22261: the comment is removed by the shared pattern, behaviour as before (an unclosed opener stays)."""
+    text = "keep one\n<!-- gone\nover lines -->\nkeep two <!-- inline --> tail\n<!-- unclosed"
+    result = tof.filter_markdown_body(text)
+    assert "gone" not in result and "inline" not in result
+    assert "keep one" in result and "keep two  tail" in result and "<!-- unclosed" in result

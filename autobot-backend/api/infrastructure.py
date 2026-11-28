@@ -47,10 +47,10 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
                     "host": meta.get("host", ""),
                     "ssh_port": meta.get("ssh_port", 22),
                     "vnc_port": meta.get("vnc_port"),
-                    "username": meta.get("username", "root"),
+                    "username": meta.get("username") or "",
                     "os": meta.get("os"),
                     "description": s.get("description", ""),
-                    "capabilities": meta.get("capabilities", ["ssh"]),
+                    "capabilities": meta.get("capabilities") or [],
                 }
             )
         return hosts
@@ -61,6 +61,15 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
         # wrong and no host to connect to.
         logger.exception("Failed to load infrastructure host secrets")
         raise SecretsStoreUnavailable("infrastructure host secrets") from exc
+
+
+def get_secrets_host(host_id: str) -> Dict[str, Any] | None:
+    """The one resolver for a /secrets host id (terminal_ssh and the chat Desktop share it).
+
+    Only ``infrastructure_host`` entries resolve; any other id (a fleet node, a
+    stale id) is None. Raises SecretsStoreUnavailable when the store is unreadable.
+    """
+    return next((h for h in _load_secrets_hosts() if h.get("id") == host_id), None)
 
 
 @router.get("/hosts", response_model=InfrastructureHostsResponse)

@@ -82,8 +82,6 @@
 1|other|autobot-backend/agents/system_command_agent.py|"system"
 1|other|autobot-backend/agents/task_pattern_learner.py|"system"
 1|other|autobot-backend/agents/task_pattern_learner.py|"user"
-1|other|autobot-backend/agents/task_retry_strategy.py|"system"
-1|other|autobot-backend/agents/task_retry_strategy.py|"user"
 1|other|autobot-backend/agents/web_researcher.py|120
 2|other|autobot-backend/agents/web_researcher.py|5
 1|other|autobot-backend/agents/web_researcher.py|http://2captcha.com/in.php
@@ -424,7 +422,6 @@
 1|other|autobot-backend/services/agents/subagent_spawner.py|30
 1|other|autobot-backend/services/agents/subagent_task.py|300
 2|other|autobot-backend/services/ai_stack_client.py|10
-1|other|autobot-backend/services/ai_stack_client.py|60
 1|other|autobot-backend/services/approval_gate_service.py|50
 2|other|autobot-backend/services/audit/audit.py|100
 1|other|autobot-backend/services/audit_logger.py|100
@@ -499,7 +496,6 @@
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/bot{bot_token}
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/file/bot{self.bot_token}/{file_path}
 1|other|autobot-backend/services/temporal_invalidation_service.py|10
-1|other|autobot-backend/services/tracing_service.py|http://host:4317
 1|other|autobot-backend/services/user_behavior_analytics.py|100
 1|other|autobot-backend/services/whatsapp_service.py|https://graph.facebook.com/v18.0
 1|other|autobot-backend/services/workflow_automation/models.py|https://10.
@@ -1116,7 +1112,6 @@
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|https://download.pytorch.org/whl/cpu
-1|other|autobot-slm-backend/ansible/roles/vnc/tasks/main.yml|https://github.com/novnc/noVNC/archive/refs/tags/v{{
 1|other|autobot-slm-backend/ansible/roles/xrdp/tasks/main.yml|30
 1|other|autobot-slm-backend/ansible/setup-backup-admin.yml|/home/autobot
 1|ssot|autobot-slm-backend/ansible/setup-user-backend.yml|:8001
@@ -1187,15 +1182,9 @@
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://oauth2.googleapis.com/token
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://openidconnect.googleapis.com/v1/userinfo
 2|other|autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue|'user'
-1|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'assistant'
-3|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'user'
 1|other|autobot_shared/auth/mcp_tool_permissions.py|"user"
-1|other|autobot_shared/env_registry.py|http://10.0.0.4:9090
-1|other|autobot_shared/env_registry.py|http://10.255.255.254:8001
 1|other|autobot_shared/env_registry.py|http://otel-collector:4317
 1|ssot|autobot_shared/env_registry.py|:11434
-1|ssot|autobot_shared/env_registry.py|:8001
-1|ssot|autobot_shared/env_registry.py|:9090
 1|ssot|autobot_shared/env_registry.py|gemma2:2b
 1|ssot|autobot_shared/env_registry.py|llama3.2:1b
 1|other|autobot_shared/models/pagination.py|offset=0

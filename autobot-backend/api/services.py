@@ -354,7 +354,7 @@ async def get_version():
             services_count = system_config.get("default_services_count", 6)
 
         return SystemInfo(
-            version=system_config.get("version", "1.5.0"),
+            version=system_config.get("version", "unknown"),  # the repo declares no version (#17821)
             build=system_config.get("build", "distributed-vm"),
             environment=backend_config.get("environment", "production"),
             uptime=uptime_seconds,

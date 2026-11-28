@@ -18,6 +18,7 @@ deploy:
     - session-store.js
     - element-index.js
     - search-snippet.js
+    - session-page.js
 
 system_dependencies:
   - nodejs              # major = node_major (= .nvmrc), via NodeSource

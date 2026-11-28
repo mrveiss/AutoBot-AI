@@ -425,3 +425,9 @@ def test_the_label_stays_when_the_comment_does_not_qualify(event: dict) -> None:
     client, fake = _client(_train())
     assert not ln.run_evidence(client, copy.deepcopy(event))
     assert fake.writes == []
+
+
+def test_strip_code_and_comments_blanks_comments_and_code_and_keeps_prose() -> None:
+    """#22261: the comment pattern is the shared one; behaviour unchanged (each construct becomes one space)."""
+    assert ln.strip_code_and_comments("a<!--\nx -->b `c` d\n```\ne\n```f") == "a b   d\n f"
+    assert ln.strip_code_and_comments("a <!-- unclosed") == "a <!-- unclosed"

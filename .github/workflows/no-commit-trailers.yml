@@ -152,7 +152,7 @@ jobs:
             [ -z "${sha}" ] && continue
             # Exempt only on an EXACT full-SHA match, so a short or partial entry
             # cannot silently widen the exemption to other commits.
-            if [ -n "${baseline}" ] && printf '%s\n' "${baseline}" | grep -qxF "${sha}"; then
+            if [ -n "${baseline}" ] && grep -qxF "${sha}" <<<"${baseline}"; then
               echo "Baselined, skipping: ${sha}"
               continue
             fi
@@ -183,7 +183,7 @@ jobs:
             trailers="$(printf '%s\n' "${body}" | awk 'BEGIN{RS=""} END{print}')"
             subject="$(git log -1 --format='%s' "${sha}")"
 
-            if printf '%s\n' "${trailers}" | grep -iqE "${agent_re}"; then
+            if grep -iqE "${agent_re}" <<<"${trailers}"; then
               bad+=("${sha} ${subject}")
               continue
             fi
@@ -198,8 +198,8 @@ jobs:
               # grep -F "me@example.com" matches inside "some@example.com", so an
               # unrelated third party would have been accepted as the author.
               ident_email="$(printf '%s' "${ident}" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
-              if printf '%s' "${ident}" | grep -qiE "${owner_re}"; then continue; fi
-              if printf '%s' "${ident}" | grep -qiE "${bot_ident_re}"; then continue; fi
+              if grep -qiE "${owner_re}" <<<"${ident}"; then continue; fi
+              if grep -qiE "${bot_ident_re}" <<<"${ident}"; then continue; fi
               if [ -n "${ident_email}" ] && [ "${ident_email}" = "${ae}" ]; then continue; fi
               if [ -z "${ident_email}" ] && [ -n "${an}" ] && [ "$(printf '%s' "${ident}" | xargs)" = "${an}" ]; then
                 continue

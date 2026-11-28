@@ -17,7 +17,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
+import api.chat as chat
 from api.chat import _enhance_with_knowledge_base, process_chat_message
 from api.schemas_chat import ChatMessage
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
@@ -61,7 +63,7 @@ async def test_process_chat_message_citations_apply_quarantine_filter():
     ):
         await process_chat_message(
             message=message,
-            chat_history_manager=AsyncMock(),
+            chat_history_manager=AsyncMock(get_session=AsyncMock(return_value={})),
             llm_service=AsyncMock(),
             memory_interface=AsyncMock(),
             knowledge_base=mock_kb,
@@ -70,3 +72,60 @@ async def test_process_chat_message_citations_apply_quarantine_filter():
         )
 
     mock_kb.search.assert_called_once_with(query="what is autobot", top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
+
+
+# A bad role or approval category: the 400 names the valid choices (#17601).
+_SESSION_ID = "6a1d0b6f-2c3d-4e4f-9a01-1b2c3d4e5f60"
+
+
+@pytest.fixture
+def _owned(monkeypatch):
+    monkeypatch.setattr(chat, "validate_chat_ownership", AsyncMock(return_value={"valid": True}))
+
+
+@pytest.mark.asyncio
+async def test_unknown_approval_category_400_names_the_valid_categories(_owned):
+    with pytest.raises(HTTPException) as caught:
+        await chat.set_session_approval_categories(
+            _SESSION_ID, categories=["no_such_category"], current_user={}, request=None
+        )
+    assert caught.value.status_code == 400
+    assert "no_such_category" in caught.value.detail
+    assert "valid:" in caught.value.detail
+
+
+@pytest.mark.asyncio
+async def test_unknown_role_400_names_the_valid_roles(_owned):
+    with pytest.raises(HTTPException) as caught:
+        await chat.set_session_role(_SESSION_ID, role="no_such_role", current_user={}, request=None)
+    assert caught.value.status_code == 400
+    assert "no_such_role" in caught.value.detail
+    assert "valid:" in caught.value.detail
+
+
+class _Cfg:
+    def get_selected_model(self):
+        return "configured-local-model"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "requested, answered, expected",
+    [
+        ("requested-model", "answering-model", "requested-model"),
+        (None, "answering-model", "answering-model"),
+        (None, "", "configured-local-model"),
+    ],
+)
+async def test_overflow_model_is_requested_then_answering_then_configured_never_a_literal(
+    requested, answered, expected
+):
+    """#19760: the overflow limit is computed for a model in use, never a hard-coded vendor name."""
+    response = type("R", (), {"model": answered})()
+    with (
+        patch.object(chat, "provide_config_manager", return_value=_Cfg()),
+        patch.object(chat, "handle_message_completion", new=AsyncMock(return_value={})) as handle,
+    ):
+        await chat._apply_context_overflow(AsyncMock(), "s1", requested, response, [])
+
+    assert handle.await_args.kwargs["model_name"] == expected

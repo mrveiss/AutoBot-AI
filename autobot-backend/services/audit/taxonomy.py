@@ -111,6 +111,9 @@ class AuditAction(str, Enum):
     CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
     VERIFIER_DEGRADED = "verifier.degraded"  # #21844: an action ran with no verifier reading
+    CHAT_INVALID_TOOL_CALLS_ABORT = (
+        "chat.invalid_tool_calls_abort"  # #22249: a turn stopped after repeated invalid tool calls
+    )
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"
@@ -162,6 +165,7 @@ class AuditAction(str, Enum):
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
     CODE_DRIFT_PRUNE = "code.drift_prune"  # #22082: an admin removed git-proven removed_from_source files
+    CODE_SYNC_STALE_FILES_CLEANUP = "code_sync.stale_files.cleanup"  # #22033: approved removal of old code-sync copies
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal

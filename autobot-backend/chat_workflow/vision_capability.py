@@ -43,8 +43,8 @@ VISION_CAPABILITY_FAILURE_TTL_S = env_float("CHAT_VISION_CAPABILITY_FAILURE_TTL_
 VISION_CAPABILITY_LOOKUP_TIMEOUT_S = env_float("CHAT_VISION_CAPABILITY_LOOKUP_TIMEOUT_S", default=5.0)
 VISION_CAPABILITY_CACHE_MAX = env_int("CHAT_VISION_CAPABILITY_CACHE_MAX", default=256)
 
-# (show_url, model) -> (expires_at monotonic, capability or None when the lookup gave no answer)
-_cache: dict[tuple[str, str], tuple[float, bool | None]] = {}
+# (show_url, model) -> (expires_at monotonic, the runtime's capability list, None when the lookup gave no answer)
+_cache: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
 
 
 def model_name_suggests_vision(model_name: str) -> bool:
@@ -53,8 +53,8 @@ def model_name_suggests_vision(model_name: str) -> bool:
     return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
 
 
-async def _fetch_vision_capability(show_url: str, model_name: str) -> bool | None:
-    """Ask ``/api/show``; True/False when it lists capabilities, None when it cannot answer."""
+async def _fetch_capabilities(show_url: str, model_name: str) -> frozenset[str] | None:
+    """Ask ``/api/show``; the capability set when it lists capabilities, None when it cannot answer."""
     try:
         async with await get_http_client().post(
             show_url,
@@ -74,27 +74,38 @@ async def _fetch_vision_capability(show_url: str, model_name: str) -> bool | Non
         return None
     if not isinstance(capabilities, list):
         return None
-    return "vision" in capabilities
+    return frozenset(c for c in capabilities if isinstance(c, str))
 
 
-def _remember(key: tuple[str, str], value: bool | None) -> None:
+def _remember(key: tuple[str, str], value: frozenset[str] | None) -> None:
     if key not in _cache and len(_cache) >= VISION_CAPABILITY_CACHE_MAX:
         _cache.pop(next(iter(_cache)))
     ttl = VISION_CAPABILITY_TTL_S if value is not None else VISION_CAPABILITY_FAILURE_TTL_S
     _cache[key] = (time.monotonic() + ttl, value)
 
 
-async def resolve_model_supports_vision(model_name: str, endpoint: str) -> bool:
-    """True when *model_name* can take an image: runtime capabilities first, name patterns as fallback."""
+async def resolve_model_capabilities(model_name: str, endpoint: str) -> frozenset[str] | None:
+    """The runtime's capability list for *model_name* (cached), or None when it cannot be read (#22258)."""
     if not model_name or not endpoint:
-        return model_name_suggests_vision(model_name)
+        return None
     show_url = ollama_api_url(endpoint, PATH_OLLAMA_SHOW)
     key = (show_url, model_name)
     cached = _cache.get(key)
     if cached is None or cached[0] <= time.monotonic():
-        _remember(key, await _fetch_vision_capability(show_url, model_name))
+        _remember(key, await _fetch_capabilities(show_url, model_name))
         cached = _cache[key]
-    return cached[1] if cached[1] is not None else model_name_suggests_vision(model_name)
+    return cached[1]
+
+
+async def resolve_model_supports_vision(model_name: str, endpoint: str) -> bool:
+    """True when *model_name* can take an image: runtime capabilities first, name patterns as fallback."""
+    capabilities = await resolve_model_capabilities(model_name, endpoint)
+    return "vision" in capabilities if capabilities is not None else model_name_suggests_vision(model_name)
+
+
+async def resolve_model_supports_thinking(model_name: str, endpoint: str) -> bool:
+    """True only when the runtime lists ``thinking`` for the model; an unanswered lookup sends no field (#22258)."""
+    return "thinking" in (await resolve_model_capabilities(model_name, endpoint) or frozenset())
 
 
 def reset_vision_capability_cache() -> None:

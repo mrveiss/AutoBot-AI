@@ -17,9 +17,13 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
+from services.telemetry_settings import get_telemetry_settings
 
 logger = get_logger(__name__)
+
+
+#: Stored in place of a path no route matched: a raw path can carry ids, names or tokens (#21684).
+UNRESOLVED_ROUTE = "unresolved"
 
 
 class AnalyticsMiddleware(BaseHTTPMiddleware):
@@ -33,45 +37,46 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         self._background_tasks: set = set()
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Track API calls and response times (Issue #9035: respects telemetry opt-out)"""
-        # Check telemetry opt-out first (Issue #9035)
-        if not config.telemetry.enabled:
+        """Track API calls and response times (Issue #9035: respects the telemetry opt-out)."""
+        # The persisted opt-out, read per request so an admin's choice applies at once (#9035, #21684)
+        if not get_telemetry_settings()["enabled"]:
+            return await call_next(request)
+
+        endpoint = str(request.url.path)
+        if not any(endpoint.startswith(path) for path in self.tracked_paths):
             return await call_next(request)
 
         start_time = time.time()
-        endpoint = str(request.url.path)
-        method = request.method
-
-        # Only track relevant endpoints
-        should_track = any(endpoint.startswith(path) for path in self.tracked_paths)
-
-        if not should_track:
-            return await call_next(request)
-
-        # Process request
         try:
             response = await call_next(request)
-            status_code = response.status_code
         except Exception as e:
-            # Track errors
-            status_code = 500
-            logger.error("Error processing %s %s: %s", method, endpoint, e)
+            # The route template, never the raw path (it can carry ids or tokens); the exception text is as before
+            logger.error("Error processing %s %s: %s", request.method, self._template(request), e)
+            self._track(request, endpoint, time.time() - start_time, 500)
             raise
 
-        # Calculate response time
         response_time = time.time() - start_time
-
-        # Track analytics asynchronously (don't block response)
-        if self.analytics_controller and hasattr(self.analytics_controller, "track_api_call"):
-            task = asyncio.create_task(self._track_call_async(endpoint, response_time, status_code, method))
-            self._background_tasks.add(task)
-            task.add_done_callback(self._background_tasks.discard)
-
-        # Add analytics headers to response
+        self._track(request, endpoint, response_time, response.status_code)
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
-        response.headers["X-Tracked-Analytics"] = "true" if config.telemetry.enabled else "false"
-
+        response.headers["X-Tracked-Analytics"] = "true"
         return response
+
+    @staticmethod
+    def _template(request: Request) -> str:
+        """The matched route template, or ``UNRESOLVED_ROUTE``: what is stored and logged instead of the raw path."""
+        return getattr(request.scope.get("route"), "path", None) or UNRESOLVED_ROUTE
+
+    def _track(self, request: Request, endpoint: str, response_time: float, status_code: int) -> None:
+        """Record one call in the background, keyed by the route template when routing resolved one."""
+        if not (self.analytics_controller and hasattr(self.analytics_controller, "track_api_call")):
+            return
+        if not get_telemetry_settings()["enabled"]:  # re-checked: the opt-out may have landed mid-request
+            return
+        task = asyncio.create_task(
+            self._track_call_async(self._template(request), response_time, status_code, request.method)
+        )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _track_call_async(self, endpoint: str, response_time: float, status_code: int, method: str):
         """Track API call asynchronously"""

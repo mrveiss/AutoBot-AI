@@ -91,7 +91,7 @@ Limits:
 | 6 | `middleware/audit_middleware.py` | Not a store: feeds #3 | via #3 | 3 | via #1 | via #1 |
 | 7 | `services/event_log.py` | Redis `autobot:event_log` | **Retired (D2), module deleted.** `ComplianceEventType` moved to `taxonomy.py`. | 0. `api/voice_bundle_admin.py` (1, the only direct writer, whose records were invisible to the admin events API) and `api/auth.py` (2) now call `emit_compliance`. | Old key expires by its 90-day TTL | n/a |
 | 8 | `knowledge/audit_log.py` | Redis `audit:user:<id>`, `audit:fact:<id>`, `audit:org:<id>` + `setex` bodies | **Retired (D2), module deleted.** `knowledge_view.KnowledgeAuditLog` records and reads KNOWLEDGE events in #1; the double write is gone. | 0 (no production caller ever called `log_event`). Reader: `api/knowledge_audit.py` (5 endpoints). | Old keys expire by their TTL | n/a |
-| 9 | `autobot_shared/user_management/models/audit.py` (`AuditLog`) | Postgres `audit_logs` (+ `category`, `actor`, `session_id`, `resource_ref` from #17225; `chain_seq`, `prev_hash`, `row_hash`, `row_mac`, `key_id`, `org_ref` from #17219) | **The system of record (D1).** | All through `audit_row`: `services/audit/store.py`, `rbac_middleware.py` (denial audit, #14750), `organization_service.py`, `team_service.py`, `user_service_base.py` (the one UserService both backends use since #18267), the SLM's `services/rollback_audit.py` (a rollback request, #20214). | None | Hash-chained from the genesis anchor (#17219); rows before it are unchained |
+| 9 | `autobot_shared/user_management/models/audit.py` (`AuditLog`) | Postgres `audit_logs` (+ `category`, `actor`, `session_id`, `resource_ref` from #17225; `chain_seq`, `prev_hash`, `row_hash`, `row_mac`, `key_id`, `org_ref` from #17219) | **The system of record (D1).** | All through `audit_row`: `services/audit/store.py`, `rbac_middleware.py` (denial audit, #14750), `organization_service.py`, `team_service.py`, `user_service_base.py` (the one UserService both backends use since #18267), the SLM's `services/rollback_audit.py` (a rollback request, #20214; the stale-file cleanup rows, #22033). | None | Hash-chained from the genesis anchor (#17219); rows before it are unchained |
 | 10 | `services/secrets_audit_store.py` | SQLite `secrets_audit` | Missed. Decided: record through #1 -- #18284. | 1 module | None | None |
 | 11 | `a2a/trust_score.py` | SQLite `trust_audit` | Missed. Decided: a domain history table emitting GOVERNANCE events -- #18285. | 1 module | None | None |
 | 12 | `security/enterprise/compliance_manager.py` | Encrypted/plain JSONL under `audit_base_path` | Missed. Decided: wire in through #1 -- #18286. `ComplianceManager` has no production constructor call (exported only). | 1 module | None | Fernet encryption for sensitive events |
@@ -142,6 +142,18 @@ mapping from every older spelling to it is `ACTION_ALIASES` in `autobot_shared/a
 (`canonical_action()` on write, `spellings_of()` on read). The mapping lives in the shared package
 because `autobot_shared` must not import backend code; the guard fails when an alias target is not an
 `AuditAction` member. This table is a copy of `ACTION_ALIASES`; the code is the source.
+
+**The three spellings** an event was stored under, one example each (`api_key` creation):
+
+| Vocabulary | Defined in | Spelling | Status |
+|---|---|---|---|
+| `AuditAction` | `autobot-backend/services/audit/taxonomy.py` | `api_key.create` | **Canonical**, what `audit_logs.action` now holds |
+| `IdentityAuditAction` | `autobot_shared/user_management/models/audit.py` | `api_key_created` | Public constant set; `audit_row` canonicalises it on write |
+| `ComplianceEventType` | `autobot-backend/services/audit/taxonomy.py` | `api_key.created` | The public event-log contract; `taxonomy.action_name()` maps it on write |
+
+Rows stored before #18716 keep their old spelling (in `audit_logs` and in the Redis projection
+`audit:unified` / `audit:category:<cat>`) until the approved rewrite (#17038); readers match them through
+`spellings_of()`.
 
 | Older spelling(s) | Canonical |
 |---|---|
@@ -236,6 +248,16 @@ to `ACTION_ALIASES` with the canonical target. Do not add a baseline entry for a
 
 The identity services still insert `audit_row` rows in the caller's transaction, bypassing the Redis
 projection and threat analysis; routing them through the bus needs a post-commit sink (#19014).
+
+**Audit-first controls: one attempt/outcome helper (#21375).** A route that must be on the trail before it acts
+writes an `attempted` row, acts, then writes an outcome row (`success`, `failed` or `denied`) linked to the
+attempt by `metadata.attempt_id`. The one implementation is `services/audit/outcome.py`
+(`record_audit_attempt`, `record_audit_outcome`): an unwritable attempt answers 503 and nothing is changed; an
+unwritable outcome is logged with the `AUDIT_OUTCOME_MISSING` marker. Heartbeat controls call it directly; the
+secret routes reach it through `api/secrets_audit.audit_secret_op`, whose other, attempt-less records stay
+best-effort through `audit_log`. Outcome reasons are fixed strings or exception class names, never messages
+(secret rows keep theirs in `details.reason`, heartbeat rows in `failure`).
+`services/audit/outcome_test.py` fails when a route module writes an `attempted` row any other way.
 
 ## Data-move proposal (for the #17038 approval queue; not implemented)
 

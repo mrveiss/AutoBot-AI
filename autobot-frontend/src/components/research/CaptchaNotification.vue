@@ -1,7 +1,15 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-up">
-      <div v-if="activeCaptcha" class="captcha-notification">
+      <div v-if="!activeCaptcha && pendingLoadFailed" class="captcha-notification" role="alert" data-testid="captcha-restore-failed">
+        <div class="captcha-card">
+          <p class="captcha-message">{{ $t('research.captcha.restoreFailed') }}</p>
+          <div class="captcha-actions">
+            <button class="btn-skip" @click="loadPendingCaptchas">{{ $t('research.captcha.retry') }}</button>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="activeCaptcha" class="captcha-notification">
         <div class="captcha-card">
           <!-- Header -->
           <div class="captcha-header">
@@ -23,7 +31,7 @@
             <p class="captcha-message">
               {{ $t('research.captcha.message') }}
             </p>
-            <p class="captcha-url">
+            <p v-if="activeCaptcha.url" class="captcha-url">
               <Icon name="link" />
               <a :href="activeCaptcha.url" target="_blank" rel="noopener">{{ truncatedUrl }}</a>
             </p>
@@ -74,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useCaptchaStatus } from '@/composables/research/useCaptchaStatus'
 
@@ -82,6 +91,7 @@ const {
   activeCaptcha,
   timeRemaining,
   isSubmitting,
+  pendingLoadFailed,
   captchaTypeLabelKey,
   truncatedUrl,
   progressPercentage,
@@ -89,7 +99,11 @@ const {
   openVnc,
   markSolved,
   skipCaptcha,
+  loadPendingCaptchas,
 } = useCaptchaStatus()
+
+// A reload must still show a CAPTCHA that was already waiting (#22215).
+onMounted(loadPendingCaptchas)
 </script>
 
 <style scoped>

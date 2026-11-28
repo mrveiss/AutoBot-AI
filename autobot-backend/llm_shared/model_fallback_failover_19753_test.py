@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llm_shared.failover_policy import may_fail_over
 from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
 from llm_shared.models import LLMRequest, LLMResponse, ProviderType
@@ -407,3 +408,159 @@ async def test_a_response_that_did_not_fail_over_names_no_destination():
         result = await ModelFallbackCoordinator().execute_with_fallback(_request(), registry)
     assert result.provider_metadata["fallback_provider"] is None
     assert result.provider_metadata["operator_configured"] is None
+
+
+# --------------------------------------------------------------------------------------------------
+# #21864: a hop whose known context window cannot hold the request is skipped before dispatch
+# --------------------------------------------------------------------------------------------------
+
+_BIG = "x" * 4000  # ~1000 tokens by the chars/4 estimator
+
+
+def _windows(table):
+    """Patch the single window reader: models absent from *table* are unknown (0)."""
+    return patch("context_window_lookup.known_context_window_tokens", side_effect=lambda m: table.get(m, 0))
+
+
+def _big_request(model="m-a"):
+    req = _request(model)
+    req.messages = [{"role": "user", "content": _BIG}]
+    return req
+
+
+@pytest.mark.asyncio
+async def test_a_hop_too_small_for_the_request_is_skipped_and_the_next_is_dispatched():
+    registry = _registry(_error("HTTP 503"), _ok("m-c"))
+    mgr = _chains("m-a", ["m-small", "m-c"], ["anthropic", "anthropic"])
+    with _env(mgr) as (store, _), _windows({"m-small": 100, "m-c": 100_000}):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+    assert registry.asked == ["m-a", "m-c"]  # the small model is never dispatched
+    assert result.content == "backup answer"
+    assert not any(model == "m-small" for _, model, _ in store.marks)  # healthy: no degradation mark
+    assert not await store.is_degraded("anthropic", "m-small")
+    (skip,) = result.provider_metadata["size_skipped"]
+    assert skip["model"] == "m-small" and skip["window"] == 100 and skip["estimated_tokens"] > 100
+    assert skip["reason"] == "request_exceeds_window"  # its own reason value in the audit record
+
+
+@pytest.mark.asyncio
+async def test_a_hop_with_an_unknown_window_is_still_offered():
+    registry = _registry(_error("HTTP 503"), _ok("m-b"))
+    mgr = _chains("m-a", ["m-b"], ["anthropic"])
+    with _env(mgr), _windows({}):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+    assert registry.asked == ["m-a", "m-b"] and result.content == "backup answer"
+
+
+@pytest.mark.asyncio
+async def test_the_size_skip_is_logged_once_with_model_estimate_and_window():
+    registry = _registry(_ok("m-c"))
+    mgr = _chains("m-a", ["m-small", "m-c"], ["anthropic", "anthropic"])
+    with _env(mgr), _windows({"m-small": 100}), patch(f"{MODULE}.logger") as log:
+        await ModelFallbackCoordinator().fail_over(_big_request(), registry, UNAVAILABLE, acted=False)
+    skips = [c for c in log.warning.call_args_list if "exceeds its window" in c.args[0]]
+    assert len(skips) == 1
+    assert skips[0].args[1]["model"] == "m-small" and skips[0].args[1]["window"] == 100
+    assert skips[0].args[1]["estimated_tokens"] > 100
+
+
+@pytest.mark.asyncio
+async def test_fail_over_skips_a_hop_too_small_for_the_request():
+    registry = _registry(_ok("m-c"))
+    mgr = _chains("m-a", ["m-small", "m-c"], ["anthropic", "anthropic"])
+    with _env(mgr), _windows({"m-small": 100}):
+        result = await ModelFallbackCoordinator().fail_over(_big_request(), registry, UNAVAILABLE, acted=False)
+    assert registry.asked == ["m-c"] and result.content == "backup answer"
+
+
+@pytest.mark.asyncio
+async def test_every_hop_skipped_for_size_names_the_size_skip_in_the_reason():
+    registry = _registry(_error("HTTP 503"))
+    mgr = _chains("m-a", ["m-s1", "m-s2"], ["anthropic", "anthropic"])
+    with _env(mgr) as (_, emitted), _windows({"m-s1": 100, "m-s2": 200}):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+        assert emitted.await_count == 1 and emitted.await_args.kwargs["reason"] == "request_exceeds_window"
+        emitted.reset_mock()  # the streaming entry point must emit its own audit, not borrow the one above
+        assert await ModelFallbackCoordinator().fail_over(_big_request(), registry, UNAVAILABLE, acted=False) is None
+        assert emitted.await_count == 1
+        assert emitted.await_args.kwargs["reason"] == "request_exceeds_window"
+        assert emitted.await_args.kwargs["exhausted"] is True
+    assert registry.asked == ["m-a"] and result.error == "HTTP 503"  # the original failure, not a bare exhaustion
+    assert result.provider_metadata["fallback_reason"] == "request_exceeds_window"
+    assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-s1", "m-s2"]
+
+
+@pytest.mark.asyncio
+async def test_a_size_skip_followed_by_a_dispatched_hop_that_fails_does_not_report_the_size_reason():
+    registry = _registry(_error("HTTP 503"))  # every dispatched model fails
+    mgr = _chains("m-a", ["m-small", "m-c"], ["anthropic", "anthropic"])
+    with _env(mgr), _windows({"m-small": 100, "m-c": 100_000}):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+    assert registry.asked == ["m-a", "m-c"]  # the small one skipped, the large one dispatched and failed
+    assert result.provider_metadata["fallback_reason"] != "request_exceeds_window"
+    assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-small"]  # still in the audit
+
+
+# --------------------------------------------------------------------------------------------------
+# Streaming fail-over audits every exhaustion, not only size skips (#22016)
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fail_over_audits_an_exhaustion_with_no_usable_hop_once():
+    registry = _registry(_ok())
+    mgr = _chains("m-a", ["m-b"], ["anthropic"])
+    with _env(mgr, _Store(degraded={("anthropic", "m-b")})) as (_, emitted):
+        result = await ModelFallbackCoordinator().fail_over(_request("m-a"), registry, UNAVAILABLE, acted=False)
+    assert result is None and registry.asked == []
+    assert emitted.await_count == 1
+    assert emitted.await_args.kwargs["exhausted"] is True
+    assert emitted.await_args.kwargs["reason"] == "provider_unavailable"  # the failure that ended the chain
+
+
+@pytest.mark.asyncio
+async def test_fail_over_audits_a_locality_blocked_exhaustion_once():
+    registry = _registry(_ok("gpt-4o"))
+    mgr = _chains("llama3", ["gpt-4o"], ["openai"], primary_provider="ollama", operator=False)
+    with _env(mgr) as (_, emitted):
+        result = await ModelFallbackCoordinator().fail_over(
+            _request("llama3", "ollama"), registry, UNAVAILABLE, acted=False
+        )
+    assert result is None and registry.asked == []
+    assert emitted.await_count == 1
+    assert emitted.await_args.kwargs["exhausted"] is True
+    assert emitted.await_args.kwargs["reason"] == "provider_unavailable"  # the failure that ended the chain
+
+
+@pytest.mark.asyncio
+async def test_fail_over_emits_nothing_when_the_failure_is_not_eligible():
+    permanent = ProviderFailure(ProviderErrorCategory.PERMANENT, "HTTP 400")
+    with _env(_chains("claude-opus-4", ["claude-sonnet-4"], ["anthropic"])) as (_, emitted):
+        assert await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), permanent, acted=False) is None
+    assert emitted.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_fail_over_emits_nothing_for_a_callers_own_credential():
+    auth = ProviderFailure(ProviderErrorCategory.AUTHENTICATION, "HTTP 401")
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])) as (_, emitted), llm_principal_scope("u1", "o1"):
+        assert await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), auth, acted=False) is None
+    assert emitted.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_a_chain_exhausted_with_no_usable_hop_names_the_failure_in_both_entry_points():
+    mgr = _chains("m-a", ["m-b"], ["anthropic"])
+    with _env(mgr, _Store(degraded={("anthropic", "m-b")})) as (_, emitted):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request("m-a"), _registry(_error("HTTP 503")))
+    assert result.provider_metadata["fallback_reason"] == "provider_unavailable"
+    assert emitted.await_count == 1 and emitted.await_args.kwargs["reason"] == "provider_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_fail_over_checks_eligibility_once_on_the_credential_path():
+    auth = ProviderFailure(ProviderErrorCategory.AUTHENTICATION, "HTTP 401")
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])), llm_principal_scope("u1", "o1"):
+        with patch(f"{MODULE}.may_fail_over", wraps=may_fail_over) as check:
+            await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), auth, acted=False)
+    assert check.call_count == 1

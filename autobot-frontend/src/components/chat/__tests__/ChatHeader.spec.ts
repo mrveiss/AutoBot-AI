@@ -11,6 +11,9 @@ import en from '@/i18n/locales/en.json'
 import ChatHeader from '../ChatHeader.vue'
 import ChatHeaderActions from '../ChatHeaderActions.vue'
 import { useUiMode } from '@/composables/useUiMode'
+import { createPinia, setActivePinia } from 'pinia'
+import { useChatStore } from '@/stores/useChatStore'
+import { resetChatKnowledgeState, useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const base = {
@@ -19,9 +22,37 @@ const base = {
 const render = (props: Record<string, unknown> = {}) =>
   mount(ChatHeader, { props: { ...base, ...props }, attachTo: document.body, global: { plugins: [i18n] } })
 
-beforeEach(() => useUiMode().setMode('full'))
+beforeEach(() => {
+  useUiMode().setMode('full')
+  setActivePinia(createPinia())
+  resetChatKnowledgeState()
+})
 
 describe('ChatHeader', () => {
+  it('shows Knowledge on or off from the state the composer chip shares (#18243)', async () => {
+    const w = render()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOn)
+    useChatKnowledge().enabled.value = false
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    w.unmount()
+  })
+
+  it('shows the Knowledge state of the current session when the chat is switched', async () => {
+    const store = useChatStore()
+    const a = store.createNewSession('A', 'session-a')
+    useChatKnowledge().enabled.value = false
+    const w = render()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    store.createNewSession('B', 'session-b')
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOn)
+    store.switchToSession(a)
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    w.unmount()
+  })
+
   it('shows the title and sub-line', () => {
     const w = render()
     expect(w.text()).toContain('Fleet check')
@@ -56,7 +87,22 @@ describe('ChatHeader', () => {
     expect(html.indexOf('Overseer on')).toBeLessThan(html.indexOf('Fleet check'))
     expect(w.text()).toContain('started')
     expect(w.text()).toContain('10:42')
-    expect(w.text()).not.toContain('Knowledge')
+    // The sub-line also carries the Knowledge state (#22200), above the title with Overseer.
+    expect(html.indexOf('data-testid="header-knowledge"')).toBeLessThan(html.indexOf('Fleet check'))
+    w.unmount()
+  })
+
+  it('shows the session id for every session, also when the start time is set (#22248)', () => {
+    const w = render({ startedAt: new Date(2026, 10, 21, 10, 42), currentSessionId: 'abc-123' })
+    expect(w.find('[data-testid="header-session-id"]').text()).toBe('Session abc-123')
+    expect(w.text()).toContain('10:42')
+    w.unmount()
+  })
+
+  it('shows the session id once when there is no start time (#22248)', () => {
+    const w = render({ startedAt: null, currentSessionId: 'abc-123', sessionInfo: 'Session abc-123 - 3 messages' })
+    expect(w.text().split('abc-123').length - 1).toBe(1)
+    expect(w.find('[data-testid="header-session-id"]').exists()).toBe(false)
     w.unmount()
   })
 
