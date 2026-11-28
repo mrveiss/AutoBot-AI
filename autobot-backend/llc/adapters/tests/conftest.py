@@ -14,6 +14,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
+import psutil
+
 
 def agent_cfg(agent_id: str = "agent-1", output_dir: str | None = None, **kwargs) -> dict:
     """Build a minimal agent-config dict used across adapter test suites."""
@@ -30,6 +32,25 @@ def make_fake_proc(pid: int = 12345) -> MagicMock:
     return proc
 
 
+def _is_live_child(pid: int) -> bool:
+    """True if ``pid`` is a live descendant of this process (psutil; no reaping)."""
+    if pid <= 1:
+        return False
+    return any(c.pid == pid for c in psutil.Process(os.getpid()).children(recursive=True))
+
+
+def _check_foreign_kill(pid: int, sig: int) -> None:
+    """Refuse a real signal to anything but this test process's own children (GH#16920).
+
+    Signal 0 is a harmless liveness probe and always passes. A fabricated PID, or
+    pid <= 1 (0 / -1 / negative group), would signal an unrelated host process.
+    """
+    if sig == 0:
+        return
+    if not _is_live_child(pid):
+        raise AssertionError(f"scoped os.kill refused foreign non-child pid {pid} with signal {sig}")
+
+
 @contextmanager
 def scoped_os_kill(*pids: int, side_effect=None, return_value=None) -> Iterator[MagicMock]:
     """Patch ``os.kill`` for the given PID(s) only (GH#16920).
@@ -39,7 +60,8 @@ def scoped_os_kill(*pids: int, side_effect=None, return_value=None) -> Iterator[
     transport -- can land inside the patch window. Calls addressed to ``pids`` go
     to the yielded mock (which records them and applies ``side_effect`` /
     ``return_value``); every other PID goes to the REAL ``os.kill``, captured
-    before patching, and is never recorded.
+    before patching, and is never recorded -- but only if it is a live child of
+    this process (or the signal is 0); anything else raises ``AssertionError``.
 
     This is the only place under llc/adapters/tests allowed to patch ``os.kill``
     (enforced by ``test_os_kill_patch_scope.py``).
@@ -50,6 +72,7 @@ def scoped_os_kill(*pids: int, side_effect=None, return_value=None) -> Iterator[
 
     def _scoped(pid, sig):
         if pid not in targeted:
+            _check_foreign_kill(pid, sig)
             return real_kill(pid, sig)
         return mock_kill(pid, sig)
 
