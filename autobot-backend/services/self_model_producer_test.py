@@ -88,31 +88,33 @@ def test_tool_records_send_requires_in_the_attrs():
     assert _from_record(record)["attrs"]["requires"] == ["xdotool"]
 
 
+class _Provider:
+    def __init__(self, names):
+        self.names = names
+
+    async def list_models(self):
+        if self.names is None:
+            raise RuntimeError("down")
+        return self.names
+
+
+class _Registry:
+    providers = {"up": _Provider(["m1", "m1", "m2"]), "down": _Provider(["m3"]), "broken": _Provider(None)}
+
+    async def health_check_all(self):
+        return {"up": True, "down": False, "broken": True}
+
+    def get_provider_by_name(self, name):
+        return self.providers[name]
+
+    def get_provider_facts(self):
+        return {}
+
+
 async def test_models_are_probed_by_their_providers_availability(monkeypatch):
     from services import self_model_models as models
 
-    class Provider:
-        def __init__(self, names):
-            self.names = names
-
-        async def list_models(self):
-            if self.names is None:
-                raise RuntimeError("down")
-            return self.names
-
-    class Registry:
-        providers = {"up": Provider(["m1", "m1", "m2"]), "down": Provider(["m3"]), "broken": Provider(None)}
-
-        async def health_check_all(self):
-            return {"up": True, "down": False, "broken": True}
-
-        def get_provider_by_name(self, name):
-            return self.providers[name]
-
-        def get_provider_facts(self):
-            return {}
-
-    monkeypatch.setattr(models, "get_provider_registry", lambda: Registry())
+    monkeypatch.setattr(models, "get_provider_registry", lambda: _Registry())
     out = await models.model_observations()
     assert [(o["name"], o["status"], o["parent"]["name"]) for o in out] == [
         ("m3", "probed_failed", "down"),

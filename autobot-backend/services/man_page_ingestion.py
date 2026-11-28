@@ -189,6 +189,11 @@ def build_man_page_metadata(
     Returns:
         Metadata dictionary
     """
+    return {**_man_page_base_fields(command, section, system_ctx, unique_key), **link_fields(node_id, command)}
+
+
+def _man_page_base_fields(command: str, section: str, system_ctx: dict, unique_key: str) -> dict:
+    """The per-host man page metadata fields, without the self-model link."""
     return {
         "type": MAN_PAGE_TYPE,
         "command": command,
@@ -208,7 +213,6 @@ def build_man_page_metadata(
         "category": "system/manpages",
         "source": "comprehensive_man_pages",
         "visibility": INGESTED_DOCUMENT_VISIBILITY,
-        **link_fields(node_id, command),
     }
 
 

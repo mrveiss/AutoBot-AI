@@ -150,6 +150,31 @@ class AgentPresenceRegistry:
         self._entries: dict[PresenceKey, _Record] = {}
         self._lock = Lock()
 
+    def _refuse_squat(
+        self,
+        existing: "_Record | None",
+        kind: AgentKind,
+        tenant_id: str | None,
+        name: str,
+        instance_id: str,
+        now: float,
+    ) -> None:
+        """Raise when a DIFFERENT instance already holds this live name."""
+        if existing is None or existing.instance_id == instance_id or now - existing.last_seen >= self._ttl:
+            return
+        logger.warning(
+            "presence report refused: %r (%s, tenant=%r) is live under instance %r; refusing %r",
+            name,
+            kind.value,
+            tenant_id,
+            existing.instance_id,
+            instance_id,
+        )
+        raise PresenceNameCollisionError(
+            f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
+            f"{existing.instance_id!r}; refusing instance {instance_id!r}"
+        )
+
     def report(
         self,
         *,
@@ -174,19 +199,7 @@ class AgentPresenceRegistry:
         now = time.time()
         with self._lock:
             existing = self._entries.get(key)
-            if existing is not None and existing.instance_id != instance_id and now - existing.last_seen < self._ttl:
-                logger.warning(
-                    "presence report refused: %r (%s, tenant=%r) is live under instance %r; refusing %r",
-                    name,
-                    kind.value,
-                    tenant_id,
-                    existing.instance_id,
-                    instance_id,
-                )
-                raise PresenceNameCollisionError(
-                    f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
-                    f"{existing.instance_id!r}; refusing instance {instance_id!r}"
-                )
+            self._refuse_squat(existing, kind, tenant_id, name, instance_id, now)
             was_busy = existing.busy if existing is not None else None
             self._entries[key] = _Record(instance_id=instance_id, busy=busy, detail=detail, last_seen=now, task=task)
         self._publish_attribute(kind, tenant_id, name)

@@ -203,6 +203,21 @@ def test_available_tools_derive_from_the_catalogue():
     assert set(REGISTRY_TOOLS) <= set(names)
 
 
+def test_the_prompt_lists_registry_tools_in_the_order_main_did():
+    """The derivation follows the class MRO (mixin tools first); the prompt order is pinned to the former one (#22280)."""
+    from tools.tool_records import REGISTRY_TOOLS
+
+    former = [
+        "execute_system_command", "query_system_information", "list_system_services", "manage_service",
+        "get_process_info", "terminate_process", "web_fetch", "web_search", "search_knowledge_base",
+        "add_file_to_knowledge_base", "store_fact", "get_fact", "query_self_model", "type_text", "click_element",
+        "bring_window_to_front", "read_text_from_region", "move_mouse", "ask_user_for_manual",
+        "respond_conversationally", "code_interpreter", "scrape_url", "crawl_site", "map_site",
+        "extract_structured_data", "content_reach",
+    ]  # fmt: skip
+    assert list(REGISTRY_TOOLS)[: len(former)] == former
+
+
 def test_every_tool_record_names_where_it_runs():
     from tools.tool_records import tool_records
 
