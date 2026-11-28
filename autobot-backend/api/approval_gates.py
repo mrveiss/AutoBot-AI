@@ -15,7 +15,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.approval_gates_approver import require_action_approver_role
-from api.approval_gates_requester import stamped_requester, with_requested_label
+from api.approval_gates_requester import (
+    caller_identities,
+    display_requester,
+    requester_names,
+    stamped_requester,
+    with_requested_label,
+)
 from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
@@ -94,7 +100,7 @@ def _build_task_links(approval) -> List[TaskApprovalLinkResponse]:
     return task_links
 
 
-def _to_response(approval) -> ApprovalGateResponse:
+def _to_response(approval, names: dict[str, str] | None = None) -> ApprovalGateResponse:
     """Convert an Approval ORM object to a response dict."""
     return ApprovalGateResponse(
         id=str(approval.id),
@@ -103,6 +109,7 @@ def _to_response(approval) -> ApprovalGateResponse:
         approval_type=approval.approval_type,
         status=approval.status,
         requested_by_agent=approval.requested_by_agent,
+        requested_by_name=display_requester(approval, names or {}),
         decided_by_user=approval.decided_by_user,
         workflow_id=approval.workflow_id,
         workflow_step=approval.workflow_step,
@@ -118,6 +125,16 @@ def _to_response(approval) -> ApprovalGateResponse:
         comments=_build_comments(approval),
         task_links=_build_task_links(approval),
     )
+
+
+async def _respond(session: AsyncSession, approvals: list) -> list[ApprovalGateResponse]:
+    """The responses for *approvals*, each carrying its requester's name resolved at read time (#22222)."""
+    names = await requester_names(session, approvals)
+    return [_to_response(a, names) for a in approvals]
+
+
+async def _respond_one(session: AsyncSession, approval) -> ApprovalGateResponse:
+    return (await _respond(session, [approval]))[0]
 
 
 def _user_uuid(current_user: dict) -> uuid.UUID | None:
@@ -171,7 +188,7 @@ def _requester_matches(approval, current_user: dict) -> bool:
     requester = str(approval.requested_by_agent or "").strip()
     if not requester:
         return False
-    mine = {str(v) for v in (current_user.get("id"), current_user.get("user_id"), current_user.get("username")) if v}
+    mine = caller_identities(current_user)
     return requester in mine or requester.rsplit(":", 1)[-1] in mine
 
 
@@ -237,7 +254,7 @@ async def create_approval(
         context=with_requested_label(body.context, body.requested_by_agent),
         task_ids=body.task_ids,
     )
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.get(
@@ -273,7 +290,7 @@ async def list_approvals(
         risk_tier=risk_tier.value if risk_tier else None,
         extra_where=svc.visibility(current_user.get("username"), is_admin_role(current_user.get("role"))),
     )
-    return [_to_response(a) for a in approvals]
+    return await _respond(session, approvals)
 
 
 # Declared before ``/approval-gates/{approval_id}`` so "pending" is never parsed as a UUID.
@@ -303,7 +320,7 @@ async def list_pending_approvals(
         limit=pagination.limit,
         offset=pagination.offset,
     )
-    return [_to_response(a) for a in approvals]
+    return await _respond(session, approvals)
 
 
 @router.get(
@@ -330,7 +347,7 @@ async def get_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Approval {approval_id} not found",
         )
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.post(
@@ -364,7 +381,7 @@ async def approve(
         )
     except ValueError:
         raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.post(
@@ -396,7 +413,7 @@ async def reject(
         )
     except ValueError:
         raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.post(
@@ -428,7 +445,7 @@ async def request_revision(
         )
     except ValueError:
         raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.post(
@@ -458,7 +475,7 @@ async def resubmit(
         )
     except ValueError:
         raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
-    return _to_response(approval)
+    return await _respond_one(session, approval)
 
 
 @router.post(

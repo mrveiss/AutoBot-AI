@@ -15,6 +15,7 @@ import auth_service_opt_in
 from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_once import reset_log_once
+from autobot_shared.principal import resolve_audit_actor_id
 from services.audit.taxonomy import AuditAction
 
 KEY = {"X-Internal-API-Key": "k"}
@@ -136,6 +137,10 @@ def test_one_request_writes_one_audit_row_however_many_gates_ask(am, key_valid, 
     with as_user(None), patch("services.audit.audit.record_committed", AsyncMock(return_value=True)) as recorded:
         response = TestClient(app).get("/both", headers=KEY)
     assert response.status_code == 200 and response.json()["role"] == "service"
+    # #22222: the shape audit callers rely on -- a service flag and a stable name that resolves as the actor
+    assert response.json()["service"] is True
+    assert response.json()["username"] == "service:test-caller"
+    assert resolve_audit_actor_id(response.json()) == "service:test-caller"
     assert recorded.await_count == 1
 
 
