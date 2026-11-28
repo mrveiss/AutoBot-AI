@@ -518,7 +518,7 @@ fi
 # families -- not just confirm a hardcoded list matches itself.
 for _fam_var in AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \
     AUTOBOT_VNC_WEB_HOST AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_HOST AUTOBOT_VNC_SERVER_PORT; do
-    if echo "$_distinct_vars" | grep -qx "$_fam_var"; then
+    if grep -qx "$_fam_var" <<<"$_distinct_vars"; then
         echo "PASS: reach self-check's scan independently found $_fam_var"
         pass=$((pass + 1))
     else

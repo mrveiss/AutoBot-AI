@@ -14,8 +14,8 @@ check() { if [ "$2" = "$3" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); 
 a=10; b=77; c=4
 printf 'FLEET = re.compile(r"^%s\\.%s\\.%s\\.")\n' "$a" "$b" "$c" > "$TMP/rule.py"
 re=$(fleet_ip_regex "$TMP/rule.py"); check "derives the range" "$?" "0"
-printf 'host %s.%s.%s.9\n' "$a" "$b" "$c" | grep -qE "$re"; check "matches a fleet address" "$?" "0"
-printf 'host %s.%s.%s.9\n' "$a" "$b" "$((c + 1))" | grep -qE "$re"; check "does not match a neighbour" "$?" "1"
+grep -qE "$re" <<<"$(printf 'host %s.%s.%s.9\n' "$a" "$b" "$c")"; check "matches a fleet address" "$?" "0"
+grep -qE "$re" <<<"$(printf 'host %s.%s.%s.9\n' "$a" "$b" "$((c + 1))")"; check "does not match a neighbour" "$?" "1"
 
 fleet_ip_regex "$TMP/missing.py" >/dev/null 2>"$TMP/err"; check "unreadable rule returns 2" "$?" "2"
 grep -q "unreadable" "$TMP/err"; check "and says why" "$?" "0"

@@ -87,7 +87,7 @@ check_prerequisites() {
     print_status "INFO" "Checking prerequisites..."
 
     # Check Python version
-    if ! python3 --version | grep -q "Python 3"; then
+    if ! py_version=$(python3 --version) || ! grep -q "Python 3" <<<"${py_version}"; then
         print_status "ERROR" "Python 3 is required"
         exit 1
     fi

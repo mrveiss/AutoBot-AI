@@ -138,7 +138,7 @@ record_install() {  # record_install <key> <value>, once (#18653)
     mkdir -p "$(dirname "${INSTALL_RECORD}")"
     grep -qxF "$1=$2" "${INSTALL_RECORD}" 2>/dev/null || echo "$1=$2" >> "${INSTALL_RECORD}"
 }
-pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'ok installed'; }
+pkg_installed() { local status; status=$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null) && grep -q 'ok installed' <<<"${status}"; }
 apt_install_recorded() {  # <desc> <pkg>...: install; record only packages absent BEFORE (#18727)
     local desc="$1" p new=(); shift
     for p in "$@"; do pkg_installed "${p}" || new+=("${p}"); done
@@ -223,7 +223,7 @@ detect_local_ip() {
     [[ "${REINSTALL}" == true ]] && rm -f "${cache_file}"
     [[ -f "${cache_file}" ]] && cached="$(head -n1 "${cache_file}")"
     # #19239: reuse a cached address only while it is still assigned to an interface here.
-    if [[ -n "${cached}" ]] && ip -4 -o addr show | awk '{print $4}' | cut -d/ -f1 | grep -qxF "${cached}"; then
+    if [[ -n "${cached}" ]] && local_addrs=$(ip -4 -o addr show | awk '{print $4}' | cut -d/ -f1) && grep -qxF "${cached}" <<<"${local_addrs}"; then
         echo "${cached}"; return
     fi
 
@@ -451,7 +451,7 @@ system_setup() {
             ca-certificates gnupg build-essential \
             libpq-dev
 
-    if ! locale -a 2>/dev/null | grep -qi 'en_US\.utf-\?8'; then
+    if ! locales=$(locale -a 2>/dev/null) || ! grep -qi 'en_US\.utf-\?8' <<<"${locales}"; then
         run_ok "Generating en_US.UTF-8 locale" \
             locale-gen en_US.UTF-8
     fi

@@ -267,10 +267,74 @@ def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path
         assert code == 0 and "status=success" in out, f"attempt {attempt}: {out[-200:]}"
 
 
-# A producer piped into an early-exiting grep: `grep -q` / `--quiet`, any producer.
+# A producer piped (`|` or `|&`) into an early-exiting grep: `grep -q` / `--quiet`, any
+# producer, behind wrappers (sudo, xargs, timeout N, env A=b, ...), with -q before or after
+# the pattern. Quoted pattern text may itself contain `|`, `;` or `&`.
+# A wrapper option may carry an operand (`sudo -u root`, `timeout -s KILL 5`, `xargs -I {}`,
+# `env -u NAME`, `nice -n 5`, `stdbuf -o0`): the operand is a following non-option word.
+_WRAPPER_ARG = r"(?:-\S+(?:\s+[^\s|;&-]\S*)?|\w+=\S*|\d+[smhd]?)"
+_WRAPPERS = r"(?:(?:sudo|xargs|timeout|env|nice|nohup|stdbuf|command|exec)\b(?:\s+" + _WRAPPER_ARG + r")*\s+)*"
+_GREP_ARG = r"""(?:"[^"]*"|'[^']*'|[^|;&\n"'])"""
 _PIPE_INTO_QUIET_GREP = re.compile(
-    r"(?<!\|)\|(?!\|)\s*(?:e|f)?grep\s+(?:[^|;&\n]*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
+    r"(?<!\|)\|&?(?!\|)\s*"
+    + _WRAPPERS
+    + r"(?:e|f)?grep\s+(?:"
+    + _GREP_ARG
+    + r"*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
 )
+
+
+_MATCHING_PIPELINES = (
+    "producer | sudo -u root grep -q hit",
+    "producer | sudo -g adm -u root grep hit -q",
+    "producer | timeout -s KILL 5 grep --quiet hit",
+    "producer | timeout -k 2s -s TERM 9 grep -q hit",
+    "producer | env -u NAME grep -q hit",
+    "producer | nice -n 5 grep -q hit",
+    "producer | stdbuf -o0 -e0 grep -q hit",
+    "producer | xargs -I {} -n 1 grep -q hit",
+    "producer |& sudo -u root grep -q hit",
+    "producer |& grep -q hit",
+)
+_NON_MATCHING_PIPELINES = (
+    "producer | sudo -u root grep hit",
+    "producer | sudo -g adm -u root grep hit",
+    "producer | timeout -s KILL 5 grep hit",
+    "producer | timeout -k 2s -s TERM 9 grep hit",
+    "producer | env -u NAME grep hit",
+    "producer | nice -n 5 grep hit",
+    "producer | stdbuf -o0 -e0 grep hit",
+    "producer | xargs -I {} -n 1 grep hit",
+    "producer |& sudo -u root grep hit",
+    "producer |& grep hit",
+    "producer || sudo -u root grep -q hit",
+)
+
+
+@pytest.mark.parametrize("line", _MATCHING_PIPELINES)
+def test_the_quiet_grep_detector_matches_wrapper_operands_and_stderr_pipes(line):
+    assert _PIPE_INTO_QUIET_GREP.search(line), line
+
+
+@pytest.mark.parametrize("line", _NON_MATCHING_PIPELINES)
+def test_the_quiet_grep_detector_ignores_the_same_pipelines_without_q(line):
+    assert not _PIPE_INTO_QUIET_GREP.search(line), line
+
+
+@pytest.mark.parametrize(
+    ("text", "matches"),
+    [
+        ("producer |&\n  grep -q hit\n", True),
+        ("producer |\n  sudo -u root grep -q hit\n", True),
+        ("producer \\\n  |& grep -q hit\n", True),
+        ("producer |&\n  grep hit\n", False),
+        ("producer ||\n  grep -q hit\n", False),
+        ("producer \\\n  | sudo -u root grep hit\n", False),
+    ],
+)
+def test_the_continuation_joiner_folds_pipes_and_backslashes_into_one_line(text, matches):
+    found = any(_PIPE_INTO_QUIET_GREP.search(line) for line in _logical_lines(text))
+    assert found is matches, text
 
 
 def _pipefail_active(document: dict, job: dict, step: dict) -> bool:
@@ -301,18 +365,34 @@ def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
 
 
-_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-\w+\s+)*-\w*o\s+pipefail")
+# `set -euo pipefail`, `set -o errexit -o pipefail`, `set -e -o nounset -o pipefail`, ...
+_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-o\s+\w+\s+|-\w+\s+)*-\w*o\s+pipefail")
 
 
-# Piped input is a few bytes of fixed text, far below the pipe buffer, so the producer
-# cannot be mid-write when grep exits; the `$?` of the pipeline is what each case asserts.
-_FIXED_INPUT_SCRIPTS = {"fleet-ip-rule_test.sh"}
+# Every tracked shell script: by suffix (`*.sh`, Ansible `*.sh.j2`) or, for extensionless
+# files (git hooks, wrappers), by a bash/sh shebang, so a new script cannot dodge a glob.
+_SHELL_SUFFIX_GLOBS = ("*.sh", "*.sh.j2")
+_SHEBANG = re.compile(rb"#!\s*(?:/usr/bin/env\s+(?:-S\s+)?)?\S*?(?:ba)?sh\b")
+# Floor: a scan that collapses to a handful of files must fail, not pass vacuously.
+_MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL = 100
+
+
+def _shell_script_paths() -> list[Path]:
+    root = repo_root()
+    rels = set(tracked_paths(root, *_SHELL_SUFFIX_GLOBS))
+    for rel in tracked_paths(root, "*", exclude=("node_modules",)):
+        if "." in Path(rel).name or rel in rels:
+            continue
+        path = root / rel
+        if path.is_file() and not path.is_symlink() and _SHEBANG.match(path.read_bytes()[:200]):
+            rels.add(rel)
+    return [root / rel for rel in sorted(rels)]
 
 
 def _logical_lines(text: str) -> list[str]:
-    """Join `\\` continuations and lines ending in a pipe, so `cmd \\ \\n | grep -q` is one line."""
+    """Join `\\` continuations and lines ending in `|` or `|&`, so `cmd \\ \\n | grep -q` is one line."""
     joined = re.sub(r"\\\n\s*", " ", text)
-    joined = re.sub(r"(?<!\|)\|\s*\n\s*", "| ", joined)
+    joined = re.sub(r"(?<!\|)(\|&?)\s*\n\s*", r"\1 ", joined)
     return joined.splitlines()
 
 
@@ -320,15 +400,16 @@ def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
     """The script half of the class: a file with `set -o pipefail` (any flag mix) must
     not pipe a producer into `grep -q`, including across a continued line."""
     offenders = []
-    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), "scripts/*.sh"))):
-        if path.name in _FIXED_INPUT_SCRIPTS:
-            continue
+    under_pipefail = 0
+    for path in _shell_script_paths():
         text = path.read_text(encoding="utf-8", errors="replace")
         if not _SET_PIPEFAIL.search(text):
             continue
+        under_pipefail += 1
         code = "\n".join(c.text for c in code_lines(text, name=path.name))
         for line in _logical_lines(code):
             if _PIPE_INTO_QUIET_GREP.search(line):
                 offenders.append(f"{path.relative_to(repo_root())}: {line.strip()[:90]}")
 
+    assert under_pipefail >= _MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL, under_pipefail
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
