@@ -24,7 +24,7 @@ from api.schemas_oauth_bundle_strip import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
-from autobot_shared.principal import require_audit_actor_id, resolve_audit_actor_id
+from autobot_shared.principal import require_audit_actor_id
 from models.approval import ApprovalType
 from services import oauth_bundle_strip
 from services.approval_gate_service import ApprovalGateService
@@ -41,7 +41,7 @@ register_strip_action()
 @router.get("/oauth-bundle-strip", response_model=OAuthBundleStripPreviewResponse)
 async def preview_oauth_bundle_strip(current_user: dict = Depends(get_current_user)):
     """Dry run: how many bundles per provider would be stripped, skipped or are already clean."""
-    report = await oauth_bundle_strip.preview(get_secrets_service(), resolve_audit_actor_id(current_user) or "admin")
+    report = await oauth_bundle_strip.preview(get_secrets_service(), require_audit_actor_id(current_user))
     return OAuthBundleStripPreviewResponse(outcomes=report.summary(), bundle_ids=report.secret_ids)
 
 

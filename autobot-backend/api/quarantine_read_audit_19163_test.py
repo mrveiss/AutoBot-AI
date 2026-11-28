@@ -15,15 +15,17 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from api import knowledge_chroma, knowledge_maintenance
-from api.quarantine_read_audit import INTERNAL_SERVICE_ACTOR, request_actor
+from api.quarantine_read_audit import INTERNAL_SERVICE_ACTOR, request_actor, request_person
 from autobot_shared.ssot_config import config
 from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
 from knowledge.quarantine import audit_quarantine_read
 from knowledge.summary_search import SummarySearchService
 from services.audit.taxonomy import AuditAction
 from services.knowledge.contradiction_detector import ConflictPair, _mark_quarantined
+from testkit.canonical_gate import HUMAN_PRINCIPAL
 
 _RESEARCH = config.research_quarantine_collection
 _HELPER_AUDIT = "api.quarantine_read_audit.audit_quarantine_read"
@@ -44,10 +46,27 @@ async def test_audit_helper_writes_through_the_canonical_audit_log():
 
 @pytest.mark.asyncio
 async def test_request_actor_is_the_human_else_the_internal_service():
-    with patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value={"username": "root"})):
-        assert await request_actor(_REQUEST) == "root"
+    with patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value=HUMAN_PRINCIPAL)):
+        assert await request_actor(_REQUEST) == "u-123"  # the id, not the mutable username (#22338)
     with patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value=None)):
         assert await request_actor(_REQUEST) == INTERNAL_SERVICE_ACTOR
+
+
+@pytest.mark.asyncio
+async def test_a_human_named_root_is_never_read_as_the_internal_service():
+    """#22338: a user with no id is refused (401); one named ``root`` with an id is that id, and may act as a person."""
+    with patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value={"username": "root"})):
+        with pytest.raises(HTTPException) as err:
+            await request_actor(_REQUEST)
+    assert err.value.status_code == 401
+    with patch(
+        "api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value={"id": "u-9", "username": "root"})
+    ):
+        assert await request_person(_REQUEST) == "u-9"
+    with patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value=None)):
+        with pytest.raises(HTTPException) as refused:
+            await request_person(_REQUEST)
+    assert refused.value.status_code == 403
 
 
 def _collection(ids, metadatas):
@@ -64,13 +83,15 @@ async def test_explorer_marks_and_audits_quarantined_rows():
     client.get_collection = AsyncMock(return_value=collection)
     with (
         patch.object(knowledge_chroma, "get_async_chromadb_client", AsyncMock(return_value=client)),
-        patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value={"username": "root"})),
+        patch(
+            "api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value={"id": "u-9", "username": "root"})
+        ),
         patch(_HELPER_AUDIT, AsyncMock(return_value=True)) as audit,
     ):
         response = await knowledge_chroma.list_documents("kb", limit=10, offset=0, _=True, request=_REQUEST)
 
     assert response.data["quarantined_ids"] == ["q"]
-    audit.assert_awaited_once_with("root", "chroma.list_documents:kb", ["q"])
+    audit.assert_awaited_once_with("u-9", "chroma.list_documents:kb", ["q"])
 
 
 @pytest.mark.asyncio

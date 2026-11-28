@@ -412,6 +412,31 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "user-B")
 
+    async def test_the_scope_is_the_principal_id_and_a_bare_username_is_refused(self):
+        """#22338: the id claim scopes the data; a username-only caller has no scope (401)."""
+        from fastapi import HTTPException
+
+        from api.memory_privacy import _resolve_target_user
+
+        human = {"id": "u-123", "username": "alice-renamed"}
+        self.assertEqual(await _resolve_target_user(human, None, self._make_request()), "u-123")
+        with self.assertRaises(HTTPException) as ctx:
+            await _resolve_target_user({"username": "mallory"}, None, self._make_request())
+        self.assertEqual(ctx.exception.status_code, 401)
+
+    async def test_an_id_less_service_asking_for_another_user_gets_403_not_401(self):
+        """#22338/#18688: the admin gate runs before the identity check, so a service principal is refused 403."""
+        from fastapi import HTTPException
+
+        from api.memory_privacy import _resolve_target_user
+
+        service = {"username": "service:slm", "service": True}
+        with patch("api.memory_privacy.refuse_service_principal", side_effect=HTTPException(status_code=403)):
+            with self.assertRaises(HTTPException) as ctx:
+                await _resolve_target_user(service, "user-B", self._make_request())
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "Only admins may access another user's memory records.")
+
 
 if __name__ == "__main__":
     unittest.main()

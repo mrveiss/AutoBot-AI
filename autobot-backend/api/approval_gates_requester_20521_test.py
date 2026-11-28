@@ -131,3 +131,24 @@ async def test_a_failed_name_lookup_rolls_back_only_its_savepoint_and_never_fail
         assert await approval_gates_requester.requester_names(session, [row]) == {}
     session.begin_nested.assert_called_once()
     session.savepoint.__aexit__.assert_awaited_once()  # the SAVEPOINT was exited (rolled back), not the outer transaction
+
+
+@pytest.mark.asyncio
+async def test_actor_names_is_the_one_batch_lookup_for_any_stored_actor() -> None:
+    """#22338: the audit API reuses it; a service name, ``system`` and an unknown id are left out."""
+    with patch.object(
+        approval_gates_requester, "member_people", AsyncMock(return_value=({uuid.UUID(_ME): "Ada Admin"}, {}))
+    ) as lookup:
+        names = await approval_gates_requester.actor_names(_session(), [_ME, "service:slm-x", "system", _VICTIM, _ME])
+    assert names == {_ME: "Ada Admin"}
+    lookup.assert_awaited_once()
+
+
+def test_a_username_never_satisfies_an_id_form_requester() -> None:
+    """#22338: a user named like another's id cannot resubmit; a legacy name-form requester still matches its name."""
+    row = SimpleNamespace(id=uuid.uuid4(), requested_by_agent=_VICTIM, status="revision_requested")
+    with pytest.raises(HTTPException) as err:
+        approval_gates._guard_resubmit(row, None, {"id": _ME, "username": _VICTIM})
+    assert err.value.status_code == 403
+    legacy = SimpleNamespace(id=uuid.uuid4(), requested_by_agent="alice", status="revision_requested")
+    approval_gates._guard_resubmit(legacy, None, {"id": _ME, "username": "alice"})  # no refusal

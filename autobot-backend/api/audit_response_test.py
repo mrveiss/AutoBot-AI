@@ -12,7 +12,9 @@ the bug (the envelope defaults message/timestamp to None but the request
 still succeeds).
 """
 
-from unittest.mock import AsyncMock, patch
+import contextlib
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -63,3 +65,40 @@ class TestListOperationTypesResponsePayload:
         assert sorted(body["categories"]["security"]) == ["auth.login", "auth.logout"]
         assert body["categories"]["data"] == ["file.export"]
         assert body["total_operations"] == 3
+
+
+class TestAuditEntriesCarryTheActorName:
+    """#22338: rows store the actor id; the response adds ``user_name`` resolved at read time."""
+
+    def test_logs_resolve_ids_to_names_and_leave_services_and_system_as_stored(self):
+        rows = [
+            SimpleNamespace(to_response_dict=lambda uid=uid: {**_ROW, "user_id": uid})
+            for uid in ("u-123", "service:slm", "system", None)
+        ]
+        audit_logger = AsyncMock()
+        audit_logger.query = AsyncMock(return_value=rows)
+
+        @contextlib.asynccontextmanager
+        async def _session():
+            yield MagicMock()
+
+        with (
+            patch("api.audit.get_audit_logger", return_value=audit_logger),
+            patch("api.audit.db_session_context", _session),
+            patch("api.audit.actor_names", AsyncMock(return_value={"u-123": "Ada Admin"})) as names,
+        ):
+            body = _make_client().get("/api/audit/logs").json()
+
+        assert [e["user_name"] for e in body["entries"]] == ["Ada Admin", None, None, None]
+        assert [e["user_id"] for e in body["entries"]] == ["u-123", "service:slm", "system", None]
+        names.assert_awaited_once()
+
+
+_ROW = {
+    "id": "1",
+    "timestamp": 1.0,
+    "date": "d",
+    "operation": "op",
+    "result": "success",
+    "details": {},
+}

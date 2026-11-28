@@ -13,7 +13,7 @@ requester the body names (the SLM console sends a ``data_hygiene_console`` label
 from __future__ import annotations
 
 import uuid
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
@@ -45,12 +45,24 @@ def with_requested_label(context: dict | None, label: str | None) -> dict | None
 
 
 def caller_identities(current_user: Mapping[str, Any]) -> set[str]:
-    """Every value a stored requester may name for this caller: the canonical ids, the service name, the username."""
-    claims = (
-        *(current_user.get(c) for c in ("id", "user_id", "sub", "username")),
-        resolve_audit_actor_id(dict(current_user)),
-    )
+    """The ids a stored requester may name for this caller: the canonical ids and an admitted service's name."""
+    claims = (*(current_user.get(c) for c in ("id", "user_id", "sub")), resolve_audit_actor_id(dict(current_user)))
     return {str(v) for v in claims if v}
+
+
+def requester_is_caller(requester: str, current_user: Mapping[str, Any]) -> bool:
+    """Whether a stored requester value names this caller.
+
+    An id-form value (a user id) matches only the caller's ids: the mutable username never satisfies it, or a user
+    could take the username of another's id (#22338). A value that is not an id was stored as a name (a row from
+    before ids were recorded) and may match the caller's username.
+    """
+    ids = caller_identities(current_user)
+    username = current_user.get("username")
+    for value in (requester, requester.rsplit(":", 1)[-1]):
+        if value in ids or (value == username and _requester_user_id(value) is None):
+            return True
+    return False
 
 
 def _requester_user_id(requester: str) -> uuid.UUID | None:
@@ -63,13 +75,14 @@ def _requester_user_id(requester: str) -> uuid.UUID | None:
     return None
 
 
-async def requester_names(session: AsyncSession, approvals: Sequence[Any]) -> dict[str, str]:
-    """Approval id -> the requester's human-readable name, resolved at read time (#22222).
+async def actor_names(session: AsyncSession, actors: Iterable[str]) -> dict[str, str]:
+    """Stored actor value -> that user's human-readable name, resolved at read time (#22222, #22338).
 
-    A ``service:<caller>`` requester is shown as stored. An id with no user row is left out, so the response
-    falls back to the raw value; the display lookup never fails a response.
+    The one batch name lookup behind both the approval requester and the audit actor. A ``service:<caller>``,
+    ``system`` or unknown id is left out, so the caller falls back to the raw value; the display lookup never
+    fails a response.
     """
-    wanted = {str(a.id): _requester_user_id(str(getattr(a, "requested_by_agent", None) or "")) for a in approvals}
+    wanted = {actor: _requester_user_id(actor) for actor in {a for a in actors if a}}
     ids = [uid for uid in wanted.values() if uid]
     if not ids:
         return {}
@@ -77,9 +90,23 @@ async def requester_names(session: AsyncSession, approvals: Sequence[Any]) -> di
         async with session.begin_nested():  # a failed lookup rolls back only itself, never the request's transaction
             names, _active = await member_people(session, ids)
     except SQLAlchemyError:
-        logger.debug("requester names could not be resolved; showing the raw ids", exc_info=True)
+        logger.debug("actor names could not be resolved; showing the raw ids", exc_info=True)
         return {}
-    return {aid: names[uid] for aid, uid in wanted.items() if uid in names}
+    return {actor: names[uid] for actor, uid in wanted.items() if uid in names}
+
+
+async def requester_names(session: AsyncSession, approvals: Sequence[Any]) -> dict[str, str]:
+    """Approval id -> the requester's human-readable name, resolved at read time (#22222).
+
+    A ``service:<caller>`` requester is shown as stored. An id with no user row is left out, so the response
+    falls back to the raw value.
+    """
+    by_actor = await actor_names(session, (str(getattr(a, "requested_by_agent", None) or "") for a in approvals))
+    return {
+        str(a.id): by_actor[actor]
+        for a in approvals
+        if (actor := str(getattr(a, "requested_by_agent", None) or "")) in by_actor
+    }
 
 
 def display_requester(approval: Any, names: Mapping[str, str]) -> str | None:

@@ -23,7 +23,9 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.exc import SQLAlchemyError
 
+from api.approval_gates_requester import actor_names
 from api.schemas_audit import (
     AuditIntegrityReport,
     AuditIntegrityRequest,
@@ -86,6 +88,21 @@ def _build_query_dict(
     }
 
 
+async def _entry_dicts(entries) -> list[dict]:
+    """The response rows, each with ``user_name``: its actor id resolved to a display name in one batch (#22338).
+
+    ``service:<caller>``, ``system`` and an id with no user row get no name, so the client shows the stored value.
+    """
+    rows = [e.to_response_dict() for e in entries]
+    try:
+        async with db_session_context() as session:
+            names = await actor_names(session, (r.get("user_id") or "" for r in rows))
+    except SQLAlchemyError:
+        logger.warning("audit actor names could not be resolved; showing the raw ids", exc_info=True)
+        return rows
+    return [{**r, "user_name": names.get(r.get("user_id") or "")} for r in rows]
+
+
 @router.get("/logs", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -97,7 +114,7 @@ async def query_audit_logs(
     start_time: str | None = Query(None, description="Start time (ISO format)"),
     end_time: str | None = Query(None, description="End time (ISO format)"),
     operation: str | None = Query(None, description="Operation filter"),
-    user_id: str | None = Query(None, description="User filter"),
+    user_id: str | None = Query(None, description="User filter: the actor id (a user id or service:<caller>)"),
     session_id: str | None = Query(None, description="Session filter"),
     vm_name: str | None = Query(None, description="VM filter"),
     result: AuditResult | None = Query(None, description="Result filter"),
@@ -134,7 +151,7 @@ async def query_audit_logs(
             success=True,
             total_returned=len(entries),
             has_more=has_more,
-            entries=[e.to_response_dict() for e in entries],
+            entries=await _entry_dicts(entries),
             query=_build_query_dict(
                 start_time,
                 end_time,
@@ -213,7 +230,7 @@ async def get_session_audit_trail(
         entries = await audit_logger.query(start_time=start_time, end_time=end_time, session_id=session_id, limit=1000)
 
         # Issue #372: Use model method to reduce feature envy
-        entry_dicts = [e.to_response_dict() for e in entries]
+        entry_dicts = await _entry_dicts(entries)
 
         return AuditQueryResponse(
             success=True,
@@ -243,8 +260,9 @@ async def get_user_audit_trail(
     """
     Get audit trail for a specific user
 
-    Requires admin permission. Returns all audit entries for the specified
-    user within the requested time period.
+    Requires admin permission. ``user_id`` is the user's id, the actor every audit row stores since #22338; a
+    username matches only rows written before then. Returns all audit entries for the specified user within the
+    requested time period.
     """
     try:
         audit_logger = await get_audit_logger()
@@ -255,7 +273,7 @@ async def get_user_audit_trail(
         entries = await audit_logger.query(start_time=start_time, end_time=end_time, user_id=user_id, limit=1000)
 
         # Issue #372: Use model method to reduce feature envy
-        entry_dicts = [e.to_response_dict() for e in entries]
+        entry_dicts = await _entry_dicts(entries)
 
         return AuditQueryResponse(
             success=True,
@@ -302,7 +320,7 @@ async def get_failed_operations(
         entries = await audit_logger.query(start_time=start_time, end_time=end_time, result=result_filter, limit=500)
 
         # Issue #372: Use model method to reduce feature envy
-        entry_dicts = [e.to_response_dict() for e in entries]
+        entry_dicts = await _entry_dicts(entries)
 
         return AuditQueryResponse(
             success=True,

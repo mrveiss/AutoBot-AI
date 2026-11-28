@@ -20,9 +20,10 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.quarantine_read_audit import INTERNAL_SERVICE_ACTOR
 from auth_middleware import check_admin_permission, resolve_human_user
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import resolve_audit_actor_id
+from autobot_shared.principal import require_audit_actor_id
 from conversation_file_cleanup import cleanup_status, reset_cleanup_attempts
 from services.audit_logger import audit_log
 
@@ -48,12 +49,14 @@ async def get_cleanup_status(request: Request) -> Dict[str, Any]:
 async def reset_stuck_cleanup(request: Request, file_id: str) -> Dict[str, Any]:
     """Let a stuck file be proposed again; a person's action, audited, and it removes nothing."""
     manager = _manager(request)
+    user = await resolve_human_user(request)
+    # No user is the internal service key; a user with no id is refused (401), never read as the service.
+    actor = require_audit_actor_id(user) if user else INTERNAL_SERVICE_ACTOR
     if not await reset_cleanup_attempts(manager, file_id):
         raise HTTPException(status_code=404, detail="No refused cleanup is recorded for this file")
-    user = await resolve_human_user(request) or {}
     await audit_log(
         "conversation_file.cleanup_reset",
-        user_id=resolve_audit_actor_id(user) or "internal-service",
+        user_id=actor,
         resource=f"conversation_file:{file_id}",
         details={"effect": "file may be proposed for removal again; no bytes removed"},
     )

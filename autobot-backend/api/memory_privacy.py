@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import require_principal_id, resolve_audit_actor_id
+from autobot_shared.principal import require_principal_id, resolve_audit_actor_id, resolve_principal_id
 from security.human_admin import refuse_service_principal
 from services.audit_logger import audit_log
 
@@ -80,9 +80,9 @@ async def _resolve_target_user(
     memories (owner decision 2026-10-17, #18688); a human admin passes the
     canonical gate, which refuses a token revoked by a password change.
     """
-    caller_id = require_principal_id(current_user)
+    caller_id = resolve_principal_id(current_user)
     if not target_user_id or target_user_id == caller_id:
-        return caller_id
+        return require_principal_id(current_user)
 
     # Only human admins may operate on another user's memories.
     try:

@@ -18,7 +18,7 @@ from fastapi import HTTPException, Request
 
 from auth_middleware import resolve_human_user
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import resolve_audit_actor_id
+from autobot_shared.principal import require_audit_actor_id
 from knowledge.quarantine import audit_quarantine_read, is_quarantined
 
 logger = get_logger(__name__)
@@ -28,14 +28,15 @@ INTERNAL_SERVICE_ACTOR = "internal-service"
 
 
 async def request_actor(request: Request) -> str:
-    """Who the admin request is: the human's username/id, else the internal service key's holder.
+    """Who the admin request is: the human's id, else the internal service key's holder.
 
     The request is required: an absent one must not read as an anonymous internal service (#19163).
     """
     user = await resolve_human_user(request)
     if not user:
         return INTERNAL_SERVICE_ACTOR
-    return resolve_audit_actor_id(user) or INTERNAL_SERVICE_ACTOR
+    # A user with no id is unattributable: a 401, never the internal-service actor (a human must not read as it).
+    return require_audit_actor_id(user)
 
 
 async def request_person(request: Request) -> str:

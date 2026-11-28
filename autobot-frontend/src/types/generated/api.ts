@@ -540,8 +540,9 @@ export interface paths {
          * Get User Audit Trail
          * @description Get audit trail for a specific user
          *
-         *     Requires admin permission. Returns all audit entries for the specified
-         *     user within the requested time period.
+         *     Requires admin permission. ``user_id`` is the user's id, the actor every audit row stores since #22338; a
+         *     username matches only rows written before then. Returns all audit entries for the specified user within the
+         *     requested time period.
          */
         get: operations["get_user_audit_trail_api_audit_user__user_id__get"];
         put?: never;
@@ -61531,6 +61532,9 @@ export interface components {
          *     an open string: operation rows say success/denied/failed/error/attempted, identity
          *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
          *     would turn one off-vocabulary row into a 500 for the whole query.
+         *
+         *     ``user_id`` is the stored actor (a user id, ``service:<caller>`` or ``system``); ``user_name`` is that user's
+         *     display name resolved at read time, absent when the actor is not a user row (#22338).
          */
         AuditEntryResponse: {
             /** Id */
@@ -61545,6 +61549,8 @@ export interface components {
             result: string;
             /** User Id */
             user_id?: string | null;
+            /** User Name */
+            user_name?: string | null;
             /** Ip Address */
             ip_address?: string | null;
             /** Session Id */
@@ -110765,7 +110771,7 @@ export interface operations {
                 end_time?: string | null;
                 /** @description Operation filter */
                 operation?: string | null;
-                /** @description User filter */
+                /** @description User filter: the actor id (a user id or service:<caller>) */
                 user_id?: string | null;
                 /** @description Session filter */
                 session_id?: string | null;

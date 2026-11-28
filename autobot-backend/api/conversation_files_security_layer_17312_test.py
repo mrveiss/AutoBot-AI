@@ -9,7 +9,10 @@ Two byte-identical ``get_security_layer(request)`` accessors read
 future fail-closed change to it) in a single place.
 """
 
+from unittest.mock import MagicMock, patch
+
 from api import conversation_files, files
+from testkit.canonical_gate import HUMAN_PRINCIPAL
 
 
 def test_conversation_files_uses_the_files_accessor():
@@ -29,3 +32,11 @@ def test_accessor_reads_the_app_state_layer():
         app = _App()
 
     assert conversation_files.get_security_layer(_Request()) is sentinel
+
+
+def test_file_operation_audit_user_is_the_principal_id():
+    """#22338: the audited user is the id, never the mutable username."""
+    layer = MagicMock()
+    with patch("api.conversation_files.get_security_layer", return_value=layer):
+        conversation_files._audit_file_operation(MagicMock(client=None), "upload", HUMAN_PRINCIPAL, "s1", {})
+    assert layer.audit_log.call_args.kwargs["user"] == "u-123"

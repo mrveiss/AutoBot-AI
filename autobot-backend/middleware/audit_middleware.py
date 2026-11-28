@@ -610,10 +610,8 @@ async def audit_log_from_request(
 def _extract_user(request: Request) -> str | None:
     """Extract user ID from request"""
     if hasattr(request.state, "user"):
-        user = request.state.user
-        if isinstance(user, dict):
-            return resolve_audit_actor_id(user)
-        return str(user)
+        user = request.state.user  # the actor is the principal id, never the mutable username (#22338)
+        return resolve_audit_actor_id(user) if isinstance(user, dict) else str(user)
     return request.headers.get("X-User-ID") or request.headers.get("X-Username")
 
 

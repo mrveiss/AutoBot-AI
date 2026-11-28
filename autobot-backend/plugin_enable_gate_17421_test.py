@@ -147,7 +147,7 @@ async def test_new_plugin_is_not_imported_until_an_admin_enables_it(store, audit
     assert second.get_load_report()["gated"] == ["gate_new_c"]
     assert audit.entries == [], "grandfathering runs once"
 
-    admin = {"username": "root"}
+    admin = {"id": "u-root", "username": "root"}
     await pes.decide_plugin_enabled("gate_new_c", True, admin, second._loader, store)
     await pes.require_enabled("gate_new_c", store)
     assert await second._loader.load_plugin(_manifest(second, "gate_new_c"))
@@ -175,9 +175,9 @@ async def test_disable_is_audited_persisted_and_silences_hooks(store, audit, plu
     await manager.startup()
     assert await HookRegistry().call_hook("gate_hook") == ["gate_old_a"]
 
-    await pes.decide_plugin_enabled("gate_old_a", False, {"username": "root"}, manager._loader, store)
+    await pes.decide_plugin_enabled("gate_old_a", False, {"id": "u-root", "username": "root"}, manager._loader, store)
     entry = audit.entries[-1]
-    assert (entry["operation"], entry["user_id"], entry["durable"]) == (AuditAction.PLUGIN_DISABLE, "root", True)
+    assert (entry["operation"], entry["user_id"], entry["durable"]) == (AuditAction.PLUGIN_DISABLE, "u-root", True)
     assert await HookRegistry().call_hook("gate_hook") == []
     assert await store.enabled_names() == set(), "a disable survives a restart"
     await manager.shutdown()
