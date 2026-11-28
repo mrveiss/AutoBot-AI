@@ -34,7 +34,9 @@ describe('useTechnicalDebtData ROI paging (#12741)', () => {
     expect(String(mockFetch.mock.calls[0][0])).toContain('source_id=src-a')
   })
 
-  beforeEach(() => mockFetch.mockReset())
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
 
   it('requests the given limit and exposes total_available', async () => {
     mockFetch.mockResolvedValueOnce(page(10, 240))

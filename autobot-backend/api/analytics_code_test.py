@@ -85,3 +85,24 @@ def test_one_sources_analysis_is_never_served_for_another(tmp_path):
     assert first["last_analysis"] == "t-src-a" and second["last_analysis"] == "t-src-b"
     assert scanned == [("src-a", str(roots["src-a"])), ("src-b", str(roots["src-b"]))]  # A reused, B scanned itself
     assert again["last_analysis"] == "t-src-a"
+
+
+def test_status_reports_which_sources_have_a_cached_analysis_without_content():
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from api import analytics as analytics_mod
+    from api.analytics_code_cache import cached_source_ids
+
+    state = {"code_analysis_cache": {"src-b": {"secret": 1}, "src-a": {"secret": 2}}, "last_analysis_time": None}
+    assert cached_source_ids(state) == ["src-a", "src-b"]
+    assert cached_source_ids({}) == []
+    controller = MagicMock()
+    controller.code_tools_available = AsyncMock(return_value={"code_analysis_suite": False, "code_index_mcp": False})
+    with patch.object(mod, "analytics_state", state), patch.object(mod, "analytics_controller", controller):
+        status = asyncio.run(mod.get_code_analysis_status(admin_check=True))
+    assert status["cache_status"]["cached_sources"] == ["src-a", "src-b"]
+    assert status["cache_status"]["has_cached_results"] is True
+    with patch.object(analytics_mod, "analytics_state", state), patch.object(analytics_mod, "analytics_controller", controller):
+        brief = asyncio.run(analytics_mod._get_code_analysis_status())
+    assert brief["cached_sources"] == ["src-a", "src-b"] and "secret" not in str(brief)

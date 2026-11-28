@@ -31,6 +31,11 @@ def get_cached_analysis(state: dict, source_id: str) -> "dict[str, Any] | None":
     return state.get("code_analysis_cache", {}).get(source)
 
 
+def cached_source_ids(state: dict) -> "list[str]":
+    """Ids of the sources that have a cached analysis; ids only, never cached content."""
+    return sorted(state.get("code_analysis_cache", {}))
+
+
 async def run_source_analysis(controller, source_id: str, scan_root: Path, analysis_type: str, **options):
     """Analyse the source's own checkout and cache the result under that source."""
     source = require_source_id(source_id, "code-analysis request")

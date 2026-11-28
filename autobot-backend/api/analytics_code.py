@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from api.analytics_code_cache import SOURCE_SCOPED, get_cached_analysis, run_source_analysis
+from api.analytics_code_cache import SOURCE_SCOPED, cached_source_ids, get_cached_analysis, run_source_analysis
 from api.codebase_analytics.endpoints.shared import resolve_scan_root
 from api.schemas_analytics import (
     AnalyticsCodeCommunicationChainsResponse,
@@ -103,6 +103,7 @@ async def get_code_analysis_status(
         "last_analysis_time": analytics_state.get("last_analysis_time"),
         "cache_status": {
             "has_cached_results": bool(analytics_state.get("code_analysis_cache")),  # any source
+            "cached_sources": cached_source_ids(analytics_state),
             "cache_timestamp": analytics_state.get("last_analysis_time"),
         },
         "supported_analysis_types": ["full", "incremental", "communication_chains"],
