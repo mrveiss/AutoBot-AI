@@ -15,6 +15,7 @@ import { HttpError } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
+import { useToast } from '@/composables/useToast'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { extractResponseErrorDetail } from '@/utils/errorExtract'
 import i18n from '@/i18n'
@@ -83,6 +84,7 @@ export function latestToken() {
 }
 
 export function useFileBrowser() {
+  const { showToast } = useToast()
   const listToken = latestToken()
   const previewToken = latestToken()
   const files = ref<FileBrowserItem[]>([])
@@ -99,9 +101,10 @@ export function useFileBrowser() {
         )
         if (listToken.isLatest(id)) files.value = data.files ?? []
       } catch (error) {
-        // a failure of a superseded request must not clear the newer list
-        if (listToken.isLatest(id)) files.value = []
-        throw error
+        // a superseded request fails silently and must not clear the newer list; only the latest is reported
+        if (!listToken.isLatest(id)) return
+        files.value = []
+        showToast(i18n.global.t('fileBrowser.browser.errorLoadingContents'), 'error')
       }
     },
     {

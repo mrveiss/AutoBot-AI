@@ -9,6 +9,8 @@ const fetchWithAuth = vi.hoisted(() => vi.fn())
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth }))
 vi.mock('@/utils/ApiClient', () => ({ default: api }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
+const showToast = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ showToast }) }))
 vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
 
 import { useFileBrowser } from '../file-browser/useFileBrowser'
@@ -21,7 +23,7 @@ const deferred = <T>() => {
 const item = (name: string) => ({ name, path: `/${name}`, is_dir: false }) as never
 
 describe('useFileBrowser request ordering (#22349)', () => {
-  beforeEach(() => { api.get.mockReset(); api.delete.mockReset(); fetchWithAuth.mockReset() })
+  beforeEach(() => { api.get.mockReset(); api.delete.mockReset(); fetchWithAuth.mockReset(); showToast.mockReset() })
 
   it('a late list response for an earlier folder does not overwrite the newer one', async () => {
     const root = deferred<{ files: unknown[] }>()
@@ -44,6 +46,17 @@ describe('useFileBrowser request ordering (#22349)', () => {
     root.resolve(new Error('late') as never)
     await first
     expect(browser.files.value).toEqual([{ name: 'docs-file' }])
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  it('the latest list failure clears the list and shows the error toast once', async () => {
+    api.get.mockRejectedValueOnce(new Error('down'))
+    const browser = useFileBrowser()
+    browser.files.value = [{ name: 'stale' }] as never
+    await browser.fetchFiles('/')
+    expect(browser.files.value).toEqual([])
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith('fileBrowser.browser.errorLoadingContents', 'error')
   })
 
   it('a refresh with no later request still updates the list', async () => {

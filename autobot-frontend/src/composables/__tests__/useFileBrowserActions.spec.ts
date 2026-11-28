@@ -38,7 +38,7 @@ const file = (over: Record<string, unknown> = {}) => ({ name: 'a.txt', path: '/a
 describe('useFileBrowserActions (#22349)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // clearAllMocks drops the default resolved value, and an undefined result reads as a superseded preview
+    // the global vitest config (clearMocks/mockReset/restoreMocks) resets vi.fn implementations before each test, and an undefined result reads as a superseded preview
     browser.fetchPreview.mockResolvedValue(true)
     browser.files.value = []
   })
