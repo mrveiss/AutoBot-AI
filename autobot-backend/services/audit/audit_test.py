@@ -11,6 +11,7 @@ cross-thread hand-off, the read filters, and the one retention path.
 import asyncio
 import json
 import threading
+import types
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -333,12 +334,12 @@ class TestThreatAnalysisFailureLog:
     @pytest.mark.asyncio
     async def test_log_names_the_missing_module(self, caplog: pytest.LogCaptureFixture) -> None:
         failure = ModuleNotFoundError("No module named 'sklearn'", name="sklearn")
-        with patch.dict("sys.modules", {"security.enterprise.threat_detection.ingest": None}):
-            with patch.object(audit, "_failure_detail", wraps=audit._failure_detail):
-                assert audit._failure_detail(failure) == "ModuleNotFoundError (sklearn)"
-                with caplog.at_level("ERROR"):
-                    await audit._analyse_for_threats(_event())
-        assert "ModuleNotFoundError" in caplog.text
+        ingest = types.SimpleNamespace(analyze_audit_event=AsyncMock(side_effect=failure))
+        with patch.dict("sys.modules", {"security.enterprise.threat_detection.ingest": ingest}):
+            with caplog.at_level("ERROR"):
+                await audit._analyse_for_threats(_event())
+        assert audit._failure_detail(failure) in caplog.text
+        assert "ModuleNotFoundError (sklearn)" in caplog.text
 
     def test_non_import_failure_keeps_the_class_name_only(self) -> None:
         assert audit._failure_detail(RuntimeError("x")) == "RuntimeError"
