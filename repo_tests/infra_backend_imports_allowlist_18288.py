@@ -107,7 +107,8 @@ BACKEND_TOOLS: dict[str, str] = {
     _P + "test_llm_awareness.py": ("backend tool: checks the backend's LLM self-awareness and its middleware"),
     _P + "test_phase2_migration.py": ("backend tool: checks the backend's error boundaries and metrics collectors"),
     _P + "trace_backend.py": ("backend tool: traces the backend's app_factory startup"),
-    _P + "utilities/migrate_codebase_to_chromadb.py": (
+    _P
+    + "utilities/migrate_codebase_to_chromadb.py": (
         "backend tool: scopes every document id through api.source_scope.require_source_id (#22398)"
     ),
     _P + "utilities/manage_classification.py": ("backend tool: manages the backend's workflow classifier"),
