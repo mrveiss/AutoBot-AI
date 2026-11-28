@@ -40,6 +40,7 @@ def _agent(engine_search=None):
 
     agent = NPUCodeSearchAgent.__new__(NPUCodeSearchAgent)
     agent.logger, agent.cache_ttl, agent.search_cache_prefix = MagicMock(), 60, "p:"
+    agent.index_prefix = "autobot:code:index:"
     agent.redis_client = MagicMock(get=MagicMock(return_value=None))
     agent._ensure_search_engine_initialized = AsyncMock()
     agent.npu_available = True
@@ -58,7 +59,7 @@ async def test_search_code_raises_a_code_index_refusal_not_word_matches_or_empty
     no_model = AsyncMock(side_effect=OSError("weights missing"))
     with patch("agents.npu_code_search_agent.get_code_embedding_generator", no_model):
         with pytest.raises(EmbeddingUnavailableError, match="code index model unavailable"):
-            await agent.search_code("q", search_type=search_type)
+            await agent.search_code("q", search_type=search_type, source_id="src")
     agent.redis_client.setex.assert_not_called()  # a refusal is never cached as a result
 
 
@@ -67,7 +68,7 @@ async def test_search_code_raises_a_kb_tier_refusal_not_word_matches_or_empty():
     agent = _agent()
     agent._search_code_embeddings = AsyncMock(side_effect=RuntimeError("chroma down"))
     with pytest.raises(EmbeddingUnavailableError):
-        await agent.search_code("q", search_type="semantic")
+        await agent.search_code("q", search_type="semantic", source_id="src")
     agent._fallback_word_matching.assert_not_awaited()
 
 
@@ -81,11 +82,13 @@ async def test_code_search_route_is_a_503_with_the_reason_and_a_400_stays_a_400(
     from api.schemas_code import CodeSearchRequest
 
     refused = AsyncMock(side_effect=EmbeddingUnavailableError("index 'x': search refused, why"))
-    with patch.object(mod, "search_codebase", refused), pytest.raises(HTTPException) as exc:
-        await mod.search_code(CodeSearchRequest(query="q"))
+    allowed = AsyncMock()  # the caller may read the source: this test is about the refusal, not the access gate
+    with patch.object(mod, "authorize_source_access", allowed), patch.object(mod, "search_codebase", refused):
+        with pytest.raises(HTTPException) as exc:
+            await mod.search_code(CodeSearchRequest(query="q", source_id="src"), {})
     assert exc.value.status_code == 503 and "refused, why" in exc.value.detail
-    with pytest.raises(HTTPException) as exc:
-        await mod.search_code(CodeSearchRequest(query="q", search_type="nope"))
+    with patch.object(mod, "authorize_source_access", allowed), pytest.raises(HTTPException) as exc:
+        await mod.search_code(CodeSearchRequest(query="q", source_id="src", search_type="nope"), {})
     assert exc.value.status_code == 400
 
 
@@ -100,8 +103,12 @@ async def test_natural_language_search_route_is_a_503_with_the_reason():
     from api.schemas_knowledge import NLSearchRequest
 
     refused = AsyncMock(side_effect=EmbeddingUnavailableError("index 'x': search refused, why"))
-    with patch.object(code_search, "search_codebase", refused), pytest.raises(HTTPException) as exc:
-        await mod.natural_language_search(NLSearchRequest(query="where is auth", include_explanations=False))
+    allowed = AsyncMock()
+    with patch.object(mod, "authorize_source_access", allowed), patch.object(code_search, "search_codebase", refused):
+        with pytest.raises(HTTPException) as exc:
+            await mod.natural_language_search(
+                NLSearchRequest(query="where is auth", include_explanations=False), "src", {}
+            )
     assert exc.value.status_code == 503 and "refused, why" in exc.value.detail
 
 

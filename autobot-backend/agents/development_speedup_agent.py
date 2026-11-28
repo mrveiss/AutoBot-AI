@@ -140,11 +140,15 @@ class DevelopmentSpeedupAgent:
         cache_key = f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
         await asyncio.to_thread(self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report))
 
+    async def _search_root(self, root_path: str, *args: Any, **kwargs: Any) -> List[Any]:
+        """Search the index of ``root_path`` alone, indexing it first; this tool has no code source (#20402)."""
+        scope = "root-" + hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()[:16]
+        await self.npu_code_search.index_codebase(root_path, force_reindex=False, source_id=scope)
+        return await self.npu_code_search.search_code(*args, source_id=scope, **kwargs)
+
     async def analyze_codebase_comprehensive(self, root_path: str) -> Dict[str, Any]:
         """Perform comprehensive codebase analysis (Issue #398: refactored)."""
         self.logger.info("Starting comprehensive codebase analysis: %s", root_path)
-
-        await self.npu_code_search.index_codebase(root_path, force_reindex=False)
 
         analysis_tasks = [
             self.find_duplicate_code(root_path),
@@ -302,10 +306,11 @@ class DevelopmentSpeedupAgent:
             },
         ]
 
-    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> SpeedupCodePattern | None:
+    async def _search_single_pattern(self, root_path: str, pattern_config: Dict[str, str]) -> SpeedupCodePattern | None:
         """Search for a single pattern and return result (Issue #398: extracted)."""
         try:
-            results = await self.npu_code_search.search_code(
+            results = await self._search_root(
+                root_path,
                 query=pattern_config["query"],
                 search_type=pattern_config["type"],
                 max_results=50,
@@ -328,7 +333,7 @@ class DevelopmentSpeedupAgent:
 
         patterns = []
         for pattern_config in self._get_pattern_search_configs():
-            pattern = await self._search_single_pattern(pattern_config)
+            pattern = await self._search_single_pattern(root_path, pattern_config)
             if pattern:
                 patterns.append(pattern)
 
@@ -391,8 +396,8 @@ class DevelopmentSpeedupAgent:
         """Analyze import patterns and suggest optimizations"""
         self.logger.info("Analyzing imports and dependencies...")
 
-        import_results = await self.npu_code_search.search_code(
-            query="import", search_type="exact", language="python", max_results=1000
+        import_results = await self._search_root(
+            root_path, query="import", search_type="exact", language="python", max_results=1000
         )
 
         import_stats = self._count_import_modules(import_results)
@@ -420,7 +425,6 @@ class DevelopmentSpeedupAgent:
 
         dead_code_indicators = []
 
-        # Search for unreachable code patterns
         unreachable_patterns = [
             {
                 "name": "Code after return",
@@ -437,8 +441,8 @@ class DevelopmentSpeedupAgent:
 
         for pattern in unreachable_patterns:
             try:
-                results = await self.npu_code_search.search_code(
-                    query=pattern["query"], search_type=pattern["type"], max_results=50
+                results = await self._search_root(
+                    root_path, query=pattern["query"], search_type=pattern["type"], max_results=50
                 )
 
                 for result in results:
@@ -466,14 +470,12 @@ class DevelopmentSpeedupAgent:
 
         opportunities = []
 
-        # Long function detection
         try:
             long_functions = await self._find_long_functions(root_path)
             opportunities.extend(long_functions)
         except Exception as e:
             self.logger.error("Error finding long functions: %s", e)
 
-        # Complex condition detection
         try:
             complex_conditions = await self._find_complex_conditions(root_path)
             opportunities.extend(complex_conditions)
@@ -492,11 +494,9 @@ class DevelopmentSpeedupAgent:
 
         quality_issues = []
 
-        # Naming convention analysis
         naming_issues = await self._check_naming_conventions(root_path)
         quality_issues.extend(naming_issues)
 
-        # Documentation consistency
         doc_issues = await self._check_documentation_consistency(root_path)
         quality_issues.extend(doc_issues)
 
@@ -555,8 +555,8 @@ class DevelopmentSpeedupAgent:
         """Analyze import patterns for optimization opportunities"""
         patterns = []
 
-        # Find star imports
-        star_imports = await self.npu_code_search.search_code(
+        star_imports = await self._search_root(
+            root_path,
             query="from .* import \\*",
             search_type="regex",
             language="python",
@@ -632,7 +632,6 @@ class DevelopmentSpeedupAgent:
         """Find complex conditional statements that could be simplified"""
         opportunities = []
 
-        # Search for complex conditions
         complex_patterns = [
             "if .* and .* and .* and",  # Long AND chains
             "if .* or .* or .* or",  # Long OR chains
@@ -640,7 +639,8 @@ class DevelopmentSpeedupAgent:
 
         for pattern in complex_patterns:
             try:
-                results = await self.npu_code_search.search_code(
+                results = await self._search_root(
+                    root_path,
                     query=pattern,
                     search_type="regex",
                     language="python",
@@ -668,8 +668,8 @@ class DevelopmentSpeedupAgent:
         """Check for naming convention violations"""
         issues = []
 
-        # Check for non-snake_case functions in Python
-        camel_case_functions = await self.npu_code_search.search_code(
+        camel_case_functions = await self._search_root(
+            root_path,
             query="def [a-z][a-zA-Z]*[A-Z]",
             search_type="regex",
             language="python",
@@ -694,8 +694,8 @@ class DevelopmentSpeedupAgent:
         """Check for missing or inconsistent documentation"""
         issues = []
 
-        # Find functions without docstrings
-        functions_without_docs = await self.npu_code_search.search_code(
+        functions_without_docs = await self._search_root(
+            root_path,
             query="def \\w+\\([^)]*\\):\\s*$",
             search_type="regex",
             language="python",

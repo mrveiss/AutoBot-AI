@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.codebase_analytics.endpoints.shared import authorize_source_access
 from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_knowledge import (
     NLCodeExplanationResponse,
@@ -34,6 +35,7 @@ from api.schemas_knowledge import (
     ParsedQueryResponse,
     SearchResultWithExplanation,
 )
+from api.source_scope import SourceIdQuery
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -1026,7 +1028,7 @@ def _convert_suggestions_to_dicts(suggestions: list) -> list:
     operation="natural_language_search",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-async def natural_language_search(request: NLSearchRequest):
+async def natural_language_search(request: NLSearchRequest, source_id: SourceIdQuery, user=Depends(get_current_user)):
     """Search codebase using natural language queries.
     Issue #665: Refactored to use extracted helper functions.
 
@@ -1035,13 +1037,11 @@ async def natural_language_search(request: NLSearchRequest):
     - "Show me all Redis cache invalidation logic"
     """
     import time
-
     start_time = time.time()
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
 
     try:
         parsed = _parser.parse(request.query)
-
-        # Perform semantic search
         try:
             from api.code_search import search_codebase
 
@@ -1050,11 +1050,11 @@ async def natural_language_search(request: NLSearchRequest):
                 search_type="semantic",
                 language=request.language_filter,
                 max_results=request.max_results,
+                source_id=source_id,
             )
         except ImportError:
             search_results = []
 
-        # Convert results and add explanations
         results_with_explanations = []
         for result in search_results:
             result_dict = _convert_search_result_to_dict(result)

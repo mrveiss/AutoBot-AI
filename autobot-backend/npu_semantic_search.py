@@ -1244,27 +1244,17 @@ class NPUSemanticSearch:
             logger.error("Failed to store code embedding: %s", e)
             return None
 
-    def _build_code_search_filter(self, language: str | None, element_type: str | None) -> Dict[str, Any] | None:
-        """Build ChromaDB where filter for code search. Issue #620.
-
-        Args:
-            language: Filter by programming language
-            element_type: Filter by element type (function, class, etc.)
-
-        Returns:
-            ChromaDB where filter dict or None if no filters. Issue #620.
-        """
-        if not language and not element_type:
-            return None
-
-        conditions = []
-        if language:
-            conditions.append({"language": language})
-        if element_type:
-            conditions.append({"element_type": element_type})
-
-        if len(conditions) == 1:
-            return conditions[0]
+    def _build_code_search_filter(
+        self, language: str | None, element_type: str | None, source_id: str | None = None
+    ) -> Dict[str, Any] | None:
+        """ChromaDB where filter for code search, or None for no filters. Issue #620, #20402."""
+        conditions = [
+            {key: value}
+            for key, value in (("language", language), ("element_type", element_type), ("source_id", source_id))
+            if value
+        ]
+        if len(conditions) <= 1:
+            return conditions[0] if conditions else None
         return {"$and": conditions}
 
     def _convert_code_search_results(
@@ -1310,8 +1300,9 @@ class NPUSemanticSearch:
         element_type: str | None = None,
         max_results: int = 20,
         similarity_threshold: float = 0.5,
+        source_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        """Search the code collection; a query not in its space is refused. Issue #207, #620, #18185."""
+        """Search the code collection (one source's with ``source_id``); a foreign query space is refused. #20402."""
         if not self.chroma_client or "code" not in self.collections:
             logger.warning("ChromaDB code collection not available")
             return []
@@ -1319,7 +1310,7 @@ class NPUSemanticSearch:
 
         try:
             collection = self.collections["code"]
-            where_filter = self._build_code_search_filter(language, element_type)
+            where_filter = self._build_code_search_filter(language, element_type, source_id)
 
             search_results = collection.query(
                 query_embeddings=[query_embedding.tolist()],

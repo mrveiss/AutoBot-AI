@@ -66355,6 +66355,11 @@ export interface components {
         CodeAnalyticsRequest: {
             /** Root Path */
             root_path: string;
+            /**
+             * Source Id
+             * @description Required: the code source
+             */
+            source_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -66911,6 +66916,11 @@ export interface components {
             /** Root Path */
             root_path: string;
             /**
+             * Source Id
+             * @description Required: the code source
+             */
+            source_id: string;
+            /**
              * Force Reindex
              * @default false
              */
@@ -66945,6 +66955,11 @@ export interface components {
         CodeSearchRequest: {
             /** Query */
             query: string;
+            /**
+             * Source Id
+             * @description Required: the code source
+             */
+            source_id: string;
             /**
              * Search Type
              * @default semantic
@@ -162772,6 +162787,8 @@ export interface operations {
     search_code_get_api_code_search_search_get: {
         parameters: {
             query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Search query */
                 q: string;
                 /** @description Search type */
@@ -164410,7 +164427,10 @@ export interface operations {
     };
     natural_language_search_api_nl_search_search_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
