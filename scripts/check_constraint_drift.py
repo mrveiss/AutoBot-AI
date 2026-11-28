@@ -227,27 +227,8 @@ def find_violations(decls, pinned: set[str]) -> list[str]:
     return out
 
 
-def main() -> int:
-    if not (ROOT / CONSTRAINTS).exists():
-        print(f"ERROR: {CONSTRAINTS} not found under the repo root.", file=sys.stderr)
-        return 2
-
-    pinned = constrained_packages()
-    if not pinned:
-        print(f"ERROR: {CONSTRAINTS} pins no packages — nothing to guard.", file=sys.stderr)
-        return 2
-
-    specs = constraint_specs()
-    files = requirement_files()
-    if not files:
-        print(
-            f"ERROR: no requirements files found under the repo root ({len(files)} scanned) -- refusing to pass.",
-            file=sys.stderr,
-        )
-        return 2
-    violations = find_violations(_declarations(files), pinned)
-    violations += unconstrained_bare_names(files, pinned)
-    violations += manifest_violations(manifest_files(), specs)
+def _report(violations: list[str], files: list, pinned: set) -> int:
+    """Print the drift report (or the OK line) and return the exit code."""
     if violations:
         print("Constraint drift — these versions belong ONLY in constraints/shared.txt:\n", file=sys.stderr)
         for v in violations:
@@ -258,12 +239,38 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-
     print(
         f"OK: no constraint drift. {len(files)} requirements files examined; "
         f"{len(pinned)} packages guarded; {len(EXEMPT)} exempt."
     )
     return 0
+
+
+def _preflight() -> int:
+    """Return 2 when the constraints file or the requirements set is unusable, else 0."""
+    if not (ROOT / CONSTRAINTS).exists():
+        print(f"ERROR: {CONSTRAINTS} not found under the repo root.", file=sys.stderr)
+        return 2
+    if not constrained_packages():
+        print(f"ERROR: {CONSTRAINTS} pins no packages — nothing to guard.", file=sys.stderr)
+        return 2
+    if not requirement_files():
+        print("ERROR: no requirements files found under the repo root -- refusing to pass.", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main() -> int:
+    code = _preflight()
+    if code:
+        return code
+    pinned = constrained_packages()
+    specs = constraint_specs()
+    files = requirement_files()
+    violations = find_violations(_declarations(files), pinned)
+    violations += unconstrained_bare_names(files, pinned)
+    violations += manifest_violations(manifest_files(), specs)
+    return _report(violations, files, pinned)
 
 
 if __name__ == "__main__":
