@@ -29,6 +29,7 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import require_principal_id
 from services.workflow_permission_service import WorkflowPermissionService
 
 logger = get_logger(__name__)
@@ -77,7 +78,7 @@ def require_workflow_permission(action: str) -> Callable:
                 detail="workflow_id is required",
             )
 
-        user_id = current_user.get("username") or current_user.get("user_id", "")
+        user_id = require_principal_id(current_user)  # 401, never a shared "" subject (#22180)
         svc = WorkflowPermissionService(session)
         allowed = await svc.check_permission(user_id, workflow_id, action)
 

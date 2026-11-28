@@ -85,10 +85,12 @@ class WorkflowPermissionService:
         Return True when *user_id* may perform *action* on *workflow_id*.
 
         Args:
-            user_id: Authenticated user identifier.
+            user_id: The caller's canonical principal id (``autobot_shared.principal``), never a username.
             workflow_id: Target workflow identifier.
             action: One of the keys in ROLE_REQUIRED.
         """
+        if not user_id:  # no identity is never a subject: there is no shared "" grant (#22180)
+            return False
         required_role = ROLE_REQUIRED.get(action, "owner")
         row = await self._fetch_permission(user_id, workflow_id)
         if row is None:

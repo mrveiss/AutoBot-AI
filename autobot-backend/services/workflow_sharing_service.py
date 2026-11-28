@@ -187,6 +187,12 @@ class WorkflowSharingService:
     # Unshare
     # ------------------------------------------------------------------
 
+    async def get_share_owner(self, share_id: str) -> str | None:
+        """The stored owner id of share *share_id*, or None when the share does not exist (#22181)."""
+        redis = await get_async_redis_client(database="workflows")
+        raw = await redis.get(_share_key(share_id)) if redis is not None else None
+        return (json.loads(raw).get("owner_id") or "") if raw else None
+
     async def unshare_workflow(self, share_id: str) -> bool:
         """
         Revoke a share by deleting its record from Redis.
