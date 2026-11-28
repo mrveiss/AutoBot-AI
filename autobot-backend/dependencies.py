@@ -11,9 +11,12 @@ removing the need for components to directly import and use config_manager.
 
 import threading
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 
+from autobot_shared.logging_manager import get_logger
 from config.manager import ConfigManager, get_config_manager
+
+logger = get_logger(__name__)
 
 
 def provide_config_manager() -> ConfigManager:
@@ -117,22 +120,26 @@ def provide_orchestrator(
     return Orchestrator(config_manager=config)
 
 
-def provide_security_layer(config: ConfigManager = Depends(provide_config_manager)):
+def provide_security_layer(request: Request):
     """
-    Dependency injection provider for security layer.
+    Dependency injection provider for the security layer (#18705).
 
-    Args:
-        config: Configuration manager instance
+    Canonical accessor: returns the app-wide ``SecurityLayer`` built once at
+    lifespan (``app.state.security_layer``) instead of constructing one per
+    request. Fails closed: a missing or unreadable layer is an HTTP 503, never
+    ``None``, so a route that depends on it cannot run unprotected.
 
-    Returns:
-        SecurityLayer | None: Security layer instance if enabled, None otherwise
+    Raises:
+        HTTPException: 503 when the security layer is unavailable.
     """
     try:
-        from security_layer import SecurityLayer
-
-        return SecurityLayer()
+        layer = getattr(request.app.state, "security_layer", None)
     except Exception:
-        return None
+        logger.exception("Security layer lookup failed")
+        layer = None
+    if layer is None:
+        raise HTTPException(status_code=503, detail="Security layer unavailable")
+    return layer
 
 
 # Utility functions for dependency injection patterns

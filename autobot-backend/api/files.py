@@ -53,6 +53,7 @@ from constants.error_constants import (
     ERR_FILE_OR_DIR_NOT_FOUND,
     ERR_PATH_NOT_FOUND,
 )
+from dependencies import provide_security_layer
 from security.upload_filename_policy import (  # noqa: F401 -- re-exported for api.sandbox_files and tests
     _DANGEROUS_EXTENSIONS,
     _DANGEROUS_FILENAME_CHARS,
@@ -60,7 +61,6 @@ from security.upload_filename_policy import (  # noqa: F401 -- re-exported for a
     ALLOWED_EXTENSIONS,
     is_safe_file,
 )
-from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
@@ -126,9 +126,9 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 INVALID_PATH_CHARACTERS = SANDBOX_INVALID_PATH_CHARACTERS
 
 
-def get_security_layer(request: Request) -> SecurityLayer:
-    """Get security layer from app state"""
-    return request.app.state.security_layer
+# #18705: canonical accessor lives in dependencies.py (fail-closed 503); the name is kept
+# because api.conversation_files and the routes below import it from here.
+get_security_layer = provide_security_layer
 
 
 async def _check_file_permission(request: Request, permission: str) -> dict:
