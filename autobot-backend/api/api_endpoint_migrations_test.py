@@ -6150,7 +6150,7 @@ class TestBatch39AnalyticsMigrations:
         source = inspect.getsource(analytics.get_code_quality_score)
 
         # Check key business logic is preserved
-        assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
+        assert "cached_analysis = get_cached_analysis(analytics_state, source_id)" in source
         assert "if not cached_analysis:" in source
         assert "analysis_request = CodeAnalysisRequest(analysis_type=" in source
         assert "await analytics_controller.perform_code_analysis(" in source

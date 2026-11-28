@@ -12,12 +12,10 @@ import asyncio
 import threading
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from api.codebase_analytics.endpoints.shared import (
-    require_source_access,
-    resolve_scan_root,
-)
+from api.analytics_code_cache import SOURCE_SCOPED, get_cached_analysis, run_source_analysis
+from api.codebase_analytics.endpoints.shared import resolve_scan_root
 from api.schemas_analytics import (
     AnalyticsCodeCommunicationChainsResponse,
     AnalyticsCodeIndexResponse,
@@ -31,7 +29,6 @@ from api.source_scope import SourceIdQuery, require_source_id
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from code_intelligence.shared.scoring import get_grade_from_score
 
 # Import shared analytics controller from analytics module
@@ -54,12 +51,10 @@ def set_analytics_dependencies(controller, state):
         analytics_state = state
 
 
-# ============================================================================
-# CODE ANALYSIS INTEGRATION ENDPOINTS
-# ============================================================================
+# --- Code analysis integration endpoints ---
 
 
-@router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
+@router.post("/code/index", response_model=AnalyticsCodeIndexResponse, dependencies=SOURCE_SCOPED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -67,6 +62,7 @@ def set_analytics_dependencies(controller, state):
 )
 async def index_codebase(
     request: CodeAnalysisRequest,
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -74,17 +70,10 @@ async def index_codebase(
 
     Issue #744: Requires admin authentication.
     """
-    # Validate request (#15238: explicit project root, not the shared /tmp default)
-    try:
-        validate_path(request.target_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
-    except (ValueError, PermissionError):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid or inaccessible target path",
-        )
-
-    # Perform analysis
-    results = await analytics_controller.perform_code_analysis(request)
+    # The scan target is the source's own checkout, never a caller-supplied path (#22198).
+    root = await resolve_scan_root(require_source_id(source_id, "index request"))
+    request = request.model_copy(update={"target_path": str(root)})
+    results = await analytics_controller.perform_code_analysis(request, source_id)
 
     return {
         "status": "completed",
@@ -113,7 +102,7 @@ async def get_code_analysis_status(
         "tools_available": tools_available,
         "last_analysis_time": analytics_state.get("last_analysis_time"),
         "cache_status": {
-            "has_cached_results": bool(analytics_state.get("code_analysis_cache")),
+            "has_cached_results": bool(analytics_state.get("code_analysis_cache")),  # any source
             "cache_timestamp": analytics_state.get("last_analysis_time"),
         },
         "supported_analysis_types": ["full", "incremental", "communication_chains"],
@@ -143,13 +132,14 @@ async def get_code_analysis_status(
     return status
 
 
-@router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
+@router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse, dependencies=SOURCE_SCOPED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS_CODE",
 )
 async def get_code_quality_assessment(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -158,7 +148,7 @@ async def get_code_quality_assessment(
     Issue #744: Requires admin authentication.
     """
     # Get cached analysis or trigger new one
-    cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = get_cached_analysis(analytics_state, source_id)
 
     # Default quality scores
     quality_assessment = {
@@ -210,13 +200,14 @@ async def get_code_quality_assessment(
     return quality_assessment
 
 
-@router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
+@router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse, dependencies=SOURCE_SCOPED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS_CODE",
 )
 async def get_code_quality_metrics(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -224,7 +215,7 @@ async def get_code_quality_metrics(
 
     Issue #744: Requires admin authentication.
     """
-    cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = get_cached_analysis(analytics_state, source_id)
 
     if not cached_analysis:
         return {
@@ -312,13 +303,14 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     return insights
 
 
-@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
+@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse, dependencies=SOURCE_SCOPED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS_CODE",
 )
 async def get_communication_chains(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -326,7 +318,7 @@ async def get_communication_chains(
 
     Issue #744: Requires admin authentication.
     """
-    cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = get_cached_analysis(analytics_state, source_id)
 
     if not cached_analysis or "communication_chains" not in cached_analysis:
         return {
@@ -426,13 +418,18 @@ def _generate_communication_chain_insights(
     return insights
 
 
-@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
+@router.post(
+    "/code/analyze/communication-chains",
+    response_model=AnalyticsCodeCommunicationChainsResponse,
+    dependencies=SOURCE_SCOPED,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS_CODE",
 )
 async def analyze_communication_chains_detailed(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -441,8 +438,8 @@ async def analyze_communication_chains_detailed(
     Issue #744: Requires admin authentication.
     Issue #620: Refactored to use extracted helper methods.
     """
-    analysis_request = CodeAnalysisRequest(analysis_type="communication_chains", include_metrics=True)
-    results = await analytics_controller.perform_code_analysis(analysis_request)
+    root = await resolve_scan_root(require_source_id(source_id, "communication-chain analysis"))
+    results = await run_source_analysis(analytics_controller, source_id, root, "communication_chains")
 
     # Enhance with runtime correlation
     if results.get("status") == "success":
@@ -561,7 +558,7 @@ def _calculate_quality_factors(cached_analysis: dict, source_id: str) -> dict:
 @router.get(
     "/code/metrics/quality-score",
     response_model=AnalyticsCodeQualityScoreResponse,
-    dependencies=[Depends(require_source_access)],
+    dependencies=SOURCE_SCOPED,
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -579,13 +576,12 @@ async def get_code_quality_score(
     Issue #744: Requires admin authentication.
     """
     # A source with no checkout is a 404, as the debt routes answer (#22198).
-    await resolve_scan_root(require_source_id(source_id, "quality-score request"))
-    cached_analysis = analytics_state.get("code_analysis_cache")
+    root = await resolve_scan_root(require_source_id(source_id, "quality-score request"))
+    cached_analysis = get_cached_analysis(analytics_state, source_id)
 
     if not cached_analysis:
-        # Trigger new analysis
-        analysis_request = CodeAnalysisRequest(analysis_type="full")
-        cached_analysis = await analytics_controller.perform_code_analysis(analysis_request)
+        # Scan THIS source's checkout; the result is cached under this source only (#22363).
+        cached_analysis = await run_source_analysis(analytics_controller, source_id, root, "full")
 
     # Calculate quality factors (Issue #665: uses helper)
     quality_factors = _calculate_quality_factors(cached_analysis, source_id)

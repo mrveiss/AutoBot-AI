@@ -26,6 +26,7 @@ import psutil
 import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
+from api.source_scope import require_source_id
 from autobot_shared.endpoint_normalization import collapse_dynamic_segments
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -244,8 +245,9 @@ class AnalyticsController:
         )
         return {"code_analysis_suite": code_analysis_exists, "code_index_mcp": code_index_exists}
 
-    async def perform_code_analysis(self, request: CodeAnalysisRequest) -> Metadata:
-        """Perform code analysis using integrated tools"""
+    async def perform_code_analysis(self, request: CodeAnalysisRequest, source_id: str) -> Metadata:
+        """Perform code analysis using integrated tools; the result is cached for ``source_id`` only."""
+        source_id = require_source_id(source_id, "code-analysis cache write")
         analysis_results = {
             "status": "success",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -273,7 +275,7 @@ class AnalyticsController:
 
             # Store results in cache (thread-safe)
             async with _analytics_state_lock:
-                analytics_state["code_analysis_cache"] = analysis_results
+                analytics_state["code_analysis_cache"][source_id] = analysis_results
                 analytics_state["last_analysis_time"] = datetime.now(tz=timezone.utc).isoformat()
 
         except Exception as e:

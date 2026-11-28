@@ -136719,7 +136719,10 @@ export interface operations {
     };
     index_codebase_api_analytics_code_index_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136772,7 +136775,10 @@ export interface operations {
     };
     get_code_quality_assessment_api_analytics_quality_assessment_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136788,11 +136794,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeQualityAssessmentResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_code_quality_metrics_api_analytics_code_quality_metrics_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136808,11 +136826,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeQualityMetricsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_communication_chains_api_analytics_code_communication_chains_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136828,11 +136858,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeCommunicationChainsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     analyze_communication_chains_detailed_api_analytics_code_analyze_communication_chains_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136846,6 +136888,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsCodeCommunicationChainsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -162621,7 +162672,10 @@ export interface operations {
     };
     index_codebase_api_analytics_code_code_index_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162674,7 +162728,10 @@ export interface operations {
     };
     get_code_quality_assessment_api_analytics_code_quality_assessment_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162690,11 +162747,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeQualityAssessmentResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_code_quality_metrics_api_analytics_code_code_quality_metrics_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162710,11 +162779,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeQualityMetricsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_communication_chains_api_analytics_code_code_communication_chains_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162730,11 +162811,23 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsCodeCommunicationChainsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     analyze_communication_chains_detailed_api_analytics_code_code_analyze_communication_chains_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162748,6 +162841,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsCodeCommunicationChainsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
