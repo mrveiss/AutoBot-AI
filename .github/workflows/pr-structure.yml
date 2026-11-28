@@ -7,7 +7,7 @@ on:
     types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, milestoned, demilestoned]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && !startsWith(github.event.label.name, 'phase:') && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -16,7 +16,8 @@ permissions:
 jobs:
   pr-structure:
     name: PR has its milestone and phase
-    if: ${{ (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
+    # A phase label added to a land-next pull request re-runs the check: its verdict is derived from the labels (#20516).
+    if: ${{ (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next' || startsWith(github.event.label.name, 'phase:'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._gate_if import runs_when_needs_skipped, runs_without_land_next
 from tools.lint._comment_syntax import code_text
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
@@ -392,8 +393,7 @@ def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
 # success for an un-admitted PR: ci.yml's gates read `admitted` (verdict.sh fails closed), and the two
 # governance workflows fail their first step.
 
-# THE one form. GitHub expressions cannot import, so every workflow spells the condition this way and
-# this guard rejects anything else (a negation, a comment quoting it, an unrelated label name).
+# THE one form: expressions cannot import, so every workflow spells it this way; anything else is rejected.
 LAND_NEXT = "contains(github.event.pull_request.labels.*.name, 'land-next')"
 # THE no-op event: an unrelated label. Every required-context job is skipped on it, so it publishes NOTHING new
 # and the earlier real verdict stands. There is no "no-op success": a pass here would green an un-admitted PR.
@@ -435,7 +435,8 @@ def _holds_back(spec: dict) -> bool:
     cond = _cond(spec)
     if "outputs.ready == 'true'" in cond:
         return True
-    return f"{LAND_NEXT} &&" in cond and LABEL_IS_LAND_NEXT in cond and f"!{LAND_NEXT}" not in cond
+    held = f"{LAND_NEXT} &&" in cond and LABEL_IS_LAND_NEXT in cond and f"!{LAND_NEXT}" not in cond
+    return held and not runs_without_land_next(cond)
 
 
 def _fails_closed(spec: dict) -> bool:
@@ -459,7 +460,8 @@ def _held_back(jobs: dict, name: str, job_id: str, seen: frozenset = frozenset()
     if name == "ci.yml" and job_id in {g[0] for g in GATES.values()}:
         return _gate_if_ok(spec)  # `always()` bar the no-op event; it fails closed through `admitted` (G3)
     needed = _needs(spec)
-    return bool(needed) and all(_held_back(jobs, name, n, seen | {job_id}) for n in needed)
+    held = all(_held_back(jobs, name, n, seen | {job_id}) for n in needed)
+    return bool(needed) and held and not runs_when_needs_skipped(_cond(spec))
 
 
 def _park_violations(workflows: dict) -> list:
