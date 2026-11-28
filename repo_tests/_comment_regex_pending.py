@@ -36,7 +36,6 @@ PENDING_REGEX_STRIPPERS = frozenset(
         "repo_tests/frontend_api_contract_ratchet_test.py",
         "repo_tests/frontend_api_timeout_ssot_17856_test.py",
         "repo_tests/frontend_hand_built_relative_time_19606_test.py",
-        "repo_tests/frontend_hand_rolled_file_save_ratchet_20770_test.py",
         "repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",
         "repo_tests/frontend_local_formatter_ratchet_19680_test.py",
         "repo_tests/frontend_reduced_motion_guard_test.py",
