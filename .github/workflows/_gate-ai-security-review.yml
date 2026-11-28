@@ -33,6 +33,19 @@ name: AI Security Review (reusable body)
 
 on:
   workflow_call:
+    inputs:
+      pr_number:
+        description: "The dispatched pull request's number; the review comment is posted there"
+        type: string
+        default: ''
+      base_sha:
+        description: "Merge base of the dispatched pull request (ci.yml passes the validated pr-context value); empty outside a pull request run"
+        type: string
+        default: ''
+      head_sha:
+        description: "Head commit of the dispatched pull request; empty outside a pull request run"
+        type: string
+        default: ''
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         description: "Subscription token for the review step"
@@ -93,8 +106,8 @@ jobs:
         if: steps.key.outputs.configured == 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
         run: |
           set -uo pipefail
           if claude -p "Use the secreview skill to review the diff between ${BASE_SHA} and ${HEAD_SHA}. Output the findings table and the verdict line only — no preamble. If there are no findings, say so in one line." \
@@ -151,3 +164,4 @@ jobs:
         with:
           marker: '<!-- ai-security-review -->'
           body-file: /tmp/comment.md
+          number: ${{ inputs.pr_number }}

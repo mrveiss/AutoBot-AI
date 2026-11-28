@@ -13,6 +13,15 @@ name: Code Quality (reusable body)
 
 on:
   workflow_call:
+    inputs:
+      base_sha:
+        description: "Merge base of the dispatched pull request (ci.yml passes the validated pr-context value); empty outside a pull request run"
+        type: string
+        default: ''
+      head_sha:
+        description: "Head commit of the dispatched pull request; empty outside a pull request run"
+        type: string
+        default: ''
     secrets:
       CONVENTIONS_DENYLIST:
         description: "Org-internal convention denylist, read by the conventions step"
@@ -87,9 +96,8 @@ jobs:
         # and went green having scanned nothing. Those steps now hard-fail on an
         # unresolvable ref, so without this the job would fail outright.
         #
-        # 2, not 0: on a pull_request the checkout is the merge commit, so depth
-        # 2 supplies both parents — HEAD^1 (base tip) and HEAD^2 (PR head) —
-        # which is all any step here needs. fetch-depth: 0 would clone 12k
+        # 2, not 0: the head and its parent are all any step here needs (the base SHA is
+        # fetched on its own, see below). fetch-depth: 0 would clone 12k
         # commits / ~511 MiB per run, and would also make `origin/<base>`
         # resolvable, silently widening these scans to include whatever other
         # PRs merged onto the base in the meantime.
@@ -178,7 +186,7 @@ jobs:
 
     - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        BASE_SHA: ${{ inputs.base_sha || github.event.merge_group.base_sha }}
         HEAD_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
@@ -265,7 +273,7 @@ jobs:
         # Bound through env rather than interpolated into the script body.
         # These are GitHub-generated SHAs, but keeping every ${{ }} out of
         # `run:` is the rule that does not need a per-field risk judgement.
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        PR_BASE_SHA: ${{ inputs.base_sha || github.event.merge_group.base_sha }}
         # PR_HEAD_SHA and PR_NUMBER removed: neither was read by this step's
         # body (PR_BASE_SHA above is, at git_scope_resolve_base). Verified
         # unreferenced here and in scripts/lib/ and pipeline-scripts/ -- the
@@ -281,21 +289,11 @@ jobs:
         # — a guard that silently no-ops is worse than no guard. The doc
         # cross-link and commit-format checks need no secret and always run.
         # Once the secret is configured this step hardens automatically.
-        # actions/checkout defaults to fetch-depth: 1, and on a pull_request
-        # event it checks out the MERGE commit — so neither base.sha nor
-        # head.sha from the event payload is present. Resolve through HEAD's
-        # own parents instead, which needs no payload and no merge-base:
-        #   HEAD^1 = base tip, HEAD^2 = PR head, HEAD = their merge.
-        # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
-        # whatever other PRs landed on the base meanwhile.
-        #
-        # The job now checks out with fetch-depth: 2 (#13880), so both parents
-        # of the merge commit are present and no fetching is needed here.
-        # No fetching here. A `git fetch --depth=N` against a complete clone
-        # makes the repository SHALLOW again (verified: 5 commits -> 1,
-        # is-shallow-repository false -> true), which would silently strip the
-        # history that later steps in this same job depend on. fetch-depth: 2
-        # on the checkout already provides both parents.
+        # actions/checkout defaults to fetch-depth: 1, and a dispatched run (#20825) checks out the
+        # branch head, not a merge commit. The base is the validated merge base the caller passes
+        # (`inputs.base_sha`, checked by pr-context): <base>..HEAD is exactly this PR's changes, and
+        # excludes whatever other PRs landed on the base meanwhile. git_scope_resolve_base fetches that
+        # one commit at depth 1 when the clone lacks it, and refuses a dispatch that names no base.
         # Base/head resolution is the canonical one (#13984) — the merge-commit
         # rule, the payload fallback, the branch-name fallback, the last-resort
         # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
@@ -709,9 +707,9 @@ jobs:
     - name: The open CodeQL alert backlog may not grow (#15333, #17300)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # #18123 review: on pull_request GITHUB_SHA is the MERGE commit, which analyses are
-        # recorded against -- but check runs attach to the PR HEAD. The check-run reads use this.
-        CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        # #18123 review: on a dispatched run GITHUB_SHA is the branch tip, the PR head the check runs attach to;
+        # the pinned head is the same commit (pr-context validates it). The check-run reads use this.
+        CODEQL_CHECK_SHA: ${{ inputs.head_sha || github.sha }}
       run: |
         set -euo pipefail
         # BLOCKING, and in this job rather than in codeql.yml on purpose: this is

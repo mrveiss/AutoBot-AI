@@ -44,43 +44,6 @@
 name: duplication-guard
 
 on:
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot-frontend/src/**/*.ts'
-      - 'autobot-frontend/src/**/*.js'
-      - 'autobot-frontend/src/**/*.vue'
-      # #13044: these three trees were ungated. A PR touching only
-      # `autobot_shared/` did not trigger this workflow at all, so the
-      # guard reported nothing rather than reporting clean.
-      - 'autobot_shared/**/*.py'
-      - 'autobot_shared/**/*.vue'
-      - 'autobot-slm-backend/**/*.py'
-      - 'autobot-slm-frontend/src/**/*.ts'
-      - 'autobot-slm-frontend/src/**/*.js'
-      - 'autobot-slm-frontend/src/**/*.vue'
-      # #18559, #18461: the tooling trees, the plugins and the UI kit.
-      - 'scripts/**/*.py'
-      - 'tools/**/*.py'
-      - 'tools/**/*.ts'
-      - 'tools/**/*.js'
-      - 'pipeline-scripts/**/*.py'
-      - 'plugins/**/*.py'
-      - 'autobot-plugins/**/*.ts'
-      - 'autobot-plugins/**/*.vue'
-      - 'libs/autobot-ui/**/*.ts'
-      - 'libs/autobot-ui/**/*.vue'
-      - 'scripts/**/*.ts'
-      - 'scripts/**/*.js'
-      - 'pipeline-scripts/**/*.ts'
-      - 'pipeline-scripts/**/*.js'
-      - 'autobot-plugins/**/*.js'
-      - '.github/duplication-pins.json'
-      - '.github/workflows/duplication-guard.yml'
   push:
     branches: [main]
     paths:
@@ -123,16 +86,55 @@ on:
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   duplication-guard:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     env:
       # Pins live in .github/duplication-pins.json, the ONE home of every pin (the
@@ -382,8 +384,7 @@ jobs:
   lower-pins:
     name: Lower pins that main has moved under
     needs: duplication-guard
-    # The draft clause mirrors the dependency's own gate (#17957); on a push it is vacuous.
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'push' && needs.duplication-guard.result == 'success' }}
+    if: ${{ github.event_name == 'push' && needs.duplication-guard.result == 'success' }}
     runs-on: ubuntu-latest
     # One bot branch, one PR: two pushes to main must not race on it.
     concurrency: duplication-pins

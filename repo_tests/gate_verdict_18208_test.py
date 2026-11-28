@@ -60,6 +60,41 @@ def test_a_draft_fails_even_when_the_gate_would_not_apply():
     assert rc == 1 and "draft: mark ready for review" in out
 
 
+def test_a_pull_request_without_land_next_fails_closed_before_anything_else():
+    """#20825: only the land-next pull requests run; the gate fails first, even when detection and work are fine."""
+    rc, out = _run(GATE_ADMITTED="false")
+    assert rc == 1 and "not admitted to a CI slot" in out
+    rc, out = _run(GATE_ADMITTED="false", GATE_CHANGES_RESULT="skipped", GATE_APPLIES="false")
+    assert rc == 1 and "not admitted to a CI slot" in out
+    assert _run(GATE_ADMITTED="false", GATE_EVENT="push")[0] == 0, "a push has no label"
+
+
+def test_an_unadmitted_pull_request_fails_whatever_the_other_inputs_say():
+    """No input combination passes an un-admitted pull_request (#20825): an unrelated label never reaches here."""
+    import itertools
+
+    for changes, applies, work_ok, draft, held in itertools.product(
+        ("success", "skipped", "failure", "cancelled"), ("true", "false"), ("true", "false"), ("true", "false"), ("true", "false")
+    ):
+        rc, out = _run(
+            GATE_ADMITTED="false",
+            GATE_CHANGES_RESULT=changes,
+            GATE_APPLIES=applies,
+            GATE_WORK_OK=work_ok,
+            GATE_DRAFT=draft,
+            GATE_HELD=held,
+            GATE_DRAFT_GATED="false",
+        )
+        assert rc == 1 and "not admitted to a CI slot" in out, (changes, applies, work_ok, draft, held, out)
+
+
+def test_the_verdict_has_no_no_op_success_path():
+    """The old `noop` input made an un-admitted PR green on its first routine label, and masked a red on an admitted one."""
+    assert "NOOP" not in SCRIPT.read_text(encoding="utf-8").upper().replace("NO-OP SUCCESS", "")
+    rc, out = _run(GATE_NOOP="true", GATE_ADMITTED="false", GATE_WORK_OK="false")
+    assert rc == 1 and "no-op" not in out, "a stale GATE_NOOP must not pass anything"
+
+
 def test_a_draft_does_not_fail_the_one_context_that_runs_on_drafts():
     """verify-precommit-config carries SPDX and symlink checks that cover every PR (#17957)."""
     rc, out = _run(GATE_CONTEXT="verify-precommit-config", GATE_DRAFT="true", GATE_DRAFT_GATED="false")
@@ -78,6 +113,13 @@ def test_a_skipped_or_failed_suite_that_applies_is_not_evidence(detail):
     """#18106: a draft-era replay once left python-suite `skipped` with zero shards run."""
     rc, out = _run(GATE_WORK_OK="false", GATE_WORK_DETAIL=detail)
     assert rc == 1 and "did not pass" in out
+
+
+def test_an_unset_admitted_is_not_admitted():
+    """Fail closed (#20825): a caller that never passes `admitted` must not read as admitted."""
+    env = {k: v for k, v in BASE.items() if k != "GATE_ADMITTED"}
+    result = run_verdict_env(env)
+    assert result.returncode == 1 and "not admitted to a CI slot" in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

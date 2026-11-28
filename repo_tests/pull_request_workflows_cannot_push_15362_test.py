@@ -80,7 +80,10 @@ def _is_pull_request_triggered(document) -> bool:
         return False
     triggers = document.get("on", document.get(True))
     if isinstance(triggers, dict):
-        return "pull_request" in triggers
+        # Since #20825 a pull request reaches a workflow by dispatch: a workflow that takes the `pr_number` pin is
+        # one a pull request runs, exactly as `pull_request` once made it (the PR coordinator or ci.yml's fan-out).
+        pins = ((triggers.get("workflow_dispatch") or {}).get("inputs") or {}) if "workflow_dispatch" in triggers else {}
+        return "pull_request" in triggers or "pr_number" in pins
     if isinstance(triggers, list):
         return "pull_request" in triggers
     return triggers == "pull_request"

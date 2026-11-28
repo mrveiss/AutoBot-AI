@@ -47,6 +47,17 @@ ceiling="${ceiling%"${ceiling##*[![:space:]]}"}"   # trim trailing -- OUTER only
 ALERT_REF="${ALERT_REF:-${GITHUB_REF:-}}"
 
 alerts_query="repos/${REPO}/code-scanning/alerts?state=open&per_page=100"
+
+# NEW ALERTS AGAINST THE DEFAULT BRANCH (#20825). A pull request used to be analysed under
+# `refs/pull/<n>/merge`, so GitHub itself compared it with its base. A dispatched run is analysed under
+# `refs/heads/<branch>` and gets no such comparison, so it is made here, explicitly: an alert open on the head
+# ref that is not open on the default branch's latest analysis is NEW, and fails the gate with its rule and
+# location. Alert numbers are shared across refs, so the set difference is exact. It only runs when a CodeQL
+# analysis of the commit under test was verified below: a docs-only change (no analysis, CodeQL never ran) has
+# nothing to compare and keeps the default-branch count, and the wait loop only ever waits on a check run that
+# exists, so that path neither hangs nor fails.
+DEFAULT_ALERT_REF="refs/heads/${DEFAULT_BRANCH:-main}"
+compare_to_default=0
 if [ -n "$ALERT_REF" ]; then
   # FAIL CLOSED ON AN UNSCANNED REF. An empty alert list is returned both for
   # "scanned, nothing found" and for "never scanned", and this script exists
@@ -125,6 +136,7 @@ if [ -n "$ALERT_REF" ]; then
   if [ "$analyses_count" -gt 0 ]; then
     alerts_query="${alerts_query}&ref=${ALERT_REF}"
     printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
+    [ "$ALERT_REF" = "$DEFAULT_ALERT_REF" ] || compare_to_default=1
   elif [ "$total_analyses" -gt 0 ]; then
     fail "no CodeQL analysis names ${GITHUB_SHA:-the ref under test} for ${ALERT_REF}, though ${total_analyses} analysis/analyses exist for that ref — a stale scan of an earlier commit, or another tool's SARIF, is not a scan of this commit (#17303)"
   else
@@ -193,6 +205,27 @@ count=$(printf '%s' "$open_json" | jq -es '
   || fail "the alerts API did not return a list of alerts (an error body, or an empty response)"
 
 printf '[codeql-ceiling] %s open alert(s), ceiling %s\n' "$count" "$ceiling"
+
+# The numbers of the open alerts on a ref. Every page must be an array, as above; an API error is a failure.
+alert_numbers() {
+  local json
+  json=$(gh api --paginate "repos/${REPO}/code-scanning/alerts?state=open&per_page=100&ref=$1" 2>/dev/null) \
+    || fail "could not read code-scanning alerts for $1 (token scope, or the API errored)"
+  printf '%s' "$json" | jq -s 'if length > 0 and all(.[]; type == "array") then add | map(.number) | sort | .[] else error("expected arrays") end' 2>/dev/null \
+    || fail "the alerts API did not return a list of alerts for $1"
+}
+
+if [ "$compare_to_default" -eq 1 ]; then
+  head_numbers=$(alert_numbers "$ALERT_REF") || exit 1
+  base_numbers=$(alert_numbers "$DEFAULT_ALERT_REF") || exit 1
+  new_numbers=$(comm -23 <(printf '%s\n' "$head_numbers" | sort) <(printf '%s\n' "$base_numbers" | sort) | grep -E '^[0-9]+$' || true)
+  if [ -n "$new_numbers" ]; then
+    printf '[codeql-ceiling] FAIL: alert(s) open on %s but not on %s: %s\n' "$ALERT_REF" "$DEFAULT_ALERT_REF" "$(printf '%s' "$new_numbers" | tr '\n' ' ')" >&2
+    printf '  This change introduced them. Fix each, or dismiss it with a written reason.\n' >&2
+    exit 1
+  fi
+  printf '[codeql-ceiling] no alert on %s is new against %s\n' "$ALERT_REF" "$DEFAULT_ALERT_REF"
+fi
 
 if [ "$count" -gt "$ceiling" ]; then
   printf '%s\n' "" >&2

@@ -60,7 +60,9 @@ def _pull_request_workflows():
             doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError:  # a malformed workflow is a different test's problem
             continue
-        if "pull_request" in _triggers(doc):
+        # Since #20825 a pull request reaches a workflow by dispatch: the ones taking the `pr_number` pin.
+        dispatch = _triggers(doc).get("workflow_dispatch")
+        if "pull_request" in _triggers(doc) or "pr_number" in ((dispatch or {}).get("inputs") or {}):
             yield path, doc
 
 
@@ -160,7 +162,7 @@ def test_base_branch_cancellation_does_not_spread():
     assert not offenders, (
         f"{sorted(offenders)} trigger on push and cancel unconditionally, so a merge "
         "cancels the previous merge's verification (#13432). Guard cancel-in-progress "
-        "on github.event_name == 'pull_request'."
+        "on `inputs.pr_number != ''` (the pull request mode)."
     )
 
 
@@ -180,4 +182,4 @@ def test_reusable_gate_bodies_declare_no_workflow_level_concurrency():
 
 def test_the_concurrency_block_exists_once_in_ci():
     doc = yaml.safe_load((WORKFLOW_DIR / "ci.yml").read_text(encoding="utf-8"))
-    assert doc["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    assert doc["concurrency"]["cancel-in-progress"] == "${{ inputs.pr_number != '' }}"

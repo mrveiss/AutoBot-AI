@@ -19,7 +19,6 @@ runs -- the two steps ``ci.yml`` uses.
 from __future__ import annotations
 
 import ast
-import fnmatch
 import re
 from pathlib import Path
 
@@ -36,7 +35,6 @@ _REPO_TESTS = "repo_tests"
 # on every change to that tree, the record's dedicated-workflow route (#21713).
 _WORKFLOW_FILES = ".github/workflows/*.y*ml"
 ACTION = "./.github/actions/release-promotion-base"
-RELEASE = "release"
 BASE_MODULE = "_ratchet_base"
 # A `repo_tests` token in a run script: the bare root, or a path under it. A dotted module name
 # (`-p repo_tests.stable_shard`, a plugin) is neither, so a following `.` rules the token out (#21713).
@@ -123,19 +121,23 @@ def runs_base_reader(step: dict, readers: set[str], root: Path) -> bool:
     return any(_targets_base_reader(m.group(1), readers) for m in _TOKEN.finditer(text))
 
 
-def _matches_release(patterns) -> bool:
-    """GitHub filter semantics: patterns apply in order, a later ``!`` pattern excludes and a later
-    positive one re-includes (#21713 review)."""
-    matched = False
-    for pattern in patterns or []:
-        negated = pattern.startswith("!")
-        if fnmatch.fnmatchcase(RELEASE, pattern.removeprefix("!")):
-            matched = not negated
-    return matched
+def _main_only_satellites(root: Path | None = None) -> frozenset[str]:
+    """The workflows ci.yml's fan-out dispatches only for a pull request into ``main`` (its `main_only` list)."""
+    ci = yaml.safe_load(((root or repo_root()) / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    script = "\n".join(s.get("run", "") for s in ci["jobs"]["fan-out"]["steps"])
+    found = re.search(r'main_only="([^"]*)"', script)
+    assert found and found.group(1).split(), "ci.yml's fan-out no longer names its main-only workflows"
+    return frozenset(found.group(1).split())
 
 
-def release_prs_reach(doc: dict) -> bool:
-    """True when a PR into ``release`` runs this workflow's jobs."""
+def release_prs_reach(doc: dict, name: str = "") -> bool:
+    """True when a PR into ``release`` runs this workflow's jobs.
+
+    A pull request reaches a workflow by dispatch (#20825): the coordinator dispatches ci.yml and the governance
+    workflows for every base, and ci.yml's fan-out dispatches a path-filtered workflow (*name*, its file stem) for
+    every base except the ones its `main_only` list keeps to ``main``. A workflow taking no ``pr_number`` pin is
+    never run for a pull request.
+    """
     on = doc.get("on", doc.get(True))
     if isinstance(on, str):
         on = {on: None}
@@ -144,12 +146,8 @@ def release_prs_reach(doc: dict) -> bool:
     on = on or {}
     if "workflow_call" in on:
         return True
-    if "pull_request" not in on:
-        return False
-    pr = on["pull_request"] or {}
-    if "branches" in pr:
-        return _matches_release(pr["branches"])
-    return not _matches_release(pr.get("branches-ignore"))
+    pins = ((on.get("workflow_dispatch") or {}).get("inputs") or {}) if "workflow_dispatch" in on else {}
+    return "pr_number" in pins and name not in _main_only_satellites()
 
 
 def _checkout_gap(checkouts: list[dict]) -> str | None:
@@ -222,7 +220,7 @@ def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
     found = []
     for path in sorted(root.glob(_WORKFLOW_FILES)):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        if not release_prs_reach(doc):
+        if not release_prs_reach(doc, path.stem):
             continue
         for name, job in (doc.get("jobs") or {}).items():
             steps = job.get("steps") or []
@@ -391,21 +389,23 @@ def test_the_wiring_check_on_fixtures(steps, gap) -> None:
 @pytest.mark.parametrize(
     ("on", "reached"),
     [
-        ({"pull_request": None}, True),
-        ({"pull_request": {"branches": ["release", "main"]}}, True),
-        ({"pull_request": {"branches": ["main"]}}, False),
-        ({"pull_request": {"branches-ignore": ["release"]}}, False),
+        ({"workflow_dispatch": {"inputs": {"pr_number": {}}}}, True),
         ({"workflow_call": {"inputs": {}}}, True),
         ({"push": {"branches": ["main"]}, "workflow_dispatch": None}, False),
-        ("pull_request", True),
-        # #21713 review: filters apply in order -- a later `!` excludes, a later positive re-includes.
-        ({"pull_request": {"branches": ["*", "!release"]}}, False),
-        ({"pull_request": {"branches": ["*", "!release", "release"]}}, True),
-        ({"pull_request": {"branches": ["*"]}}, True),
+        ({"push": {"branches": ["main"]}, "workflow_dispatch": {"inputs": {"markers": {}}}}, False),
+        ({"pull_request": {"branches": ["*"]}}, False),  # control: no workflow subscribes to pull_request any more
     ],
 )
 def test_which_workflows_a_release_pr_reaches(on, reached) -> None:
-    assert release_prs_reach({True: on}) is reached
+    assert release_prs_reach({True: on}, "some-workflow") is reached
+
+
+def test_a_main_only_satellite_is_not_reached_by_a_release_pr() -> None:
+    main_only = _main_only_satellites()
+    assert {"co-located-smoke", "import-hermeticity-sweep"} <= main_only
+    on = {True: {"workflow_dispatch": {"inputs": {"pr_number": {}}}}}
+    assert not any(release_prs_reach(on, name) for name in main_only)
+    assert release_prs_reach(on, "docs-liquid-tags")
 
 
 # --- discovery fixtures: import closure, target mapping, tracked lists (positive and negative) ---

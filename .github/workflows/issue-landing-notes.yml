@@ -11,27 +11,32 @@
 #   `<!-- landing-note:<merge sha> -->` marker, closed issues included. A closed
 #   issue referenced with a closing keyword gets `needs-ac-evidence`. A member
 #   PR GitHub marks merged when its train lands defers to the train's run.
-# clear-evidence-label: an OWNER/MEMBER/COLLABORATOR's comment holding an AC
-#   evidence table (a markdown table with an `AC` and an `Evidence` header)
-#   removes the label; the script re-checks the author association.
 #
-# Neither job ticks, closes, reopens or edits an issue. The logic and its
-# fixture tests live in pipeline-scripts/landing_notes.py.
+# It runs on the PUSH to main (#20825), not on `pull_request: closed`: a pull request
+# creates no workflow run at all unless it holds a CI slot, and a merge to main is a push
+# whatever route merged it. The pull requests a push merged are resolved from its commits
+# (`GET commits/{sha}/pulls`). There is no `issue_comment` leg: it ran once per comment on
+# every issue and pull request. Its `evidence` work (clear `needs-ac-evidence` when an owner comments an
+# AC evidence table) is the `sweep` command now: a schedule and a manual dispatch list the issues that
+# carry the label and clear it from each one that holds a trusted AC evidence table. No per-comment run.
+#
+# The job ticks, closes, reopens or edits no issue. The logic and its fixture tests
+# live in pipeline-scripts/landing_notes.py.
 #
 # Fork heads are skipped: a fork PR's GITHUB_TOKEN cannot write issues.
 
 name: Issue landing notes
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main]
-  issue_comment:
-    types: [created]
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
 
 concurrency:
   # Never cancel: a half-finished run leaves some issues without their note.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: ${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: false
 
 permissions: {}
@@ -39,10 +44,7 @@ permissions: {}
 jobs:
   landing-notes:
     name: Post landing notes on referenced issues
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -52,16 +54,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Run the script from the trusted default branch, never from the PR's code; a merged
-          # PR's commit is on that branch anyway (CodeQL actions/untrusted-checkout, #19520).
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
             .github/actions/upsert-pr-comment
 
-      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
-      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
       - name: Set up Python from .python-version
         uses: actions/setup-python@v7
         with:
@@ -71,38 +69,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python3 pipeline-scripts/landing_notes.py merged --event "$GITHUB_EVENT_PATH"
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: python3 pipeline-scripts/landing_notes.py pushed --before "$BEFORE" --after "$AFTER" --branch main
 
-  clear-evidence-label:
-    name: Clear needs-ac-evidence on an AC evidence comment
-    if: >-
-      github.event_name == 'issue_comment' &&
-      !github.event.issue.pull_request &&
-      github.event.comment.user.type != 'Bot' &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
-      contains(github.event.issue.labels.*.name, 'needs-ac-evidence')
+  evidence-sweep:
+    name: Clear needs-ac-evidence where an owner posted the AC table
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
             .github/actions/upsert-pr-comment
 
-      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
-      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
       - name: Set up Python from .python-version
         uses: actions/setup-python@v7
         with:
           python-version-file: '.python-version'
 
-      - name: Remove the label when the comment holds an AC evidence table
+      - name: Sweep
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python3 pipeline-scripts/landing_notes.py evidence --event "$GITHUB_EVENT_PATH"
+        run: python3 pipeline-scripts/landing_notes.py sweep

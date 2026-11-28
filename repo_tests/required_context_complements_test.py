@@ -23,8 +23,8 @@ G2  each gated context's job is a top-level job of ci.yml, `if: always()`, and n
     `changes` and the work it stands for
 G3  the gate reads `needs.changes.result` (fail closed) and the work's result
 G4  no work job or reusable-body job takes the name of a required context
-G5  ci.yml's pull_request trigger carries no paths/branches filter and has the four
-    types; the contexts that carry no draft clause still carry none
+G5  ci.yml has no pull_request trigger (the PR coordinator dispatches it, #20825), keeps
+    merge_group, and takes the three dispatch pins as required inputs
 G6  the required list is non-vacuous: the scan resolves every one of the eleven
 G7  control fixtures: a gate missing `if: always()`, a gate gated on a filter output
     and a duplicated context name must each FAIL the checker
@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from tools.lint._comment_syntax import code_text
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
@@ -150,10 +151,10 @@ def _gate_violations(workflows: dict) -> list:
             continue
         if _job_name(job_id, spec) != context:
             problems.append(f"G2 {context!r}: job {job_id!r} is named {_job_name(job_id, spec)!r}")
-        if str(spec.get("if", "")).strip() != "always()":
+        if not _gate_if_ok(spec):
             problems.append(
                 f"G2 {context!r}: `if:` is {spec.get('if')!r}, must be exactly `always()` -- "
-                "a gate that can be skipped re-publishes `skipped` on the context"
+                "a gate skipped by a filter re-publishes `skipped`"
             )
         missing = ({"changes"} | set(work)) - _needs(spec)
         if missing:
@@ -188,8 +189,12 @@ def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated:
     for w in work:
         if f"needs.{w}." not in str(with_.get("work-ok", "")):
             problems.append(f"G3 {context!r}: `work-ok` does not read the result of {w!r}")
-    if "pull_request.draft" not in str(with_.get("draft", "")):
-        problems.append(f"G3 {context!r}: `draft` is not wired to the pull request")
+    if "needs.changes.outputs.draft" not in str(with_.get("draft", "")):
+        problems.append(f"G3 {context!r}: `draft` is not wired to the pull request looked up by `changes`")
+    if "needs.changes.outputs.admitted" not in str(with_.get("admitted", "")):
+        problems.append(f"G3 {context!r}: `admitted` does not read the live land-next lookup of `changes` (fail closed, #20825)")
+    if "noop" in with_:
+        problems.append(f"G3 {context!r}: a `noop` input is back: no event may pass a gate without a verdict (#20825)")
     is_gated = str(with_.get("draft-gated", "true")).lower() != "false"
     if is_gated != draft_gated:
         problems.append(f"G3 {context!r}: draft-gated is {is_gated}, expected {draft_gated}")
@@ -209,6 +214,17 @@ def _cancel_step_violations(context: str, spec: dict, work: tuple) -> list:
     if (spec.get("permissions") or {}).get("actions") != "write":
         problems.append(f"G5 {context!r}: the job lacks `permissions: actions: write`, so the cancel cannot run")
     return problems
+
+
+def _norm(expr) -> str:
+    """An `if:` with comments stripped, the `${{ }}` wrapper removed and whitespace collapsed."""
+    text = code_text(str(expr or ""), name="workflow.yml")
+    return " ".join(text.replace("${{", " ").replace("}}", " ").split())
+
+
+def _gate_if_ok(spec: dict) -> bool:
+    """A gate is exactly `always()`: no event filter exists any more, so nothing can skip a required context."""
+    return _norm(spec.get("if")) == "always()"
 
 
 def _verdict_step(job: dict) -> dict:
@@ -251,27 +267,27 @@ def test_the_shims_are_gone():
 # ── G5: the trigger ──────────────────────────────────────────────────────────
 
 
-def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
-    """ci.yml publishes nine required contexts, so both triggers are its own.
+def test_ci_is_dispatched_with_required_pins_and_keeps_merge_group():
+    """ci.yml publishes nine required contexts, so its triggers are its own.
 
-    `branches:` would drop STACKED pull requests (base is another feature branch): zero
-    runs, every context absent (#14747, measured on #14641). `paths:` would deadlock a PR
-    that misses the filter (#13388). `ready_for_review` is the only event marking a PR ready
-    fires, and the gates fail on a draft until it does.
+    No `pull_request` trigger (#20825): the PR coordinator dispatches it for a `land-next` pull request.
+    `merge_group` stays (#14054); `paths:` would deadlock a PR that misses the filter (#13388), and a
+    dispatch has none. The three pins are required, so a hand dispatch cannot omit the pull request.
     """
     on = _on(_load(CI))
     assert "merge_group" in on, "no merge_group trigger: no context can report inside a queue (#14054)"
-    pull_request = on.get("pull_request") or {}
-    assert isinstance(pull_request, dict)
-    for key in ("paths", "paths-ignore", "branches", "branches-ignore"):
-        assert key not in pull_request, f"ci.yml filters pull_request.{key}: a context can fail to report"
-    assert {"opened", "synchronize", "reopened", "ready_for_review"} <= set(pull_request.get("types", []))
+    assert "pull_request" not in on and "pull_request_target" not in on
+    inputs = (on.get("workflow_dispatch") or {}).get("inputs") or {}
+    assert sorted(inputs) == ["base_sha", "head_sha", "pr_number"]
+    assert all(spec.get("required") is True for spec in inputs.values())
 
 
 @pytest.mark.parametrize("fname", sorted(set(GOVERNANCE.values())))
-def test_the_separate_required_workflows_have_no_pull_request_paths(fname):
+def test_the_separate_required_workflows_are_dispatched_and_keep_merge_group(fname):
     on = _on(_load(WORKFLOW_DIR / fname))
-    assert "paths" not in (on.get("pull_request") or {}), f"{fname} would deadlock a PR that misses its filter"
+    assert "pull_request" not in on, f"{fname} subscribes to pull_request (#20825)"
+    assert "merge_group" in on, f"{fname}: no context can report inside a queue (#14054)"
+    assert sorted((on.get("workflow_dispatch") or {}).get("inputs") or {}) == ["base_sha", "head_sha", "pr_number"]
 
 
 # ── G7: control fixtures -- the checker must catch what it claims ────────────
@@ -328,24 +344,6 @@ def test_control_a_gate_that_ignores_its_work_fails_the_checker():
     assert any(p.startswith("G3 'api-wiring'") and "run-api-wiring" in p for p in problems), problems
 
 
-def test_the_work_callers_hold_back_draft_pull_requests():
-    """A required gate's work does not run on a draft; the gate says why (D4).
-
-    The exception is `run-precommit`, which carries no `ready` condition.
-    """
-    jobs = _load(CI)["jobs"]
-    for context, (_, work, draft_gated) in GATES.items():
-        for w in work:
-            if w == "python-shard":
-                cond = str(jobs["python-shard"].get("if", ""))
-            else:
-                cond = str(jobs[w].get("if", ""))
-            if draft_gated:
-                assert "outputs.ready == 'true'" in cond, f"{w} (for {context}) is not held back on a draft"
-            else:
-                assert "ready" not in cond, f"{w} (for {context}) must run on drafts"
-
-
 def test_the_gate_names_are_the_exact_branch_protection_strings():
     """A rename silently un-requires a context. Compare against the literal job `name:`."""
     jobs = _load(CI)["jobs"]
@@ -370,3 +368,96 @@ def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
     steps.append(steps.pop(i))
     problems = _gate_violations(docs)
     assert any(p.startswith("G5 'code-quality'") and "after the verdict" in p for p in problems), problems
+
+
+# --- A dispatched run reports success only for an admitted pull request (#20825) ----------------------
+# The coordinator dispatches CI for the `land-next` pull requests only, and `admitted` is read LIVE from the
+# pull request (pr-context), so a hand dispatch on a branch that holds no slot cannot publish a green required
+# context: ci.yml's gates read `admitted` (verdict.sh fails closed) and the two governance workflows fail a step.
+
+ADMITTED = "${{ needs.changes.outputs.admitted == 'true' }}"
+
+
+def test_the_work_callers_hold_back_until_the_pull_request_is_ready():
+    """Work behind a required gate waits for `ready` (admitted and not held); the gate itself says why it did not run."""
+    jobs = _load(CI)["jobs"]
+    assert jobs["changes"]["outputs"]["ready"].replace(" ", "") == (
+        "${{steps.pr.outputs.is-pr!='true'||(steps.pr.outputs.admitted=='true'&&steps.hold.outputs.held!='true')}}"
+    )
+    for context, (_, work, _) in GATES.items():
+        for w in work:
+            assert "outputs.ready == 'true'" in str(jobs[w].get("if", "")), f"{w} (for {context}) is not held back until ready"
+
+
+def test_the_required_gates_fail_closed_on_an_unadmitted_pull_request():
+    """Each ci.yml gate hands the verdict script `admitted` (the live label), is exactly `always()`, and
+    verdict.sh has no noop path and fails an un-admitted pull_request before anything else."""
+    assert _unadmitted_violations(_all_workflows(), _verdict_text()) == []
+
+
+def _verdict_text() -> str:
+    return (REPO_ROOT / ".github" / "actions" / "gate-verdict" / "verdict.sh").read_text(encoding="utf-8")
+
+
+def _unadmitted_violations(workflows: dict, script: str) -> list:
+    """Every way a required context could report success for an un-admitted pull request (#20825). Empty means none."""
+    problems = []
+    jobs = (workflows.get("ci.yml") or {}).get("jobs") or {}
+    for context, (job_id, _, _) in GATES.items():
+        spec = jobs[job_id]
+        with_ = (_verdict_step(spec).get("with")) or {}
+        if str(with_.get("admitted", "")).replace(" ", "") != ADMITTED.replace(" ", ""):
+            problems.append(f"{context}: `admitted` is not the live admission lookup")
+        if not _gate_if_ok(spec):
+            problems.append(f"{context}: the gate `if` is not exactly always()")
+        if "noop" in with_:
+            problems.append(f"{context}: passes a noop input")
+    for fname, job_id in (("no-commit-trailers.yml", "check-trailers"), ("pr-blocking-findings.yml", "blocking-findings")):
+        job = ((workflows.get(fname) or {}).get("jobs") or {}).get(job_id) or {}
+        fail = [s for s in job.get("steps") or [] if "admitted != 'true'" in str(s.get("if", "")) and "exit 1" in str(s.get("run", ""))]
+        if not fail:
+            problems.append(f"{fname} {job_id!r}: no step fails closed for a pull request that is not admitted")
+        if "if" in job:
+            problems.append(f"{fname} {job_id!r}: a job-level `if:` could skip a required context")
+    code = code_text(script, name="verdict.sh")
+    if "NOOP" in code.upper():
+        problems.append("verdict.sh has a noop path")
+    marker = 'GATE_ADMITTED}" != "true"'
+    head = code.split(marker)[0] if marker in code else code
+    if marker not in code or "exit 0" in head:
+        problems.append("verdict.sh can exit 0 before the not-admitted check")
+    return problems
+
+
+def test_control_a_gate_that_can_exit_zero_unadmitted_fails_the_checker():
+    docs = _fixture()
+    noop = 'if [ "${GATE_NOOP}" = "true" ]; then\n  exit 0\nfi\n'
+    assert any("noop path" in p for p in _unadmitted_violations(docs, noop + _verdict_text()))
+    assert any("before the not-admitted" in p for p in _unadmitted_violations(docs, "exit 0\n" + _verdict_text()))
+    docs["ci.yml"]["jobs"]["python-suite"]["if"] = "${{ github.event_name == 'push' }}"
+    assert any("python-suite: the gate `if`" in p for p in _unadmitted_violations(docs, _verdict_text()))
+    _verdict_step(docs["ci.yml"]["jobs"]["code-quality"])["with"]["noop"] = "true"
+    assert any("code-quality: passes a noop" in p for p in _unadmitted_violations(docs, _verdict_text()))
+
+
+def test_control_a_gate_reading_a_event_payload_instead_of_the_lookup_fails_the_checker():
+    docs = _fixture()
+    _verdict_step(docs["ci.yml"]["jobs"]["python-suite"])["with"]["admitted"] = "${{ true }}"
+    assert any("python-suite: `admitted`" in p for p in _unadmitted_violations(docs, _verdict_text()))
+
+
+def test_control_a_governance_workflow_that_can_pass_unadmitted_fails_the_checker():
+    docs = _fixture()
+    steps = docs["no-commit-trailers.yml"]["jobs"]["check-trailers"]["steps"]
+    for step in steps:
+        step.pop("if", None)
+    assert any("no-commit-trailers.yml 'check-trailers'" in p for p in _unadmitted_violations(docs, _verdict_text()))
+    docs = _fixture()
+    docs["pr-blocking-findings.yml"]["jobs"]["blocking-findings"]["if"] = "${{ github.event_name == 'merge_group' }}"
+    assert any("pr-blocking-findings.yml" in p and "job-level" in p for p in _unadmitted_violations(docs, _verdict_text()))
+
+
+def test_control_a_gate_that_ignores_admission_fails_the_checker():
+    docs = _fixture()
+    del _verdict_step(docs["ci.yml"]["jobs"]["python-suite"])["with"]["admitted"]
+    assert any(p.startswith("G3 'python-suite'") and "admitted" in p for p in _gate_violations(docs))

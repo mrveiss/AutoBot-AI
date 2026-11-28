@@ -16,40 +16,26 @@ name: SSOT Coverage
 on:
   push:
     branches: [ release, main ]
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ release, main ]
-    # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
-    # pipeline-scripts/detect-hardcoded-values.sh scans with
-    # `grep -rn --include="*.py" --include="*.ts" --include="*.vue" --include="*.sh"
-    # --include="*.yml" --include="*.yaml"` and nothing else (#14316 added the last
-    # three — shell scripts and Ansible YAML are where hardcoded accounts and
-    # paths actually live), so a pull request touching none of those six
-    # extensions cannot change the violation count this workflow reports. The
-    # script itself and this file are included because either can change the
-    # verdict.
-    paths:
-      - '**/*.py'
-      - '**/*.ts'
-      - '**/*.vue'
-      - '**/*.sh'
-      - '**/*.yml'
-      - '**/*.yaml'
-      - 'pipeline-scripts/detect-hardcoded-values.sh'
-      # #14371: the rules moved into a shared library and the known backlog into
-      # a baseline. Either one changes the verdict this workflow reports, so
-      # either one must trigger it — an entry-point-only filter would let a rule
-      # change land without the check that judges it ever running.
-      - 'scripts/lib/hardcoded-value-rules.sh'
-      - 'pipeline-scripts/hardcoded_values_baseline.txt'
-      - '.github/workflows/ssot-coverage.yml'
-
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
@@ -57,8 +43,30 @@ permissions:
   pull-requests: write
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   ssot-coverage:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     name: SSOT Configuration Compliance
     runs-on: ubuntu-latest
 
@@ -132,7 +140,7 @@ jobs:
     - name: Fail if the hardcoded-value baseline GREW (#14371)
       shell: bash
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_SHA: ${{ inputs.base_sha }}
         HEAD_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
@@ -153,7 +161,7 @@ jobs:
       # found zero violations. `Set job status` below is what should decide
       # pass/fail, based on the actual violation count, not on whether a
       # comment could be posted.
-      if: github.event_name == 'pull_request'
+      if: inputs.pr_number != ''
       continue-on-error: true
       uses: actions/github-script@v9
       with:
@@ -206,11 +214,12 @@ jobs:
       # #12984: the one shared upsert. It reads every page of comments, so a PR
       # with more than 30 comments no longer collects a new report per run.
       # Same fork-hostile caveat as the step above: continue-on-error.
-      if: github.event_name == 'pull_request'
+      if: inputs.pr_number != ''
       continue-on-error: true
       uses: ./.github/actions/upsert-pr-comment
       with:
         marker: '<!-- ssot-coverage -->'
+        number: ${{ inputs.pr_number }}
         body-file: ${{ runner.temp }}/ssot-comment.md
 
     - name: Set job status

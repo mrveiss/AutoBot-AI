@@ -61,7 +61,7 @@ def _run(tmp_path: Path, *, event: str, base_ref: str, response: dict | None = N
         "GH_FIXTURE_JSON": str(fixture),
         "GH_FAIL": "1" if fail else "0",
         "GITHUB_OUTPUT": str(out),
-        "EVENT_NAME": event,
+        "IS_PR": "true" if event == "pull_request" else "false",  # a dispatched pull request run (#20825)
         "BASE_REF": base_ref,
         "HEAD_SHA": "f" * 40,
         "REPO": "owner/repo",

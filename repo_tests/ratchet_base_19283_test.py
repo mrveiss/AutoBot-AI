@@ -56,6 +56,7 @@ def _repo(tmp_path: Path, commits: int) -> Path:
 def test_in_ci_a_missing_head_parent_refuses_instead_of_passing(tmp_path, monkeypatch) -> None:
     """A depth-1 checkout has no HEAD^1: the ratchet must say so, never report 'nothing rose'."""
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")  # this suite itself runs inside a dispatched run (#20825)
     # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
     monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     with pytest.raises(BaseUnavailable, match="fetch-depth: 2"):
@@ -64,6 +65,7 @@ def test_in_ci_a_missing_head_parent_refuses_instead_of_passing(tmp_path, monkey
 
 def test_in_ci_the_base_is_head_parent_and_reads_its_table(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
     # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
     monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     repo = _repo(tmp_path, commits=2)
@@ -92,6 +94,7 @@ def _history(tmp_path: Path, *tables: str, path: str = "table.py") -> tuple[Path
 
 def _ci(monkeypatch, *, base_sha: str = "") -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")  # not a dispatch: that refuses a missing base (#20825)
     # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
     monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", base_sha)
@@ -154,7 +157,7 @@ def test_no_later_merge_can_cancel_a_push_to_main():
     ci = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     group = ci["concurrency"]["group"]
     assert "github.event_name == 'push' && github.sha" in group, f"push runs must key on their commit: {group!r}"
-    assert ci["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    assert ci["concurrency"]["cancel-in-progress"] == "${{ inputs.pr_number != '' }}"
 
 
 def test_a_table_keyed_by_a_module_constant_reads_at_the_base() -> None:
@@ -237,3 +240,17 @@ def test_a_key_the_base_lacks_is_ignored_and_only_a_known_key_that_rose_is_repor
     assert raised_known_entries({"new": 9}, base) == {}
     assert raised_known_entries(now, {}) == {}, "an empty base has no key that could have risen"
     assert raised_entries({"new": 9}, base) == {"new": (None, 9)}, "the strict comparison still refuses it"
+
+
+def test_a_dispatched_run_without_a_base_refuses_and_with_one_uses_it(tmp_path, monkeypatch) -> None:
+    """#20825: a dispatch tests a branch head, so HEAD^1 is the previous commit of the branch, not its base."""
+    repo, shas = _history(tmp_path, "T = {'x.py': 700}\n", "T = {'x.py': 710}\n", "T = {'x.py': 720}\n")
+    _ci(monkeypatch, base_sha="")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    with pytest.raises(BaseUnavailable, match="workflow_dispatch"):
+        base_commit(repo)
+    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", shas[0])
+    assert base_commit(repo) == shas[0]
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", "")
+    assert base_commit(repo) == shas[1], "control: the same environment on a push still reads HEAD^1"

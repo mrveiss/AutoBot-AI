@@ -15,24 +15,57 @@ name: Wiki from docs
 on:
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - docs/wiki/manifest.yml
-      - scripts/ci/build_wiki.py
-      - scripts/ci/build_wiki_test.py
-      - .github/workflows/wiki.yml
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: wiki-from-docs-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  group: wiki-from-docs-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || 'publish' }}
   # Publishes queue rather than cancel: a cancelled run could leave the wiki a commit behind.
   cancel-in-progress: false
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   wiki:
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -52,7 +85,7 @@ jobs:
           python3 scripts/ci/build_wiki.py "${RUNNER_TEMP}/wiki" --sha "${GITHUB_SHA}"
 
       - name: Publish to the wiki
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: inputs.pr_number == '' && github.ref == 'refs/heads/main'
         env:
           WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
         run: |

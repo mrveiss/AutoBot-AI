@@ -44,13 +44,17 @@ on:
         description: "'true' when the structured_thinking package changed"
         type: string
         default: 'false'
+      draft:
+        description: "'true' when the dispatched pull request is a draft; empty outside a pull request run"
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   npm-package-tests:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ inputs.draft != 'true' }}
     name: NPM Package Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15

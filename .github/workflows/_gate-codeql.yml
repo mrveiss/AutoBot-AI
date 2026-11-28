@@ -46,6 +46,10 @@ on:
         description: "Upload results to code scanning ('never' is a dry run)"
         type: string
         default: 'always'
+      draft:
+        description: "'true' when the dispatched pull request is a draft; empty outside a pull request run"
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -53,7 +57,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ inputs.draft != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

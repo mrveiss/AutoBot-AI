@@ -36,6 +36,12 @@ An AC evidence table is a markdown table whose header row has a cell reading ``A
 (both case-insensitive), followed by a delimiter row and at least one body row. Tables inside
 code are not tables.
 
+``sweep`` on ``schedule`` / ``workflow_dispatch`` (#20825): the ``issue_comment`` trigger is gone, because
+it ran once per comment on every issue and pull request. The sweep lists the issues that carry
+``needs-ac-evidence`` and clears the label from each one that holds a trusted comment with an AC
+evidence table (the same ``is_trusted_evidence`` check as ``evidence``), so no per-comment run exists
+and no clearing is lost.
+
 Never ticks a checkbox, closes, reopens or edits an issue body: evidence stays a person's or
 agent's job. Stdlib only; HTTP goes through ``github_api.GitHubApi`` and comment pages are
 read by the one comment reader, ``.github/actions/upsert-pr-comment`` (#12984).
@@ -56,7 +62,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
-from issue_api import IssueApiError, IssueClient, ensure_label, load_upsert  # noqa: E402
+from issue_api import IssueApiError, IssueClient, ensure_label, list_issues, load_upsert  # noqa: E402
 
 from autobot_shared.html_comments import HTML_COMMENT_FLAGS, HTML_COMMENT_PATTERN  # noqa: E402
 
@@ -455,15 +461,94 @@ def run_merged(client: LandingClient, landing: Landing, dry_run: bool = False) -
     return outcomes
 
 
+def clear_label(client: LandingClient, number: int) -> None:
+    name = urllib.parse.quote(EVIDENCE_LABEL)
+    client.call("DELETE", f"/repos/{client.repo}/issues/{number}/labels/{name}", ok=(200, 404))
+    logger.info("#%s: %s removed (AC evidence table posted)", number, EVIDENCE_LABEL)
+
+
 def run_evidence(client: LandingClient, event: Dict[str, Any]) -> bool:
     """Remove ``needs-ac-evidence`` when the comment holds an AC evidence table."""
     if not should_clear_label(event):
         return False
-    number = int(event["issue"]["number"])
-    name = urllib.parse.quote(EVIDENCE_LABEL)
-    client.call("DELETE", f"/repos/{client.repo}/issues/{number}/labels/{name}", ok=(200, 404))
-    logger.info("#%s: %s removed (AC evidence table posted)", number, EVIDENCE_LABEL)
+    clear_label(client, int(event["issue"]["number"]))
     return True
+
+
+EVENTS_MAX_PAGES = 5
+NOTE_MARKER_PREFIX = MARKER_TEMPLATE.split("{")[0]
+
+
+def label_applied_at(client: LandingClient, number: int, comments: List[Dict[str, Any]]) -> Optional[str]:
+    """When ``needs-ac-evidence`` was last applied: the latest ``labeled`` event, else the landing note's time.
+
+    ``None`` when neither can be read, so the caller fails closed.
+    """
+    stamps: List[str] = []
+    for page in range(1, EVENTS_MAX_PAGES + 1):
+        query = urllib.parse.urlencode({"per_page": COMMITS_PAGE_SIZE, "page": page})
+        batch = client.try_get(f"/repos/{client.repo}/issues/{number}/events?{query}")
+        if not isinstance(batch, list):
+            break
+        stamps += [
+            e["created_at"]
+            for e in batch
+            if e.get("event") == "labeled" and (e.get("label") or {}).get("name") == EVIDENCE_LABEL and e.get("created_at")
+        ]
+        if len(batch) < COMMITS_PAGE_SIZE:
+            break
+    if stamps:
+        return max(stamps)
+    notes = [c["created_at"] for c in comments if c.get("created_at") and NOTE_MARKER_PREFIX in (c.get("body") or "") and is_bot(c.get("user"))]
+    return max(notes) if notes else None
+
+
+def _evidence_after_label(client: LandingClient, number: int) -> bool:
+    """A trusted evidence comment posted AFTER the label was applied; fails closed when that time is unreadable."""
+    comments = client.comments(number)
+    applied = label_applied_at(client, number, comments)
+    if applied is None:
+        logger.warning("#%s: cannot read when %s was applied; label kept", number, EVIDENCE_LABEL)
+        return False
+    return any(is_trusted_evidence(c) and (c.get("created_at") or "") > applied for c in comments)
+
+
+def run_sweep(client: LandingClient) -> List[int]:
+    """Clear ``needs-ac-evidence`` from every labelled issue that already holds trusted AC evidence (#20825).
+
+    Replaces the per-comment ``evidence`` run. Raises when the listing was cut by the page cap, so a
+    partial sweep is never read as a complete one.
+    """
+    issues, complete = list_issues(client, {"labels": EVIDENCE_LABEL, "state": "all"})
+    if not complete:
+        raise LandingNoteError(f"the {EVIDENCE_LABEL} listing hit the page cap; the sweep is incomplete")
+    cleared: List[int] = []
+    for issue in issues:
+        number = int(issue["number"])
+        if has_evidence_label(issue) and _evidence_after_label(client, number):
+            clear_label(client, number)
+            cleared.append(number)
+    logger.info("sweep: %d issue(s) labelled, %d cleared", len(issues), len(cleared))
+    return cleared
+
+
+def landings_for_push(client: LandingClient, before: str, after: str, branch: str) -> List[Landing]:
+    """The pull requests a push to ``branch`` merged (#20825): no ``pull_request: closed`` event exists any more.
+
+    A pull request merged by ANY route (the coordinator, the UI) is a commit on the branch, and the commit-to-PR
+    lookup names it. Only the pull request whose own merge commit is the pushed commit counts, so the member
+    commits of a merged branch do not repeat it. A first push (``before`` all zeros) reads only ``after``.
+    """
+    shas = [after]
+    if before.strip("0"):
+        shas = [c["sha"] for c in client.call("GET", f"/repos/{client.repo}/compare/{before}...{after}")["commits"]] or [after]
+    found: Dict[int, Landing] = {}
+    for sha in shas:
+        for pr in client.try_get(f"/repos/{client.repo}/commits/{sha}/pulls") or []:
+            same_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name") == client.repo
+            if pr.get("merged_at") and pr.get("merge_commit_sha") == sha and pr["base"]["ref"] == branch and same_repo:
+                found[int(pr["number"])] = landing_from_pr(pr)
+    return [found[n] for n in sorted(found)]
 
 
 def _landing_for(client: LandingClient, args: argparse.Namespace) -> Landing:
@@ -475,7 +560,10 @@ def _landing_for(client: LandingClient, args: argparse.Namespace) -> Landing:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=("merged", "evidence"))
+    parser.add_argument("command", choices=("merged", "evidence", "pushed", "sweep"))
+    parser.add_argument("--before", default="", help="pushed only: the branch tip before the push")
+    parser.add_argument("--after", default="", help="pushed only: the branch tip after the push")
+    parser.add_argument("--branch", default="main", help="pushed only: the branch that was pushed")
     parser.add_argument("--event", help="GITHUB_EVENT_PATH")
     parser.add_argument("--pr", type=int, help="merged only: read this PR from the API instead of --event")
     parser.add_argument("--dry-run", action="store_true", help="merged only: read, resolve and print; write nothing")
@@ -487,6 +575,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             run_evidence(client, json.load(handle))
         return 0
     try:
+        if args.command == "sweep":
+            run_sweep(client)
+            return 0
+        if args.command == "pushed":
+            for landing in landings_for_push(client, args.before, args.after, args.branch):
+                run_merged(client, landing, dry_run=args.dry_run)
+            return 0
         run_merged(client, _landing_for(client, args), dry_run=args.dry_run)
     except LandingNoteError as exc:
         logger.error("%s", exc)

@@ -30,8 +30,7 @@ inputs:
     required: true
   number:
     description: 'Pull request number.'
-    required: false
-    default: ${{ github.event.pull_request.number }}
+    required: true
   token:
     description: 'Token allowed to write comments.'
     required: false

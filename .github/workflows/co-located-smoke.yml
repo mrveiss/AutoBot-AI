@@ -28,64 +28,61 @@
 name: Co-located Smoke
 
 on:
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-    paths:
-      # nginx — compose flavor (live-tested here)
-      - 'docker/**'
-      - 'docker-compose*.yml'
-      # nginx — bare-metal co-located templates (same routing contract)
-      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm.conf.j2'
-      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-security-headers-strict.conf.j2'
-      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/nginx-override.conf.j2'
-      - 'autobot-slm-backend/ansible/roles/frontend/templates/nginx-frontend.conf.j2'
-      # co-located client / update-selection logic
-      - 'autobot-backend/services/slm_client.py'
-      - 'autobot-slm-backend/api/code_sync.py'
-      - 'autobot-slm-backend/api/websocket.py'
-      # transcriber multi-user authz surface
-      - 'autobot-backend/transcriber/**'
-      # user-frontend CSP surface
-      - 'autobot-frontend/index.html'
-      - 'autobot-frontend/src/assets/**'
-      # the gate itself
-      - '.github/workflows/co-located-smoke.yml'
-      # #19527: the image build and disk guard it runs
-      - '.github/actions/build-smoke-images/**'
-      - '.github/actions/free-disk-space/**'
-      - '.github/actions/install-ci-requirements/**'
-      - 'scripts/check_colocated_csp.py'
-      - 'autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py'
-      - 'autobot-backend/transcriber/tests/test_multiuser_authz.py'
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
   authz-and-selection:
-    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
-    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
-    if: >-
-      ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
-              && (github.event.pull_request.user.login != 'dependabot[bot]'
-                  || startsWith(github.event.pull_request.head.ref, 'train-')
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
-              && (github.event.pull_request.head.ref != github.event.repository.default_branch
-                  || github.event.pull_request.head.repo.full_name != github.repository
-                  || github.event.pull_request.base.ref != 'release'
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Runs only after `pr-context` passed or was skipped (no pull request): a fork head that is not the coordinator's
+    # `ci/pr-<N>` mirror fails there, so this job never starts for it (#20825).
+    needs: pr-context
+    if: ${{ !cancelled() && (needs.pr-context.result == 'success' || needs.pr-context.result == 'skipped') }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -137,18 +134,11 @@ jobs:
   # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
   # /slm — the same single-host topology as bare-metal co-located installs).
   colocated-stack:
-    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
-    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
-    if: >-
-      ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
-              && (github.event.pull_request.user.login != 'dependabot[bot]'
-                  || startsWith(github.event.pull_request.head.ref, 'train-')
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
-              && (github.event.pull_request.head.ref != github.event.repository.default_branch
-                  || github.event.pull_request.head.repo.full_name != github.repository
-                  || github.event.pull_request.base.ref != 'release'
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Runs only after `pr-context` passed or was skipped (no pull request): a fork head that is not the coordinator's
+    # `ci/pr-<N>` mirror fails there, so this job never starts for it (#20825).
+    needs: pr-context
+    if: ${{ !cancelled() && (needs.pr-context.result == 'success' || needs.pr-context.result == 'skipped') }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

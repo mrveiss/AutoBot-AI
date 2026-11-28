@@ -6,8 +6,9 @@
 
 A merge train learned that its combined tree needs an ``api.ts`` patch only by
 running the full CI suite. The steps now live once in a composite action. The
-``pull_request`` workflow checks out the PR head and runs it; a dispatch-only
-workflow does a plain checkout of the dispatched branch and runs the same action.
+reusable workflow ci.yml calls and a dispatch-only workflow both do a plain
+checkout of the dispatched branch and run the same action (since #20825 ci.yml is
+itself dispatched on the pull request's branch, so no computed ref is needed).
 
 Why this shape: CodeQL's ``actions/cache-poisoning/poisonable-step`` read a
 checkout of ``github.head_ref`` -- and, in a reusable workflow, of
@@ -54,11 +55,12 @@ def test_dispatch_checks_out_the_dispatched_branch_with_no_ref_and_runs_the_acti
     ), "dispatches on different branches must not cancel each other"
 
 
-def test_the_pull_request_caller_cannot_be_dispatched() -> None:
+def test_the_reusable_caller_checks_out_no_computed_ref() -> None:
     doc = _doc(".github/workflows/auto-fix-generated-types.yml")
-    assert "workflow_dispatch" not in doc["on"], "a PR-head checkout must never sit in a dispatch-triggerable workflow"
+    assert "workflow_dispatch" not in doc["on"], "the reusable workflow has no trigger of its own"
     checkout, action = _steps(".github/workflows/auto-fix-generated-types.yml")
-    assert checkout["with"]["ref"] == "${{ github.head_ref }}" and action["uses"] == _ACTION_USE
+    assert "ref" not in (checkout.get("with") or {}), "ci.yml is dispatch-triggered, so a computed ref is the shape CodeQL ejects"
+    assert action["uses"] == _ACTION_USE
 
 
 def test_the_action_checks_out_nothing() -> None:
@@ -67,9 +69,9 @@ def test_the_action_checks_out_nothing() -> None:
     assert not [s for s in steps if str(s.get("uses", "")).startswith("actions/checkout@")]
 
 
-def test_the_parked_run_approval_stays_pull_request_only() -> None:
-    gate = _doc(".github/workflows/auto-fix-generated-types.yml")["jobs"]["approve-parked-runs"]["if"]
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in gate
+def test_the_parked_run_approval_stays_same_repository_only() -> None:
+    jobs = _doc(".github/workflows/auto-fix-generated-types.yml")["jobs"]
+    assert jobs["approve-parked-runs"]["if"] == "inputs.same_repo == 'true'" == jobs["autofix-types"]["if"]
 
 
 def test_the_patch_artifact_is_uploaded_whatever_the_caller() -> None:

@@ -3,19 +3,37 @@
 name: PR structure
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, milestoned, demilestoned]
+  # The PR coordinator dispatches this for a `land-next` pull request and again when its labels or milestone change
+  # (#20825): the verdict is derived from them.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
+  actions: write        # pr-context cancels a stale dispatch
+  pull-requests: read
 
 jobs:
   pr-structure:
     name: PR has its milestone and phase
+    # A phase label added to a land-next pull request re-dispatches the check: its verdict is derived from the labels (#20516).
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,6 +44,7 @@ jobs:
             pipeline-scripts
             autobot_shared
             .github/actions/upsert-pr-comment
+            .github/actions/pr-context
 
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
       # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
@@ -34,5 +53,20 @@ jobs:
         with:
           python-version-file: '.python-version'
 
+
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+      - name: Fail closed unless admitted to a CI slot
+        if: ${{ steps.pr.outputs.admitted != 'true' }}
+        run: |
+          echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label)"
+          exit 1
+
       - name: Check the milestone and phase label
+        env:
+          PR_PULL_PATH: ${{ steps.pr.outputs.pull-file }}
         run: python3 pipeline-scripts/pr_structure.py

@@ -5,60 +5,111 @@
 # commit, so a loss stops the train before it lands. When a train lands it checks that what the
 # train changed reached main.
 #
-# Only `train-*` heads from this repo run it. `pull_request`, not `pull_request_target`, and a
-# read-only token. Making `train-content` a required status on main is a branch-protection setting
+# Only `train-*` heads from this repo run it. A read-only token, and no
+# `pull_request` trigger (#20825): ci.yml's `fan-out` dispatches it before the train lands, and a push to main checks
+# it after. Making `train-content` a required status on main is a branch-protection setting
 # (maintainer), recorded on #20406.
 
 name: train-content-gate
 
 on:
-  pull_request:
+  push:
     branches: [ main ]
-    types: [ opened, reopened, synchronize, ready_for_review, closed ]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Train pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 
 concurrency:
-  group: train-content-gate-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' }}
-  cancel-in-progress: true
+  group: train-content-gate-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.sha }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions: {}
 
 jobs:
+  # Before the train lands: judge each member at its own merge commit.
   train-content:
     name: train-content
-    if: >-
-      startsWith(github.head_ref, 'train-') &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    if: ${{ inputs.pr_number != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: write
+      pull-requests: read
     steps:
       - name: Check out the full history
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event.pull_request.head.sha }}
 
-      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
-      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
       - name: Set up Python from .python-version
         uses: actions/setup-python@v7
         with:
           python-version-file: '.python-version'
 
       - name: Every member's content is present at its merge
-        if: github.event.action != 'closed'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          TITLE: ${{ github.event.pull_request.title }}
-          BODY: ${{ github.event.pull_request.body }}
-        run: python3 pipeline-scripts/train_content_gate.py --range "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA" --title="$TITLE" --body="$BODY"
+          BASE_SHA: ${{ steps.pr.outputs.base-sha }}
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+          TITLE: ${{ steps.pr.outputs.title }}
+          BODY_FILE: ${{ steps.pr.outputs.body-file }}
+        run: python3 pipeline-scripts/train_content_gate.py --range "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA" --title="$TITLE" --body="$(cat "$BODY_FILE")"
+
+  # After the push to main: when the pushed commit is a train's merge, what the train changed reached main.
+  train-landed:
+    name: train-content (landed)
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Is the pushed commit a train's merge
+        id: train
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Only the pull request whose OWN merge commit is the pushed commit, from this repository, with a `train-*` head.
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq \
+            "[.[] | select(.merge_commit_sha == \"${GITHUB_SHA}\" and .merged_at != null and (.head.ref | startswith(\"train-\")) and .head.repo.full_name == \"${GITHUB_REPOSITORY}\")] | length")
+          echo "train=$([ "${n}" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python from .python-version
+        if: steps.train.outputs.train == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
 
       - name: What the train changed reached main
-        if: github.event.action == 'closed'
-        env:
-          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-        run: python3 pipeline-scripts/train_content_gate.py --landed "$MERGE_SHA"
+        if: steps.train.outputs.train == 'true'
+        run: python3 pipeline-scripts/train_content_gate.py --landed "$GITHUB_SHA"

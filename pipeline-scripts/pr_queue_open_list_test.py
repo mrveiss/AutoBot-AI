@@ -253,7 +253,7 @@ def test_the_job_declares_the_scopes_its_steps_need() -> None:
             "`contents: read`; declaring any permission drops every unlisted "
             "scope to `none`"
         )
-    assert permissions.get("pull-requests") == "write", "the gate posts a comment"
+    assert permissions.get("pull-requests") == "read", "the gate only lists open pull requests (it posts no comment since #20825)"
 
 
 def test_the_runaway_notice_never_tells_a_reader_to_merge_directly() -> None:

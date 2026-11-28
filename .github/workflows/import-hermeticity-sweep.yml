@@ -37,24 +37,6 @@ name: import-hermeticity-sweep
 # push trigger reads main after each merge that can change the answer. Only non-PR runs
 # open, update or close an issue: those describe the base, not a diff that may never merge.
 on:
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
-    paths:
-      - 'autobot-backend/**'
-      - 'autobot-slm-backend/**'
-      - 'autobot_shared/**'
-      - 'requirements-ci.txt'
-      - 'requirements-ci/**'
-      - 'constraints/shared.txt'  # #21471: CI-plane versions live here
-      - '.python-version'  # #21471: setup-python-ci reads the interpreter version here
-      - 'repo_tests/_import_hermeticity_scope.py'
-      - 'repo_tests/import_hermeticity_known_offenders.py'
-      - 'repo_tests/import_hermeticity_test.py'
-      - '.github/workflows/import-hermeticity-sweep.yml'
   push:
     branches: [main]
     paths:
@@ -72,31 +54,58 @@ on:
   schedule:
     - cron: "0 4 * * *"  # daily 04:00 UTC
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: import-hermeticity-sweep-${{ github.ref }}
+  group: import-hermeticity-sweep-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
   # A superseded PR run can be dropped; a push, scheduled or dispatched run is the
   # reading of the base and must finish. At most one waits behind it, and a newer
   # push replaces the waiting one, so the latest base is always the one read.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   sweep:
-    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
-    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
-    if: >-
-      ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
-              && (github.event.pull_request.user.login != 'dependabot[bot]'
-                  || startsWith(github.event.pull_request.head.ref, 'train-')
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
-              && (github.event.pull_request.head.ref != github.event.repository.default_branch
-                  || github.event.pull_request.head.repo.full_name != github.repository
-                  || github.event.pull_request.base.ref != 'release'
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # issues: write so a red sweep on the base reaches a reader. A push or scheduled
@@ -109,10 +118,8 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
-          # 2, not 1: on pull_request the checkout is the PR's merge commit, and depth 2
-          # brings both its parents -- HEAD^1 the base tip, HEAD^2 the PR head. That pair
-          # is all "Choose what to sweep" diffs, the same one enforce-precommit.yml reads;
-          # no history beyond it is fetched (#16207).
+          # 2, not 1: the base SHA is fetched on its own at depth 1 by "Choose what to sweep"; no history
+          # beyond that is needed (#16207).
           fetch-depth: 2
 
       - uses: ./.github/actions/setup-python-ci
@@ -129,23 +136,23 @@ jobs:
         id: mode
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          BASE_SHA: ${{ inputs.base_sha }}
         run: |
           set -euo pipefail
-          if [ "${EVENT_NAME}" != "pull_request" ]; then
+          if [ -z "${PR_NUMBER}" ]; then
             echo "mode=full" >>"$GITHUB_OUTPUT"
             printf '## Import-hermeticity sweep\n\nFull sweep: a %s run reads the base, not a diff.\n' \
               "${EVENT_NAME}" >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # Without a second parent, HEAD^1 would be the PR's previous commit and the
-          # diff would silently shrink to that one commit.
-          if ! git rev-parse --verify --quiet 'HEAD^2' >/dev/null; then
-            echo "::error::the checkout is not the pull request's merge commit, so its changed files cannot be read"
-            exit 1
-          fi
+          # A dispatched run tests the branch head, not a merge ref (#20825): the diff is from the validated
+          # merge base (`inputs.base_sha`, checked by pr-context) to HEAD, never the first parent, which on a branch head
+          # is its previous commit and would silently shrink the diff to that one commit.
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "${BASE_SHA}"
           # --diff-filter=d: a deleted file has no module left to probe. quotepath=off: a
           # non-ASCII path must match the population's spelling, not git's octal escape.
-          git -c core.quotepath=off diff --name-only --diff-filter=d 'HEAD^1' HEAD >changed-files.txt
+          git -c core.quotepath=off diff --name-only --diff-filter=d "${BASE_SHA}" HEAD >changed-files.txt
           python -m repo_tests._import_hermeticity_scope changed-files.txt
 
       # The declared dependency set is the whole point of running here rather than
@@ -228,7 +235,7 @@ jobs:
         # unequal to '0', and file an offender report for a sweep that never ran.
         # Off pull_request: a PR run reports through its own red check (#16221). Every
         # other event is a FULL run, so no mode term is needed here.
-        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc != '0'
+        if: success() && inputs.pr_number == '' && steps.sweep.outputs.rc != '0'
         uses: actions/github-script@v9
         env:
           # Through the environment, never interpolated into the script body: the
@@ -275,7 +282,7 @@ jobs:
 
       - name: Close the sweep-failure issue once the sweep is clean again
         # Off pull_request: a clean diff says nothing about whether the base is clean.
-        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc == '0'
+        if: success() && inputs.pr_number == '' && steps.sweep.outputs.rc == '0'
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -303,7 +310,7 @@ jobs:
         # earlier step did -- checkout, setup, choosing the mode or the dependency
         # install. That is a sweep that never looked, and it must not read as a clean
         # run either. On a pull_request run the red check is the report; no issue.
-        if: failure() && github.event_name != 'pull_request'
+        if: failure() && inputs.pr_number == ''
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

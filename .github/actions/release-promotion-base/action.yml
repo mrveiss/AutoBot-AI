@@ -29,6 +29,18 @@ description: >
   commits not already on main, so gates judge only new commits. Empty outputs otherwise.
 
 inputs:
+  is-pr:
+    description: "'true' for a dispatched pull request run (pr-context's `is-pr`); anything else yields empty outputs."
+    required: false
+    default: ''
+  base-ref:
+    description: "The pull request's base branch (pr-context's `base-ref`)."
+    required: false
+    default: ''
+  head-sha:
+    description: "The pull request's head commit (pr-context's `head-sha`)."
+    required: false
+    default: ''
   fetch:
     description: '"true" fetches base-sha at depth 1 when the checkout does not hold it.'
     required: false
@@ -62,9 +74,9 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
-        EVENT_NAME: ${{ github.event_name }}
-        BASE_REF: ${{ github.event.pull_request.base.ref }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        IS_PR: ${{ inputs.is-pr }}
+        BASE_REF: ${{ inputs.base-ref }}
+        HEAD_SHA: ${{ inputs.head-sha }}
         REPO: ${{ github.repository }}
         RELEASE_BRANCH: ${{ inputs.release-branch }}
         INTEGRATION_BRANCH: ${{ inputs.integration-branch }}

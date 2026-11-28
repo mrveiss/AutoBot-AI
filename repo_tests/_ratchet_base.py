@@ -13,9 +13,10 @@ The base is:
 - in CI (``GITHUB_ACTIONS``): ``AUTOBOT_RATCHET_BASE_SHA`` when ci.yml sets it -- a merge
   group's ``base_sha``, on a push to main the commit main pointed at before, or on a pull
   request into ``release`` the head's merge base with main (#19466: gates judge only commits
-  not already on main, so a promotion is not re-judged against the weeks-old release tip) --
-  else ``HEAD^1``. A pull_request run checks out the merge ref, whose first parent is the base tip.
-  The checkout needs ``fetch-depth: 2``.
+  not already on main, so a promotion is not re-judged against the weeks-old release tip), or on a
+  dispatched pull request run (#20825) its validated merge base (``inputs.base_sha``) -- else ``HEAD^1``.
+  A ``workflow_dispatch`` run with no base REFUSES: it tests a branch head, whose ``HEAD^1`` is the
+  previous commit of the branch and not its base. The checkout needs ``fetch-depth: 2``.
 - elsewhere: ``git merge-base HEAD <AUTOBOT_RATCHET_BASE_REF, default origin/main>``.
 
 A PR run that spans a raise can be cancelled, so the backstop is main's own push run: its base
@@ -74,6 +75,13 @@ def base_commit(root: Path) -> str:
         given = os.environ.get(BASE_SHA_ENV, "").strip()
         if given.strip("0"):  # a new branch's push carries before=000...0, which names no commit
             return _commit(root, given, BASE_SHA_ENV)
+        if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+            # A dispatched run tests a branch head (#20825): HEAD^1 there is the previous commit of the branch, not
+            # its base. A complete, plausible, wrong answer, so refuse instead of reading it.
+            raise BaseUnavailable(
+                f"a workflow_dispatch run has no merge ref, so HEAD^1 is not the base. {BASE_SHA_ENV} must name the "
+                "pull request's merge base (ci.yml passes inputs.base_sha); refusing rather than reporting 'nothing rose'."
+            )
         out = _git(root, "rev-parse", "--verify", "--quiet", "HEAD^1")
         if out.returncode != 0:
             raise BaseUnavailable(

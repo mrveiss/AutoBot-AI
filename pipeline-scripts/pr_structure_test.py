@@ -104,13 +104,13 @@ def test_the_workflows_sparse_checkout_is_enough_to_run_the_script(tmp_path: Pat
     checkout = next(s for s in workflow["jobs"]["pr-structure"]["steps"] if "checkout" in s.get("uses", ""))
     for listed in checkout["with"]["sparse-checkout"].split():
         shutil.copytree(root / listed, tmp_path / listed, ignore=shutil.ignore_patterns("__pycache__"))
-    event = tmp_path / "event.json"
-    event.write_text(json.dumps({"pull_request": _pull()}), encoding="utf-8")
+    pull = tmp_path / "pr.json"
+    pull.write_text(json.dumps(_pull()), encoding="utf-8")
     done = subprocess.run(
         [sys.executable, "-S", str(tmp_path / "pipeline-scripts/pr_structure.py")],
         capture_output=True,
         text=True,
         check=False,
-        env={"GITHUB_EVENT_PATH": str(event)},
+        env={"PR_PULL_PATH": str(pull)},
     )
     assert done.returncode == 0, done.stderr

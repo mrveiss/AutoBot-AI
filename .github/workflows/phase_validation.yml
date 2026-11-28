@@ -35,15 +35,23 @@ on:
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
       - '.github/actions/setup-python-suite/ci-config.yaml'
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ release ]
-    paths: *phase_paths
   workflow_dispatch:
     inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
       phase_filter:
         description: 'Specific phase to validate (leave empty for all phases)'
         required: false
@@ -55,12 +63,34 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   phase-validation:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     name: AutoBot Phase Validation
     runs-on: ubuntu-latest
 
@@ -242,8 +272,10 @@ jobs:
         retention-days: 30
 
     - name: Comment Phase Status on PR
-      if: github.event_name == 'pull_request' && always()
+      if: inputs.pr_number != '' && always()
       uses: actions/github-script@v9
+      env:
+        PR_NUMBER: ${{ inputs.pr_number }}
       with:
         script: |
           const fs = require('fs');
@@ -274,7 +306,7 @@ jobs:
             }
 
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: Number(process.env.PR_NUMBER),
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment
