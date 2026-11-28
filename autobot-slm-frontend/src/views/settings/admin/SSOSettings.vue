@@ -427,7 +427,7 @@ onMounted(fetchProviders)
       <div
         v-for="provider in providers"
         :key="provider.id"
-        class="bg-white border border-autobot-border rounded-lg p-4"
+        class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4"
       >
         <div class="flex items-start justify-between">
           <div class="flex-1">

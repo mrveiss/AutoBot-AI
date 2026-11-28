@@ -101,6 +101,8 @@ MIGRATIONS = [
     "add_auth_revocation_tables",
     # Issue #22211: the one VNC desktop. The node that carries the xrdp desktop purpose gets the vnc role.
     "assign_vnc_role_to_desktop_node",
+    # Issue #22277: the connected self-model (entities + append-only history).
+    "add_self_model_tables",
 ]
 
 

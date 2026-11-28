@@ -248,7 +248,8 @@ def test_beat_schedule_entry_resolves_to_dispatcher_task():
     """celery_app.py's beat_schedule wires tasks.dispatch_due_batch_schedules
     on a distinct entry from the concurrent #12365 beat work (both entries
     coexist in the same beat_schedule dict)."""
-    from pathlib import Path
+    from testkit.beat_schedule import beat_schedule_entries
 
-    src = (Path(__file__).resolve().parents[1] / "celery_app.py").read_text(encoding="utf-8")
-    assert '"task": "tasks.dispatch_due_batch_schedules"' in src
+    entries = beat_schedule_entries()
+    assert entries["batch-schedules-tick"]["task"] == "tasks.dispatch_due_batch_schedules"
+    assert "analytics-cache-population-daily" in entries  # the #12365 entry is a separate key
