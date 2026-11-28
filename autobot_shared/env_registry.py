@@ -54,14 +54,15 @@ def env(name: str, default: Any = None) -> Any:
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
-from autobot_shared import env_registry_agent_runtime, env_registry_ai_stack  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_host_binding  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_admin_files,
+    env_registry_agent_runtime,
     env_registry_agent_tools,
     env_registry_ai,
+    env_registry_ai_stack,
     env_registry_analytics,
     env_registry_approvals,
     env_registry_audit_chain,
@@ -92,6 +93,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_tls,
     env_registry_transcriber,
     env_registry_vnc,
+    env_registry_voice,
     env_registry_worker_loop,
 )
 
@@ -436,62 +438,7 @@ register_env_var(
 )
 
 # --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
-# --- voice / speech-to-text -------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_STT_SILENCE_RMS_THRESHOLD",
-        type=float,
-        default=0.005,
-        description=(
-            "Audio RMS below which the waveform is treated as silence, so any STT "
-            "transcript over it is a hallucination rather than a user turn (#13104)."
-        ),
-        component="voice",
-        range=(0.0, 1.0),
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD",
-        type=float,
-        default=0.8,
-        description=(
-            "Decoder no-speech probability at or above which an STT transcript is "
-            "discarded as a silence hallucination (#13104)."
-        ),
-        component="voice",
-        range=(0.0, 1.0),
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD",
-        type=float,
-        default=0.7,
-        description=(
-            "Fallback confidence threshold for VoiceProcessor when the multimodal.voice "
-            "config section omits it (#13207)."
-        ),
-        component="voice",
-        range=(0.0, 1.0),
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT",
-        type=int,
-        default=30,
-        description=(
-            "Fallback processing timeout in seconds for VoiceProcessor when the "
-            "multimodal.voice config section omits it (#13207)."
-        ),
-        component="voice",
-    )
-)
+# --- voice / speech-to-text: env_registry_voice.py (#22280) ---
 
 # --- provider OAuth / device-code flow (#14223) ------------------------------
 
