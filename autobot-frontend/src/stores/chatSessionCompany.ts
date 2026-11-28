@@ -20,4 +20,5 @@ export function refreshExistingCompany(existing: CompanyFields, incoming: Compan
   logger.debug(`Session ${incoming.id} already exists, skipping import`)
   if (incoming.companyId !== undefined) existing.companyId = incoming.companyId
   if (incoming.unassigned !== undefined) existing.unassigned = incoming.unassigned
+  else if (incoming.companyId) existing.unassigned = false // assigned to a company means not unassigned
 }

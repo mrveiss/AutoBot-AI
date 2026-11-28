@@ -316,7 +316,7 @@ export class ChatRepository {
       return await fetchChatList(companyId)
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
-      return [] // Return empty array on error to prevent app crash
+      throw error // #16905: a failed list stays distinguishable from an empty one
     }
   }
 

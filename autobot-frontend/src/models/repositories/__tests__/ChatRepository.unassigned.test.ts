@@ -44,4 +44,10 @@ describe('ChatRepository.getChatList Unassigned (#21997)', () => {
     const out = await list({ sessions: [{ id: 'a1' }] })
     expect(out.map((c) => c.id)).toEqual(['a1'])
   })
+
+  it('rethrows a failed request so it stays distinguishable from an empty list (#16905)', async () => {
+    const repo = new ChatRepository()
+    vi.spyOn(apiClient, 'call').mockRejectedValue(new Error('boom'))
+    await expect(repo.getChatList()).rejects.toThrow('boom')
+  })
 })
