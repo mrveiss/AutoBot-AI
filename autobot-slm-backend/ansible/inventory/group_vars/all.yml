@@ -438,8 +438,11 @@ _role_aliases:
 # of the update playbook. node_roles_declared (declared roles only) closes
 # that branch; it falls back to node_roles wherever it is not stamped
 # (static inventories, the synthetic test hosts below), so a role assigned
-# through a static inventory keeps activating unchanged. The other facts
-# below (redis, vnc, xrdp, llm, tts_worker) deliberately keep raw node_roles
+# through a static inventory keeps activating unchanged. role_vnc_active
+# reads node_roles_declared too (#22262, owner 2026-11-27): a node that only
+# DETECTED vnc (e.g. the SLM manager's own local vncserver) is not a fleet VNC
+# node, so the update's vnc gate and provisioning never treat it as one. The
+# other facts below (redis, xrdp, llm, tts_worker) deliberately keep raw node_roles
 # -- role_tts_worker_active in particular has NO group fallback at all
 # (#9965), so node_roles is its only activation path by design. Guarded by
 # services/inventory_privileged_node_roles_test.py, which derives the
@@ -536,7 +539,7 @@ backend_advertised_host: >-
      else (_inv if (_invn != '' and (_invn | regex_search(_unspec)) is none) else slm_loopback_ipv4) }}
 
 role_vnc_active: >-
-  {{ ('vnc' in (node_roles | default([]))) or
+  {{ ('vnc' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
 
 role_xrdp_active: >-
