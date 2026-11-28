@@ -126,3 +126,109 @@ def test_a_cached_fact_that_expires_within_the_cache_ttl_is_not_served_on_the_ne
     obj._generate_cache_key = lambda *_a: "k"
     assert asyncio.run(obj.search("q"))[0] == []
     assert asyncio.run(obj.batch_search(["q"]))[0][0] == []
+
+
+# #21799: the CPU fallback retries a transient embedding failure and surfaces any other as an error metric.
+def _fallback_engine(search: AsyncMock) -> NPUSemanticSearch:
+    obj = _engine()
+    obj.knowledge_base = SimpleNamespace(search=search)
+    return obj
+
+
+def test_fallback_recovers_when_the_first_cpu_embedding_fails_transiently(monkeypatch):
+    import npu_cpu_fallback
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=[ConnectionError("embed blip"), []])
+    results, metrics = asyncio.run(
+        _fallback_engine(search)._handle_search_error(RuntimeError("primary"), "q", 5, None, time.time())
+    )
+    assert results == [] and metrics.error is None and search.await_count == 2
+
+
+def test_fallback_surfaces_a_non_transient_failure_without_retrying():
+    search = AsyncMock(side_effect=ValueError("bad embedding"))
+    results, metrics = asyncio.run(
+        _fallback_engine(search)._handle_search_error(RuntimeError("primary"), "q", 5, None, time.time())
+    )
+    assert results == [] and "bad embedding" in metrics.error and search.await_count == 1
+
+
+def test_fallback_stops_after_the_attempt_cap_on_a_persistent_transient_failure(monkeypatch):
+    import npu_cpu_fallback
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=TimeoutError("down"))
+    _, metrics = asyncio.run(
+        _fallback_engine(search)._handle_search_error(RuntimeError("primary"), "q", 5, None, time.time())
+    )
+    assert metrics.error and search.await_count == npu_cpu_fallback.CPU_FALLBACK_ATTEMPTS
+
+
+def test_fallback_recovers_when_the_first_cpu_embedding_is_refused_then_recovers(monkeypatch):
+    import npu_cpu_fallback
+    from autobot_shared.embedding_model import EmbeddingUnavailableError
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=[EmbeddingUnavailableError("model produced no vector"), []])
+    results, metrics = asyncio.run(
+        _fallback_engine(search)._handle_search_error(RuntimeError("primary"), "q", 5, None, time.time())
+    )
+    assert results == [] and metrics.error is None and search.await_count == 2
+
+
+def test_fallback_does_not_retry_a_missing_file():
+    search = AsyncMock(side_effect=FileNotFoundError("index gone"))
+    _, metrics = asyncio.run(
+        _fallback_engine(search)._handle_search_error(RuntimeError("primary"), "q", 5, None, time.time())
+    )
+    assert metrics.error and search.await_count == 1
+
+
+def test_vector_search_path_runs_one_bounded_cpu_cycle_not_two(monkeypatch):
+    import npu_cpu_fallback
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=TimeoutError("down"))
+    obj = _fallback_engine(search)
+    obj.knowledge_base.vector_store = obj.knowledge_base.vector_index = None
+    obj.search_results_cache, obj.cache_ttl_seconds = {}, 60
+    monkeypatch.setattr(obj, "_hybrid_populated", lambda: False)
+    results, metrics = asyncio.run(obj.search("q", 5))
+    assert results == [] and "CPU fallback failed" in metrics.error
+    assert search.await_count == npu_cpu_fallback.CPU_FALLBACK_ATTEMPTS
+
+
+def test_a_non_retryable_failure_after_retries_does_not_start_a_second_cpu_cycle(monkeypatch):
+    import npu_cpu_fallback
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=[TimeoutError("a"), TimeoutError("b"), ValueError("bad"), []])
+    obj = _fallback_engine(search)
+    obj.knowledge_base.vector_store = obj.knowledge_base.vector_index = None
+    obj.search_results_cache, obj.cache_ttl_seconds = {}, 60
+    monkeypatch.setattr(obj, "_hybrid_populated", lambda: False)
+    results, metrics = asyncio.run(obj.search("q", 5))
+    assert results == [] and "CPU fallback failed" in metrics.error and "bad" in metrics.error
+    assert search.await_count == 3
+
+
+def test_fallback_settings_use_safe_values_for_blank_malformed_and_zero(monkeypatch):
+    import importlib
+
+    import npu_cpu_fallback
+
+    try:
+        for attempts, delay, want in (
+            ("", "", (3, 0.5)),
+            ("abc", "xyz", (3, 0.5)),
+            ("0", "-2", (1, 0.0)),
+            ("4", "nan", (4, 0.0)),
+        ):
+            monkeypatch.setenv("AUTOBOT_NPU_CPU_FALLBACK_ATTEMPTS", attempts)
+            monkeypatch.setenv("AUTOBOT_NPU_CPU_FALLBACK_RETRY_DELAY", delay)
+            mod = importlib.reload(npu_cpu_fallback)
+            assert (mod.CPU_FALLBACK_ATTEMPTS, mod.CPU_FALLBACK_RETRY_DELAY) == want
+    finally:
+        monkeypatch.undo()
+        importlib.reload(npu_cpu_fallback)

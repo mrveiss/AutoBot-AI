@@ -44,6 +44,7 @@ from knowledge.index_embedding_space import (
 )
 from knowledge.quarantine import servable_unquarantined, with_quarantine
 from knowledge_factory import get_knowledge_base_async
+from npu_cpu_fallback import cpu_search, cpu_search_or_error
 
 # Issue #387: GPU-accelerated vector search
 from utils.gpu_vector_search import (
@@ -345,7 +346,7 @@ class NPUSemanticSearch:
             return await self._search_with_llamaindex(query, similarity_top_k, filters), "knowledge_base"
 
         logger.warning("Vector store not available, using basic search fallback")
-        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        hits = await cpu_search(self.knowledge_base, query, similarity_top_k, filters)
         return self._convert_basic_results(hits, "cpu_fallback"), "cpu_fallback"  # KB.search gated it (#19144)
 
     def _hybrid_populated(self) -> bool:
@@ -392,18 +393,13 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        hits, failure = await cpu_search_or_error(self.knowledge_base, query, similarity_top_k, filters, error)
+        if failure:
+            return [], self._failed_metrics(failure, start_time)
         fallback_results = self._convert_basic_results(hits, "fallback")  # KB.search gated it (#19144)
         total_time = (time.time() - start_time) * 1000
 
-        fallback_metrics = SearchMetrics(
-            total_documents_searched=len(fallback_results),
-            embedding_generation_time_ms=0,
-            similarity_computation_time_ms=total_time,
-            total_search_time_ms=total_time,
-            device_used="fallback",
-            hardware_utilization={},
-        )
+        fallback_metrics = SearchMetrics(len(fallback_results), 0, total_time, total_time, "fallback", {})
         return fallback_results, fallback_metrics
 
     def _log_search_completion(
