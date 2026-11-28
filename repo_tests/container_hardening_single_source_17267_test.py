@@ -236,6 +236,116 @@ def test_the_warm_pool_run_kwargs_come_from_the_full_builder() -> None:
     assert called & _EXECUTION_BUILDER, f"#17267: {_POOL_FILE}._run_kwargs does not call execution_hardening_kwargs"
 
 
+_CLI_BUILDER = "execution_hardening_cli_flags"
+_CLI_VERBS = frozenset({"run", "create"})
+_RUNNER_FILE = "autobot-backend/services/autoresearch/runner.py"
+
+#: Operator tooling whose ``docker run`` argv is a throwaway utility container, not a workload
+#: sandbox, pinned by site count so a new one is reviewed in (tracked for hardening in the PR body).
+_ALLOWED_CLI_SITES = {
+    "autobot-infrastructure/shared/scripts/backup_manager.py": 1,
+    "autobot-infrastructure/shared/scripts/zero_downtime_deploy.py": 1,
+}
+
+
+def _const(node: ast.AST | None) -> object:
+    return node.value if isinstance(node, ast.Constant) else None
+
+
+def _spreads_cli_builder(elts: list[ast.expr]) -> bool:
+    return any(
+        isinstance(e, ast.Starred)
+        and isinstance(e.value, ast.Call)
+        and isinstance(e.value.func, ast.Name)
+        and e.value.func.id == _CLI_BUILDER
+        for e in elts
+    )
+
+
+def _is_docker_verb(elts: list[ast.expr]) -> bool:
+    return len(elts) >= 2 and _const(elts[0]) == "docker" and _const(elts[1]) in _CLI_VERBS
+
+
+def cli_docker_run_sites(source: str) -> list[tuple[int, bool]]:
+    """``(line, hardened)`` for every ``docker run|create`` argv in `source`.
+
+    Seen: a list/tuple literal ``["docker", "run", ...]``, the positional form
+    ``create_subprocess_exec("docker", "run", ...)`` and a shell string ``"docker run ..."``
+    (never hardened: it cannot carry the builder spread). Hardened means the argv spreads
+    ``*execution_hardening_cli_flags(...)``.
+    """
+    found: list[tuple[int, bool]] = []
+    for node in ast.walk(parse_cache.parse(source)):
+        if isinstance(node, (ast.List, ast.Tuple)) and _is_docker_verb(node.elts):
+            found.append((node.lineno, _spreads_cli_builder(node.elts)))
+        elif isinstance(node, ast.Call) and _is_docker_verb(node.args):
+            found.append((node.lineno, _spreads_cli_builder(node.args)))
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.startswith(("docker run ", "docker create ")):
+                found.append((node.lineno, False))
+    return found
+
+
+def unhardened_cli_sites(source: str) -> list[int]:
+    return [line for line, hardened in cli_docker_run_sites(source) if not hardened]
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected"),
+    [
+        ("argv with builder", 'cmd = ["docker", "run", "--rm", *execution_hardening_cli_flags(), img]\n', []),
+        ("argv, bare", 'cmd = ["docker", "run", "--rm", "--network", "none", img]\n', [1]),
+        ("create, bare", 'cmd = ["docker", "create", img]\n', [1]),
+        ("tuple, bare", 'cmd = ("docker", "run", img)\n', [1]),
+        ("exec form, bare", 'await asyncio.create_subprocess_exec("docker", "run", img)\n', [1]),
+        ("exec form, builder", 'await x("docker", "run", *execution_hardening_cli_flags(), img)\n', []),
+        ("shell string", 'subprocess.run("docker run --rm img", shell=True)\n', [1]),
+        ("a different builder is not it", 'cmd = ["docker", "run", *hardening_kwargs()]\n', [1]),
+        ("docker logs is not a creating verb", 'cmd = ["docker", "logs", name]\n', []),
+        ("prose naming it", 'x = "use docker"\n', []),
+    ],
+)
+def test_the_cli_matcher_tells_a_hardened_docker_run_from_a_bare_one(
+    label: str, source: str, expected: list[int]
+) -> None:
+    assert unhardened_cli_sites(source) == expected, label
+
+
+def test_every_docker_cli_run_site_in_the_tree_takes_the_cli_builder_or_is_allowlisted() -> None:
+    root = repo_root()
+    offenders = {}
+    for rel in REACH.examined(root):
+        lines = unhardened_cli_sites((root / rel).read_text(encoding="utf-8"))
+        if lines and rel not in _ALLOWED_CLI_SITES:
+            offenders[rel] = lines
+    assert not offenders, f"#17267: docker run/create argv without `*{_CLI_BUILDER}(...)`: {offenders}"
+
+
+def test_each_allowlisted_cli_file_has_exactly_its_pinned_sites() -> None:
+    root = repo_root()
+    for rel, expected in _ALLOWED_CLI_SITES.items():
+        found = len(cli_docker_run_sites((root / rel).read_text(encoding="utf-8")))
+        assert found == expected, f"#17267: {rel} has {found} docker run/create argv sites, pinned at {expected}"
+
+
+def test_the_autoresearch_runner_still_takes_the_cli_builder() -> None:
+    sites = cli_docker_run_sites((repo_root() / _RUNNER_FILE).read_text(encoding="utf-8"))
+    assert sites and all(hardened for _, hardened in sites), f"#17267: {_RUNNER_FILE} docker run argv: {sites}"
+
+
+#: Every top-level python service tree (derived: each ``autobot-*`` directory with tracked ``.py`` outside
+#: tests) plus the shared package. ``autobot-slm-backend`` was missing; the rest hold no docker SDK use today.
+_ROOTS = (
+    "autobot-backend",
+    "autobot-browser-worker",
+    "autobot-infrastructure",
+    "autobot-npu-worker",
+    "autobot-slm-backend",
+    "autobot-tts-worker",
+    "autobot_shared",
+)
+
+
 def _is_source_python(rel: str) -> bool:
     name = rel.rsplit("/", 1)[-1]
     return rel.endswith(".py") and not (name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel)
@@ -243,7 +353,7 @@ def _is_source_python(rel: str) -> bool:
 
 def _source_population(root) -> list[str]:
     try:
-        tracked = tracked_paths(root, "autobot-backend", "autobot_shared")
+        tracked = tracked_paths(root, *_ROOTS)
     except EmptyEnumeration:
         return []
     return [rel for rel in tracked if _is_source_python(rel)]
@@ -253,7 +363,7 @@ REACH = declare(
     "container-hardening-inline",
     discover=_source_population,
     what="non-test python source",
-    roots=("autobot-backend", "autobot_shared"),
+    roots=_ROOTS,
     growth=300,
 )
 

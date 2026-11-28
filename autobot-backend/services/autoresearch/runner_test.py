@@ -663,6 +663,23 @@ class TestDockerCommand:
         assert "--network" in cmd
         assert "none" in cmd
 
+    def test_container_is_fully_hardened_with_a_named_user(self) -> None:
+        import os
+        import tempfile
+
+        from autobot_shared.container_hardening import execution_hardening_cli_flags
+
+        runner = _make_runner(config=_make_docker_config())
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(_make_experiment(), Path(tmp))
+
+        flags = execution_hardening_cli_flags(memory_limit="2g")
+        assert any(cmd[i : i + len(flags)] == flags for i in range(len(cmd))), "canonical hardening flags missing"
+        for needle in ("--read-only", "--cap-drop", "--security-opt", "--pids-limit", "--tmpfs"):
+            assert needle in cmd
+        assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+        assert cmd[cmd.index("--network") + 1] == "none"
+
     def test_memory_and_cpu_flags(self) -> None:
         config = _make_docker_config(docker_memory_limit="3g", docker_cpu_limit=1.5)
         runner = _make_runner(config=config)

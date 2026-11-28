@@ -197,3 +197,40 @@ def execution_hardening_kwargs(
         "memswap_limit": memory,
         **baseline_hardening_kwargs(),
     }
+
+
+def _cli_flags(kwargs: Mapping[str, Any]) -> list[str]:
+    """Render the Docker SDK kwargs the execution set uses as ``docker run`` / ``create`` flags."""
+    flags = ["--network", str(kwargs["network_mode"])]
+    if kwargs.get("read_only"):
+        flags.append("--read-only")
+    for path, opts in (kwargs.get("tmpfs") or {}).items():
+        flags += ["--tmpfs", f"{path}:{opts}"]
+    flags += ["--memory", str(kwargs["mem_limit"]), "--memory-swap", str(kwargs["memswap_limit"])]
+    for opt in kwargs.get("security_opt", []):
+        flags += ["--security-opt", opt]
+    for cap in kwargs.get("cap_drop", []):
+        flags += ["--cap-drop", cap]
+    if "pids_limit" in kwargs:
+        flags += ["--pids-limit", str(kwargs["pids_limit"])]
+    return flags
+
+
+def execution_hardening_cli_flags(
+    *,
+    memory_limit: str | None = None,
+    network_reason: str | None = None,
+    writable_root_reason: str | None = None,
+) -> list[str]:
+    """`execution_hardening_kwargs` rendered as CLI flags for a subprocess ``docker run`` (#17267).
+
+    For a client that shells out to the docker CLI instead of the SDK. The flags are derived
+    from the same kwargs (same defaults, same audited opt-outs), never listed a second time.
+    """
+    return _cli_flags(
+        execution_hardening_kwargs(
+            memory_limit=memory_limit,
+            network_reason=network_reason,
+            writable_root_reason=writable_root_reason,
+        )
+    )

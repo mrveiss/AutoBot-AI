@@ -194,3 +194,43 @@ def test_an_ordinary_bind_and_harmless_extras_pass_through_and_cannot_override()
     )
     assert out["volumes"] == {"/srv/work": {"bind": "/w", "mode": "ro"}} and out["working_dir"] == "/w"
     assert execution_hardening_kwargs(extra={"network_mode": "host", "read_only": False})["network_mode"] == "none"
+
+
+def test_cli_flags_are_the_rendering_of_the_execution_kwargs() -> None:
+    from autobot_shared.container_hardening import (
+        CONTAINER_PIDS_LIMIT,
+        EXECUTION_MEMORY_LIMIT,
+        EXECUTION_TMPFS_SIZE,
+        execution_hardening_cli_flags,
+    )
+
+    assert execution_hardening_cli_flags() == [
+        "--network",
+        "none",
+        "--read-only",
+        "--tmpfs",
+        f"/tmp:rw,noexec,nosuid,size={EXECUTION_TMPFS_SIZE}",  # nosec B108
+        "--memory",
+        EXECUTION_MEMORY_LIMIT,
+        "--memory-swap",
+        EXECUTION_MEMORY_LIMIT,
+        "--security-opt",
+        "no-new-privileges",
+        "--cap-drop",
+        "ALL",
+        "--pids-limit",
+        str(CONTAINER_PIDS_LIMIT),
+    ]
+
+
+def test_cli_flags_honour_the_audited_opt_outs_and_refuse_nameless_ones() -> None:
+    from autobot_shared.container_hardening import execution_hardening_cli_flags
+
+    flags = execution_hardening_cli_flags(
+        memory_limit="2g", network_reason="pip-install", writable_root_reason="rw-job"
+    )
+    assert flags[flags.index("--network") + 1] == "bridge"
+    assert "--read-only" not in flags
+    assert flags[flags.index("--memory") + 1] == flags[flags.index("--memory-swap") + 1] == "2g"
+    with pytest.raises(ValueError):
+        execution_hardening_cli_flags(network_reason="")
