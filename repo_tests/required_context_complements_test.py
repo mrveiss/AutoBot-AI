@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from tools.lint._comment_syntax import code_text
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
@@ -426,7 +427,7 @@ _DRAFT_FALSE = re.compile(
 
 
 def _skips_draft(spec: dict) -> bool:
-    cond = "\n".join(ln for ln in str(spec.get("if", "")).splitlines() if not ln.lstrip().startswith("#"))
+    cond = code_text(str(spec.get("if", "")), name="workflow.yml")
     return bool(_DRAFT_FALSE.search(cond))
 
 
