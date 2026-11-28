@@ -53,11 +53,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Iterator, List, Optional, Set, Tuple
 
+from starlette.routing import Match
+
 __all__ = [
+    "MatchedRoute",
     "MountedRoute",
+    "RouteShapeError",
     "effective_routes",
     "effective_route_count",
     "included_router",
+    "matched_route",
     "route_method_paths",
 ]
 
@@ -182,3 +187,67 @@ def route_method_paths(container: Any) -> Set[Tuple[str, str]]:
         methods = mounted.methods or frozenset({"WEBSOCKET"})
         found.update((method, mounted.path) for method in methods)
     return found
+
+
+class RouteShapeError(RuntimeError):
+    """FastAPI's deferred-inclusion internals no longer look the way this module reads them.
+
+    Raised instead of returning "no route": a resolver that silently found nothing would
+    make every caller treat every route as one that declares nothing, which for an
+    authorisation check is the wrong direction to fail quietly.
+    """
+
+
+@dataclass(frozen=True)
+class MatchedRoute:
+    """The concrete route a request scope resolves to, and the dependency tree that guards it."""
+
+    route: Any
+    #: The route's ``dependant`` including router-level and include-time dependencies, or ``None``.
+    dependant: Any
+
+
+def _select(wrapper: Any, scope: dict) -> Tuple[Any, Any]:
+    """``(route, effective_context)`` FastAPI's own matching picks inside *wrapper*, or ``(None, None)``.
+
+    Reads the private ``_IncludedRouter._match`` (fastapi>=0.139; the floor in ``constraints/shared.txt``),
+    the only place the matched leaf and its include-time-merged dependency tree are both exposed.
+    ``autobot_shared/api_routing/router_routes_test.py`` pins its shape.
+    """
+    select = getattr(wrapper, "_match", None)
+    if not callable(select):
+        raise RouteShapeError("_IncludedRouter._match is gone; re-derive matched_route() for this FastAPI")
+    result = select(scope)
+    if not isinstance(result, tuple) or len(result) != 4:
+        raise RouteShapeError(f"_IncludedRouter._match returned {type(result).__name__}, expected a 4-tuple")
+    match, _child, route, context = result
+    if match is not Match.FULL:
+        return None, None
+    return route, context
+
+
+def _resolve(route: Any, scope: dict) -> Optional[MatchedRoute]:
+    context = None
+    while included_router(route) is not None:
+        route, context = _select(route, scope)
+        if route is None:
+            return None
+    effective = getattr(context, "dependant", None)
+    leaf = getattr(context, "original_route", None) or route
+    # Fallback can only cause a refusal, never a grant: the leaf's own dependant lacks include-time dependencies.
+    return MatchedRoute(route=leaf, dependant=effective or getattr(leaf, "dependant", None))
+
+
+def matched_route(container: Any, scope: dict) -> Optional[MatchedRoute]:
+    """The concrete route *scope* fully matches in *container*, through nested and deferred includes.
+
+    *container* is a ``FastAPI`` app or ``APIRouter``. On the eager shape the first fully matching
+    entry is already the real route; on the deferred shape it is a wrapper and the leaf is found by
+    descending with FastAPI's own matcher, so ``dependant`` carries every router-level and
+    ``include_router(dependencies=...)`` dependency. ``None`` when nothing fully matches (a mount
+    or a partial match is not a route).
+    """
+    for route in getattr(container, "routes", None) or ():
+        if route.matches(scope)[0] is Match.FULL:
+            return _resolve(route, scope)
+    return None

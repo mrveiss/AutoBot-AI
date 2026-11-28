@@ -222,3 +222,64 @@ def test_a_failed_audit_write_is_an_explicit_503_never_a_bare_500(call, method, 
 
     assert response.status_code == 503, response.text
     assert "audit" in response.json()["detail"]
+
+
+def test_an_unreadable_route_shape_refuses_a_keyed_request_with_403_and_audits_it(call, caplog):
+    """#22136: RouteShapeError on a keyed request is the normal refusal, not a bare 500."""
+    from autobot_shared.api_routing.router_routes import RouteShapeError
+
+    with patch(
+        "middleware.api_key_allow_list.accepts_api_key", side_effect=RouteShapeError("matcher gone")
+    ), caplog.at_level("ERROR"):
+        response = call("GET", "/knowledge", scopes=("admin:*",))
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "API keys are not accepted on this route"
+    assert _audited(call)["action"] == "api_key_refused_off_allow_list"
+    assert "matcher gone" in caplog.text and _KEY not in caplog.text
+
+
+# --- #22136: accepts_api_key resolves the concrete route through deferred includes --
+
+
+def _nested_included_app() -> fastapi.FastAPI:
+    """A key-declaring route and a sibling without, two include levels deep (the deferred shape on fastapi>=0.139)."""
+    declared = fastapi.APIRouter(dependencies=[fastapi.Depends(_auth.require_key_permission(Permission.KNOWLEDGE_READ))])
+    declared.add_api_route("/read", lambda: None, methods=["GET"])
+    plain = fastapi.APIRouter()
+    plain.add_api_route("/read", lambda: None, methods=["GET"])
+    middle = fastapi.APIRouter()
+    middle.include_router(declared, prefix="/declared")
+    middle.include_router(plain, prefix="/plain")
+    app = fastapi.FastAPI()
+    app.include_router(middle, prefix="/v1")
+    return app
+
+
+def _scope(path: str) -> dict:
+    return {"type": "http", "path": path, "root_path": "", "method": "GET", "headers": []}
+
+
+def test_a_nested_included_route_declaring_a_key_permission_accepts_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    assert accepts_api_key(_nested_included_app(), _scope("/v1/declared/read")) is True
+
+
+def test_the_contrast_a_sibling_without_the_declaration_refuses_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    app = _nested_included_app()
+    assert accepts_api_key(app, _scope("/v1/plain/read")) is False
+    assert accepts_api_key(app, _scope("/v1/missing")) is False
+
+
+def test_an_include_time_declaration_accepts_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    child = fastapi.APIRouter()
+    child.add_api_route("/read", lambda: None, methods=["GET"])
+    app = fastapi.FastAPI()
+    guard = fastapi.Depends(_auth.require_key_permission(Permission.KNOWLEDGE_READ))
+    app.include_router(child, prefix="/c", dependencies=[guard])
+    assert accepts_api_key(app, _scope("/c/read")) is True

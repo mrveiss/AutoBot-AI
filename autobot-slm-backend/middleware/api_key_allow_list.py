@@ -19,8 +19,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from autobot_shared.api_routing.router_routes import RouteShapeError
+from autobot_shared.logging_manager import get_logger
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_routes import accepts_api_key
+
+logger = get_logger(__name__)
 
 API_KEY_HEADER = "X-API-Key"  # pragma: allowlist secret
 
@@ -28,9 +32,18 @@ API_KEY_HEADER = "X-API-Key"  # pragma: allowlist secret
 class ApiKeyAllowListMiddleware(BaseHTTPMiddleware):
     """403 for any request carrying ``X-API-Key`` to a route that does not declare a key permission."""
 
+    @staticmethod
+    def _accepts(request: Request) -> bool:
+        """Whether the matched route takes a key; an unreadable route shape is a refusal, never a grant."""
+        try:
+            return accepts_api_key(request.app, request.scope)
+        except RouteShapeError as exc:
+            logger.error("API-key route check failed for %s: %s", request.url.path, exc)
+            return False
+
     async def dispatch(self, request: Request, call_next) -> Response:
         presented = request.headers.get(API_KEY_HEADER)
-        if presented and not accepts_api_key(request.app, request.scope):
+        if presented and not self._accepts(request):
             try:
                 await audit_key_request(
                     request,

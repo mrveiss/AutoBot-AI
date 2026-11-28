@@ -20,13 +20,16 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, FastAPI
+import pytest
+from fastapi import APIRouter, Depends, FastAPI
 
 from autobot_shared.api_routing.router_routes import (
     MountedRoute,
+    RouteShapeError,
     effective_route_count,
     effective_routes,
     included_router,
+    matched_route,
     route_method_paths,
 )
 
@@ -285,3 +288,91 @@ def test_the_installed_fastapi_shape_is_one_of_the_two_known_ones():
         f"{type(entry).__name__}(path={getattr(entry, 'path', None)!r}) with no original_router. "
         "autobot_shared/api_routing/router_routes.py must learn it before anything trusts a traversal."
     )
+
+
+# --- matched_route: the concrete route a request resolves to ----------------
+
+
+def _scope(path: str, method: str = "GET") -> dict:
+    return {"type": "http", "path": path, "root_path": "", "method": method, "headers": []}
+
+
+def _guard() -> None:
+    """Stand-in dependency; its identity is what the tests look for."""
+
+
+def _calls(dependant) -> set:
+    found = {sub.call for sub in dependant.dependencies}
+    for sub in dependant.dependencies:
+        found |= _calls(sub)
+    return found
+
+
+def _nested_app() -> FastAPI:
+    """Two levels of deferred include; the guard sits on the router, the include call and not on a sibling."""
+    leaf = APIRouter(dependencies=[Depends(_guard)])
+    leaf.add_api_route("/guarded", lambda: None, methods=["GET"])
+    open_leaf = APIRouter()
+    open_leaf.add_api_route("/open", lambda: None, methods=["GET"])
+    middle = APIRouter()
+    middle.include_router(leaf, prefix="/leaf")
+    middle.include_router(open_leaf, prefix="/sibling")
+    app = FastAPI()
+    app.include_router(middle, prefix="/mid")
+    return app
+
+
+def test_matched_route_reads_the_concrete_route_through_nested_includes():
+    found = matched_route(_nested_app().router, _scope("/mid/leaf/guarded"))
+    assert found is not None and found.route.path.endswith("/guarded")
+    assert _guard in _calls(found.dependant)
+
+
+def test_matched_route_contrast_a_sibling_route_does_not_carry_the_guard():
+    found = matched_route(_nested_app().router, _scope("/mid/sibling/open"))
+    assert found is not None and found.route.path.endswith("/open")
+    assert _guard not in _calls(found.dependant)
+
+
+def test_matched_route_includes_dependencies_given_to_include_router():
+    child = APIRouter()
+    child.add_api_route("/x", lambda: None, methods=["GET"])
+    app = FastAPI()
+    app.include_router(child, prefix="/c", dependencies=[Depends(_guard)])
+    found = matched_route(app.router, _scope("/c/x"))
+    assert found is not None and _guard in _calls(found.dependant)
+
+
+def test_matched_route_is_none_when_nothing_fully_matches():
+    assert matched_route(_nested_app().router, _scope("/mid/nowhere")) is None
+    assert matched_route(_nested_app().router, _scope("/mid/leaf/guarded", "DELETE")) is None
+
+
+def test_matched_route_never_hands_back_the_wrapper():
+    found = matched_route(_nested_app().router, _scope("/mid/leaf/guarded"))
+    assert included_router(found.route) is None and found.dependant is not None
+
+
+def test_the_private_matcher_matched_route_relies_on_still_exists_on_a_deferred_wrapper():
+    """Fails loudly if FastAPI renames ``_IncludedRouter._match``: otherwise every route would read as unguarded."""
+    wrappers = [r for r in _nested_app().router.routes if included_router(r) is not None]
+    if not wrappers:
+        pytest.skip("eager FastAPI shape: no _IncludedRouter wrapper")
+    assert callable(getattr(wrappers[0], "_match", None)), "FastAPI changed _IncludedRouter; update matched_route()"
+    match, _child, route, _context = wrappers[0]._match(_scope("/mid/leaf/guarded"))
+    assert route is not None
+
+
+def test_a_wrapper_without_the_matcher_raises_instead_of_reporting_no_route():
+    class _Wrapper(_Deferred):
+        def matches(self, scope):
+            from starlette.routing import Match
+
+            return Match.FULL, {}
+
+    container = _Router(_Wrapper(_Router(_Route("/x"))))
+    try:
+        matched_route(container, _scope("/x"))
+    except RouteShapeError:
+        return
+    raise AssertionError("a wrapper whose matcher is gone must raise RouteShapeError, not return None")

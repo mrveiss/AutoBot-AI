@@ -20,12 +20,12 @@ unauthenticated health route, and the only API-key docs describe the main backen
 (#16294, #16999). ``repo_tests/api_key_scopes_are_enforced_16040_test.py`` pins the
 list, so adding a member is a visible, reviewed change.
 
-Free of FastAPI imports except Starlette's ``Match``, so it can be loaded on its own.
+Free of FastAPI imports (the shared route resolver reads Starlette's ``Match`` only), so it can be loaded on its own.
 """
 
 from typing import Any, Callable
 
-from starlette.routing import Match
+from autobot_shared.api_routing.router_routes import matched_route
 
 #: Set on the dependency ``require_key_permission`` returns. Its value is the declared permission.
 KEY_PERMISSION_MARK = "__autobot_key_permission__"
@@ -51,11 +51,10 @@ def declared_key_permission(dependant: Any) -> Any:
 def accepts_api_key(app: Any, scope: dict) -> bool:
     """Whether the route *scope* resolves to declares a key permission.
 
-    A request that matches no route fully, or matches a mount, is not accepted: a key is
-    refused there too, never waved through to whatever answers.
+    The route is resolved through nested and deferred includes (``matched_route``), so a
+    router-level or include-time declaration counts. A request that matches no route fully,
+    or matches a mount, is not accepted: a key is refused there too, never waved through
+    to whatever answers.
     """
-    for route in app.router.routes:
-        match, _child = route.matches(scope)
-        if match is Match.FULL:
-            return declared_key_permission(getattr(route, "dependant", None)) is not None
-    return False
+    found = matched_route(app.router, scope)
+    return found is not None and declared_key_permission(found.dependant) is not None
