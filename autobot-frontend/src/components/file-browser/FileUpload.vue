@@ -1,3 +1,5 @@
+<!-- Copyright 2025-2026 mrveiss -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <template>
   <div class="file-upload-section">
     <div class="file-upload-inline-wrapper">
@@ -65,39 +67,51 @@ defineExpose({
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
 .file-upload-section {
-  @apply mb-6 p-0 border-2 border-dashed border-autobot-border rounded-lg bg-autobot-bg-secondary hover:border-autobot-border transition-colors;
+  padding: 0 var(--aui-space-2);
+  border: 1px dashed var(--aui-color-border);
+  border-radius: var(--aui-radius-md);
+  background: var(--aui-color-surface);
+  transition: border-color var(--aui-transition);
 }
-
+.file-upload-section:hover,
+.file-upload-section:focus-within {
+  border-color: var(--aui-color-primary);
+}
 .file-upload-inline-wrapper {
-  @apply flex items-center flex-wrap;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aui-space-1);
 }
-
 .file-input-label {
-  @apply flex items-center gap-2 text-autobot-text-secondary font-medium cursor-pointer text-sm flex-shrink-0;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--aui-space-2);
+  font-size: var(--aui-text-sm);
+  font-weight: var(--aui-font-weight-medium);
+  color: var(--aui-color-text-muted);
+  cursor: pointer;
 }
-
-.file-input-label:hover {
-  @apply text-autobot-text-primary;
-}
-
 .visible-file-input {
-  @apply flex-1 min-w-[150px] text-sm text-autobot-text-muted py-0 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium;
+  flex: 1;
+  min-width: 150px;
+  font-size: var(--aui-text-sm);
+  color: var(--aui-color-text-muted);
 }
-
 .visible-file-input::file-selector-button {
-  background: var(--color-info-bg);
-  color: var(--color-info);
+  margin-inline-end: var(--aui-space-2);
+  padding: var(--aui-space-1) var(--aui-space-3);
+  border: 0;
+  border-radius: var(--aui-radius-md);
+  background: var(--aui-color-primary);
+  color: var(--aui-color-primary-contrast);
+  font-size: var(--aui-text-sm);
+  font-weight: var(--aui-font-weight-medium);
+  cursor: pointer;
 }
-
-.visible-file-input:hover::file-selector-button {
-  filter: brightness(1.1);
-}
-
-/* Drag and drop styling */
-.file-upload-section.drag-over {
-  border-color: var(--color-primary);
-  background: var(--color-info-bg);
+.visible-file-input::file-selector-button:hover {
+  background: var(--aui-color-primary-hover);
 }
 </style>

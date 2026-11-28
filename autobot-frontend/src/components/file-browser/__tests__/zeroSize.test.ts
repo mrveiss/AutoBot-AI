@@ -28,11 +28,14 @@ const globalCfg = (zeroSize: string) => ({
 
 describe('file browser missing-size text (#19885)', () => {
   it('FilePreview renders the locale key for a missing size', () => {
+    // The kit modal teleports to <body>, so the info block is read from the document.
     const w = mount(FilePreview, {
       props: { showPreview: true, previewFile: { name: 'a.bin', type: 'other', fileType: 'bin' } },
+      attachTo: document.body,
       global: globalCfg('NULL-BAJTI'),
     })
-    expect(w.find('.file-info').text()).toContain('NULL-BAJTI')
+    expect(document.body.querySelector('.file-info')?.textContent).toContain('NULL-BAJTI')
+    w.unmount()
   })
 
   it('FileListTable renders the locale key for a missing size', () => {

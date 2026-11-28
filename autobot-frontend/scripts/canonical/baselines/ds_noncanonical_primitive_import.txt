@@ -24,10 +24,7 @@ autobot-frontend/src/components/analytics/panels/CodebaseEnvironmentPanel.vue
 autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue
 autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue
 autobot-frontend/src/components/browser/BrowserSessionManager.vue
-autobot-frontend/src/components/chat/ChatFilePanel.vue
 autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue
-autobot-frontend/src/components/file-browser/FileListTable.vue
-autobot-frontend/src/components/file-browser/FileTreeView.vue
 autobot-frontend/src/components/knowledge/DeduplicationManager.vue
 autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue
 autobot-frontend/src/components/knowledge/FailedVectorizationsManager.vue

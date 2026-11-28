@@ -198,7 +198,7 @@
     "planning": "planning",
     "debug": "debug",
     "filePanel": {
-      "title": "Chat Files",
+      "title": "Chat files",
       "newFile": "New file",
       "gridView": "Grid view",
       "listView": "List view",
@@ -207,13 +207,13 @@
       "sort": "Sort",
       "nSelected": "{count} selected",
       "deselect": "Deselect",
-      "selectAll": "Select All",
+      "selectAll": "Select all",
       "dropFiles": "Drop files here",
       "clickOrDrag": "Click to browse or drag files here",
       "uploading": "Uploading...",
       "noFiles": "No files yet",
       "loadingFiles": "Loading files...",
-      "aiGenerated": "AI Generated",
+      "aiGenerated": "AI generated",
       "preview": "Preview",
       "previewEmpty": "This file is empty",
       "closePreview": "Close preview",
@@ -231,7 +231,18 @@
       "sortName": "Name",
       "sortDate": "Date",
       "sortSize": "Size",
-      "sortType": "Type"
+      "sortType": "Type",
+      "fileCount": "{count} file | {count} files",
+      "noMatches": "No files match your search",
+      "sortGroupLabel": "Sort files by",
+      "searchLabel": "Search files",
+      "selectFile": "Select {name}",
+      "preview": "Preview",
+      "previewFile": "Preview {name}",
+      "downloadFile": "Download {name}",
+      "deleteFile": "Delete {name}",
+      "moreActions": "More actions for {name}",
+      "editFileTitle": "Edit {name}"
     },
     "sidebar": {
       "expandSidebar": "Expand sidebar",
@@ -802,7 +813,10 @@
       "go": "Navigate"
     },
     "voice": {
-      "title": "Voice Chat",
+      "title": "Voice chat",
+      "inputLevel": "Input level",
+      "silenceValue": "{seconds} s",
+      "connectionLabel": "Connection: {status}",
       "conversationMode": "Conversation mode",
       "walkieTalkie": "Walkie-talkie",
       "handsFree": "Hands-free",
@@ -8020,6 +8034,27 @@
   },
   "fileBrowser": {
     "zeroSize": "0 B",
+    "fileType": {
+      "txt": "Text",
+      "md": "Markdown",
+      "js": "JavaScript",
+      "ts": "TypeScript",
+      "html": "HTML",
+      "css": "CSS",
+      "vue": "Vue Component",
+      "json": "JSON",
+      "jpg": "JPEG Image",
+      "jpeg": "JPEG Image",
+      "png": "PNG Image",
+      "gif": "GIF Image",
+      "svg": "SVG Image",
+      "pdf": "PDF Document",
+      "zip": "ZIP Archive",
+      "tar": "TAR Archive",
+      "gz": "GZ Archive",
+      "unknown": "Unknown",
+      "extension": "{ext} File"
+    },
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8030,6 +8065,7 @@
       "renamePrompt": "Enter new name:",
       "createFolderPrompt": "Enter folder name:",
       "errorLoadingContents": "Error loading contents",
+      "errorLoadingPreview": "Error loading preview",
       "errorCreatingFolder": "Error creating folder",
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
@@ -8048,6 +8084,7 @@
       "goHome": "Go to home directory"
     },
     "fileList": {
+      "tableLabel": "Files in this folder",
       "name": "Name",
       "type": "Type",
       "size": "Size",
@@ -8068,6 +8105,7 @@
       "deleteItem": "Delete"
     },
     "pathNavigation": {
+      "pathLabel": "Folder path",
       "home": "Home",
       "pathPlaceholder": "Enter path..."
     },

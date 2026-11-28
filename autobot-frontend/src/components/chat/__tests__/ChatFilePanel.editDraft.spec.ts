@@ -1,6 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-// #21337: switching conversation closes an open edit dialog, so a save never sends the old draft to the new session.
+// #21337 (edit is reached through the file card's More menu since #22349, so the card's `edit` is emitted directly): switching conversation closes an open edit dialog, so a save never sends the old draft to the new session.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -15,6 +15,7 @@ vi.mock('vue-i18n', async (importOriginal) => ({
 }))
 
 import ChatFilePanel from '../ChatFilePanel.vue'
+import ChatFilePanelItem from '../ChatFilePanelItem.vue'
 
 const listing = {
   files: [{ file_id: 'f1', filename: 'notes.txt', original_filename: 'notes.txt', size: 5, mime_type: 'text/plain', uploaded_at: '2026-11-01T10:00:00Z', uploaded_by: 'alice' }],
@@ -33,10 +34,10 @@ describe('ChatFilePanel edit draft (#21337)', () => {
     const wrapper = mount(ChatFilePanel, {
       props: { sessionId: 's1' },
       attachTo: document.body,
-      global: { mocks: { $t: (k: string) => k }, stubs: { Icon: true, EmptyState: true, StatusBadge: true, BaseAlert: true } },
+      global: { mocks: { $t: (k: string) => k }, stubs: { Icon: true, EmptyState: true, BaseAlert: true } },
     })
     await flushPromises()
-    await wrapper.find('button[title="common.edit"]').trigger('click')
+    wrapper.findComponent(ChatFilePanelItem).vm.$emit('edit')
     await flushPromises()
     expect(document.body.querySelector('textarea')).not.toBeNull()
 
@@ -56,10 +57,10 @@ describe('ChatFilePanel edit draft (#21337)', () => {
     const wrapper = mount(ChatFilePanel, {
       props: { sessionId: 's1' },
       attachTo: document.body,
-      global: { mocks: { $t: (k: string) => k }, stubs: { Icon: true, EmptyState: true, StatusBadge: true, BaseAlert: true } },
+      global: { mocks: { $t: (k: string) => k }, stubs: { Icon: true, EmptyState: true, BaseAlert: true } },
     })
     await flushPromises()
-    await wrapper.find('button[title="common.edit"]').trigger('click')
+    wrapper.findComponent(ChatFilePanelItem).vm.$emit('edit')
     await wrapper.setProps({ sessionId: 's2' })
     await flushPromises()
 

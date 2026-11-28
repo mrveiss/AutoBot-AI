@@ -1,116 +1,49 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  ChatFilePanel -- the Chat files aside (#22349, on the Refined UI Chat mockup): header with New file, list/grid and
+  Close, then the toolbar, the upload target, the file cards, the create / edit dialog and the preview pane. It owns
+  the dialog state and the delete confirmations; the data comes from `useConversationFiles`.
+-->
 <template>
-  <div
-    class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
-    role="complementary"
+  <aside
+    class="chat-file-panel w-80 min-w-80 max-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
     :aria-label="$t('chat.filePanel.title')"
     tabindex="-1"
     @keydown.escape.self="$emit('close')"
   >
-    <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
         <Icon name="folder" class="text-autobot-text-secondary" />
-        <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h3>
+        <h2 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h2>
       </div>
       <div class="flex items-center gap-1">
-        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')" :aria-label="$t('chat.filePanel.newFile')">
-          <Icon name="plus" class="text-xs" />
-        </button>
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')" :aria-label="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
-          <Icon :name="viewMode === 'list' ? 'th' : 'list'" />
-        </button>
-        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')" :aria-label="$t('chat.filePanel.closePanel')">
-          <Icon name="times" class="text-xs" />
-        </button>
-      </div>
-    </div>
-
-    <!-- File Statistics & Search -->
-    <div class="px-3 py-2 border-b border-autobot-border shrink-0 space-y-2">
-      <div v-if="stats.total_files > 0" class="flex justify-between text-xs text-autobot-text-secondary">
-        <span>{{ stats.total_files }} file{{ stats.total_files > 1 ? 's' : '' }}</span>
-        <span>{{ totalSizeFormatted }}</span>
-      </div>
-      <!-- Search -->
-      <div class="relative">
-        <Icon name="search" class="absolute left-2 top-1/2 -translate-y-1/2 text-autobot-text-muted text-xs" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="$t('chat.filePanel.searchFiles')"
-          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary bg-autobot-bg-tertiary"
+        <ChatHeaderIconButton :label="$t('chat.filePanel.newFile')" icon="plus" data-testid="new-file" @click="showCreateDialog = true" />
+        <ChatHeaderIconButton
+          :label="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')"
+          :icon="viewMode === 'list' ? 'th' : 'list'"
+          data-testid="view-toggle"
+          @click="viewMode = viewMode === 'list' ? 'grid' : 'list'"
         />
-      </div>
-      <!-- Sort -->
-      <div class="flex items-center gap-1 text-xs">
-        <span class="text-autobot-text-secondary">{{ $t('chat.filePanel.sort') }}:</span>
-        <button
-          v-for="opt in sortOptions"
-          :key="opt.field"
-          @click="setSort(opt.field)"
-          class="px-1.5 py-0.5 rounded transition-colors"
-          :class="sortField === opt.field ? 'bg-autobot-bg-tertiary text-autobot-primary' : 'text-autobot-text-muted hover:bg-autobot-bg-secondary'"
-        >
-          {{ opt.label }}
-          <i v-if="sortField === opt.field" :class="sortDirection === 'asc' ? 'sort-up' : 'sort-down'" class="text-xs ml-0.5"></i>
-        </button>
-      </div>
-      <!-- Bulk actions -->
-      <div v-if="selectedCount > 0" class="flex items-center justify-between bg-autobot-bg-tertiary rounded-md px-2 py-1">
-        <span class="text-xs text-autobot-text-secondary">{{ $t('chat.filePanel.nSelected', { count: selectedCount }) }}</span>
-        <div class="flex gap-1">
-          <button @click="handleBulkDelete" class="text-xs text-red-600 hover:text-red-800 px-1">{{ $t('common.delete') }}</button>
-          <button @click="selectAllFiles" class="text-xs text-autobot-primary hover:text-autobot-text-secondary px-1">
-            {{ allSelected ? $t('chat.filePanel.deselect') : $t('chat.filePanel.selectAll') }}
-          </button>
-        </div>
+        <ChatHeaderIconButton :label="$t('chat.filePanel.closePanel')" icon="times" data-testid="close-panel" @click="$emit('close')" />
       </div>
     </div>
 
-    <!-- Upload Area -->
-    <div class="p-3 border-b border-autobot-border shrink-0">
-      <div
-        class="upload-area border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer"
-        :class="[
-          isDragging
-            ? 'border-autobot-primary bg-autobot-bg-tertiary'
-            : 'border-autobot-border bg-autobot-bg-secondary hover:border-autobot-text-muted hover:bg-autobot-bg-tertiary'
-        ]"
-        @click="triggerFileInput"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="handleDrop"
-      >
-        <Icon name="cloud-upload-alt" class="text-2xl mb-1" />
-        <p class="text-xs text-autobot-text-secondary">
-          {{ isDragging ? $t('chat.filePanel.dropFiles') : $t('chat.filePanel.clickOrDrag') }}
-        </p>
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          class="hidden"
-          @change="handleFileSelect"
-          :disabled="loading"
-        />
-      </div>
+    <ChatFilePanelToolbar
+      v-model:search="searchQuery"
+      :total-files="stats.total_files"
+      :total-size-label="totalSizeFormatted"
+      :sort-field="sortField"
+      :sort-direction="sortDirection"
+      :selected-count="selectedCount"
+      :all-selected="allSelected"
+      @sort="setSort"
+      @bulk-delete="handleBulkDelete"
+      @select-all="selectAllFiles"
+    />
+    <ChatFilePanelUpload :loading="loading" :progress="uploadProgress" @files="uploadFiles" />
 
-      <!-- Upload Progress -->
-      <div v-if="uploadProgress > 0 && uploadProgress < 100" class="mt-2">
-        <div class="flex items-center justify-between text-xs text-autobot-text-secondary mb-1">
-          <span>{{ $t('chat.filePanel.uploading') }}</span>
-          <span>{{ uploadProgress }}%</span>
-        </div>
-        <div class="w-full bg-autobot-bg-tertiary rounded-full h-1.5">
-        <div
-        class="bg-autobot-primary h-1.5 rounded-full transition-all duration-300"
-            :style="{ width: `${uploadProgress}%` }"
-          ></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Error Display -->
     <BaseAlert
       v-if="error"
       variant="error"
@@ -122,463 +55,154 @@
       @dismiss="clearError"
     />
 
-    <!-- File List -->
-    <div class="flex-1 overflow-y-auto p-3 space-y-2" style="scrollbar-width: thin;">
-      <!-- Empty State -->
+    <div class="flex-1 overflow-y-auto p-3 file-list [scrollbar-width:thin]" :class="viewMode === 'grid' ? 'grid grid-cols-1 gap-2' : 'space-y-2'">
       <EmptyState
-        v-if="!hasFiles && !loading"
-        icon="folder-open"
-        :message="$t('chat.filePanel.noFiles')"
+        v-if="sortedFiles.length === 0 && !loading"
         compact
-      />
-
-      <!-- Loading State -->
-      <div v-if="loading && !hasFiles" class="text-center py-8">
-        <Icon name="spinner" class="animate-spin text-2xl text-autobot-text-muted mb-2" />
-        <p class="text-xs text-autobot-text-secondary">{{ $t('chat.filePanel.loadingFiles') }}</p>
+        :description="hasFiles && searchQuery.trim() ? $t('chat.filePanel.noMatches') : $t('chat.filePanel.noFiles')"
+      >
+        <template #icon><Icon name="folder-open" size="xl" /></template>
+      </EmptyState>
+      <div v-if="loading && !hasFiles" class="text-center py-8 text-autobot-text-muted">
+        <BaseSpinner :label="$t('chat.filePanel.loadingFiles')" />
       </div>
-
-      <!-- File Items -->
-      <div
+      <ChatFilePanelItem
         v-for="file in sortedFiles"
         :key="file.file_id"
-        class="file-item group p-2 bg-autobot-bg-card border rounded-lg hover:shadow-sm transition-all"
-        :class="selectedFileIds.has(file.file_id)
-          ? 'border-autobot-primary bg-autobot-bg-tertiary'
-          : 'border-autobot-border hover:border-autobot-primary'"
-        @contextmenu="showContextMenu($event, file)"
-      >
-        <div class="flex items-start gap-2">
-          <!-- Checkbox -->
-          <input
-            type="checkbox"
-            :checked="selectedFileIds.has(file.file_id)"
-            @change="toggleFileSelection(file.file_id)"
-            class="mt-1 shrink-0 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
-          />
-
-          <!-- File Icon -->
-          <div class="file-icon shrink-0">
-            <Icon :name="getFileIcon(file.mime_type)" />
-          </div>
-
-          <!-- File Info -->
-          <div class="flex-1 min-w-0">
-            <!-- Inline Rename -->
-            <div v-if="renamingFileId === file.file_id" class="flex items-center gap-1">
-              <input
-                v-model="renameValue"
-                @keyup.enter="handleRename"
-                @keyup.escape="renamingFileId = null"
-                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
-              />
-              <button @click="handleRename" class="action-btn" :title="$t('common.save')" :aria-label="$t('common.save')">
-                <Icon name="check" class="text-xs text-green-600" />
-              </button>
-            </div>
-            <p v-else class="text-xs font-medium text-autobot-text-primary truncate" :title="file.filename">
-              {{ file.filename }}
-            </p>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xs text-autobot-text-secondary">{{ formatFileSize(file.size_bytes) }}</span>
-              <span class="text-xs text-autobot-text-muted">&middot;</span>
-              <span class="text-xs text-autobot-text-secondary">{{ formatTimeAgo(file.upload_timestamp) }}</span>
-            </div>
-            <StatusBadge
-              v-if="file.file_type === 'generated'"
-              variant="primary"
-              size="sm"
-              class="mt-1"
-            >
-              {{ $t('chat.filePanel.aiGenerated') }}
-            </StatusBadge>
-          </div>
-
-          <!-- File Actions -->
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            <button
-              v-if="isPreviewable(file.mime_type)"
-              @click="handlePreview(file.file_id)"
-              class="action-btn"
-              :title="$t('chat.filePanel.preview')"
-              :aria-label="$t('chat.filePanel.preview')"
-            >
-              <Icon name="eye" class="text-xs" />
-            </button>
-            <button
-              v-if="isEditable(file.mime_type)"
-              @click="startEdit(file.file_id, file.filename)"
-              class="action-btn"
-              :title="$t('common.edit')"
-              :aria-label="$t('common.edit')"
-            >
-              <Icon name="edit" class="text-xs" />
-            </button>
-            <button
-              @click="handleDownload(file.file_id, file.filename)"
-              class="action-btn"
-              :title="$t('chat.filePanel.download')"
-              :aria-label="$t('chat.filePanel.download')"
-            >
-              <Icon name="download" class="text-xs" />
-            </button>
-            <button
-              @click="handleDelete(file.file_id, file.filename)"
-              class="action-btn text-red-400 hover:text-red-600"
-              :title="$t('common.delete')"
-              :aria-label="$t('common.delete')"
-            >
-              <Icon name="trash" class="text-xs" />
-            </button>
-          </div>
-        </div>
-      </div>
+        :file="file"
+        :selected="selectedFileIds.has(file.file_id)"
+        :icon="getFileIcon(file.mime_type)"
+        :size-label="formatFileSize(file.size_bytes)"
+        :previewable="isPreviewable(file.mime_type)"
+        :editable="isEditable(file.mime_type)"
+        @select="toggleFileSelection(file.file_id)"
+        @preview="previewFile(file.file_id)"
+        @download="downloadFile(file.file_id, file.filename)"
+        @delete="handleDelete(file.file_id, file.filename)"
+        @edit="startEdit(file.file_id, file.filename)"
+        @rename="renameFile(file.file_id, $event)"
+        @duplicate="copyFile(file.file_id)"
+      />
     </div>
 
-    <!-- Context Menu -->
-    <Teleport to="body">
-      <div
-        v-if="contextMenu"
-        class="fixed z-50 bg-autobot-bg-card border border-autobot-border rounded-lg shadow-lg py-1 min-w-[140px]"
-        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
-        @click.stop
-      >
-        <button v-if="isPreviewable(contextMenu.mimeType)" @click="handlePreview(contextMenu.fileId); closeContextMenu()"
-          class="ctx-menu-item"><Icon name="eye" class="w-4" /> {{ $t('chat.filePanel.preview') }}</button>
-        <button v-if="isEditable(contextMenu.mimeType)" @click="startEdit(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><Icon name="edit" class="w-4" /> {{ $t('common.edit') }}</button>
-        <button @click="startRename(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><Icon name="pencil-alt" class="w-4" /> {{ $t('chat.filePanel.rename') }}</button>
-        <button @click="handleCopy(contextMenu.fileId)"
-          class="ctx-menu-item"><Icon name="copy" class="w-4" /> {{ $t('chat.filePanel.duplicate') }}</button>
-        <button @click="handleDownload(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item"><Icon name="download" class="w-4" /> {{ $t('chat.filePanel.download') }}</button>
-        <div class="border-t border-autobot-border my-1"></div>
-        <button @click="handleDelete(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item text-red-600 hover:bg-red-50"><Icon name="trash" class="w-4" /> {{ $t('common.delete') }}</button>
-      </div>
-    </Teleport>
-
-    <!-- Create File Dialog -->
-    <Teleport to="body">
-      <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showCreateDialog = false">
-        <div class="bg-autobot-bg-card rounded-lg shadow-xl w-80 p-4">
-          <h4 class="text-sm font-semibold text-autobot-text-primary mb-3">{{ $t('chat.filePanel.createNewFile') }}</h4>
-          <input
-            v-model="newFileName"
-            :placeholder="$t('chat.filePanel.filenamePlaceholder')"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-2"
-            @keyup.enter="handleCreateFile"
-          />
-          <textarea
-            v-model="newFileContent"
-            :placeholder="$t('chat.filePanel.contentPlaceholder')"
-            rows="4"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
-          ></textarea>
-          <div class="flex justify-end gap-2">
-            <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Edit File Dialog -->
-    <Teleport to="body">
-      <div v-if="editingFileId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="editingFileId = null">
-        <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ editingFileName }}</h4>
-            <button @click="editingFileId = null" class="action-btn" :aria-label="$t('common.close')"><Icon name="times" class="text-xs" /></button>
-          </div>
-          <textarea
-            v-model="editingContent"
-            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
-          ></textarea>
-          <div class="flex justify-end gap-2 mt-3">
-            <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ChatFileEditorDialog v-model:open="showCreateDialog" mode="create" @submit="handleCreateFile" />
+    <ChatFileEditorDialog
+      :open="editingFileId !== null"
+      mode="edit"
+      :filename="editingFileName"
+      :content="editingContent"
+      @update:open="closeEdit"
+      @submit="handleSaveEdit"
+    />
     <!-- Preview Pane: the server-built preview of a listed text attachment (#20906) -->
-    <Teleport to="body">
-      <FilePreviewPane v-if="preview || previewLoading" :preview="preview" @close="closePreview" />
-    </Teleport>
-  </div>
+    <FilePreviewPane v-if="preview || previewLoading" :preview="preview" @close="closePreview" />
+  </aside>
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
-import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
-import { useLatestRequest } from '@/composables/useLatestRequest'
+import { BaseAlert, BaseSpinner, EmptyState } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
+import ChatHeaderIconButton from '@/components/chat/ChatHeaderIconButton.vue'
+import ChatFileEditorDialog from '@/components/chat/ChatFileEditorDialog.vue'
+import ChatFilePanelItem from '@/components/chat/ChatFilePanelItem.vue'
+import ChatFilePanelToolbar from '@/components/chat/ChatFilePanelToolbar.vue'
+import ChatFilePanelUpload from '@/components/chat/ChatFilePanelUpload.vue'
 import FilePreviewPane from '@/components/chat/FilePreviewPane.vue'
-import EmptyState from '@/components/ui/EmptyState.vue'
-import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useConversationFiles } from '@/composables/useConversationFiles'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
-const props = defineProps<{
-  sessionId: string
-}>()
+const props = defineProps<{ sessionId: string }>()
+defineEmits<{ close: [] }>()
 
-defineEmits<{
-  close: []
-}>()
-
-const { t, locale } = useI18n()
-const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
+const { t } = useI18n()
 const { confirm } = useConfirmDialog()
 
-// File management composable
 const {
-  stats,
-  loading,
-  error,
-  preview,
-  previewLoading,
-  closePreview,
-  resetForSession,
-  uploadProgress,
-  hasFiles,
-  totalSizeFormatted,
-  sortedFiles,
-  searchQuery,
-  sortField,
-  sortDirection,
-  selectedCount,
-  allSelected,
-  selectedFileIds,
-  loadFiles,
-  uploadFiles,
-  deleteFile,
-  downloadFile,
-  previewFile,
-  createFile,
-  renameFile,
-  getFileContent,
-  updateFileContent,
-  copyFile,
-  toggleFileSelection,
-  selectAllFiles,
-  deleteSelectedFiles,
-  setSort,
-  getFileIcon,
-  formatFileSize,
-  isPreviewable,
-  isEditable,
-  clearError
+  stats, loading, error, preview, previewLoading, closePreview, resetForSession, uploadProgress,
+  hasFiles, totalSizeFormatted, sortedFiles, searchQuery, sortField, sortDirection, selectedCount,
+  allSelected, selectedFileIds, loadFiles, uploadFiles, deleteFile, downloadFile, previewFile, createFile,
+  renameFile, getFileContent, updateFileContent, copyFile, toggleFileSelection, selectAllFiles,
+  deleteSelectedFiles, setSort, getFileIcon, formatFileSize, isPreviewable, isEditable, clearError,
 } = useConversationFiles(() => props.sessionId)
 
-// Local state
-const fileInput = ref<HTMLInputElement>()
-const isDragging = ref(false)
 const viewMode = ref<'list' | 'grid'>('list')
 const showCreateDialog = ref(false)
-const newFileName = ref('')
-const newFileContent = ref('')
 const editingFileId = ref<string | null>(null)
 const editingContent = ref('')
 const editingFileName = ref('')
-const renamingFileId = ref<string | null>(null)
-const renameValue = ref('')
-const contextMenu = ref<{ x: number; y: number; fileId: string; filename: string; mimeType: string } | null>(null)
 
-const sortOptions = computed(() => [
-  { field: 'name' as SortField, label: t('chat.filePanel.sortName') },
-  { field: 'date' as SortField, label: t('chat.filePanel.sortDate') },
-  { field: 'size' as SortField, label: t('chat.filePanel.sortSize') },
-  { field: 'type' as SortField, label: t('chat.filePanel.sortType') },
-])
-
-// Methods
-const triggerFileInput = () => {
-  if (loading.value) return
-  fileInput.value?.click()
-}
-
-const handleFileSelect = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (target.files && target.files.length > 0) {
-    await uploadFiles(target.files)
-    target.value = ''
-  }
-}
-
-const handleDrop = async (event: DragEvent) => {
-  isDragging.value = false
-  if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-    await uploadFiles(event.dataTransfer.files)
-  }
-}
-
-const handlePreview = async (fileId: string) => { await previewFile(fileId) }
-const handleDownload = async (fileId: string, filename: string) => { await downloadFile(fileId, filename) }
-const handleDelete = async (fileId: string, filename: string) => {
+async function handleDelete(fileId: string, filename: string): Promise<void> {
   if (await confirm({ title: t('common.confirm'), message: t('chat.filePanel.confirmDelete', { name: filename }) })) {
     await deleteFile(fileId)
   }
 }
 
-// Issue #70: New file manager handlers
-const handleCreateFile = async () => {
-  if (!newFileName.value.trim()) return
-  await createFile(newFileName.value.trim(), newFileContent.value)
-  showCreateDialog.value = false
-  newFileName.value = ''
-  newFileContent.value = ''
-}
-
-const startRename = (fileId: string, currentName: string) => {
-  renamingFileId.value = fileId
-  renameValue.value = currentName
-  contextMenu.value = null
-}
-
-const handleRename = async () => {
-  if (!renamingFileId.value || !renameValue.value.trim()) return
-  await renameFile(renamingFileId.value, renameValue.value.trim())
-  renamingFileId.value = null
-  renameValue.value = ''
-}
-
-/** Only the latest edit-open may fill the editor; a session switch or a newer open revokes the one in flight (#21337). */
-const editOpen = useLatestRequest()
-
-const startEdit = async (fileId: string, filename: string) => {
-  contextMenu.value = null
-  const token = editOpen.begin()
-  const content = await getFileContent(fileId)
-  if (content !== null && editOpen.isCurrent(token)) {
-    editingFileId.value = fileId
-    editingContent.value = content
-    editingFileName.value = filename
-  }
-}
-
-const handleSaveEdit = async () => {
-  if (!editingFileId.value) return
-  await updateFileContent(editingFileId.value, editingContent.value)
-  editingFileId.value = null
-  editingContent.value = ''
-  editingFileName.value = ''
-}
-
-const handleCopy = async (fileId: string) => {
-  contextMenu.value = null
-  await copyFile(fileId)
-}
-
-const handleBulkDelete = async () => {
+async function handleBulkDelete(): Promise<void> {
   if (await confirm({ title: t('common.confirm'), message: t('chat.filePanel.confirmBulkDelete', { count: selectedCount.value }) })) {
     await deleteSelectedFiles()
   }
 }
 
-const showContextMenu = (event: MouseEvent, file: { file_id: string; filename: string; mime_type: string }) => {
-  event.preventDefault()
-  contextMenu.value = {
-    x: event.clientX,
-    y: event.clientY,
-    fileId: file.file_id,
-    filename: file.filename,
-    mimeType: file.mime_type
+async function handleCreateFile(draft: { name: string; content: string }): Promise<void> {
+  if (!draft.name) return
+  await createFile(draft.name, draft.content)
+  showCreateDialog.value = false
+}
+
+/** Only the latest edit-open may fill the editor; a session switch or a newer open revokes the one in flight (#21337). */
+const editOpen = useLatestRequest()
+
+async function startEdit(fileId: string, filename: string): Promise<void> {
+  const token = editOpen.begin()
+  const content = await getFileContent(fileId)
+  if (content !== null && editOpen.isCurrent(token)) {
+    editingContent.value = content
+    editingFileName.value = filename
+    editingFileId.value = fileId
   }
 }
 
-const closeContextMenu = () => { contextMenu.value = null }
+function closeEdit(): void {
+  editingFileId.value = null
+  editingContent.value = ''
+  editingFileName.value = ''
+}
 
-// Keyboard shortcuts
-const handleKeydown = (event: KeyboardEvent) => {
+async function handleSaveEdit(draft: { content: string }): Promise<void> {
+  if (!editingFileId.value) return
+  await updateFileContent(editingFileId.value, draft.content)
+  closeEdit()
+}
+
+// Keyboard shortcuts: Ctrl+N opens the create dialog, Delete removes the selection.
+/** True while the user is typing: Delete there edits text, it must never delete files. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+
+function handleKeydown(event: KeyboardEvent): void {
   if (event.ctrlKey && event.key === 'n') {
     event.preventDefault()
     showCreateDialog.value = true
   }
-  if (event.key === 'Escape') {
-    if (contextMenu.value) { closeContextMenu(); return }
-    if (showCreateDialog.value) { showCreateDialog.value = false; return }
-    if (editingFileId.value) { editingFileId.value = null; return }
-    if (renamingFileId.value) { renamingFileId.value = null; return }
-  }
-  if (event.key === 'Delete' && selectedCount.value > 0) {
-    handleBulkDelete()
-  }
+  if (event.key === 'Delete' && selectedCount.value > 0 && !isTypingTarget(event.target)) handleBulkDelete()
 }
 
 onMounted(() => {
   if (props.sessionId) loadFiles()
   document.addEventListener('keydown', handleKeydown)
-  document.addEventListener('click', closeContextMenu)
 })
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-  document.removeEventListener('click', closeContextMenu)
-})
+onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 
 watch(() => props.sessionId, (newSessionId) => {
   resetForSession()
   // A draft belongs to the file of the previous conversation; saving it here would write into the new one (#21337).
   editOpen.invalidate()
-  editingFileId.value = null
-  editingContent.value = ''
-  editingFileName.value = ''
+  closeEdit()
   if (newSessionId) loadFiles()
 })
 </script>
-
-<style scoped>
-@reference "../../assets/tailwind.css";
-.chat-file-panel {
-  width: 280px;
-  max-width: 280px;
-  min-width: 280px;
-}
-
-.action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-
-.ctx-menu-item {
-  @apply w-full text-left px-3 py-1.5 text-xs text-autobot-text-primary hover:bg-autobot-bg-secondary flex items-center gap-2 transition-colors;
-}
-
-/* Issue #704: Migrated to CSS design tokens */
-/* Scrollbar styling */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 6px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background: var(--border-default);
-  border-radius: var(--radius-sm);
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
-}
-
-/* File item animations */
-.file-item {
-  animation: slideInFromRight 0.2s ease-out;
-}
-
-@keyframes slideInFromRight {
-  from {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-</style>

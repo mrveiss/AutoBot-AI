@@ -1,118 +1,87 @@
+<!-- Copyright 2025-2026 mrveiss -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  The Files tab file table on the kit `BaseTable` (#22349). The name cell is a real button, so a row is reachable by Tab
+  and the arrow keys; a click anywhere on a row (or Enter on its name) opens the folder or previews the file, as before.
+-->
 <template>
-  <div class="file-list-container">
-    <table v-if="files.length > 0" class="file-table">
-      <thead>
-        <tr>
-          <th @click="$emit('sort', 'name')" class="sortable">
-            {{ $t('fileBrowser.fileList.name') }}
-            <Icon :name="getSortIcon('name')" />
-          </th>
-          <th @click="$emit('sort', 'type')" class="sortable">
-            {{ $t('fileBrowser.fileList.type') }}
-            <Icon :name="getSortIcon('type')" />
-          </th>
-          <th @click="$emit('sort', 'size')" class="sortable">
-            {{ $t('fileBrowser.fileList.size') }}
-            <Icon :name="getSortIcon('size')" />
-          </th>
-          <th @click="$emit('sort', 'modified')" class="sortable">
-            {{ $t('fileBrowser.fileList.modified') }}
-            <Icon :name="getSortIcon('modified')" />
-          </th>
-          <th>{{ $t('fileBrowser.fileList.actions') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="(file, index) in files"
-          :key="file.name || file.id || `file-${index}`"
-          :ref="el => setRowRef(el as HTMLElement | null, index)"
-          :tabindex="index === focusedIndex ? 0 : -1"
-          :aria-selected="index === focusedIndex"
-          role="button"
-          @click="handleRowClick(file, index)"
-          @keydown="handleRowKeydown($event, file, index)"
-          @focus="focusedIndex = index"
-          class="file-row"
-        >
-          <td class="file-name-cell">
-            <Icon :name="getFileIcon(file)" />
-            <span
-              :class="{ clickable: file.is_dir }"
-              class="file-name"
-            >
-              {{ file.name }}
-            </span>
-          </td>
-          <td>{{ file.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(file.name) }}</td>
-          <td>{{ file.is_dir ? '-' : formatFileSize(file.size, sizeOptions) }}</td>
-          <td>{{ formatDate(file.last_modified) }}</td>
-          <td>
-            <div class="action-buttons">
-              <BaseButton
-                v-if="!file.is_dir"
-                variant="ghost"
-                size="sm"
-                @click.stop="$emit('view-file', file)"
-                class="action-btn view-btn"
-                :aria-label="$t('fileBrowser.fileList.previewFile')"
-                :title="$t('fileBrowser.fileList.preview')"
-              >
-                <Icon name="eye" />
-              </BaseButton>
-              <BaseButton
-                v-if="file.is_dir"
-                variant="ghost"
-                size="sm"
-                @click.stop="$emit('navigate', file.path)"
-                class="action-btn open-btn"
-                :aria-label="$t('fileBrowser.fileList.openDirectory')"
-                :title="$t('fileBrowser.fileList.open')"
-              >
-                <Icon name="folder-open" />
-              </BaseButton>
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click.stop="$emit('rename-file', file)"
-                class="action-btn rename-btn"
-                :aria-label="$t('fileBrowser.fileList.renameItem')"
-                :title="$t('fileBrowser.fileList.rename')"
-              >
-                <Icon name="edit" />
-              </BaseButton>
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click.stop="$emit('delete-file', file)"
-                class="action-btn delete-btn"
-                :aria-label="$t('fileBrowser.fileList.deleteItem')"
-                :title="$t('fileBrowser.fileList.delete')"
-              >
-                <Icon name="trash" />
-              </BaseButton>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <EmptyState
-      v-else
-      icon="folder-open"
-      :message="$t('fileBrowser.fileList.noFiles')"
-    />
+  <div class="file-list-container" @click="onTableClick" @keydown="onTableKeydown">
+    <BaseTable
+      :columns="columns"
+      :rows="rows"
+      row-key="path"
+      :aria-label="$t('fileBrowser.fileList.tableLabel')"
+      :sort-key="sortField"
+      :sort-order="sortOrder"
+      :actions-label="$t('fileBrowser.fileList.actions')"
+      :empty-title="$t('fileBrowser.fileList.noFiles')"
+      @sort="(key: string) => emit('sort', key)"
+    >
+      <template #cell-name="{ row }">
+        <BaseButton variant="link" size="sm" class="file-name-cell" data-row-primary :data-path="String(row.path)" :data-testid="`file-row-${row.name}`">
+          <Icon :name="getFileIcon(row as unknown as FileItem)" />
+          <span class="file-name" :class="{ clickable: row.is_dir }">{{ row.name }}</span>
+        </BaseButton>
+      </template>
+      <template #cell-type="{ row }">{{ row.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(String(row.name), t) }}</template>
+      <template #cell-size="{ row }">{{ row.is_dir ? '-' : formatFileSize(row.size as number | undefined, sizeOptions) }}</template>
+      <template #cell-modified="{ row }">{{ formatDateTime(row.last_modified as string | undefined) }}</template>
+      <template #actions="{ row }">
+        <div class="action-buttons">
+          <BaseButton
+            v-if="!row.is_dir"
+            variant="ghost"
+            size="sm"
+            :aria-label="$t('fileBrowser.fileList.previewFile')"
+            data-testid="row-preview"
+            @click.stop="emit('view-file', row as unknown as FileItem)"
+          >
+            <Icon name="eye" />
+          </BaseButton>
+          <BaseButton
+            v-else
+            variant="ghost"
+            size="sm"
+            :aria-label="$t('fileBrowser.fileList.openDirectory')"
+            data-testid="row-open"
+            @click.stop="emit('navigate', String(row.path))"
+          >
+            <Icon name="folder-open" />
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            :aria-label="$t('fileBrowser.fileList.renameItem')"
+            data-testid="row-rename"
+            @click.stop="emit('rename-file', row as unknown as FileItem)"
+          >
+            <Icon name="edit" />
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            :aria-label="$t('fileBrowser.fileList.deleteItem')"
+            data-testid="row-delete"
+            @click.stop="emit('delete-file', row as unknown as FileItem)"
+          >
+            <Icon name="trash" />
+          </BaseButton>
+        </div>
+      </template>
+    </BaseTable>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, nextTick } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseButton, BaseTable } from '@autobot/ui'
+import type { BaseTableColumn } from '@autobot/ui'
 import { formatDateTime, formatFileSize, fileBrowserSizeOptions } from '@/utils/formatHelpers'
 import { getFileIconName } from '@/utils/iconMappings'
-import EmptyState from '@/components/ui/EmptyState.vue'
-import { BaseButton } from '@autobot/ui'
+import { getFileType } from '@/utils/fileTypeLabel'
 
 // #9724: aligned with FileBrowserItem (useFileBrowser) — is_dir is optional
 // in the backend payload.
@@ -145,190 +114,66 @@ const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
 const sizeOptions = computed(() => fileBrowserSizeOptions(t('fileBrowser.zeroSize')))
+const rows = computed(() => props.files as unknown as Record<string, unknown>[])
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'name', label: t('fileBrowser.fileList.name'), sortable: true },
+  { key: 'type', label: t('fileBrowser.fileList.type'), sortable: true },
+  { key: 'size', label: t('fileBrowser.fileList.size'), sortable: true, numeric: true },
+  { key: 'modified', label: t('fileBrowser.fileList.modified'), sortable: true },
+])
 
-// Keyboard navigation state
-const focusedIndex = ref(0)
-const rowRefs = ref<(HTMLElement | null)[]>([])
+// #9724: consumed by <Icon :name="..."> — must return an SVG IconName.
+const getFileIcon = (file: FileItem): IconName => getFileIconName(file.name, file.is_dir)
 
-// Set row reference for keyboard navigation
-const setRowRef = (el: HTMLElement | null, index: number) => {
-  if (el) {
-    rowRefs.value[index] = el
-  }
+/** The file behind a click: the row's name button carries the file's path, so no table internals are read. */
+function fileOfRow(target: EventTarget | null): FileItem | null {
+  const row = (target as HTMLElement | null)?.closest?.('tr')
+  const path = row?.querySelector<HTMLElement>('[data-row-primary]')?.dataset.path
+  return path === undefined ? null : props.files.find((file) => file.path === path) ?? null
 }
 
-// Handle row click (mouse or keyboard activation)
-const handleRowClick = (file: FileItem, index: number) => {
-  focusedIndex.value = index
-
-  if (file.is_dir) {
-    emit('navigate', file.path)
-  } else {
-    emit('view-file', file)
-  }
+function onTableClick(event: MouseEvent): void {
+  const file = fileOfRow(event.target)
+  if (!file) return
+  if (file.is_dir) emit('navigate', file.path)
+  else emit('view-file', file)
 }
 
-// Handle keyboard navigation
-const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) => {
-  switch (event.key) {
-    case 'ArrowDown':
-      event.preventDefault()
-      if (index < props.files.length - 1) {
-        focusedIndex.value = index + 1
-        nextTick(() => {
-          rowRefs.value[index + 1]?.focus()
-        })
-      }
-      break
-
-    case 'ArrowUp':
-      event.preventDefault()
-      if (index > 0) {
-        focusedIndex.value = index - 1
-        nextTick(() => {
-          rowRefs.value[index - 1]?.focus()
-        })
-      }
-      break
-
-    case 'Home':
-      event.preventDefault()
-      focusedIndex.value = 0
-      nextTick(() => {
-        rowRefs.value[0]?.focus()
-      })
-      break
-
-    case 'End':
-      event.preventDefault()
-      focusedIndex.value = props.files.length - 1
-      nextTick(() => {
-        rowRefs.value[props.files.length - 1]?.focus()
-      })
-      break
-
-    case 'Enter':
-    case ' ':
-      event.preventDefault()
-      handleRowClick(file, index)
-      break
-  }
+/** Arrow keys, Home and End move between the name buttons; Enter and Space are the button's own click. */
+function onTableKeydown(event: KeyboardEvent): void {
+  const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+  if (!keys.includes(event.key)) return
+  const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-row-primary]'))
+  const at = buttons.indexOf(event.target as HTMLElement)
+  if (at < 0) return
+  event.preventDefault()
+  const next = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: buttons.length - 1 }[event.key as 'ArrowDown']
+  buttons[Math.min(Math.max(next, 0), buttons.length - 1)]?.focus()
 }
-
-// Methods
-const getSortIcon = (field: string): IconName => {
-  if (props.sortField !== field) return 'sort'
-  return props.sortOrder === 'asc' ? 'sort-up' : 'sort-down'
-}
-
-// Icon mapping centralized in @/utils/iconMappings
-// #9724: consumed by <Icon :name="..."> — must return an SVG IconName. The
-// previous "<fa-class> <color-class>" strings rendered an empty SVG.
-const getFileIcon = (file: FileItem): IconName => {
-  return getFileIconName(file.name, file.is_dir)
-}
-
-const getFileType = (filename: string): string => {
-  const extension = filename.split('.').pop()?.toLowerCase()
-  if (!extension) return 'Unknown'
-
-  const typeMap: Record<string, string> = {
-    txt: 'Text',
-    md: 'Markdown',
-    js: 'JavaScript',
-    ts: 'TypeScript',
-    html: 'HTML',
-    css: 'CSS',
-    vue: 'Vue Component',
-    json: 'JSON',
-    jpg: 'JPEG Image',
-    jpeg: 'JPEG Image',
-    png: 'PNG Image',
-    gif: 'GIF Image',
-    svg: 'SVG Image',
-    pdf: 'PDF Document',
-    zip: 'ZIP Archive',
-    tar: 'TAR Archive',
-    gz: 'GZ Archive'
-  }
-
-  return typeMap[extension] || extension.toUpperCase() + ' File'
-}
-
-// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
-const formatDate = formatDateTime
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
 .file-list-container {
-  @apply overflow-auto;
+  overflow: auto;
 }
-
-.file-table {
-  @apply w-full border-collapse bg-autobot-bg-card shadow-sm rounded-lg overflow-hidden;
-}
-
-.file-table thead {
-  @apply bg-autobot-bg-tertiary;
-}
-
-.file-table th {
-  @apply px-4 py-3 text-left text-xs font-medium text-autobot-text-muted uppercase tracking-wider border-b border-autobot-border;
-}
-
-.file-table th.sortable {
-  @apply cursor-pointer hover:bg-autobot-bg-secondary select-none;
-}
-
-.file-table td {
-  @apply px-4 py-3 text-sm text-autobot-text-primary border-b border-autobot-border;
-}
-
-.file-table tbody tr:hover {
-  @apply bg-autobot-bg-tertiary;
-}
-
-.file-table tbody tr:focus {
-  @apply outline-hidden ring-2 ring-inset;
-  background: var(--color-info-bg);
-  --tw-ring-color: var(--color-primary);
-}
-
-.file-table tbody tr:focus-visible {
-  @apply outline-hidden ring-2 ring-inset;
-  background: var(--color-info-bg);
-  --tw-ring-color: var(--color-primary);
-}
-
 .file-name-cell {
-  @apply flex items-center gap-2;
+  max-width: 100%;
+  gap: var(--aui-space-2);
 }
-
 .file-name {
-  @apply truncate;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
 .file-name.clickable {
-  @apply cursor-pointer hover:underline;
-  color: var(--text-link);
+  color: var(--aui-color-primary);
 }
-
 .file-name.clickable:hover {
-  color: var(--text-link-hover);
+  text-decoration: underline;
 }
-
-.file-icon {
-  @apply flex-shrink-0;
-}
-
-.sort-icon {
-  @apply ml-1;
-}
-
 .action-buttons {
-  @apply flex gap-1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--aui-space-1);
 }
-
-/* Button styling handled by BaseButton component */
 </style>

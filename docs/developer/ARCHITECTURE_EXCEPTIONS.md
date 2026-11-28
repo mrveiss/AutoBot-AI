@@ -707,3 +707,20 @@ reads both files and fails when the two defaults differ or when either site stop
 **Review trigger:** ADR-012 changes so the two frontends share a build-time config package.
 
 **Grep check:** `git grep -n 'getEnvPositiveInt.*VITE_SLM_API_TIMEOUT_MS' -- '*.ts'` returns exactly the two read sites above.
+
+---
+
+## Files Tab Tree — Styling the Kit `BaseButton` Label Span
+
+**File:** `autobot-frontend/src/components/file-browser/FileTreeView.vue` (`.tree-node :deep(.tree-node-content [data-slot="button-label"])`)
+**Diverges from:** styling the kit only through its props and tokens
+**Issue:** #22349 (introduced), #22362 (removal)
+
+**Reason:** The kit `BaseButton` wraps its slot in a `[data-slot="button-label"]` span and offers no
+label layout or truncate prop. The tree row needs that span as a shrinkable flex row so the file name
+truncates with an ellipsis. The selector uses the kit's stable `data-slot` attribute, not the internal
+`.aui-btn__label` class; no edit to `libs/autobot-ui` was in scope for the batch.
+
+**Removal condition:** the kit `BaseButton` gains a label layout/truncate prop (#22362); the rule is then deleted.
+
+**Grep check:** `git grep -n 'button-label' -- 'autobot-frontend/src/**/*.vue'` returns only this rule.

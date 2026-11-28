@@ -15,6 +15,7 @@ import { HttpError } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
+import { useToast } from '@/composables/useToast'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { extractResponseErrorDetail } from '@/utils/errorExtract'
 import i18n from '@/i18n'
@@ -76,7 +77,16 @@ async function uploadOne(file: File, path: string, overwrite: boolean): Promise<
   }
 }
 
+/** A request token: only the newest request may write its result; `cancel` makes every pending one stale. */
+export function latestToken() {
+  let current = 0
+  return { next: () => ++current, isLatest: (id: number) => id === current, cancel: () => { current++ } }
+}
+
 export function useFileBrowser() {
+  const { showToast } = useToast()
+  const listToken = latestToken()
+  const previewToken = latestToken()
   const files = ref<FileBrowserItem[]>([])
   const directoryTree = ref<FileBrowserTreeNode[]>([])
   const previewFile = ref<FilePreviewData | null>(null)
@@ -84,13 +94,20 @@ export function useFileBrowser() {
   // ---- GET /files/list ----
   const { execute: fetchFiles, loading: isLoadingFiles } = useAsyncHandler(
     async (path: string) => {
-      const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
-        `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
-      )
-      files.value = data.files ?? []
+      const id = listToken.next()
+      try {
+        const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
+          `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
+        )
+        if (listToken.isLatest(id)) files.value = data.files ?? []
+      } catch (error) {
+        // a superseded request fails silently and must not clear the newer list; only the latest is reported
+        if (!listToken.isLatest(id)) return
+        files.value = []
+        showToast(i18n.global.t('fileBrowser.browser.errorLoadingContents'), 'error')
+      }
     },
     {
-      onError: () => { files.value = [] },
       logErrors: true,
       errorPrefix: '[useFileBrowser]'
     }
@@ -131,10 +148,19 @@ export function useFileBrowser() {
 
   // ---- GET /files/preview ----
   const { execute: fetchPreview, loading: isLoadingPreview } = useAsyncHandler(
-    async (file: FileBrowserItem, getFileType: (name: string) => string) => {
-      const data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
-        `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
-      )
+    async (file: FileBrowserItem, getFileType: (name: string) => string): Promise<boolean> => {
+      const id = previewToken.next()
+      let data: { type?: string; url?: string; content?: string }
+      try {
+        data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
+          `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
+        )
+      } catch (error) {
+        // a superseded request fails silently; only the newest one is reported to the caller
+        if (!previewToken.isLatest(id)) return false
+        throw error
+      }
+      if (!previewToken.isLatest(id)) return false
       previewFile.value = {
         name: file.name,
         type: data.type ?? '',
@@ -143,10 +169,12 @@ export function useFileBrowser() {
         fileType: getFileType(file.name),
         size: file.size
       }
+      return true
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -157,7 +185,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -175,7 +204,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -193,7 +223,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -217,6 +248,7 @@ export function useFileBrowser() {
     fetchTree,
     uploadFiles,
     fetchPreview,
+    cancelPreview: previewToken.cancel,
     deleteFileOrFolder,
     renameFileOrFolder,
     createDirectory
