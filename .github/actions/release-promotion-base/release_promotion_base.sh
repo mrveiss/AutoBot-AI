@@ -8,11 +8,11 @@
 # reason for it live in action.yml next to this file; repo_tests/release_promotion_base_19466_test.py
 # runs this script against a fake `gh`.
 #
-# Inputs (env): EVENT_NAME, BASE_REF, HEAD_SHA, REPO, RELEASE_BRANCH, INTEGRATION_BRANCH,
+# Inputs (env): IS_PR ('true' for a dispatched pull request run), BASE_REF, HEAD_SHA, REPO, RELEASE_BRANCH, INTEGRATION_BRANCH,
 # FETCH ("true" fetches the merge base when the clone lacks it), GITHUB_OUTPUT.
 set -euo pipefail
 
-if [ "${EVENT_NAME}" != "pull_request" ] || [ "${BASE_REF}" != "${RELEASE_BRANCH}" ]; then
+if [ "${IS_PR}" != "true" ] || [ "${BASE_REF}" != "${RELEASE_BRANCH}" ]; then
   echo "not a pull request into ${RELEASE_BRANCH}: the gates judge the PR's own range as before"
   {
     echo "base-sha="

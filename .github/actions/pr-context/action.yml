@@ -1,0 +1,111 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Live pull-request facts for a run the PR coordinator dispatched (#20825). A dispatched run has no pull_request
+# payload, so every fact a workflow used to read from `github.event.pull_request.*` is looked up here, live, in ONE
+# call. The dispatch inputs are PINS that must match, never the source of a fact: an input is caller-controlled.
+#
+# When `pr-number` is empty (push, schedule, merge_group, a manual run) `is-pr` is `false` and every other
+# output is empty. Otherwise, in order:
+#   1. the run's commit or the live head differs from `head-sha`  -> the run is cancelled (never failed)
+#   2. the pull request is not open                                -> fail
+#   3. `base-sha` equals the head, is not an ancestor of the head, or is not on the base branch -> fail
+# The body goes to a file (`body-file`), never to an output or an expression (script injection).
+#
+# Usage (the job needs `actions: write` and a checkout that holds .github/actions):
+#   - uses: ./.github/actions/pr-context
+#     id: pr
+#     with: { pr-number: '${{ inputs.pr_number }}', head-sha: '${{ inputs.head_sha }}', base-sha: '${{ inputs.base_sha }}' }
+
+name: Pull request context
+description: Live pull request facts for a coordinator-dispatched run; cancels a stale dispatch and refuses a wrong base.
+
+inputs:
+  pr-number:
+    description: 'inputs.pr_number; empty outside a coordinator dispatch.'
+    required: false
+    default: ''
+  head-sha:
+    description: 'inputs.head_sha: the head the coordinator read.'
+    required: false
+    default: ''
+  base-sha:
+    description: 'inputs.base_sha: the merge base of the head with the base branch.'
+    required: false
+    default: ''
+  token:
+    description: 'Token allowed to read pull requests and the compare API, and to cancel the run.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  is-pr:
+    description: "'true' for a validated pull-request run, 'false' otherwise."
+    value: ${{ steps.ctx.outputs.is-pr }}
+  number:
+    description: Pull request number.
+    value: ${{ steps.ctx.outputs.number }}
+  head-sha:
+    description: Validated head commit.
+    value: ${{ steps.ctx.outputs.head-sha }}
+  base-sha:
+    description: Validated merge base; the base every diff and ratchet compares with.
+    value: ${{ steps.ctx.outputs.base-sha }}
+  base-ref:
+    description: Base branch name (live).
+    value: ${{ steps.ctx.outputs.base-ref }}
+  head-ref:
+    description: Head branch name (live).
+    value: ${{ steps.ctx.outputs.head-ref }}
+  head-repo:
+    description: Head repository full name (live).
+    value: ${{ steps.ctx.outputs.head-repo }}
+  same-repo:
+    description: "'true' when the head lives in this repository."
+    value: ${{ steps.ctx.outputs.same-repo }}
+  author:
+    description: Pull request author login (live). Replaces github.actor wherever the author is meant.
+    value: ${{ steps.ctx.outputs.author }}
+  author-type:
+    description: Author account type (User, Bot).
+    value: ${{ steps.ctx.outputs.author-type }}
+  draft:
+    description: "'true' when the pull request is a draft."
+    value: ${{ steps.ctx.outputs.draft }}
+  labels:
+    description: JSON array of the label names.
+    value: ${{ steps.ctx.outputs.labels }}
+  admitted:
+    description: "'true' when the pull request carries land-next (admitted to a CI slot), read live."
+    value: ${{ steps.ctx.outputs.admitted }}
+  commits:
+    description: Number of commits in the pull request (what GitHub counts against the base branch).
+    value: ${{ steps.ctx.outputs.commits }}
+  title:
+    description: Pull request title.
+    value: ${{ steps.ctx.outputs.title }}
+  body-file:
+    description: Path of the file holding the pull request body.
+    value: ${{ steps.ctx.outputs.body-file }}
+
+  pull-file:
+    description: Path of the file holding the pull request as the API returned it (what the pull_request event payload used to carry).
+    value: ${{ steps.ctx.outputs.pull-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Look up the pull request
+      id: ctx
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        REPO: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_SHA: ${{ github.sha }}
+      run: bash "$GITHUB_ACTION_PATH/pr_context.sh"

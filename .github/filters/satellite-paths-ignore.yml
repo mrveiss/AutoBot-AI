@@ -1,0 +1,16 @@
+# The `paths-ignore` rules of the path-filtered advisory workflows ("satellites"), one key per workflow file stem (#20825).
+# A file must match EVERY pattern here (dorny's `every` quantifier, set on its own step in ci.yml's `changes` job),
+# so `'**'` plus negations reads as "anything not ignored". The same contract as satellite-paths.yml follows.
+#
+# Their `pull_request` triggers are gone: a pull request gets CI only when the PR coordinator dispatches ci.yml,
+# and ci.yml's `changes` job evaluates THIS file once against the dispatched run's merge base. Its `fan-out` job
+# then dispatches `<key>.yml` for every key that matched. The key IS the workflow file name without `.yml`
+# (repo_tests/pr_dispatch_contract_test.py holds both directions). A workflow with no path filter before has `'**'`.
+#
+# Key names are unique across EVERY file in .github/filters/.
+hardened-smoke-test:
+  - '**'
+  - '!docs/**'
+  - '!**/*.md'
+  - '!.claude/**'
+  - '!.github/ISSUE_TEMPLATE/**'
