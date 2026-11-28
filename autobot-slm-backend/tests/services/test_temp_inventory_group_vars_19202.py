@@ -122,7 +122,7 @@ def test_the_decommission_run_sees_autobot_base_dir_from_group_vars(executor) ->
 
 
 def test_the_provision_run_sees_autobot_base_dir_from_group_vars(executor) -> None:
-    node = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node")
+    node = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=22)
     roles = [SimpleNamespace(status="pending")]
     result = asyncio.run(nodes._execute_provision_playbook(FakeAsyncSession(), "n1", node, roles, ["backend"]))
     assert result["success"], result
@@ -180,7 +180,7 @@ def _fleet() -> list:
 
 
 def _provision_hosts() -> dict:
-    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node")
+    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=22)
     text = provision_inventory.build_provision_inventory("n1", target, ["vnc"], _fleet(), _is_manager_ip)
     return yaml.safe_load(text)["all"]
 
@@ -207,13 +207,42 @@ def test_the_provision_target_keeps_its_own_vars_and_the_update_inventorys_key()
     assert "ansible_connection" not in target
 
 
+def _build_for(fleet: list, ssh_port: int | None = None) -> dict:
+    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=ssh_port)
+    text = provision_inventory.build_provision_inventory("n1", target, ["vnc"], fleet, _is_manager_ip)
+    return yaml.safe_load(text)["all"]
+
+
+def test_two_managers_keep_the_update_inventorys_sorted_order() -> None:
+    """#22262: slm_server[0] is the same host in the provision and the update inventory."""
+    fleet = _fleet()
+    fleet.insert(0, SimpleNamespace(**{**vars(fleet[0]), "node_id": "aaa"}))
+    fleet.insert(0, SimpleNamespace(**{**vars(fleet[0]), "node_id": "zzz"}))
+    inv = _build_for(fleet)
+    assert list(inv["children"]["slm_server"]["hosts"]) == ["aaa", "mgr", "zzz"]
+    assert list(inv["hosts"])[0] == "provision_target"
+
+
+def test_no_manager_row_logs_a_warning_naming_the_consequence(monkeypatch) -> None:
+    warnings: list[str] = []
+    monkeypatch.setattr(provision_inventory.logger, "warning", lambda msg, *a: warnings.append(msg % a))
+    inv = _build_for([r for r in _fleet() if r.node_id != "mgr"])
+    assert "slm_server" in inv["children"]
+    assert len(warnings) == 1 and "unreachable" in warnings[0]
+
+
+def test_the_target_carries_the_nodes_ssh_port() -> None:
+    assert _build_for(_fleet(), 2222)["hosts"]["provision_target"]["ansible_port"] == 2222
+    assert _build_for(_fleet(), None)["hosts"]["provision_target"]["ansible_port"] == 22
+
+
 _ANSIBLE_ADHOC = shutil.which("ansible")
 
 
 @pytest.mark.skipif(_ANSIBLE_ADHOC is None, reason="ansible not installed")
 def test_ansible_resolves_the_delegate_target_to_the_manager_host(scratch) -> None:
     """#22262: ``slm_manager_inventory_host`` (group_vars) names a host this inventory defines."""
-    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node")
+    target = SimpleNamespace(ssh_user="svc", ip_address="node.example.test", hostname="node", ssh_port=22)
     text = provision_inventory.build_provision_inventory("n1", target, ["vnc"], _fleet(), _is_manager_ip)
     inv = temp_inventory.write_linked_inventory(text, "t_inv_", _ANSIBLE)
     host = "slm_manager_inventory_host | trim"

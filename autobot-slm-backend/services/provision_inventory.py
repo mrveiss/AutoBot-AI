@@ -22,10 +22,13 @@ from typing import Any
 import yaml
 from sqlalchemy import select
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
 from models.database import Node
-from services.inventory_builder import build_registry_inventory
+from services.inventory_builder import build_registry_inventory, ssh_port_of
+
+logger = get_logger(__name__)
 
 #: The inventory host name of the node being provisioned; also the run's ``--limit``.
 PROVISION_TARGET = "provision_target"
@@ -41,7 +44,8 @@ def slm_manager_hosts(nodes: list[Any], local_ip_check: Any) -> dict[str, dict]:
     """
     update_inv = build_registry_inventory(nodes, local_ip_check)["all"]
     names = update_inv["children"].get(SLM_MANAGER_GROUP, {}).get("hosts", {})
-    return {name: {**update_inv["vars"], **update_inv["hosts"][name]} for name in names}
+    # sorted by name, as the update inventory is dumped with sort_keys=True: slm_server[0] is the same host
+    return {name: {**update_inv["vars"], **update_inv["hosts"][name]} for name in sorted(names)}
 
 
 def _target_hostvars(node_id: str, node: Any, target_roles: list[str], deps: list[str]) -> dict:
@@ -51,6 +55,7 @@ def _target_hostvars(node_id: str, node: Any, target_roles: list[str], deps: lis
         "slm_node_id": node_id,  # the vnc role registers its credential only when this is set (#22211)
         "ansible_host": node.ip_address,
         "ansible_user": node.ssh_user or "autobot",
+        "ansible_port": ssh_port_of(node),  # the update inventory's rule (non-22 SSH)
         "ansible_ssh_private_key_file": config.path.ssh_key_path,  # the update inventory's key (#12429)
         "ansible_python_interpreter": "/usr/bin/python3",
         "node_roles": list(target_roles),
@@ -76,6 +81,11 @@ def build_provision_inventory(
 
     deps = sorted({d for r in target_roles for d in ROLE_DEPENDENCIES.get(r, [])})
     managers = slm_manager_hosts(nodes, local_ip_check)
+    if not managers:
+        logger.warning(
+            "provision inventory for %s has no SLM manager host: tasks delegated to the SLM will be unreachable",
+            node_id,
+        )
     inventory = {
         "all": {
             "hosts": {PROVISION_TARGET: _target_hostvars(node_id, node, target_roles, deps), **managers},
