@@ -117,7 +117,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1085,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
-    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 872,
+    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 870,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
