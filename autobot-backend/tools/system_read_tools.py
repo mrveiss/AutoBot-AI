@@ -9,6 +9,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict
 
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.tool_spec import LOCATION_WORKER, declares_tool
+
 
 class SystemReadToolsMixin:
     """query_system_information / list_system_services for ToolRegistry."""
@@ -32,6 +35,7 @@ class SystemReadToolsMixin:
             self._system_integration = SystemIntegration()
         return await asyncio.to_thread(getattr(self._system_integration, method))
 
+    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ)
     async def query_system_information(self) -> Dict[str, Any]:
         """Query system information (worker node, else SystemIntegration)."""
         result = await self._execute_system_read("system_query_info", "query_system_info")
@@ -42,6 +46,7 @@ class SystemReadToolsMixin:
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("system", LOCATION_WORKER, Permission.MCP_METRICS_READ, requires=("systemctl",))
     async def list_system_services(self) -> Dict[str, Any]:
         """List system services (worker node, else SystemIntegration)."""
         result = await self._execute_system_read("system_list_services", "list_services")

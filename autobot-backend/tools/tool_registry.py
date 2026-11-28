@@ -12,7 +12,6 @@ the standard orchestrator and LangChain orchestrator, eliminating code
 duplication.
 """
 
-import asyncio
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List
@@ -22,13 +21,15 @@ from tools.kb_read_tools import KnowledgeReadToolsMixin
 from tools.kb_write_tools import KnowledgeWriteToolsMixin
 from tools.self_model_tools import SelfModelToolsMixin
 from tools.system_read_tools import SystemReadToolsMixin
-from tools.tool_records import prompt_tool_names
+from tools.tool_descriptions import ToolDescriptionsMixin
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
-from autobot_shared.auth.permissions import Role
+
+from autobot_shared.auth.permissions import Permission, Role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_spec import CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, LOCATION_WORKER, declares_tool
 
 logger = get_logger(__name__)
 
@@ -41,7 +42,9 @@ GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
 TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
 
 
-class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelToolsMixin, SystemReadToolsMixin):
+class ToolRegistry(
+    KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelToolsMixin, SystemReadToolsMixin, ToolDescriptionsMixin
+):
     """Unified tool implementations for both orchestrator types (no duplication)."""
 
     def __init__(
@@ -118,6 +121,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
 
     # System Integration Tools
 
+    @declares_tool("system", LOCATION_WORKER, Permission.SHELL_EXECUTE)
     async def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Execute a system command."""
         task = self._create_base_task("system_execute_command")
@@ -131,6 +135,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("conversation", LOCATION_BACKEND, None, listed=False, flag_gated=True)
     async def read_spilled_output(self, anchor: str, offset: int = 0, limit: int | None = None) -> Dict[str, Any]:
         """Read a window of a tool output that was spilled out of context (#13754).
 
@@ -157,6 +162,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": "success" if window.get("found") else "not_found",
         }
 
+    @declares_tool("system", LOCATION_WORKER, None, requires=("systemctl",))
     async def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage a system service."""
         task = self._create_base_task("system_manage_service")
@@ -174,6 +180,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("system", LOCATION_WORKER, None)
     async def get_process_info(self, process_name: str | None = None, pid: str | None = None) -> Dict[str, Any]:
         """Get process information."""
         task = self._create_base_task("system_get_process_info")
@@ -190,6 +197,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("system", LOCATION_WORKER, None)
     async def terminate_process(self, pid: str) -> Dict[str, Any]:
         """Terminate a process by PID."""
         task = self._create_base_task("system_terminate_process")
@@ -203,6 +211,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("web", LOCATION_BACKEND, None)
     async def web_fetch(self, url: str) -> Dict[str, Any]:
         """Fetch content from a web URL."""
         task = self._create_base_task("web_fetch")
@@ -218,6 +227,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
 
     # Issue #7509: Web research tools — direct internal dispatch via web_fetch package.
 
+    @declares_tool("web", LOCATION_BACKEND, None)
     async def content_reach(self, source: str, query: str = "", url: str = "", limit: int = 5) -> Dict[str, Any]:
         """Fetch external content via a Content Reach source chain (#10932)."""
         from content_reach.base import BackendError, ContentRequest
@@ -258,6 +268,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             self.logger.error("content_reach failed for %s: %s", source, exc)
             return {"tool_name": "content_reach", "tool_args": args, "result": f"Error: {exc}", "status": "error"}
 
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
     async def scrape_url(self, url: str, render: str = "auto") -> Dict[str, Any]:
         """Fetch a URL and return its markdown content."""
         from web_fetch import RenderMode, WebFetcher
@@ -283,6 +294,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             self.logger.error("scrape_url failed for %s: %s", url, exc)
             return {"tool_name": "scrape_url", "tool_args": {"url": url}, "result": f"Error: {exc}", "status": "error"}
 
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE)
     async def crawl_site(
         self,
         seed_urls: List[str],
@@ -328,6 +340,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
                 "status": "error",
             }
 
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
     async def map_site(self, domain: str, max_urls: int = 500, respect_robots: bool = True) -> Dict[str, Any]:
         """Discover URLs for a domain via sitemap.xml or BFS crawl fallback."""
         from chat_workflow.tool_handler import _format_map_results
@@ -350,6 +363,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
                 "status": "error",
             }
 
+    @declares_tool(CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ)
     async def extract_structured_data(self, url: str, schema: Dict[str, Any], render: str = "auto") -> Dict[str, Any]:
         """Extract structured data from a URL using a JSON Schema and LLM."""
         import json
@@ -378,6 +392,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
 
     # GUI Automation Tools
 
+    @declares_tool("gui", LOCATION_WORKER, None)
     async def type_text(self, text: str) -> Dict[str, Any]:
         """Type text into the active window."""
         task = self._create_base_task("gui_type_text")
@@ -391,6 +406,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("gui", LOCATION_WORKER, None)
     async def click_element(self, image_path: str) -> Dict[str, Any]:
         """Click on a GUI element by image."""
         task = self._create_base_task("gui_click_element")
@@ -407,6 +423,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("gui", LOCATION_WORKER, None, requires=("xdotool",))
     async def bring_window_to_front(self, window_title: str) -> Dict[str, Any]:
         """Bring a window to the front."""
         task = self._create_base_task("gui_bring_window_to_front")
@@ -425,6 +442,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("gui", LOCATION_WORKER, None, requires=("tesseract",))
     async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
         """OCR-read text from a screen region (Issue #12070)."""
         task = self._create_base_task("gui_read_text_from_region")
@@ -441,6 +459,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("gui", LOCATION_WORKER, None)
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
         """Move the mouse cursor to the specified coordinates (Issue #12070)."""
         task = self._create_base_task("gui_move_mouse")
@@ -461,6 +480,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
 
     # User Interaction Tools
 
+    @declares_tool("conversation", LOCATION_BACKEND, None)
     async def ask_user_for_manual(self, program_name: str, question_text: str) -> Dict[str, Any]:
         """Ask user for manual information."""
         task = self._create_base_task("ask_user_for_manual")
@@ -478,6 +498,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": result.get("status", "success"),
         }
 
+    @declares_tool("conversation", LOCATION_BACKEND, None)
     async def respond_conversationally(self, response_text: str) -> Dict[str, Any]:
         """Respond conversationally to the user."""
         task = self._create_base_task("respond_conversationally")
@@ -492,6 +513,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "response_text": response_text,
         }
 
+    @declares_tool("code", LOCATION_BACKEND, None, name="code_interpreter")
     async def execute_code_tool(self, code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
         """Execute Python code in a sandboxed subprocess and return stdout/stderr."""
         result = execute_code(code, timeout_seconds=timeout_seconds)
@@ -672,52 +694,6 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
             "status": "error",
         }
 
-    def _tool_description(self, name: str) -> str:
-        """Return the raw (uncompressed) description for a single tool. Issue #5871."""
-        import inspect  # noqa: PLC0415
-
-        method = getattr(self, name, None)
-        if method is not None:
-            doc = inspect.getdoc(method)
-            if doc:
-                return doc.split("\n")[0]
-        try:
-            from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS  # noqa: PLC0415
-
-            schema = _BUILTIN_TOOL_SCHEMAS.get(name, {})
-            desc = (schema or {}).get("description", "")
-            if desc:
-                return desc
-        except ImportError:
-            pass
-        return name
-
-    def get_raw_descriptions(self) -> Dict[str, str]:
-        """Return uncompressed descriptions for all registered tools. Issue #5871."""
-        return {name: self._tool_description(name) for name in self.get_available_tools()}
-
-    async def get_compressed_descriptions(self) -> Dict[str, str]:
-        """Return a mapping of tool_name -> compressed description for all registered tools.
-
-        Uses :func:`tools.description_compressor.compress_description` with Redis
-        caching and Ollama LLM compression.  Falls back to the tool name string for
-        any tool whose description cannot be resolved.
-        """
-        from tools.description_compressor import compress_description  # noqa: PLC0415
-
-        tool_names = self.get_available_tools()
-        tasks = [compress_description(name, {"description": self._tool_description(name)}) for name in tool_names]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        compressed: Dict[str, str] = {}
-        for name, result in zip(tool_names, results):
-            if isinstance(result, Exception):
-                logger.warning("compress_description failed for tool '%s': %s", name, result)
-                compressed[name] = self._tool_description(name)
-            else:
-                compressed[name] = result
-        return compressed
-
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
 
@@ -725,6 +701,8 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelT
         tools (each with its execution location), the spill read tool when its flag is
         on, and the browser tools from BROWSER_TOOL_NAMES (Issue #2609).
         """
+        from tools.tool_records import prompt_tool_names  # noqa: PLC0415 - tool_records derives from this class
+
         return prompt_tool_names()
 
 

@@ -19,8 +19,8 @@ import aiohttp
 from autobot_shared.auth.permissions import role_has_permission
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.self_model_constants import ENTITY_KINDS
+from autobot_shared.tool_spec import LOCATION_BACKEND, SELF_MODEL_QUERY_TOOL_NAME, declares_tool
 from services.slm_self_model import SelfModelUnavailable, query_entities
-from tools.tool_records import SELF_MODEL_QUERY_TOOL_NAME
 from user_management.services.user_role import role_for_user_id
 
 logger = get_logger(__name__)
@@ -161,6 +161,7 @@ def format_result(data: Dict[str, Any]) -> str:
 class SelfModelToolsMixin:
     """``query_self_model`` for ToolRegistry; needs nothing from the registry beyond being a mixin."""
 
+    @declares_tool("self_model", LOCATION_BACKEND, None, name=SELF_MODEL_QUERY_TOOL_NAME)
     async def query_self_model(self, args: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
         """Agent tool: entities of the self-model filtered by kind, name, node and status (read-only)."""
         envelope = {"tool_name": SELF_MODEL_QUERY_TOOL_NAME, "tool_args": args}

@@ -331,3 +331,29 @@ def test_a_worker_tool_with_a_required_command_is_placed_where_a_missing_command
     records = {r["name"]: r for r in tool_records()}
     for name in TOOL_REQUIRES:
         assert records[name]["node_id"], f"{name} declares requires but has no node to check them on"
+
+
+def test_every_command_a_tool_requires_has_a_yaml_tool_doc():
+    """#22276: the YAML tool docs cover every command the catalogue says a tool needs (a guard, one direction)."""
+    import pathlib
+
+    import yaml
+
+    from tools.tool_records import TOOL_REQUIRES
+
+    docs = pathlib.Path(__file__).resolve().parents[1] / "resources" / "knowledge" / "tools"
+    documented = {
+        t["name"]
+        for f in docs.glob("*.yaml")
+        for t in (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("tools", [])
+    }
+    required = {cmd for cmds in TOOL_REQUIRES.values() for cmd in cmds}
+    assert required <= documented, f"#22276: required commands with no YAML tool doc: {sorted(required - documented)}"
+
+
+def test_every_catalogue_tool_is_declared_on_its_handler():
+    """#22276: the catalogue is the handlers' declarations; web_search and the shell come from the chat handler."""
+    from tools.tool_records import CHAT_SHELL_TOOL, REGISTRY_TOOLS, SPILL_READ_TOOL
+
+    assert {"web_search", "code_interpreter", "query_self_model", "scrape_url"} <= set(REGISTRY_TOOLS)
+    assert CHAT_SHELL_TOOL[0] == "execute_command" and SPILL_READ_TOOL[0] == "read_spilled_output"
