@@ -2362,10 +2362,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         Abstracts the multi-step browser flow (navigate → fill → click → get_text)
         into a single tool call so small models don't need to orchestrate it.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
-        Issue #14469: declares the same ``MCP_BROWSER_READ`` baseline the
-        ``browser_mcp`` bridge grants an undeclared tool — this abstracts
-        read-only browser navigation (search + read results), never drives
-        arbitrary page state, so it does not need ``MCP_BROWSER_CONTROL``.
+        Issue #14469: ``@declares_tool`` grants ``MCP_BROWSER_READ`` only (read-only, no page-state control).
 
         Yields:
             WorkflowMessage for search execution stages
