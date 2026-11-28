@@ -37,21 +37,42 @@ __all__ = ["word_token_list", "word_tokens"]
 _MARK_CATEGORIES = frozenset({"Mn", "Mc", "Me"})
 
 
+# Codepoint ranges that can hold a mark (Mn, Mc, Me); every other plane has none. Scanning only
+# these (about 131k codepoints, tens of ms) instead of all 1.1M (about 1s) keeps the first
+# tokenizing request fast. The test `test_mark_scan_ranges_match_a_full_scan` proves the set
+# complete for the running Python's unicodedata, so a Unicode upgrade that adds a mark elsewhere
+# fails CI rather than silently dropping it.
+_MARK_SCAN_RANGES = (
+    (0x0000, 0x10000),  # plane 0 (BMP): Combining Diacriticals, Indic/Arabic/Hebrew signs, ...
+    (0x10000, 0x20000),  # plane 1 (SMP): Brahmi, Grantha, Kaithi, Musical Symbols, ...
+    (0xE0000, 0xE0200),  # plane 14 (SSP): Variation Selectors Supplement (U+E0100-E01EF)
+)
+
+
+def _scan_marks(scan_ranges) -> list:
+    """Maximal (start, end) runs of mark codepoints in the half-open *scan_ranges*."""
+    runs, start = [], None
+    for lo, hi in scan_ranges:
+        for cp in range(lo, hi):
+            if unicodedata.category(chr(cp)) in _MARK_CATEGORIES:
+                start = cp if start is None else start
+            elif start is not None:
+                runs.append((start, cp - 1))
+                start = None
+        if start is not None:
+            runs.append((start, hi - 1))
+            start = None
+    return runs
+
+
 def _mark_class_body() -> str:
     """Regex class body listing every Unicode mark (Mn, Mc, Me) as `\\U` ranges.
 
     `re` has no `\\p{M}` and the `regex` package is not a dependency, so the ranges
     are read from `unicodedata`, the tables `str.isalnum` (and so `\\w`) already use.
     """
-    ranges, start = [], None
-    for cp in range(sys.maxunicode + 2):
-        is_mark = cp <= sys.maxunicode and unicodedata.category(chr(cp)) in _MARK_CATEGORIES
-        if is_mark and start is None:
-            start = cp
-        elif not is_mark and start is not None:
-            ranges.append((start, cp - 1))
-            start = None
-    return "".join(f"\\U{a:08x}" if a == b else f"\\U{a:08x}-\\U{b:08x}" for a, b in ranges)
+    runs = _scan_marks(_MARK_SCAN_RANGES)
+    return "".join(f"\\U{a:08x}" if a == b else f"\\U{a:08x}-\\U{b:08x}" for a, b in runs)
 
 
 @lru_cache(maxsize=None)

@@ -25,8 +25,8 @@
     "tokens": 2
   },
   {
-    "name": "latin with NFD diacritics",
-    "text": "cafe\u0301 nai\u0308ve",
+    "name": "latin with uncomposable diacritics",
+    "text": "x\u0301y q\u0323\u0307z",
     "tokens": 2
   },
   {

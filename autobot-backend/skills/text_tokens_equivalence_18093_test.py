@@ -119,3 +119,20 @@ def test_combining_marks_stay_in_the_word_on_the_shared_corpus(case):
     """The frontend asserts the same counts on the same file (#21891); NFKC first, as both sides do."""
     text = unicodedata.normalize("NFKC", case["text"])
     assert len(word_token_list(text)) == case["tokens"]
+
+
+def test_mark_scan_ranges_match_a_full_scan():
+    """The reduced scan finds exactly the mark ranges a scan of every codepoint finds (#21891)."""
+    import sys
+
+    from autobot_shared import text_tokens
+
+    full = text_tokens._scan_marks([(0, sys.maxunicode + 1)])
+    assert text_tokens._scan_marks(text_tokens._MARK_SCAN_RANGES) == full
+
+
+def test_uncomposable_mark_stays_in_the_word():
+    """No precomposed x-acute or q-dot-below-dot-above exists, so NFKC leaves the marks separate (#21891)."""
+    text = unicodedata.normalize("NFKC", "x́y q̣̇z")
+    assert "́" in text and "̣̇" in text
+    assert len(word_token_list(text)) == 2
