@@ -24,7 +24,7 @@ from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS, approval_category_for
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS
 from autobot_shared.tool_spec import CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, declares_tool
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
