@@ -48,7 +48,7 @@ tools:
       - "author: Author name"
       - "tags: List of category/tag objects"
       - "content: Full content (Atom feeds)"
-    related_tools: ["atoma", "wget", "curl", "jina-reader"]
+    related_tools: ["atoma", "wget", "curl", "reader-service"]
 
   - name: atoma
     type: feed_parser

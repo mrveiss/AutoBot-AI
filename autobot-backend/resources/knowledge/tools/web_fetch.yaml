@@ -7,37 +7,24 @@ metadata:
   version: "1.0.0"
 
 tools:
-  - name: jina-reader
+  - name: reader-service
     type: web_content_extractor
-    purpose: Extract clean markdown content from any URL via Jina Reader API
+    purpose: Extract clean markdown from a URL through the gated web_fetch tool (a third-party reader fast path is an admin opt-in, off by default)
     installation:
-      system: No installation required — uses curl with r.jina.ai prefix
+      system: No installation required — use the web_fetch tool, never a direct curl to a reader service
     usage:
-      fetch_url: "curl -s 'https://r.jina.ai/{url}'"
-      fetch_with_header: "curl -s -H 'Accept: application/json' 'https://r.jina.ai/{url}'"
-      fetch_raw: "curl -s -H 'X-Return-Format: text' 'https://r.jina.ai/{url}'"
+      fetch_url: "web_fetch tool with the target URL"
     common_examples:
       - description: Fetch a web page as clean markdown
-        command: "curl -s 'https://r.jina.ai/https://example.com/article'"
+        command: "web_fetch tool, url=https://example.com/article"
         expected_output: "Clean markdown version of the article without ads/nav"
-      - description: Fetch with JSON response metadata
-        command: "curl -s -H 'Accept: application/json' 'https://r.jina.ai/https://docs.python.org/3/library/asyncio.html'"
-        expected_output: "JSON with title, url, content, and description fields"
-      - description: Return plain text only
-        command: "curl -s -H 'X-Return-Format: text' 'https://r.jina.ai/https://example.com'"
-        expected_output: "Plain text content without markdown formatting"
     troubleshooting:
-      - problem: "Rate limit exceeded"
-        solution: "Add JINA_API_KEY header for higher rate limits: -H 'Authorization: Bearer {key}'"
       - problem: "Content truncated"
-        solution: "Some pages with heavy JavaScript may not render fully; try wget or httpx fallback"
-      - problem: "SSL certificate error"
-        solution: "Use -k flag to skip verification only for trusted internal URLs"
+        solution: "Some pages with heavy JavaScript may not render fully; the tool falls back to the headless browser, or try wget or httpx"
     related_tools: ["wget", "httpx", "curl"]
     performance_notes:
-      - "Jina Reader is the preferred fast-path for text extraction from public URLs"
-      - "Response time is typically 1-3 seconds for most pages"
-      - "Caches results; repeated requests for same URL are faster"
+      - "Third-party fast paths send every URL to an outside service, so they are an admin opt-in (web research settings), off by default"
+      - "Never call a reader or search service directly with curl; the web_fetch tool honours the opt-in and the egress policy"
 
   - name: wget
     type: web_downloader
@@ -77,7 +64,7 @@ tools:
     security_notes:
       - "Verify checksums after downloading sensitive files"
       - "Avoid --no-check-certificate for untrusted sources"
-    related_tools: ["curl", "httpx", "jina-reader"]
+    related_tools: ["curl", "httpx", "reader-service"]
 
   - name: httpx
     type: http_client
@@ -110,4 +97,4 @@ tools:
         solution: "Use --verify false only for trusted internal endpoints"
       - problem: "Connection timeout"
         solution: "Increase --timeout value (default is 5 seconds)"
-    related_tools: ["curl", "wget", "requests", "jina-reader"]
+    related_tools: ["curl", "wget", "requests", "reader-service"]

@@ -25,6 +25,9 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 
+from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
+from content_reach.base import BackendError
+
 # Default HTTP timeout in seconds — shared across all httpx-backed backends.
 _HTTP_TIMEOUT = 15.0
 
@@ -93,3 +96,19 @@ async def http_get(
         return await client.get(url, timeout=timeout, **kwargs)
 
     return await _pinned_get(url, headers=headers, params=params, timeout=timeout)
+
+
+async def assert_server_chosen_egress(url: str, *, client: httpx.AsyncClient | None) -> None:
+    """Apply ``EGRESS_POLICY`` to a server-chosen SSOT *url* before a real request (#21850).
+
+    For the third-party reader/search hosts: the egress target is that host (the page URL or
+    query only rides in the path), so the destination is named by the policy, not by the
+    user's input. An injected client (tests) skips the check, exactly as :func:`http_get`
+    skips pinning. Raises ``BackendError`` when the policy refuses the destination.
+    """
+    if client is not None:
+        return
+    try:
+        await assert_egress_policy(url)
+    except EgressBlockedError as exc:
+        raise BackendError(f"egress policy refused {url!r}: {exc}") from exc

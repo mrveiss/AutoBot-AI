@@ -16,7 +16,11 @@ differs.
 import copy
 from typing import Any, Dict, Protocol
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot
 from services.config_write_lock import locked_config_write
+
+logger = get_logger(__name__)
 
 SECTION = "web_research"
 
@@ -36,6 +40,9 @@ DEFAULTS: Dict[str, Any] = {
     "store_results_in_kb": True,
     "filter_adult_content": True,
     "anonymize_requests": True,
+    # #21850: URLs and queries go to a third-party reader/search service only when a user opts in.
+    # The SSOT value (off unless the env says otherwise) is the default until a user saves a choice.
+    "third_party_fast_paths_enabled": ssot.feature.third_party_fast_paths_enabled,
 }
 
 _CONFIG_KEYS = {"daily_limit": "daily_research_limit", "quality_threshold": "min_result_quality"}
@@ -103,3 +110,18 @@ def researcher_config(manager: ConfigManagerLike) -> Dict[str, Any]:
     for field, value in load_settings(manager).items():
         section[_config_key(field)] = value
     return section
+
+
+def third_party_fast_paths_enabled() -> bool:
+    """True only when a user (or the SSOT default) has opted in to the third-party reader/search fast paths.
+
+    The one gate every fast path checks (#21850). Fails closed: a config that cannot be read
+    means no URL or query leaves for a third party.
+    """
+    try:
+        from config import config_manager
+
+        return bool(load_settings(config_manager)["third_party_fast_paths_enabled"])
+    except Exception as exc:
+        logger.warning("Third-party fast-path setting unreadable, treating as off: %s", exc)
+        return False

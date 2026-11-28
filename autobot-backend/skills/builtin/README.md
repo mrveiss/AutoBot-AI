@@ -44,7 +44,7 @@ skill's graceful-degradation chain — never invent tool integrations.
 
 - **STANDALONE** — always works, zero config. What the skill can do with no keys,
   no login, and no external service configured (including its built-in fallback
-  chain, e.g. Jina Reader → `wget` → `httpx`).
+  chain, e.g. the web_fetch tool → `wget` → `httpx`).
 - **SUPERCHARGED** — unlocks per connected tool. What each optional
   provider/connector/credential adds on top. An unset connector must simply keep
   the skill on the STANDALONE tier — connecting a tool never changes the

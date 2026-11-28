@@ -39,7 +39,7 @@ to an UNGUARDED direct connect. It now routes through
 independently resolves + pins every hop (including redirects) before
 connecting, unconditionally — closing both the missing-gate bug and the
 check-then-connect TOCTOU in one fix. ``_try_jina`` is unaffected: its
-connect target is always the fixed, trusted ``r.jina.ai`` host (the caller's
+connect target is always the fixed third-party reader host from the SSOT (the caller's
 ``url`` is only embedded in the request path), so pinning it is a no-op.
 """
 
@@ -50,11 +50,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 from urllib.parse import urljoin
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
+from services import web_research_config
 
 # aiohttp for async HTTP
 try:
@@ -83,7 +85,7 @@ _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
 _MAX_CONTENT_LENGTH = config.link_pipeline_max_content_bytes
 _READ_CHUNK_SIZE = 65536
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
-_JINA_BASE_URL = "https://r.jina.ai/"
+_JINA_BASE_URL = config.feature.third_party_reader_base_url
 
 
 def _resolve_max_redirects() -> int:
@@ -208,14 +210,19 @@ class LinkPipeline(BasePipeline):
         the circuit opens for _JINA_COOLDOWN_SECONDS and all calls short-
         circuit to None immediately.
         """
+        # Not opted in (#21850): the URL never leaves for a third party.
+        if not web_research_config.third_party_fast_paths_enabled():
+            return None
         # Circuit open? Skip the call entirely.
         if time.monotonic() < _jina_cooldown_until:
             return None
 
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
+            # Server-chosen SSOT host (the page URL rides in the path): EGRESS_POLICY, no redirects (#21850).
+            await assert_egress_policy(jina_url)
             async with _get_jina_session() as session:
-                async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
+                async with session.get(jina_url, allow_redirects=False, timeout=_JINA_TIMEOUT) as response:
                     if response.status == 200:
                         text = await response.text(encoding="utf-8", errors="replace")
                         _record_jina_success()

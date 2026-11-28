@@ -108780,6 +108780,8 @@ export interface components {
             filter_adult_content: boolean;
             /** Anonymize Requests */
             anonymize_requests: boolean;
+            /** Third Party Fast Paths Enabled */
+            third_party_fast_paths_enabled: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -108827,6 +108829,8 @@ export interface components {
             filter_adult_content?: boolean | null;
             /** Anonymize Requests */
             anonymize_requests?: boolean | null;
+            /** Third Party Fast Paths Enabled */
+            third_party_fast_paths_enabled?: boolean | null;
         } & {
             [key: string]: unknown;
         };

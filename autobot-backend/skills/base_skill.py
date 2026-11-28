@@ -225,7 +225,7 @@ class DeclarativeSkill(BaseSkill):
         """Declarative skills have no Python execution path.
 
         The agent invokes these capabilities via the tool commands documented
-        in the SKILL.md body (e.g. yt-dlp, feedparser, gh CLI, Jina Reader).
+        in the SKILL.md body (e.g. yt-dlp, feedparser, gh CLI).
         """
         return {
             "success": False,
