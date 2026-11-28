@@ -18,6 +18,7 @@ from agents.development_speedup_agent import (
     analyze_codebase,
     find_duplicates,
 )
+from api.codebase_analytics.endpoints.shared import authorize_source_access
 from api.dev_speedup_analysis import ANALYSIS_TYPE_HANDLERS, VALID_ANALYSIS_TYPES, get_dev_speedup_agent
 from api.dev_speedup_templates import CODE_TEMPLATES
 from api.schemas_code import (
@@ -36,6 +37,7 @@ from api.schemas_code import (
     DevSpeedupTemplatesResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -449,18 +451,19 @@ async def get_recommendations_endpoint(path: str = Query(..., description="Root 
     operation="get_development_speedup_status",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-async def get_development_speedup_status():
+async def get_development_speedup_status(source_id: SourceIdQuery, user=Depends(get_current_user)):
     """
-    Get development speedup system status.
+    Get development speedup system status; the search index is ONE source's (#20402).
 
     Returns information about NPU availability, Redis connection,
     and analysis capabilities.
     """
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
         from agents.npu_code_search_agent import npu_code_search
 
         # Get NPU and search status
-        search_status = await npu_code_search.get_index_status()
+        search_status = await npu_code_search.get_index_status(source_id)
 
         return JSONResponse(
             status_code=200,
@@ -478,19 +481,8 @@ async def get_development_speedup_status():
                         "refactoring",
                         "quality",
                     ],
-                    "supported_languages": [
-                        "python",
-                        "javascript",
-                        "typescript",
-                        "java",
-                        "cpp",
-                        "c",
-                        "csharp",
-                        "ruby",
-                        "go",
-                        "rust",
-                        "php",
-                    ],
+                    "supported_languages": ["python", "javascript", "typescript", "java", "cpp", "c", "csharp"]
+                    + ["ruby", "go", "rust", "php"],
                 },
                 "search_index": search_status,
                 "thresholds": {

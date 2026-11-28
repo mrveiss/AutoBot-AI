@@ -76,3 +76,48 @@ def test_a_request_without_a_source_is_refused() -> None:
         CodeAnalyticsRequest(root_path="/p")
     with pytest.raises(Exception):
         CodeAnalyticsRequest(root_path="/p", source_id="*")
+
+
+def _refusing_auth():
+    from fastapi import HTTPException
+
+    return AsyncMock(side_effect=HTTPException(status_code=404, detail="Source not found"))
+
+
+@pytest.mark.asyncio
+async def test_refactor_suggestions_answer_404_for_a_foreign_or_unknown_source() -> None:
+    from fastapi import HTTPException
+
+    request = CodeAnalyticsRequest(root_path="/p", source_id="src-foreign")
+    with patch.object(mod, "authorize_source_access", _refusing_auth()):
+        with pytest.raises(HTTPException) as refused:
+            await mod.get_refactor_suggestions(request, {"u": 1})
+    assert refused.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_status_and_stats_refuse_a_foreign_source_before_reading_the_index() -> None:
+    from fastapi import HTTPException
+
+    agent = AsyncMock()
+    with (
+        patch.object(mod, "authorize_source_access", _refusing_auth()),
+        patch.object(mod, "_get_code_search_agent", return_value=agent),
+    ):
+        for route in (mod.get_search_status, mod.get_codebase_statistics):
+            with pytest.raises(HTTPException) as refused:
+                await route("src-foreign", {"u": 1})
+            assert refused.value.status_code == 404
+    agent.get_index_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_status_reports_only_the_requested_source() -> None:
+    agent = AsyncMock()
+    agent.get_index_status.return_value = {"npu_available": False}
+    with (
+        patch.object(mod, "authorize_source_access", AsyncMock()),
+        patch.object(mod, "_get_code_search_agent", return_value=agent),
+    ):
+        await mod.get_search_status("src-a", {"u": 1})
+    agent.get_index_status.assert_awaited_once_with("src-a")

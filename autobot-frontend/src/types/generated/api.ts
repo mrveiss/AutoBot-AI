@@ -39526,7 +39526,7 @@ export interface paths {
         };
         /**
          * Get Search Status
-         * @description Get code search system status.
+         * @description Get code search system status for ONE source (#20402).
          *
          *     Returns information about indexed files, NPU availability,
          *     language distribution, and cache statistics.
@@ -39643,7 +39643,7 @@ export interface paths {
         };
         /**
          * Get Codebase Statistics
-         * @description Get comprehensive codebase statistics from Redis index.
+         * @description Get comprehensive statistics of ONE source's Redis index (#20402).
          *
          *     Returns language distribution, file types, complexity metrics,
          *     and usage patterns across the indexed codebase.
@@ -42564,7 +42564,7 @@ export interface paths {
         };
         /**
          * Get Development Speedup Status
-         * @description Get development speedup system status.
+         * @description Get development speedup system status; the search index is ONE source's (#20402).
          *
          *     Returns information about NPU availability, Redis connection,
          *     and analysis capabilities.
@@ -162859,7 +162859,10 @@ export interface operations {
     };
     get_search_status_api_code_search_status_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162873,6 +162876,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_CodeSearchStatusResultResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -162985,7 +162997,10 @@ export interface operations {
     };
     get_codebase_statistics_api_code_search_analytics_stats_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -162999,6 +163014,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_CodeSearchStatsResultResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -166669,7 +166693,10 @@ export interface operations {
     };
     get_development_speedup_status_api_dev_speedup_status_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -166683,6 +166710,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_DevSpeedupStatusResultResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

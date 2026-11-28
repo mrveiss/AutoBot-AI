@@ -169,7 +169,7 @@ async def test_get_index_status_exposes_npu_fields():
         "agents.npu_code_search_agent.asyncio.to_thread",
         new=AsyncMock(return_value=(5, {"python": 3}, 1)),
     ):
-        status = await agent.get_index_status()
+        status = await agent.get_index_status("src-a")
 
     assert "npu_acceleration_used" in status
     assert "last_search_device" in status
@@ -187,7 +187,7 @@ async def test_get_index_status_last_device_cpu_when_not_npu():
         "agents.npu_code_search_agent.asyncio.to_thread",
         new=AsyncMock(return_value=(0, {}, 0)),
     ):
-        status = await agent.get_index_status()
+        status = await agent.get_index_status("src-a")
 
     assert status["last_search_device"] == "cpu"
 
@@ -354,3 +354,17 @@ async def test_a_search_or_index_without_a_source_is_refused_not_unscoped():
 def test_the_same_root_under_two_sources_has_two_index_keys():
     agent = _make_agent()
     assert agent._get_index_key("/repo", "src-a") != agent._get_index_key("/repo", "src-b")
+
+
+@pytest.mark.asyncio
+async def test_get_index_status_scopes_its_key_patterns_to_one_source():
+    """The index status counts ONE source's keys; there is no cross-source aggregate (#20402)."""
+    agent = _make_agent(npu_available=False)
+    agent.redis_client = MagicMock()
+    agent.redis_client.keys.return_value = []
+    await agent.get_index_status("src-a")
+    patterns = [call.args[0] for call in agent.redis_client.keys.call_args_list]
+    assert any("src-a" in p for p in patterns if "file:" in p or "lang:" in p)
+    assert not any("source_id:*" in p for p in patterns)
+    with pytest.raises(TypeError):
+        await agent.get_index_status()

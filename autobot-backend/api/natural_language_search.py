@@ -1037,6 +1037,7 @@ async def natural_language_search(request: NLSearchRequest, source_id: SourceIdQ
     - "Show me all Redis cache invalidation logic"
     """
     import time
+
     start_time = time.time()
     await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
 

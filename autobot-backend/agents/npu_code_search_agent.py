@@ -1270,9 +1270,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
             logger.error("Failed to clear cache: %s", e)
             return {"status": "error", "error": "Cache clear failed"}
 
-    async def get_index_status(self, source_id: str | None = None) -> Dict[str, Any]:
-        """Get indexing status: one source's, or (no ``source_id``) every source's together (#20402)."""
-        scope = self._scope(source_id) if source_id else f"{self.index_prefix}source_id:*:"
+    async def get_index_status(self, source_id: str) -> Dict[str, Any]:
+        """Get ONE source's indexing status; no cross-source aggregate exists (#20402)."""
+        scope = self._scope(source_id)
         try:
             # Issue #361 - avoid blocking - run all Redis ops in thread pool
             def _fetch_index_status():

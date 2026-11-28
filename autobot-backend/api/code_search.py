@@ -43,7 +43,7 @@ from api.schemas_code import (
     CodeSearchStatusResultResponse,
 )
 from api.schemas_common import DataResponse
-from api.source_scope import SourceIdQuery
+from api.source_scope import SourceIdQuery, source_scoped_prefix
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -222,15 +222,16 @@ async def search_code_get(
     operation="get_search_status",
     error_code_prefix="CODE_SEARCH",
 )
-async def get_search_status():
+async def get_search_status(source_id: SourceIdQuery, user=Depends(get_current_user)):
     """
-    Get code search system status.
+    Get code search system status for ONE source (#20402).
 
     Returns information about indexed files, NPU availability,
     language distribution, and cache statistics.
     """
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
-        status = await _get_code_search_agent().get_index_status()
+        status = await _get_code_search_agent().get_index_status(source_id)
 
         return JSONResponse(
             status_code=200,
@@ -638,16 +639,17 @@ async def find_code_duplicates(request: CodeAnalyticsRequest, user=Depends(get_c
     operation="get_codebase_statistics",
     error_code_prefix="CODE_SEARCH",
 )
-async def get_codebase_statistics():
+async def get_codebase_statistics(source_id: SourceIdQuery, user=Depends(get_current_user)):
     """
-    Get comprehensive codebase statistics from Redis index.
+    Get comprehensive statistics of ONE source's Redis index (#20402).
 
     Returns language distribution, file types, complexity metrics,
     and usage patterns across the indexed codebase.
     """
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
         # Get current index status
-        index_status = await _get_code_search_agent().get_index_status()
+        index_status = await _get_code_search_agent().get_index_status(source_id)
 
         if not index_status.get("is_indexed", False):
             raise HTTPException(
@@ -660,7 +662,7 @@ async def get_codebase_statistics():
 
         # Get all index keys
         # Issue #361 - avoid blocking
-        index_pattern = "code_index:*"
+        index_pattern = f"{source_scoped_prefix(_get_code_search_agent().index_prefix, source_id)}*"
         index_keys = await asyncio.to_thread(redis_client.keys, index_pattern)
 
         stats = {
@@ -709,6 +711,7 @@ async def get_refactor_suggestions(request: CodeAnalyticsRequest, user=Depends(g
     Analyzes code patterns, usage statistics, and complexity to suggest
     specific refactoring opportunities for improved maintainability.
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Generating refactor suggestions for: %s", request.root_path)
 
