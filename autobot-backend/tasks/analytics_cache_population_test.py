@@ -182,30 +182,27 @@ class TestPopulateAll:
 
 class TestBeatScheduleRegistration:
     """celery_app.py is heavy and pytest-stubbed (#7766: the stub Celery app
-    has no beat_schedule), so read source text the same way
-    celery_beat_registration_test.py does, rather than importing the real
-    module. GH#12318's generic ``test_every_beat_scheduled_task_is_registered``
+    has no beat_schedule), so read the entry through
+    ``testkit.beat_schedule.beat_schedule_entries``, the one reader of it. GH#12318's generic ``test_every_beat_scheduled_task_is_registered``
     already asserts analytics.populate_all_caches resolves in the task
     registry; these tests check this entry's specifics: it exists, uses the
     configurable (not hardcoded) schedule, and is dispatched at an off-peak hour.
     """
 
-    def _celery_app_source(self) -> str:
-        from pathlib import Path
+    def _entry(self) -> dict:
+        from testkit.beat_schedule import beat_schedule_entries
 
-        return (Path(__file__).resolve().parents[1] / "celery_app.py").read_text(encoding="utf-8")
+        return beat_schedule_entries()["analytics-cache-population-daily"]
 
     def test_populate_all_caches_registered_in_beat_schedule(self):
-        src = self._celery_app_source()
-        assert '"task": "analytics.populate_all_caches"' in src
+        assert self._entry()["task"] == "analytics.populate_all_caches"
 
     def test_schedule_is_configurable_not_hardcoded(self):
         """The entry must read ssot_config.analytics_cache_population_schedule
         (env-var-backed), not a bare crontab(hour=N) literal -- per project
         convention (never hard-code a schedule/TTL; module-level constant
         sourced from config/env var)."""
-        src = self._celery_app_source()
-        assert "crontab_from_string(ssot_config.analytics_cache_population_schedule)" in src
+        assert self._entry()["schedule"] == "crontab_from_string(ssot_config.analytics_cache_population_schedule)"
 
     def test_configured_hour_is_off_peak(self):
         """Sanity-check the default schedule lands in the existing off-peak

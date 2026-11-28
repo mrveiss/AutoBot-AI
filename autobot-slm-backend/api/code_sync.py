@@ -119,7 +119,7 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.node_events import get_slm_self_node, split_enrollment_failed
-from services.pending_role_provisioning import provision_pending_roles, run_update_all_nodes
+from services.pending_role_provisioning import ARCHIVE_BUILD_HOST, provision_pending_roles, run_update_all_nodes
 from services.pending_role_resume import schedule_marked_provisioning
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
@@ -3069,7 +3069,7 @@ async def _execute_node_playbook(
     # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
-    limit = ["localhost", node.node_id]
+    limit = [ARCHIVE_BUILD_HOST, node.node_id]
     playbook_result = await run_update_all_nodes(
         executor, node.node_id, limit, request.restart, progress_callback=progress_callback  # #22211
     )
@@ -3219,7 +3219,7 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     restart, so the update-all stage that fired it ends FAILED, not RUNNING.
     """
     executor = get_playbook_executor()
-    limit = ["localhost", *await _colocated_node_ids(node_id)]
+    limit = [ARCHIVE_BUILD_HOST, *await _colocated_node_ids(node_id)]
     try:
         result = await run_update_all_nodes(
             executor, node_id, limit, True, resume_after_restart=True, detach=True, must_run=[node_id]
@@ -3460,7 +3460,7 @@ async def _sync_single_node(
         # Build playbook parameters
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
-        limit = ["localhost", node_state.node_id]
+        limit = [ARCHIVE_BUILD_HOST, node_state.node_id]
         result = await run_update_all_nodes(executor, node_state.node_id, limit, restart)  # #22211
 
         if result["success"]:
@@ -5050,7 +5050,7 @@ async def _sync_fleet_node(
             f"attempting anyway; ansible decides whether it is reachable (#14297)",
         )
 
-    playbook_result = await run_update_all_nodes(executor, node_id, ["localhost", node_id], True)  # #22211
+    playbook_result = await run_update_all_nodes(executor, node_id, [ARCHIVE_BUILD_HOST, node_id], True)  # #22211
     return await _record_fleet_node_outcome(node, node_id, job, stage, unhealthy, playbook_result)
 
 

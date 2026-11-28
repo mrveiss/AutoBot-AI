@@ -3657,6 +3657,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/self-model/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Entities
+         * @description Entities matching the filters, each with its status, ``last_seen`` and whether its commands are present.
+         *
+         *     ``total`` counts every match; ``offset`` pages through them, so a caller can tell a short page from a full set.
+         */
+        get: operations["list_entities_api_nodes_self_model_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/self-model/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Observations
+         * @description Fold a producer's batch into the model; entities it owns and no longer lists become ``absent``.
+         */
+        post: operations["post_observations_api_nodes_self_model_observations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/nodes/test-connection": {
         parameters: {
             query?: never;
@@ -10406,6 +10448,11 @@ export interface components {
          * @description Agent heartbeat response (Issue #741).
          */
         HeartbeatResponse: {
+            /**
+             * Inventory Ack
+             * @description Inventory hash stored in the self-model (#22280)
+             */
+            inventory_ack?: string | null;
             /** Latest Version */
             latest_version?: string | null;
             /**
@@ -10449,6 +10496,17 @@ export interface components {
             count: number;
             /** Subscribers */
             subscribers: components["schemas"]["IdleSubscriberRow"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** IngestResult */
+        IngestResult: {
+            /** Changed */
+            changed: number;
+            /** Revision */
+            revision: number;
+            /** Upserted */
+            upserted: number;
         } & {
             [key: string]: unknown;
         };
@@ -11927,6 +11985,40 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ObservationBatch
+         * @description One producer's complete claim about the entities of ``scope_kinds``.
+         */
+        ObservationBatch: {
+            /** Observations */
+            observations: components["schemas"]["ObservationIn"][];
+            /** Scope Kinds */
+            scope_kinds: string[];
+            /** Source */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ObservationIn */
+        ObservationIn: {
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            };
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Node Id */
+            node_id?: string | null;
+            parent?: components["schemas"]["ParentRef"] | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OrchestrationServiceActionResponse
          * @description Response for a service action.
          */
@@ -11961,6 +12053,15 @@ export interface components {
             role_name: string;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ParentRef */
+        ParentRef: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
         } & {
             [key: string]: unknown;
         };
@@ -21961,6 +22062,81 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entities_api_nodes_self_model_entities_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+                name?: string | null;
+                node_id?: string | null;
+                status?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_observations_api_nodes_self_model_observations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObservationBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResult"];
                 };
             };
             /** @description Validation Error */

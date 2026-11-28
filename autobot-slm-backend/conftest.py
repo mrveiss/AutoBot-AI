@@ -31,7 +31,7 @@ import importlib.util as _ilu  # noqa: E402
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 _ms_spec = _ilu.spec_from_file_location("_slm_module_stub", Path(__file__).parent / "tests" / "_module_stub.py")
 _ms_mod = _ilu.module_from_spec(_ms_spec)
@@ -183,6 +183,7 @@ for _m in [
     "models",
     "models.database",
     "models.schemas",
+    "models.self_model",  # #22277: Core tables; api/self_model.py and the store read it
 ]:
     _stub(_m)
 
@@ -285,6 +286,9 @@ _EXTRA_SERVICE_MODULES = (
     # (#16310 review round 10: moved out of services/ itself, see that
     # file's module docstring), not here.
     "services.full_tree_drift",
+    # #22277: reconciler.py and api/self_model.py import it at module scope; its own
+    # test real-loads it by path, and its pure decisions are self_model_reconcile.
+    "services.self_model_store",
 )
 
 # #16722: the parent is a hollow package over the real directory, not a MagicMock.
@@ -309,6 +313,13 @@ if "services" not in sys.modules:
 # Each child stub binds onto the parent as it is created (see _stub docstring).
 for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
     _stub(_m)
+
+# #22277: every binding the API and the heartbeat path await needs an AsyncMock; a plain MagicMock child is
+# not awaitable. The inventory ack is a response field, so it resolves to None (nothing acknowledged).
+_AWAITED = "apply_heartbeat_extra_data apply_observations revision sweep_stale load_rows load_page"
+for _awaited in _AWAITED.split():
+    setattr(sys.modules["services.self_model_store"], _awaited, AsyncMock())
+sys.modules["services.self_model_store"].acknowledged_inventory_hash = AsyncMock(return_value=None)
 
 # #16712/#16722 (#17133 review): pytest.ini's --import-mode=importlib collects a
 # services/*_test.py file as the dotted module services.<name>, and
@@ -388,6 +399,7 @@ _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
     "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first
+    "inventory_files",  # #22262: inventory_builder re-exports its write_temp_* helpers, so it loads first
     "inventory_builder",
     "a2a_card_fetcher",
     "hf_token_validator",
@@ -450,6 +462,8 @@ _REAL_SERVICE_MODULES = (
     # secrets_store_snapshot (BACKEND_DATA_DIR), so that loads first.
     "secrets_store_snapshot",
     "sync_restart",
+    # #22277: the pure self-model reconcile; its co-located test imports it directly.
+    "self_model_reconcile",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

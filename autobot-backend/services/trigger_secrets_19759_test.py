@@ -210,13 +210,13 @@ def test_audit_entry_point_runs_the_async_audit() -> None:
 
 
 def test_audit_is_scheduled_from_a_registered_env_backed_setting() -> None:
-    from pathlib import Path
-
     from autobot_shared import env_registry, env_registry_llc  # noqa: F401
+    from testkit.beat_schedule import beat_schedule_entries
 
     assert "AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE" in env_registry.REGISTRY
-    source = (Path(__file__).resolve().parent.parent / "celery_app.py").read_text(encoding="utf-8")
-    assert "run_trigger_secret_audit" in source and "TRIGGER_SECRET_AUDIT_SCHEDULE" in source
+    entry = beat_schedule_entries()["llc-trigger-secret-audit"]
+    assert entry["task"] == "llc.scheduler.trigger_secret_audit.run_trigger_secret_audit"
+    assert entry["schedule"] == "crontab_from_string(TRIGGER_SECRET_AUDIT_SCHEDULE)"
 
 
 @pytest.mark.asyncio

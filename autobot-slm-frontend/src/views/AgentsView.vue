@@ -213,7 +213,7 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'local-agents'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.localAgents') }}</button>
@@ -222,7 +222,7 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'external-agents'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.externalAgents') }}</button>
@@ -231,7 +231,7 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'org-chart'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.orgChart') }}</button>
@@ -240,7 +240,7 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'config-history'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.configHistory') }}</button>
@@ -249,7 +249,7 @@ onMounted(() => {
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'processes'
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.processes') }}</button>
@@ -469,9 +469,9 @@ onMounted(() => {
 }
 
 .error-banner {
-  background: var(--slm-red-100);
-  border: 1px solid var(--color-error-500);
-  color: var(--slm-red-700);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error-dark);
   padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-4);
@@ -525,7 +525,7 @@ onMounted(() => {
   font-weight: 600;
   margin: 0 0 var(--spacing-4) 0;
   padding-bottom: var(--spacing-3);
-  border-bottom: 1px solid var(--slm-gray-200);
+  border-bottom: 1px solid var(--border);
 }
 
 .agents-list ul {
@@ -547,11 +547,11 @@ onMounted(() => {
 }
 
 .agents-list li:hover {
-  background: var(--slm-gray-100);
+  background: var(--bg-tertiary);
 }
 
 .agents-list li.selected {
-  background: var(--slm-indigo-100);
+  background: var(--color-primary-bg);
 }
 
 .agents-list li.inactive {
@@ -570,8 +570,8 @@ onMounted(() => {
 
 .default-badge {
   font-size: 10px;
-  background: var(--slm-indigo-500);
-  color: var(--color-white);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   padding: 2px var(--spacing-2);
   border-radius: var(--radius-default);
   align-self: flex-start;
@@ -636,21 +636,21 @@ onMounted(() => {
 .form-group input,
 .form-group select {
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-300);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
 }
 
 .form-group input:disabled,
 .form-group select:disabled {
-  background: var(--slm-gray-50);
+  background: var(--surface2);
   color: var(--text-secondary);
 }
 
 .node-select {
   width: 100%;
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-300);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   background: var(--color-white);
@@ -661,7 +661,7 @@ onMounted(() => {
   margin-top: var(--spacing-2);
   width: 100%;
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-indigo-500);
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-family: monospace;
@@ -678,10 +678,10 @@ onMounted(() => {
 
 .endpoint-readonly {
   padding: 10px var(--spacing-3);
-  border: 1px solid var(--slm-gray-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
-  background: var(--slm-gray-50);
+  background: var(--surface2);
   color: var(--text-secondary);
   font-family: monospace;
 }

@@ -30,7 +30,18 @@ def test_population_builders_write_system():
     from api import knowledge_population as pop
 
     assert _is_system_document(pop._get_command_metadata({"command": "ls"}), "system_commands")
-    assert _is_system_document(pop._get_man_page_metadata("ls"), "man_page")
+    from services.man_page_ingestion import build_man_page_metadata
+
+    ctx = {
+        "machine_id": "redis",
+        "machine_ip": "10.0.0.1",
+        "os_name": "ubuntu",
+        "os_version": "24.04",
+        "os_type": "Linux",
+        "architecture": "x86_64",
+        "kernel_version": "6",
+    }
+    assert _is_system_document(build_man_page_metadata("ls", "1", ctx, "k"), "man_page")  # #22272: the one path
 
 
 def test_the_documentation_index_writes_system():

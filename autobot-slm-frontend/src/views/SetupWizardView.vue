@@ -1326,26 +1326,26 @@ onMounted(async () => {
 .status-badge.online,
 .status-badge.success {
   background: rgba(34, 197, 94, 0.15);
-  color: var(--color-success-500);
+  color: var(--color-success);
 }
 
 .status-badge.pending,
 .status-badge.untested,
 .status-badge.testing {
   background: rgba(234, 179, 8, 0.15);
-  color: var(--color-warning-500);
+  color: var(--color-warning);
 }
 
 .status-badge.failed,
 .status-badge.error,
 .status-badge.offline {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-error-500);
+  color: var(--color-error);
 }
 
 .status-badge.enrolling {
   background: rgba(59, 130, 246, 0.15);
-  color: var(--slm-blue-500);
+  color: var(--color-info);
 }
 
 .empty-state {
@@ -1549,7 +1549,7 @@ input.full-width {
 }
 
 .state-running .state-dot {
-  background: var(--color-success-500);
+  background: var(--color-success);
   box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
 }
 
@@ -1567,7 +1567,7 @@ input.full-width {
 
 /* Provision log */
 .provision-log {
-  background: var(--color-log-bg);
+  background: var(--terminal-chrome-bg-alt);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 1rem;
@@ -1585,24 +1585,24 @@ input.full-width {
 }
 
 .log-info {
-  color: var(--color-log-info);
+  color: var(--terminal-text-output);
 }
 
 .log-task {
-  color: var(--slm-blue-400);
+  color: var(--color-info-light);
   font-weight: 600;
 }
 
 .log-success {
-  color: var(--color-log-success);
+  color: var(--color-success-light);
 }
 
 .log-error {
-  color: var(--color-log-error);
+  color: var(--terminal-ansi-red);
 }
 
 .log-warning {
-  color: var(--color-log-warning);
+  color: var(--color-warning-light);
 }
 
 .provision-status-bar {
@@ -1618,7 +1618,7 @@ input.full-width {
 }
 
 .provision-stage {
-  color: var(--slm-blue-400);
+  color: var(--color-info-light);
   font-weight: 600;
 }
 
@@ -1630,7 +1630,7 @@ input.full-width {
 .provision-failure {
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
-  background: var(--error-bg);
+  background: var(--color-error-bg);
   border: 1px solid var(--error-color);
   border-radius: var(--radius-md);
 }
@@ -1666,13 +1666,13 @@ input.full-width {
 
 .phase-active {
   border-color: rgba(96, 165, 250, 0.5);
-  color: var(--slm-blue-400);
+  color: var(--color-info-light);
   font-weight: 600;
 }
 
 .phase-done {
   border-color: rgba(74, 222, 128, 0.3);
-  color: var(--color-log-success);
+  color: var(--color-success-light);
 }
 
 .provision-current-task {
@@ -1683,7 +1683,7 @@ input.full-width {
   border-radius: var(--radius-default);
   font-family: monospace;
   font-size: 0.78rem;
-  color: var(--color-log-current-task);
+  color: var(--terminal-ansi-cyan);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1696,7 +1696,7 @@ input.full-width {
 }
 
 .log-phase {
-  color: var(--color-log-phase);
+  color: var(--terminal-ansi-purple);
   font-weight: 600;
   margin-top: 0.25rem;
 }
@@ -1723,17 +1723,17 @@ input.full-width {
 
 .health-badge.healthy {
   background: rgba(34, 197, 94, 0.15);
-  color: var(--color-success-500);
+  color: var(--color-success);
 }
 
 .health-badge.degraded {
   background: rgba(234, 179, 8, 0.15);
-  color: var(--color-warning-500);
+  color: var(--color-warning);
 }
 
 .health-badge.critical {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-error-500);
+  color: var(--color-error);
 }
 
 /* Complete panel */

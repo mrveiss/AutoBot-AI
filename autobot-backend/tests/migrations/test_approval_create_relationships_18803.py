@@ -104,9 +104,9 @@ def response_failures(monkeypatch, approval_route):
     failures = []
     original = approval_route._to_response
 
-    def observed(row):
+    def observed(row, *args, **kwargs):
         try:
-            return original(row)
+            return original(row, *args, **kwargs)
         except Exception as error:
             failures.append(type(error).__module__ + "." + type(error).__name__)
             raise

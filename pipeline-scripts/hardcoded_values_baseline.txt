@@ -197,7 +197,6 @@
 3|other|autobot-backend/chat_workflow/manager.py|"user"
 1|other|autobot-backend/chat_workflow/tool_handler.py|5
 1|other|autobot-backend/chat_workflow/tool_handler.py|https://html.duckduckgo.com/html/?q={quote_plus(query
-1|other|autobot-backend/chat_workflow/tool_handler.py|offset=0
 3|other|autobot-backend/code_analysis/auto-tools/accessibility_enhancer.py|offset=0
 1|other|autobot-backend/code_analysis/setup.py|https://autobot-code-analysis.readthedocs.io/
 2|other|autobot-backend/code_analysis/setup.py|https://github.com/autobot/code-analysis-suite
@@ -817,7 +816,6 @@
 1|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|:11434
 5|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|:8001
 1|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|deepseek-r1:14b
-1|other|autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py|30
 3|ssot|autobot-infrastructure/shared/scripts/utilities/npu_worker.py|llama3.2:1b
 1|ssot|autobot-infrastructure/shared/scripts/utilities/npu_worker_design.py|:6379
 2|ssot|autobot-infrastructure/shared/scripts/utilities/npu_worker_design.py|llama3.2:1b

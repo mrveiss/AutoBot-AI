@@ -86,7 +86,7 @@ onMounted(load)
   <div class="p-6 space-y-6">
     <BaseAlert v-if="error" variant="error" :message="error" />
 
-    <section class="bg-white rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="relaxed-section">
+    <section class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="relaxed-section">
       <h2 class="text-lg font-semibold text-(--aui-color-text) mb-2">{{ $t('settings.chatApprovalSettings.relaxedTitle') }}</h2>
       <p class="text-sm text-(--aui-color-text-muted) mb-6">{{ $t('settings.chatApprovalSettings.relaxedHelp') }}</p>
 
@@ -117,7 +117,7 @@ onMounted(load)
       </div>
     </section>
 
-    <section class="bg-white rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="auto-approve-section">
+    <section class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="auto-approve-section">
       <h2 class="text-lg font-semibold text-(--aui-color-text) mb-2">{{ $t('settings.chatApprovalSettings.autoApproveTitle') }}</h2>
       <p class="text-sm text-(--aui-color-text-muted) mb-4">{{ $t('settings.chatApprovalSettings.autoApproveHelp') }}</p>
 

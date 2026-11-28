@@ -21,6 +21,10 @@ _STILL_ALLOWED = frozenset(
         "read_spilled_output",
         # #22253: reads a manual synopsis from the knowledge base; a READ in the catalogue, executes nothing.
         "command_manual",
+        # #22278: chat reaches these registry reads now; each needs a READ permission and changes nothing.
+        "query_self_model",
+        "query_system_information",
+        "list_system_services",
         "scrape_url",
         "crawl_site",
         "map_site",
