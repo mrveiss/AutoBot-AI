@@ -79,11 +79,8 @@ _RECORDED = {
     ("autobot-backend/knowledge/root_read.py", "literal"): 1,
     # Cross-org KB writes: platform_admin / superadmin, a platform-level concept (#12786).
     ("autobot-backend/llc/kb/write_guard.py", "set"): 1,
-    # Company membership roles (owner / admin / lead of ONE company), not the system admin role.
-    ("autobot-backend/llc/api/controls.py", "set"): 1,
-    ("autobot-backend/llc/api/replay.py", "set"): 1,
+    # Company membership roles (owner / admin of ONE company), not the system admin role: the one board-role set.
     ("autobot-backend/llc/services/authz.py", "set"): 1,
-    ("autobot-backend/llc/services/work_item_service.py", "set"): 1,
 }
 
 _GATE = "the one gate is the HTTP route dependency; this delegates to it, then adds a step"

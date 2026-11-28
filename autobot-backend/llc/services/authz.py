@@ -46,6 +46,19 @@ if TYPE_CHECKING:
 #: permissions and workflow attachments.
 GRANTING_ROLES = frozenset({MembershipRole.OWNER.value, MembershipRole.ADMIN.value})
 
+#: The board set plus ``lead``: who may manage a work item's co-working slot.
+COWORKING_ROLES = GRANTING_ROLES | {MembershipRole.LEAD.value}
+
+
+def _role_value(role: "MembershipRole | str | None") -> str:
+    """The plain string of a membership role (enum member or string); ``""`` for none."""
+    return role.value if isinstance(role, MembershipRole) else (role or "")
+
+
+def is_coworking_role(role: "MembershipRole | str | None") -> bool:
+    """True when *role* may manage co-working: the board set or ``lead``."""
+    return _role_value(role) in COWORKING_ROLES
+
 
 class NotAuthorisedError(Exception):
     """The actor may not perform this change in this company.

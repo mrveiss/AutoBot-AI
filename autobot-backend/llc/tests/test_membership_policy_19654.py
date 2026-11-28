@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from llc.api import company_members as routes
 from llc.models.activity import ActorType
 from llc.models.enums import MembershipRole as Role
-from llc.services.authz import NotAuthorisedError
+from llc.services.authz import COWORKING_ROLES, GRANTING_ROLES, NotAuthorisedError, is_coworking_role
 from llc.services.membership_policy import LastOwnerError, authorize_member_change
 from llc.services.membership_service import MembershipService
 
@@ -237,3 +237,16 @@ async def test_a_superadmins_add_to_a_missing_company_is_404_not_500():
         await _member_routes()["add"](session, svc, _ctx(admin=True))
     assert raised.value.status_code == 404
     session.rollback.assert_awaited_once()
+
+
+@pytest.mark.parametrize("role", list(Role))
+def test_coworking_predicate_accepts_enum_and_string(role):
+    """Co-working is the board set (owner, admin) plus lead; enum and string agree (#20778)."""
+    expected = role in (Role.OWNER, Role.ADMIN, Role.LEAD)
+    assert is_coworking_role(role) is expected and is_coworking_role(role.value) is expected
+
+
+def test_board_set_is_defined_once_and_coworking_derives_from_it():
+    assert GRANTING_ROLES == {Role.OWNER.value, Role.ADMIN.value}
+    assert COWORKING_ROLES == GRANTING_ROLES | {Role.LEAD.value}
+    assert not is_coworking_role(None) and not is_coworking_role("superadmin")

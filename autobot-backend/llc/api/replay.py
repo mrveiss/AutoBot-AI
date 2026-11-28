@@ -44,7 +44,6 @@ from ..services.replay_service import ReplayLogNotFoundError, RunReplayService
 
 router = APIRouter(prefix="/agents", tags=["llc-replay"])
 
-_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
 
 _get_membership = lazy_singleton(MembershipService)
 _get_replay_svc = lazy_singleton(RunReplayService)
@@ -61,7 +60,7 @@ async def _check_admin(ctx: TenantContext, current_user: dict, session: AsyncSes
         company_id=ctx.org_id,
         current_user=current_user,
         session=session,
-        allowed_roles=_ALLOWED_ROLES,
+        allowed_roles=GRANTING_ROLES,
         membership_svc=_get_membership(),
     )
 

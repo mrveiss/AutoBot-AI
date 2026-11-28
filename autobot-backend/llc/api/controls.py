@@ -52,8 +52,6 @@ router = APIRouter(tags=["llc-controls"])
 _get_controls = lazy_singleton(ControlsService)
 _get_membership = lazy_singleton(MembershipService)
 
-_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
-
 
 def _controls_svc() -> ControlsService:
     return _get_controls()
@@ -78,7 +76,7 @@ async def _require_board_role(
         company_id,
         current_user,
         session,
-        _ALLOWED_ROLES,
+        GRANTING_ROLES,
         membership_svc,
         detail="Only board members (owner/admin) can use instant controls",
     )
