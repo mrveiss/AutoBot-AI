@@ -71,3 +71,38 @@ def test_run_capability_audit_report_shape():
     assert report["agent_count"] >= 4
     assert report["error_count"] == 0
     assert isinstance(report["findings"], list)
+
+
+def test_scheduled_task_runs_the_audit_and_is_on_the_beat_schedule():
+    """#22271: the Celery task is the scheduled entry point for the audit (schedule read from source, #22280)."""
+    from tasks.capability_audit_task import run_capability_audit_task
+    from testkit.beat_schedule import beat_schedule_entries
+
+    report = run_capability_audit_task()
+    assert report["error_count"] == 0
+    assert run_capability_audit_task.name == "tasks.run_capability_audit"
+    assert beat_schedule_entries()["capability-manifest-audit-daily"]["task"] == "tasks.run_capability_audit"
+
+
+def test_audit_schedule_comes_from_the_env_backed_constant():
+    """#22271/#22273: the beat entry's hour and minute are not literals in celery_app."""
+    import ast
+    import inspect
+
+    from autobot_shared.env_registry import REGISTRY
+    from testkit.beat_schedule import beat_schedule_entries
+    from utils import celery_schedules
+
+    entry = beat_schedule_entries()["capability-manifest-audit-daily"]
+    assert entry["schedule"] == "crontab_from_string(CAPABILITY_AUDIT_SCHEDULE)"
+    # ...and the constant itself is read from its registered env var (#22280).
+    tree = ast.parse(inspect.getsource(celery_schedules))
+    value = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(getattr(t, "id", None) == "CAPABILITY_AUDIT_SCHEDULE" for t in node.targets)
+    )
+    assert isinstance(value, ast.Call) and getattr(value.func, "id", None) == "env_str"
+    assert value.args[0].value == "AUTOBOT_CAPABILITY_AUDIT_SCHEDULE"
+    assert "AUTOBOT_CAPABILITY_AUDIT_SCHEDULE" in REGISTRY

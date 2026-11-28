@@ -83,6 +83,8 @@ MONITORING_ROUTER_CONFIGS = [
     # Issue #4069: Production diagnostic endpoints for causal inference
     # Issue #4254: Register diagnostics router
     ("api.diagnostics", "router", "", ["diagnostics"], "diagnostics"),
+    # Issue #22271: admin-gated agent capability-manifest audit
+    ("api.capability_audit", "router", "/capability-audit", ["capability-audit"], "capability_audit"),
 ]
 
 

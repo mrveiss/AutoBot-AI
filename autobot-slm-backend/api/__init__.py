@@ -46,6 +46,7 @@ from .scim import router as scim_router
 from .secrets import router as secrets_router
 from .secrets_backup_status import router as secrets_backup_status_router
 from .security import router as security_router
+from .self_model import router as self_model_router
 from .services import fleet_router as fleet_services_router
 from .services import router as services_router
 from .settings import router as settings_router
@@ -82,6 +83,8 @@ monitoring_router.include_router(agent_ledger_router)
 # nodes_router's own include-level auth from main.py. Mounted here rather
 # than added to api/nodes.py because that file is at its file-size ceiling.
 nodes_router.include_router(capability_profile_router)
+# #22277: the connected self-model, served as /api/nodes/self-model/... (same reason: api/nodes.py is at its ceiling).
+nodes_router.include_router(self_model_router)
 # #10200: on the unauthenticated health router because the route checks the internal key itself.
 health_router.include_router(first_admin_internal_router)
 

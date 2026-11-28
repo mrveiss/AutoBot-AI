@@ -11,10 +11,11 @@ Provides developer mode functionality including:
 - Debug information and system diagnostics
 """
 
-from typing import Dict, List
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.routing import compile_path
 
 from api.schemas_system import (
     DeveloperConfigResponse,
@@ -22,6 +23,7 @@ from api.schemas_system import (
     DeveloperEndpointsResponse,
     DeveloperSystemInfoResponse,
 )
+from api.self_capabilities import discover_endpoints
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -34,62 +36,46 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-class RuntimeEndpointRegistry:
-    """Registry to track all API endpoints across routers"""
-
-    def __init__(self):
-        """Initialize API registry with empty endpoints and routers."""
-        self.endpoints: Dict[str, Metadata] = {}
-        self.routers: List[str] = []
-
-    def register_router(self, router_name: str, router_instance, prefix: str = ""):
-        """Register a router and its endpoints"""
-        self.routers.append(router_name)
-
-        for route in router_instance.routes:
-            if hasattr(route, "path") and hasattr(route, "methods"):
-                for method in route.methods:
-                    if method != "HEAD":  # Skip HEAD methods
-                        endpoint_key = f"{method} {prefix}{route.path}"
-                        self.endpoints[endpoint_key] = {
-                            "router": router_name,
-                            "path": f"{prefix}{route.path}",
-                            "method": method,
-                            "name": getattr(route, "name", "unnamed"),
-                            "summary": getattr(route, "summary", ""),
-                            "tags": getattr(route, "tags", []),
-                        }
-
-    def get_all_endpoints(self) -> Metadata:
-        """Get all registered endpoints"""
-        return {
-            "total_endpoints": len(self.endpoints),
-            "routers": self.routers,
-            "endpoints": self.endpoints,
-        }
-
-    def find_similar_endpoints(self, path: str, method: str) -> List[str]:
-        """Find similar endpoints for helpful error messages"""
-        similar = []
-        path_lower = path.lower()
-
-        for endpoint_key, endpoint_info in self.endpoints.items():
-            endpoint_path = endpoint_info["path"].lower()
-            endpoint_method = endpoint_info["method"]
-
-            # Exact path match but different method
-            if endpoint_path == path_lower and endpoint_method != method:
-                similar.append(f"{endpoint_method} {endpoint_info['path']} (different method)")
-
-            # Similar path (contains or partial match)
-            elif path_lower in endpoint_path or endpoint_path in path_lower:
-                similar.append(f"{endpoint_method} {endpoint_info['path']} (similar path)")
-
-        return similar[:5]  # Limit to 5 suggestions
+def find_similar_endpoints(endpoints: List[Metadata], path: str, method: str) -> List[str]:
+    """Find similar endpoints for helpful error messages (#22274: over the canonical route records)."""
+    similar = []
+    path_lower = path.lower()
+    for ep in endpoints:
+        endpoint_path = ep["path"].lower()
+        if endpoint_path == path_lower and ep["method"] != method:
+            similar.append(f"{ep['method']} {ep['path']} (different method)")
+        elif path_lower in endpoint_path or endpoint_path in path_lower:
+            similar.append(f"{ep['method']} {ep['path']} (similar path)")
+    return similar[:5]  # Limit to 5 suggestions
 
 
-# Global registry instance
-api_registry = RuntimeEndpointRegistry()
+def allowed_methods_for_path(endpoints: List[Metadata], path: str) -> List[str]:
+    """Methods of every discovered route whose template matches the concrete ``path``.
+
+    ``GET /items/{id}`` matches ``/items/42``; a literal route matches only itself, because
+    ``compile_path`` turns a template without parameters into an exact-match pattern.
+    """
+    methods = []
+    for ep in endpoints:
+        pattern, _, _ = compile_path(ep["path"])
+        if pattern.match(path):
+            methods.append(ep["method"])
+    return methods
+
+
+async def runtime_endpoint_view(app) -> Metadata:
+    """The developer endpoint view, derived from the one route registry (#22274).
+
+    ``RuntimeEndpointRegistry`` was retired: its ``register_router`` had no caller, so it was
+    always empty; ``api.self_capabilities.discover_endpoints`` crawls the served app instead.
+    """
+    payload = await discover_endpoints(app)
+    return {
+        "total_endpoints": payload["total_endpoints"],
+        "routers": sorted(payload["by_tag"]),
+        "endpoints": {f"{ep['method']} {ep['path']}": ep for ep in payload["endpoints"]},
+        "list": payload["endpoints"],
+    }
 
 
 @router.get("/endpoints", response_model=DeveloperEndpointsResponse)
@@ -98,14 +84,15 @@ api_registry = RuntimeEndpointRegistry()
     operation="get_api_endpoints",
     error_code_prefix="DEVELOPER",
 )
-async def get_api_endpoints():
+async def get_api_endpoints(request: Request):
     """Get all registered API endpoints (developer mode)"""
     developer_mode = config_manager.get_nested("developer.enabled", False)
 
     if not developer_mode:
         raise HTTPException(status_code=403, detail="Developer mode is not enabled")
 
-    return api_registry.get_all_endpoints()
+    view = await runtime_endpoint_view(request.app)
+    return {k: view[k] for k in ("total_endpoints", "routers", "endpoints")}
 
 
 @router.get("/config", response_model=DeveloperConfigResponse)
@@ -148,7 +135,7 @@ async def update_developer_config(config: dict):
     operation="get_system_info",
     error_code_prefix="DEVELOPER",
 )
-async def get_system_info():
+async def get_system_info(request: Request):
     """Get system information for debugging"""
     developer_mode = config_manager.get_nested("developer.enabled", False)
 
@@ -160,7 +147,7 @@ async def get_system_info():
         "backend_config": config_manager.get_backend_config(),
         "redis_config": config_manager.get_redis_config(),
         "llm_config": config_manager.get_nested("llm_config", {}),
-        "available_routers": api_registry.routers,
+        "available_routers": (await runtime_endpoint_view(request.app))["routers"],
     }
 
 
@@ -181,7 +168,8 @@ async def not_found_handler(request: Request, exc: HTTPException):
     method = request.method
 
     # Find similar endpoints
-    similar_endpoints = api_registry.find_similar_endpoints(path, method)
+    view = await runtime_endpoint_view(request.app)
+    similar_endpoints = find_similar_endpoints(view["list"], path, method)
 
     response_content = {
         "detail": f"Endpoint not found: {method} {path}",
@@ -189,8 +177,8 @@ async def not_found_handler(request: Request, exc: HTTPException):
             "requested_method": method,
             "requested_path": path,
             "similar_endpoints": similar_endpoints,
-            "total_available_endpoints": len(api_registry.endpoints),
-            "available_routers": api_registry.routers,
+            "total_available_endpoints": view["total_endpoints"],
+            "available_routers": view["routers"],
         },
     }
 
@@ -217,10 +205,7 @@ async def method_not_allowed_handler(request: Request, exc: HTTPException):
     method = request.method
 
     # Find endpoints with same path but different methods
-    allowed_methods = []
-    for endpoint_key, endpoint_info in api_registry.endpoints.items():
-        if endpoint_info["path"] == path:
-            allowed_methods.append(endpoint_info["method"])
+    allowed_methods = allowed_methods_for_path((await runtime_endpoint_view(request.app))["list"], path)
 
     response_content = {
         "detail": f"Method {method} not allowed for {path}",

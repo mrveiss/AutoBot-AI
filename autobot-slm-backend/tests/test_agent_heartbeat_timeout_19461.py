@@ -68,7 +68,7 @@ def _agent(tmp_path, session) -> SLMAgent:
 async def test_heartbeat_timeout_is_a_warning_and_buffers_the_event(tmp_path, caplog):
     agent = _agent(tmp_path, _Session(TimeoutError()))
     with caplog.at_level(logging.DEBUG, logger=agent_mod.logger.name):
-        assert await agent._send_heartbeat_request({"x": 1}) is False
+        assert await agent._send_heartbeat_request({"x": 1, "extra_data": {}}) is False
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1 and "failed within" in warnings[0].getMessage()
     assert warnings[0].getMessage().split("failed within", 1)[1].strip()  # says what happened
@@ -80,7 +80,7 @@ async def test_heartbeat_timeout_is_a_warning_and_buffers_the_event(tmp_path, ca
 async def test_heartbeat_cancel_propagates(tmp_path):
     agent = _agent(tmp_path, _Session(asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):
-        await agent._send_heartbeat_request({"x": 1})
+        await agent._send_heartbeat_request({"x": 1, "extra_data": {}})
     assert event_buffer.read_unsynced(agent.buffer_db) == []
 
 
@@ -88,7 +88,7 @@ async def test_heartbeat_cancel_propagates(tmp_path):
 async def test_successful_heartbeat_is_unchanged(tmp_path, caplog):
     agent = _agent(tmp_path, _Session())
     with caplog.at_level(logging.DEBUG, logger=agent_mod.logger.name):
-        assert await agent._send_heartbeat_request({"x": 1}) is True
+        assert await agent._send_heartbeat_request({"x": 1, "extra_data": {}}) is True
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert event_buffer.read_unsynced(agent.buffer_db) == []
 
@@ -132,7 +132,7 @@ async def test_run_loop_continues_after_a_timeout_without_the_catch_all(tmp_path
     agent.collector = type("C", (), {"collect": lambda self: {}})()
     agent.version_manager = type("V", (), {"get_version": lambda self: "v"})()
     agent.role_detector = None
-    monkeypatch.setattr(agent_mod, "build_heartbeat_payload", lambda *a, **k: {"x": 1})
+    monkeypatch.setattr(agent_mod, "build_heartbeat_payload", lambda *a, **k: {"extra_data": {}})
     sleeps = 0
 
     async def _sleep(_s):
@@ -181,7 +181,7 @@ async def test_real_server_delay_past_the_timeout_is_a_missed_heartbeat(tmp_path
             agent = _agent(tmp_path, session)
             agent.admin_url = str(server.make_url("")).rstrip("/")
             with caplog.at_level(logging.DEBUG, logger=agent_mod.logger.name):
-                assert await agent._send_heartbeat_request({"x": 1}) is False
+                assert await agent._send_heartbeat_request({"x": 1, "extra_data": {}}) is False
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 

@@ -1109,22 +1109,14 @@ async def _init_trigger_service(app: FastAPI) -> None:
         app.state.trigger_service = None
 
 
-async def _init_slm_reconciler(app: FastAPI):
-    """
-    Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
+async def _init_self_model_producer(app: FastAPI):
+    """Start the periodic push of route, tool, agent and service-health records to the SLM self-model (#22277).
 
-    DEPRECATED: Issue #729 - SLM services moved to SLM server.
-    This function is disabled as backend/services/slm/ has been removed.
-    SLM server runs its own reconciler independently.
-
-    Issue #726: Starts the Service Lifecycle Manager reconciler that monitors
-    node health and triggers remediation actions. Wires up WebSocket callbacks
-    for real-time event broadcasting.
+    Replaces the disabled SLM reconciler stub (#729): the SLM runs its own reconciler, so nothing was left to start.
     """
-    logger.info("✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server)")
-    # REMOVED as part of Issue #729 layer separation
-    # SLM server now runs its own reconciler - no longer initialized from backend
-    return
+    from services.self_model_producer import start_self_model_producer
+
+    app.state.self_model_producer_task = start_self_model_producer(app)
 
 
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
@@ -1995,7 +1987,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
         await _init_trigger_service(app)
-        await _init_slm_reconciler(app)
+        await _init_self_model_producer(app)
         await _init_metrics_collection(app)
         await agent_presence_sync.start(app)
         await _recover_index_queue()

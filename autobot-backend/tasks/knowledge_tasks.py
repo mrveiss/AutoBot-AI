@@ -19,7 +19,7 @@ from pathlib import Path
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
-from tasks.man_page_indexing import run_indexing_subprocess
+from tasks.man_page_indexing import run_man_page_indexing
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -66,7 +66,7 @@ def refresh_system_knowledge(self) -> Metadata:
 
     This is a long-running operation (can take up to 10 minutes) that indexes
     all system man pages and AutoBot documentation into the knowledge base.
-    Issue #1088: subprocess execution extracted; #15853 moved it to tasks.man_page_indexing.
+    Issue #1088: extracted; #22272: calls the canonical in-process indexer, no subprocess.
 
     Args:
         self: Celery task instance (bound for progress updates)
@@ -87,7 +87,7 @@ def refresh_system_knowledge(self) -> Metadata:
             },
         )
         logger.info("Starting comprehensive system knowledge refresh (background task)...")
-        return run_indexing_subprocess()
+        return _run_async_in_loop(run_man_page_indexing())
 
     except Exception as e:
         logger.exception("System knowledge refresh task failed: %s", e)

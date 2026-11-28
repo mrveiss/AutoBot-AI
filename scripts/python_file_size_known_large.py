@@ -102,7 +102,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_connectors.py": 912,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
-    "autobot-backend/api/knowledge_population.py": 1238,
+    "autobot-backend/api/knowledge_population.py": 1146,
     "autobot-backend/api/knowledge_search.py": 808,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 900,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
@@ -386,7 +386,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/unit/chat_workflow/test_code_exec.py": 1093,
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 718,
-    "autobot-backend/tools/tool_registry.py": 809,
+    "autobot-backend/tools/tool_registry.py": 734,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/error_catalog.py": 774,
@@ -445,7 +445,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
     "autobot-slm-backend/services/role_registry.py": 617,
-    "autobot-slm-backend/services/service_orchestrator.py": 913,
+    "autobot-slm-backend/services/service_orchestrator.py": 911,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,

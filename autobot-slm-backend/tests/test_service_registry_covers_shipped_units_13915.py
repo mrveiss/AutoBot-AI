@@ -175,3 +175,16 @@ def test_chromadb_default_port_is_the_ssot_port():
     from autobot_shared.ssot_config import config
 
     assert _SERVICE_DEFINITIONS["chromadb"].default_port == config.port.chromadb
+
+
+def test_linked_services_take_port_and_health_path_from_the_shared_definition():
+    """#22273: one definition. A linked entry restates neither the port nor the health path."""
+    from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
+
+    linked = {"npu-worker": "npu-worker", "ai-stack": "ollama", "browser": "playwright-vnc"}
+    for slm_name, shared_name in linked.items():
+        spec = SERVICE_DEFINITIONS[shared_name]
+        assert _SERVICE_DEFINITIONS[slm_name].default_port == spec.port, slm_name
+        assert _SERVICE_DEFINITIONS[slm_name].health_check_path == spec.health_path, slm_name
+    assert _SERVICE_DEFINITIONS["redis"].default_port == SERVICE_DEFINITIONS["redis"].port
+    assert _SERVICE_DEFINITIONS["ai-stack-service"].default_port == SERVICE_DEFINITIONS["ai-stack"].port
