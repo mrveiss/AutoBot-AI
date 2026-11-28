@@ -401,5 +401,16 @@ describe('useChatStore', () => {
       expect(moved.companyId).toBe('c2')
       expect(moved.unassigned).toBe(false)
     })
+
+    it('an empty companyId without an unassigned flag leaves the held Unassigned flag unchanged', () => {
+      const store = useChatStore()
+      store.createNewSession('Chat', 'imp-3')
+      store.importSession({ ...store.exportSession('imp-3')!, unassigned: true })
+      const emptied = { ...store.exportSession('imp-3')!, companyId: '' } as Record<string, unknown>
+      delete emptied.unassigned
+      store.importSession(emptied as never)
+
+      expect(store.exportSession('imp-3')!.unassigned).toBe(true)
+    })
   })
 })
