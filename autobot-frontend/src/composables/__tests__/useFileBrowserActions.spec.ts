@@ -38,6 +38,8 @@ const file = (over: Record<string, unknown> = {}) => ({ name: 'a.txt', path: '/a
 describe('useFileBrowserActions (#22349)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks drops the default resolved value, and an undefined result reads as a superseded preview
+    browser.fetchPreview.mockResolvedValue(true)
     browser.files.value = []
   })
 
@@ -126,6 +128,15 @@ describe('useFileBrowserActions (#22349)', () => {
     expect(a.showPreview.value).toBe(false)
     expect(browser.previewFile.value).toBeNull()
     expect(browser.cancelPreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed preview request shows an error toast and opens nothing', async () => {
+    browser.fetchPreview.mockRejectedValueOnce(new Error('boom'))
+    const a = useFileBrowserActions({ chatContext: true })
+    await a.viewFile(file())
+    expect(showToast).toHaveBeenCalledWith('fileBrowser.browser.errorLoadingPreview', 'error')
+    expect(a.showPreview.value).toBe(false)
+    expect(logFileActivity).not.toHaveBeenCalledWith('view', expect.anything(), expect.anything())
   })
 
   it('a superseded preview request neither opens the preview nor logs a view', async () => {

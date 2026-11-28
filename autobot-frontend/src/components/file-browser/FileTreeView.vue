@@ -149,8 +149,9 @@ const iconFor = (item: TreeItem): IconName =>
 .tree-icon--dir {
   color: var(--aui-color-primary);
 }
-/* BaseButton wraps the slot in its label span: make that span shrinkable so the label can truncate */
-.tree-node :deep(.tree-node-content .aui-btn__label) {
+/* BaseButton wraps the slot in its label span: make that span shrinkable so the label can truncate.
+   Named exception in docs/developer/ARCHITECTURE_EXCEPTIONS.md, removed by #22362 (kit label-layout prop). */
+.tree-node :deep(.tree-node-content [data-slot="button-label"]) {
   display: flex;
   flex: 1;
   align-items: center;

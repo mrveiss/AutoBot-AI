@@ -93,13 +93,18 @@ export function useFileBrowser() {
   const { execute: fetchFiles, loading: isLoadingFiles } = useAsyncHandler(
     async (path: string) => {
       const id = listToken.next()
-      const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
-        `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
-      )
-      if (listToken.isLatest(id)) files.value = data.files ?? []
+      try {
+        const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
+          `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
+        )
+        if (listToken.isLatest(id)) files.value = data.files ?? []
+      } catch (error) {
+        // a failure of a superseded request must not clear the newer list
+        if (listToken.isLatest(id)) files.value = []
+        throw error
+      }
     },
     {
-      onError: () => { files.value = [] },
       logErrors: true,
       errorPrefix: '[useFileBrowser]'
     }
@@ -142,9 +147,16 @@ export function useFileBrowser() {
   const { execute: fetchPreview, loading: isLoadingPreview } = useAsyncHandler(
     async (file: FileBrowserItem, getFileType: (name: string) => string): Promise<boolean> => {
       const id = previewToken.next()
-      const data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
-        `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
-      )
+      let data: { type?: string; url?: string; content?: string }
+      try {
+        data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
+          `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
+        )
+      } catch (error) {
+        // a superseded request fails silently; only the newest one is reported to the caller
+        if (!previewToken.isLatest(id)) return false
+        throw error
+      }
       if (!previewToken.isLatest(id)) return false
       previewFile.value = {
         name: file.name,
@@ -158,7 +170,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 

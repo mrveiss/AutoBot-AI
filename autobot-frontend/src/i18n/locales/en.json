@@ -8065,6 +8065,7 @@
       "renamePrompt": "Enter new name:",
       "createFolderPrompt": "Enter folder name:",
       "errorLoadingContents": "Error loading contents",
+      "errorLoadingPreview": "Error loading preview",
       "errorCreatingFolder": "Error creating folder",
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",

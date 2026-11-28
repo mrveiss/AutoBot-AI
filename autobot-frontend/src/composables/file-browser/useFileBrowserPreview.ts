@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveUrl } from '@autobot/ui'
+import { useToast } from '@/composables/useToast'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import type { FilePreviewData, FileBrowserItem } from '@/composables/file-browser/useFileBrowser'
 import { getFileType } from '@/utils/fileTypeLabel'
@@ -14,6 +15,7 @@ type PreviewDownloadFile = Pick<FilePreviewData, 'name' | 'url'>
 
 export function useFileBrowserPreview(browser: FileBrowser, log: FileLog) {
   const { t } = useI18n()
+  const { showToast } = useToast()
   const showPreview = ref(false)
   const typeOf = (name: string) => getFileType(name, t)
 
@@ -22,7 +24,7 @@ export function useFileBrowserPreview(browser: FileBrowser, log: FileLog) {
     if (!(await browser.fetchPreview(file, typeOf))) return
     showPreview.value = true
     log('view', file.path, { fileName: file.name, fileType: typeOf(file.name), size: file.size })
-  }, ERROR_OPTS)
+  }, { ...ERROR_OPTS, onError: () => { showToast(t('fileBrowser.browser.errorLoadingPreview'), 'error') } })
 
   const closePreview = () => {
     browser.cancelPreview()

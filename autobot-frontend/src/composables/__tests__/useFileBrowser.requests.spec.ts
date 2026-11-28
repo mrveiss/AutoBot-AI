@@ -34,6 +34,18 @@ describe('useFileBrowser request ordering (#22349)', () => {
     expect(browser.files.value).toEqual([{ name: 'docs-file' }])
   })
 
+  it('a late failure of a superseded list request leaves the newer list intact', async () => {
+    const root = deferred<{ files: unknown[] }>()
+    const rootFailure = new Promise<never>((_, reject) => { root.resolve = reject as never })
+    api.get.mockReturnValueOnce(rootFailure).mockResolvedValueOnce({ files: [{ name: 'docs-file' }] })
+    const browser = useFileBrowser()
+    const first = browser.fetchFiles('/')
+    await browser.fetchFiles('/docs')
+    root.resolve(new Error('late') as never)
+    await first
+    expect(browser.files.value).toEqual([{ name: 'docs-file' }])
+  })
+
   it('a refresh with no later request still updates the list', async () => {
     api.get.mockResolvedValueOnce({ files: [{ name: 'a' }] })
     const browser = useFileBrowser()
