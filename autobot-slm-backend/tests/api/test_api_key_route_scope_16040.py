@@ -222,3 +222,49 @@ def test_a_failed_audit_write_is_an_explicit_503_never_a_bare_500(call, method, 
 
     assert response.status_code == 503, response.text
     assert "audit" in response.json()["detail"]
+
+
+# --- #22136: accepts_api_key resolves the concrete route through deferred includes --
+
+
+def _nested_included_app() -> fastapi.FastAPI:
+    """A key-declaring route and a sibling without, two include levels deep (the deferred shape on fastapi>=0.139)."""
+    declared = fastapi.APIRouter(dependencies=[fastapi.Depends(_auth.require_key_permission(Permission.KNOWLEDGE_READ))])
+    declared.add_api_route("/read", lambda: None, methods=["GET"])
+    plain = fastapi.APIRouter()
+    plain.add_api_route("/read", lambda: None, methods=["GET"])
+    middle = fastapi.APIRouter()
+    middle.include_router(declared, prefix="/declared")
+    middle.include_router(plain, prefix="/plain")
+    app = fastapi.FastAPI()
+    app.include_router(middle, prefix="/v1")
+    return app
+
+
+def _scope(path: str) -> dict:
+    return {"type": "http", "path": path, "root_path": "", "method": "GET", "headers": []}
+
+
+def test_a_nested_included_route_declaring_a_key_permission_accepts_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    assert accepts_api_key(_nested_included_app(), _scope("/v1/declared/read")) is True
+
+
+def test_the_contrast_a_sibling_without_the_declaration_refuses_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    app = _nested_included_app()
+    assert accepts_api_key(app, _scope("/v1/plain/read")) is False
+    assert accepts_api_key(app, _scope("/v1/missing")) is False
+
+
+def test_an_include_time_declaration_accepts_a_key_22136():
+    from services.api_key_routes import accepts_api_key
+
+    child = fastapi.APIRouter()
+    child.add_api_route("/read", lambda: None, methods=["GET"])
+    app = fastapi.FastAPI()
+    guard = fastapi.Depends(_auth.require_key_permission(Permission.KNOWLEDGE_READ))
+    app.include_router(child, prefix="/c", dependencies=[guard])
+    assert accepts_api_key(app, _scope("/c/read")) is True
