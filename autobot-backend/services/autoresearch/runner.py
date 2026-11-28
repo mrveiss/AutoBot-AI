@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
+from autobot_shared.container_hardening import EXECUTION_SCRATCH_PATH, execution_hardening_cli_flags
 from autobot_shared.logging_manager import get_logger
 
 from .config import AutoResearchConfig
@@ -401,10 +403,8 @@ class ExperimentRunner:
             "--rm",
             "--name",
             container_name,
-            "--network",
-            "none",
-            "--memory",
-            self.config.docker_memory_limit,
+            *execution_hardening_cli_flags(memory_limit=self.config.docker_memory_limit),
+            *self._unprivileged_user_flags(),
             "--cpus",
             str(self.config.docker_cpu_limit),
             "-v",
@@ -415,6 +415,15 @@ class ExperimentRunner:
         cmd.extend(env_flags)
         cmd.append(self.config.docker_image)
         return cmd
+
+    @staticmethod
+    def _unprivileged_user_flags() -> list[str]:
+        """Run as the caller's uid/gid with the scratch tmpfs as HOME.
+
+        ``cap_drop=ALL`` removes DAC_OVERRIDE, so container root could no longer write the
+        host-owned output directory; the same uid/gid can.
+        """
+        return ["--user", f"{os.getuid()}:{os.getgid()}", "--env", f"HOME={EXECUTION_SCRATCH_PATH}"]
 
     @staticmethod
     def _validate_mount_path(path: Path) -> None:

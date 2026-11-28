@@ -113,7 +113,15 @@ DECLARED_SCOPES = {
     ),
     "audit-writer-single-source": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "audit-integrity-wording": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "container-hardening-inline": ("autobot-backend", "autobot_shared"),
+    "container-hardening-inline": (
+        "autobot-backend",
+        "autobot-browser-worker",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot-tts-worker",
+        "autobot_shared",
+    ),
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
     "timeout-message-from-constant": (

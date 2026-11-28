@@ -84,7 +84,7 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
     "container-hardening-inline": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
+        "Non-test source is a subset of tracked .py under seven roots; the test-file share drifts.",
     ),
     "credential-field-name-only-callers": (
         ABSOLUTE,

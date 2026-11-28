@@ -57,7 +57,15 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "repo_tests",
     ),
-    "repo_tests/container_hardening_single_source_17267_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/container_hardening_single_source_17267_test.py": (
+        "autobot-backend",
+        "autobot-browser-worker",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot-tts-worker",
+        "autobot_shared",
+    ),
     "repo_tests/conversation_turn_single_store_18293_test.py": (
         "autobot-backend",
         "autobot-infrastructure",
