@@ -151,10 +151,10 @@ def _gate_violations(workflows: dict) -> list:
             continue
         if _job_name(job_id, spec) != context:
             problems.append(f"G2 {context!r}: job {job_id!r} is named {_job_name(job_id, spec)!r}")
-        if str(spec.get("if", "")).strip() != "always()":
+        if not _gate_if_ok(spec):
             problems.append(
-                f"G2 {context!r}: `if:` is {spec.get('if')!r}, must be exactly `always()` -- "
-                "a gate that can be skipped re-publishes `skipped` on the context"
+                f"G2 {context!r}: `if:` is {spec.get('if')!r}, must be exactly `always() && !({NOOP})` -- "
+                "a gate skipped by a filter re-publishes `skipped`; a no-op label event must publish nothing"
             )
         missing = ({"changes"} | set(work)) - _needs(spec)
         if missing:
@@ -193,8 +193,8 @@ def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated:
         problems.append(f"G3 {context!r}: `draft` is not wired to the pull request")
     if "'land-next'" not in str(with_.get("admitted", "")):
         problems.append(f"G3 {context!r}: `admitted` does not read the land-next label (fail closed, #20825)")
-    if "label.name != 'land-next'" not in str(with_.get("noop", "")):
-        problems.append(f"G3 {context!r}: `noop` does not skip an unrelated-label run (#20825)")
+    if "noop" in with_:
+        problems.append(f"G3 {context!r}: a `noop` input is back: no event may pass a gate without a verdict (#20825)")
     is_gated = str(with_.get("draft-gated", "true")).lower() != "false"
     if is_gated != draft_gated:
         problems.append(f"G3 {context!r}: draft-gated is {is_gated}, expected {draft_gated}")
@@ -214,6 +214,17 @@ def _cancel_step_violations(context: str, spec: dict, work: tuple) -> list:
     if (spec.get("permissions") or {}).get("actions") != "write":
         problems.append(f"G5 {context!r}: the job lacks `permissions: actions: write`, so the cancel cannot run")
     return problems
+
+
+def _norm(expr) -> str:
+    """An `if:` with comments stripped, the `${{ }}` wrapper removed and whitespace collapsed."""
+    text = code_text(str(expr or ""), name="workflow.yml")
+    return " ".join(text.replace("${{", " ").replace("}}", " ").split())
+
+
+def _gate_if_ok(spec: dict) -> bool:
+    """A gate is `always()` except on a no-op label event, where it is skipped so the earlier verdict stands."""
+    return _norm(spec.get("if")) == f"always() && !({NOOP})"
 
 
 def _verdict_step(job: dict) -> dict:
@@ -384,9 +395,11 @@ def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
 # THE one form. GitHub expressions cannot import, so every workflow spells the condition this way and
 # this guard rejects anything else (a negation, a comment quoting it, an unrelated label name).
 LAND_NEXT = "contains(github.event.pull_request.labels.*.name, 'land-next')"
+# THE no-op event: an unrelated label. Every required-context job is skipped on it, so it publishes NOTHING new
+# and the earlier real verdict stands. There is no "no-op success": a pass here would green an un-admitted PR.
+NOOP = "github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next'"
 # A `labeled` run for another label skips, so an unrelated label starts no work.
 LABEL_IS_LAND_NEXT = "github.event.label.name == 'land-next'"
-LABEL_NOT_LAND_NEXT = "github.event.label.name != 'land-next'"
 
 # Workflows with no land-next condition, each justified. Only a workflow whose work cannot be a PR's.
 LAND_NEXT_EXEMPT_WORKFLOWS = {
@@ -430,7 +443,7 @@ def _fails_closed(spec: dict) -> bool:
     steps = spec.get("steps") or []
     first = steps[0] if steps else {}
     return (
-        LABEL_IS_LAND_NEXT in _cond(spec)
+        _norm(spec.get("if")) == f"!({NOOP})"
         and f"!{LAND_NEXT}" in code_text(str(first.get("if", "")), name="workflow.yml")
         and "exit 1" in str(first.get("run", ""))
     )
@@ -444,7 +457,7 @@ def _held_back(jobs: dict, name: str, job_id: str, seen: frozenset = frozenset()
     if (name, job_id) in LAND_NEXT_EXEMPT_JOBS or _holds_back(spec):
         return True
     if name == "ci.yml" and job_id in {g[0] for g in GATES.values()}:
-        return True  # a gate: `if: always()` by design; it fails closed through `admitted` (G3)
+        return _gate_if_ok(spec)  # `always()` bar the no-op event; it fails closed through `admitted` (G3)
     needed = _needs(spec)
     return bool(needed) and all(_held_back(jobs, name, n, seen | {job_id}) for n in needed)
 
@@ -484,13 +497,47 @@ def test_every_exemption_names_a_workflow_that_exists_and_a_reason():
 
 
 def test_the_required_gates_fail_closed_on_an_unadmitted_pull_request():
-    """Each ci.yml gate hands the verdict script `admitted` (the label) and `noop`; verdict.sh fails on `false`."""
+    """Each ci.yml gate hands the verdict script `admitted` (the label), is skipped on the no-op event, and
+    verdict.sh has no noop path and fails an un-admitted pull_request before anything else."""
+    assert _unadmitted_violations(_all_workflows(), _verdict_text()) == []
+
+
+def _verdict_text() -> str:
+    return (REPO_ROOT / ".github" / "actions" / "gate-verdict" / "verdict.sh").read_text(encoding="utf-8")
+
+
+def _unadmitted_violations(workflows: dict, script: str) -> list:
+    """Every way a gate could exit 0 on an un-admitted pull_request (#20825). Empty means none."""
+    problems = []
+    jobs = (workflows.get("ci.yml") or {}).get("jobs") or {}
     for context, (job_id, _, _) in GATES.items():
-        with_ = (_verdict_step(_load(CI)["jobs"][job_id]).get("with")) or {}
-        assert str(with_.get("admitted", "")).replace(" ", "") == "${{" + LAND_NEXT + "}}", context
-        assert LABEL_NOT_LAND_NEXT in str(with_.get("noop", "")), context
-    script = (REPO_ROOT / ".github" / "actions" / "gate-verdict" / "verdict.sh").read_text(encoding="utf-8")
-    assert script.index("GATE_ADMITTED}\" != \"true\"") < script.index("GATE_CHANGES_RESULT}\" != \"success\"")
+        spec = jobs[job_id]
+        with_ = (_verdict_step(spec).get("with")) or {}
+        if str(with_.get("admitted", "")).replace(" ", "") != "${{" + LAND_NEXT + "}}":
+            problems.append(f"{context}: `admitted` is not the land-next label test")
+        if not _gate_if_ok(spec):
+            problems.append(f"{context}: the gate `if` does not skip the no-op label event")
+        if "noop" in with_:
+            problems.append(f"{context}: passes a noop input")
+    code = code_text(script, name="verdict.sh")
+    if "NOOP" in code.upper():
+        problems.append("verdict.sh has a noop path")
+    marker = 'GATE_ADMITTED}" != "true"'
+    head = code.split(marker)[0] if marker in code else code
+    if marker not in code or "exit 0" in head:
+        problems.append("verdict.sh can exit 0 before the not-admitted check")
+    return problems
+
+
+def test_control_a_gate_that_can_exit_zero_unadmitted_fails_the_checker():
+    docs = _fixture()
+    noop = 'if [ "${GATE_NOOP}" = "true" ]; then\n  exit 0\nfi\n'
+    assert any("noop path" in p for p in _unadmitted_violations(docs, noop + _verdict_text()))
+    assert any("before the not-admitted" in p for p in _unadmitted_violations(docs, "exit 0\n" + _verdict_text()))
+    docs["ci.yml"]["jobs"]["python-suite"]["if"] = "always()"
+    assert any("python-suite: the gate `if`" in p for p in _unadmitted_violations(docs, _verdict_text()))
+    _verdict_step(docs["ci.yml"]["jobs"]["code-quality"])["with"]["noop"] = "true"
+    assert any("code-quality: passes a noop" in p for p in _unadmitted_violations(docs, _verdict_text()))
 
 
 def test_control_a_workflow_without_labeled_fails_the_park_checker():

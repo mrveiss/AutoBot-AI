@@ -46,8 +46,8 @@ jobs:
   blocking-findings:
     name: No open blocks-merge issues reference this PR
     # Required context: never skipped for an un-admitted pull request (#20825). The first step fails it
-    # closed, so the context reports FAILURE, not success; an unrelated label on an admitted one is a no-op.
-    if: ${{ github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'land-next' }}
+    # closed, so the context reports FAILURE, not success; an unrelated label event skips the job and publishes nothing new.
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     runs-on: ubuntu-latest
     steps:
       - name: Fail closed unless admitted to a CI slot

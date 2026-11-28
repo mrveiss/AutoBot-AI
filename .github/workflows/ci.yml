@@ -899,7 +899,7 @@ jobs:
   python-suite:
     name: python-suite
     needs: [changes, short-check, provision-packages, python-shard]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -925,7 +925,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
@@ -1075,7 +1074,7 @@ jobs:
   code-quality:
     name: code-quality
     needs: [changes, short-check, run-code-quality]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1101,7 +1100,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-startup-import-smoke:
@@ -1115,7 +1113,7 @@ jobs:
   startup-import-smoke:
     name: startup-import-smoke
     needs: [changes, short-check, run-startup-import-smoke]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1141,7 +1139,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-frontend-test:
@@ -1156,7 +1153,7 @@ jobs:
   unit-tests:
     name: Unit & Integration Tests
     needs: [changes, short-check, run-frontend-test]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1182,7 +1179,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-docker-smoke:
@@ -1197,7 +1193,7 @@ jobs:
   smoke-test:
     name: smoke-test
     needs: [changes, short-check, run-docker-smoke]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1223,7 +1219,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-api-wiring:
@@ -1237,7 +1232,7 @@ jobs:
   api-wiring:
     name: api-wiring
     needs: [changes, short-check, run-api-wiring]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1263,7 +1258,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-migration-gate:
@@ -1278,7 +1272,7 @@ jobs:
   migration-matrix:
     name: migration-matrix
     needs: [changes, short-check, run-migration-gate]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1304,7 +1298,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-generated-types:
@@ -1336,7 +1329,7 @@ jobs:
   verify-generated-types:
     name: verify-generated-types
     needs: [changes, short-check, run-generated-types]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1362,7 +1355,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   # Never filtered and never draft-gated: it carries the SPDX and symlink checks, which must cover EVERY pull
@@ -1381,7 +1373,7 @@ jobs:
   verify-precommit-config:
     name: verify-precommit-config
     needs: [changes, run-precommit]
-    if: always()
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1407,7 +1399,6 @@ jobs:
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
           admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
-          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           draft-gated: 'false'
 
   # ---- checks that are not required contexts: same bodies, same conditions as before ----

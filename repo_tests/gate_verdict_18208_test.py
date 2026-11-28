@@ -69,9 +69,30 @@ def test_a_pull_request_without_land_next_fails_closed_before_anything_else():
     assert _run(GATE_ADMITTED="false", GATE_EVENT="push")[0] == 0, "a push has no label"
 
 
-def test_an_unrelated_label_run_is_a_no_op_not_a_verdict():
-    rc, out = _run(GATE_NOOP="true", GATE_ADMITTED="true", GATE_WORK_OK="false")
-    assert rc == 0 and "no-op" in out
+def test_an_unadmitted_pull_request_fails_whatever_the_other_inputs_say():
+    """No input combination passes an un-admitted pull_request (#20825): an unrelated label never reaches here."""
+    import itertools
+
+    for changes, applies, work_ok, draft, held in itertools.product(
+        ("success", "skipped", "failure", "cancelled"), ("true", "false"), ("true", "false"), ("true", "false"), ("true", "false")
+    ):
+        rc, out = _run(
+            GATE_ADMITTED="false",
+            GATE_CHANGES_RESULT=changes,
+            GATE_APPLIES=applies,
+            GATE_WORK_OK=work_ok,
+            GATE_DRAFT=draft,
+            GATE_HELD=held,
+            GATE_DRAFT_GATED="false",
+        )
+        assert rc == 1 and "not admitted to a CI slot" in out, (changes, applies, work_ok, draft, held, out)
+
+
+def test_the_verdict_has_no_no_op_success_path():
+    """The old `noop` input made an un-admitted PR green on its first routine label, and masked a red on an admitted one."""
+    assert "NOOP" not in SCRIPT.read_text(encoding="utf-8").upper().replace("NO-OP SUCCESS", "")
+    rc, out = _run(GATE_NOOP="true", GATE_ADMITTED="false", GATE_WORK_OK="false")
+    assert rc == 1 and "no-op" not in out, "a stale GATE_NOOP must not pass anything"
 
 
 def test_a_draft_does_not_fail_the_one_context_that_runs_on_drafts():
