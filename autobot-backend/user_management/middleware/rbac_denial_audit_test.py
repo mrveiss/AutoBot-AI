@@ -94,11 +94,15 @@ class TestAuditVocabulary:
 
 
 class TestEveryDenialIsAudited:
-    """All three decorators must emit — one missed path is a blind spot."""
+    """The decorator here must emit — one missed path is a blind spot.
 
-    def test_all_three_denial_points_emit(self):
-        """require_permission / require_any_permission / require_all_permissions."""
-        assert _source().count("await _emit_permission_denied_audit(") == 3
+    The string-typed require_permission / require_any_permission were retired in #18088; the
+    one gate's denials are audited in ``permission_gate`` (pinned in ``permission_gate_test``).
+    """
+
+    def test_the_denial_point_emits(self):
+        """require_all_permissions is the one decorator left in this module."""
+        assert _source().count("await _emit_permission_denied_audit(") == 1
 
     def test_no_denial_path_raises_403_without_emitting(self):
         """Every 403 in the decorators module must be preceded by an audit call.

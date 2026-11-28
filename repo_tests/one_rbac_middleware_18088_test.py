@@ -34,6 +34,8 @@ CANONICAL = "autobot_shared/user_management/middleware/rbac_middleware.py"
 CANONICAL_DECORATORS = "autobot_shared/user_management/middleware/rbac_decorators.py"
 MIDDLEWARE_DIR = "autobot_shared/user_management/middleware"
 DECORATOR_NAMES = ("require_permission", "require_any_permission", "require_all_permissions")
+#: What the decorators module defines now; the first two are the gate's, retired here.
+DEFINED_DECORATORS = ("require_all_permissions",)
 SHIMS = (
     "autobot-backend/user_management/middleware/rbac_middleware.py",
     "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
@@ -46,8 +48,6 @@ REQUIRED_EXPORTS = frozenset(
     {
         "RBACMiddleware",
         "rbac_middleware",
-        "require_permission",
-        "require_any_permission",
         "require_all_permissions",
         "_permission_cache",
     }
@@ -148,7 +148,7 @@ def test_the_canonical_implementation_exists_and_holds_the_logic() -> None:
     defined = _defined_names(_tree(CANONICAL))
     assert "RBACMiddleware" in defined, f"{CANONICAL} must DEFINE RBACMiddleware, not import it"
     decorators_defined = _defined_names(_tree(CANONICAL_DECORATORS))
-    for decorator in DECORATOR_NAMES:
+    for decorator in DEFINED_DECORATORS:
         assert decorator in decorators_defined, f"{CANONICAL_DECORATORS} must define {decorator}"
 
 
@@ -285,3 +285,101 @@ def test_the_type_checking_exemption_covers_only_the_body() -> None:
 
     harmless = 'import importlib\nimportlib.import_module("autobot_shared.x")\n'
     assert _runtime_service_imports(parse_cache.parse(harmless)) == []
+
+
+# --- AC2: a permission one service enforces, the other must enforce the same way -------------
+#
+# Read from the real enforcement source, not a hand-copied list: the enum from
+# `permissions.py`, the gate bindings and every `Permission.X` named in a gate factory call
+# from each service's own source. Behavioural parity (same answer per role/grant/org row) is
+# `cross_service_permission_parity_18263_test`; this is the static half that names WHY it holds.
+
+_PERMISSIONS = "autobot_shared/auth/permissions.py"
+_GATE_FACTORIES = frozenset({"require_permission", "require_any_permission", "require_all_permissions"})
+#: Each service's own auth module, where it binds the one shared gate to its caller dependency.
+_GATE_BINDINGS = {
+    "autobot-backend": "autobot-backend/auth_rbac.py",
+    "autobot-slm-backend": "autobot-slm-backend/services/auth.py",
+}
+
+
+def _enum_members(tree: ast.Module) -> set[str]:
+    """Member names of `class Permission` -- the set every route's argument must come from."""
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "Permission":
+            return {
+                t.id
+                for stmt in node.body
+                if isinstance(stmt, ast.Assign)
+                for t in stmt.targets
+                if isinstance(t, ast.Name)
+            }
+    return set()
+
+
+def _enforced_members(tree: ast.Module) -> set[str]:
+    """`X` for every `Permission.X` inside an argument of a gate-factory call."""
+    found: set[str] = set()
+    for call in (n for n in ast.walk(tree) if isinstance(n, ast.Call)):
+        func = call.func
+        if (func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")) not in _GATE_FACTORIES:
+            continue
+        for arg in (*call.args, *(k.value for k in call.keywords)):
+            found |= {
+                n.attr
+                for n in ast.walk(arg)
+                if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "Permission"
+            }
+    return found
+
+
+def _binds_the_one_gate(tree: ast.Module) -> bool:
+    """`require_permission = <gate>.require_permission` (and any) where `<gate> = PermissionGate(...)`."""
+    gates, bound = set(), set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        name, value = node.targets[0].id, node.value
+        if isinstance(value, ast.Call) and getattr(value.func, "id", None) == "PermissionGate":
+            gates.add(name)
+        elif isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.value.id in gates:
+            bound.add((name, value.attr))
+    return {("require_permission", "require_permission"), ("require_any_permission", "require_any_permission")} <= bound
+
+
+@pytest.mark.parametrize(("service", "rel"), sorted(_GATE_BINDINGS.items()))
+def test_each_service_enforces_through_the_one_shared_gate(service: str, rel: str) -> None:
+    """A service that bound its own factory would enforce a permission the other does not."""
+    assert _binds_the_one_gate(
+        _tree(rel)
+    ), f"{rel}: {service} must bind require_permission/require_any_permission to a PermissionGate"
+
+
+def test_every_enforced_permission_is_a_member_of_the_one_enum() -> None:
+    """Both services enforce only members of the shared enum, and each enforces a non-empty set."""
+    from tools.lint._scan_helpers import tracked_paths
+
+    members = _enum_members(_tree(_PERMISSIONS))
+    assert len(members) > 10, f"{_PERMISSIONS}: parsed {len(members)} Permission members -- the parser is looking wrong"
+    root = repo_root()
+    enforced: dict[str, set[str]] = {service: set() for service in _GATE_BINDINGS}
+    for rel in tracked_paths(root, *_GATE_BINDINGS):
+        name = rel.rsplit("/", 1)[-1]
+        if not rel.endswith(".py") or name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel:
+            continue
+        source = (root / rel).read_text(encoding="utf-8")
+        if "Permission." in source:
+            enforced[rel.split("/", 1)[0]] |= _enforced_members(parse_cache.parse(source))
+    for service, names in enforced.items():
+        assert names, f"{service}: no gate factory call names a Permission member -- the sweep is looking wrong"
+        assert names <= members, f"{service} enforces {sorted(names - members)}, which are not Permission members"
+
+
+def test_the_parity_detectors_have_contrast_pairs() -> None:
+    gate = "g = PermissionGate(dep)\nrequire_permission = g.require_permission\nrequire_any_permission = g.require_any_permission\n"
+    assert _binds_the_one_gate(parse_cache.parse(gate))
+    own = "def require_permission(p):\n    return p\nrequire_any_permission = require_permission\n"
+    assert not _binds_the_one_gate(parse_cache.parse(own)), "a service-local factory is the fork"
+    src = "x = Depends(require_any_permission(Permission.A, Permission.B))\ny = Permission.C\n"
+    assert _enforced_members(parse_cache.parse(src)) == {"A", "B"}, "only members named inside a gate call count"
+    assert _enum_members(parse_cache.parse("class Permission(str, Enum):\n    A = 'a'\n    B = 'b'\n")) == {"A", "B"}

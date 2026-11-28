@@ -4,7 +4,7 @@
 # Author: mrveiss
 """RBAC middleware — re-export of the one shared implementation (#18088).
 
-This module held a 594-line copy. Its twin in the other service was byte-identical apart
+This module held a ~595-line copy. Its twin in the other service was byte-identical apart
 from two comments describing the same audit-swallowing bug under different issue numbers,
 which is #6511's warning in practice: "divergent permission logic across two services
 that interoperate is a security drift risk."
@@ -17,13 +17,16 @@ already used for `base_service`, `organization_service` and `team_service`.
 both (`api/secrets.py`, `api/envelope_secrets.py`),
 and `_permission_cache` crosses the module boundary despite the underscore. Re-exporting the
 singleton keeps one instance per process, which is what the cache invalidation depends on.
+
+`require_permission` / `require_any_permission` are not re-exported: the one definition is
+`autobot_shared.auth.permission_gate`, which each service reaches through its own auth module
+(`auth_rbac`, `services.auth`), typed on `Permission`.
+
+The two service shims differ in exactly one injected name: the service's own deployment-config
+accessor, which is not the same function in the two services' `user_management.config`.
 """
 
-from autobot_shared.user_management.middleware.rbac_decorators import (  # noqa: F401
-    require_all_permissions,
-    require_any_permission,
-    require_permission,
-)
+from autobot_shared.user_management.middleware.rbac_decorators import require_all_permissions  # noqa: F401
 from autobot_shared.user_management.middleware.rbac_middleware import (  # noqa: F401
     CACHE_TTL_SECONDS,
     RBACDependencies,
@@ -51,8 +54,6 @@ configure_rbac(
 __all__ = [
     "RBACMiddleware",
     "rbac_middleware",
-    "require_permission",
-    "require_any_permission",
     "require_all_permissions",
     "CACHE_TTL_SECONDS",
 ]

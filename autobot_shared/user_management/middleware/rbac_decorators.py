@@ -12,10 +12,12 @@ can never silently allow or deny on an unconfigured middleware.
 
 import uuid
 from functools import wraps
-from typing import Callable, List
+from typing import Callable
 
 from fastapi import HTTPException, Request, status
 
+from autobot_shared.auth.permission_evaluator import require_permission_member
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.middleware.rbac_middleware import (
     _emit_permission_denied_audit,
@@ -110,118 +112,29 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
         )
 
 
-def require_permission(permission: str):
-    """
-    Decorator to require a specific permission for an endpoint.
-
-    Issue #620: Refactored to use extracted helper functions.
-
-    Usage:
-        @router.get("/admin/users")
-        @require_permission("users.read")
-        async def list_users(request: Request):
-            ...
-
-    Args:
-        permission: Permission name required
-    """
-
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
-            request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, permission)
-
-            # Check permission
-            has_permission = await rbac_middleware.check_permission(user_id, permission, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    permission,
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permission '{permission}' required",
-                )
-
-            return await func(*args, request=request, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def require_any_permission(permissions: List[str]):
-    """
-    Decorator to require any of the specified permissions.
-
-    Issue #620: Refactored to use extracted helper functions.
-
-    Usage:
-        @router.get("/content")
-        @require_any_permission(["content.read", "content.admin"])
-        async def get_content(request: Request):
-            ...
-
-    Args:
-        permissions: List of permission names (any one is sufficient)
-    """
-
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
-            request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, str(permissions))
-
-            has_permission = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    str(permissions),
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"One of these permissions required: {permissions}",
-                )
-
-            return await func(*args, request=request, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def require_all_permissions(permissions: List[str]):
+def require_all_permissions(*permissions: Permission):
     """
     Decorator to require all of the specified permissions.
 
-    Issue #620: Refactored to use extracted helper functions.
+    Typed on the shared ``Permission`` enum like the one gate's factories (#18088): a string
+    raises ``TypeError`` when the decorator is built, which is import time for a route module.
+    The string-typed ``require_permission`` / ``require_any_permission`` that lived here are
+    retired; the one definition is ``autobot_shared.auth.permission_gate``.
 
     Usage:
         @router.delete("/admin/users/{user_id}")
-        @require_all_permissions(["users.read", "users.delete"])
+        @require_all_permissions(Permission.ADMIN_USERS_READ, Permission.ADMIN_USERS_WRITE)
         async def delete_user(request: Request, user_id: str):
             ...
 
     Args:
-        permissions: List of permission names (all are required)
+        permissions: ``Permission`` members (all are required)
     """
+    if not permissions:
+        raise ValueError("require_all_permissions needs at least one Permission")
+    for permission in permissions:
+        require_permission_member(permission)
+    names = [permission.value for permission in permissions]
 
     def decorator(func: Callable):
         @wraps(func)
@@ -229,15 +142,15 @@ def require_all_permissions(permissions: List[str]):
             # Issue #620: Use extracted helpers
             request = _extract_request(args, request)
             user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, str(permissions))
+            _require_authentication(user_id, str(names))
 
-            has_permission = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
+            has_permission = await rbac_middleware.check_all_permissions(user_id, names, org_id)
 
             if not has_permission:
                 _path, _ip, _ua = _request_audit_context(request)
                 await _emit_permission_denied_audit(
                     user_id,
-                    str(permissions),
+                    str(names),
                     _path,
                     org_id=org_id,
                     ip_address=_ip,
@@ -245,7 +158,7 @@ def require_all_permissions(permissions: List[str]):
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"All of these permissions required: {permissions}",
+                    detail=f"All of these permissions required: {names}",
                 )
 
             return await func(*args, request=request, **kwargs)
