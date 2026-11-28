@@ -197,3 +197,38 @@ def test_vector_search_path_runs_one_bounded_cpu_cycle_not_two(monkeypatch):
     results, metrics = asyncio.run(obj.search("q", 5))
     assert results == [] and "CPU fallback failed" in metrics.error
     assert search.await_count == npu_cpu_fallback.CPU_FALLBACK_ATTEMPTS
+
+
+def test_a_non_retryable_failure_after_retries_does_not_start_a_second_cpu_cycle(monkeypatch):
+    import npu_cpu_fallback
+
+    monkeypatch.setattr(npu_cpu_fallback._POLICY, "base_delay", 0)
+    search = AsyncMock(side_effect=[TimeoutError("a"), TimeoutError("b"), ValueError("bad"), []])
+    obj = _fallback_engine(search)
+    obj.knowledge_base.vector_store = obj.knowledge_base.vector_index = None
+    obj.search_results_cache, obj.cache_ttl_seconds = {}, 60
+    monkeypatch.setattr(obj, "_hybrid_populated", lambda: False)
+    results, metrics = asyncio.run(obj.search("q", 5))
+    assert results == [] and "CPU fallback failed" in metrics.error and "bad" in metrics.error
+    assert search.await_count == 3
+
+
+def test_fallback_settings_use_safe_values_for_blank_malformed_and_zero(monkeypatch):
+    import importlib
+
+    import npu_cpu_fallback
+
+    try:
+        for attempts, delay, want in (
+            ("", "", (3, 0.5)),
+            ("abc", "xyz", (3, 0.5)),
+            ("0", "-2", (1, 0.0)),
+            ("4", "nan", (4, 0.0)),
+        ):
+            monkeypatch.setenv("AUTOBOT_NPU_CPU_FALLBACK_ATTEMPTS", attempts)
+            monkeypatch.setenv("AUTOBOT_NPU_CPU_FALLBACK_RETRY_DELAY", delay)
+            mod = importlib.reload(npu_cpu_fallback)
+            assert (mod.CPU_FALLBACK_ATTEMPTS, mod.CPU_FALLBACK_RETRY_DELAY) == want
+    finally:
+        monkeypatch.undo()
+        importlib.reload(npu_cpu_fallback)
