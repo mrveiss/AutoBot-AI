@@ -213,7 +213,7 @@ watch([entityType, entityId], () => {
 .revision-item.selected { background: var(--color-primary-bg); border-color: var(--color-primary); }
 .revision-meta { display: flex; align-items: center; gap: var(--spacing-2); flex-wrap: wrap; }
 .source-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
-.badge-blue { background: var(--color-info-bg); color: var(--color-info-hover); }
+.badge-blue { background: var(--info-bg); color: var(--info-fg); }
 .badge-orange { background: var(--color-warning-bg); color: var(--color-warning-hover); }
 .badge-gray { background: var(--bg-tertiary); color: var(--muted); }
 .revision-by { font-size: 13px; font-weight: 500; color: var(--text-primary); }

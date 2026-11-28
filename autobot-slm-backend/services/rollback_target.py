@@ -32,8 +32,10 @@ from typing import Iterator
 
 from autobot_shared.git_refs import is_safe_ref
 
-#: The one playbook that takes ``deploy_ref``.
-ROLLBACK_PLAYBOOK = "update-all-nodes.yml"
+#: The fleet update playbook: the ONE definition of its name (#22262). Every update path runs it.
+FLEET_UPDATE_PLAYBOOK = "update-all-nodes.yml"
+#: The one playbook that takes ``deploy_ref``: the fleet update itself.
+ROLLBACK_PLAYBOOK = FLEET_UPDATE_PLAYBOOK
 
 #: A rollback target is always the full 40-hex object name the commit list returned.
 _FULL_SHA = re.compile(r"[0-9a-f]{40}")

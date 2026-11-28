@@ -81,7 +81,7 @@ li.selected { background: var(--color-primary-bg); }
 .reports-count { font-size: 11px; color: var(--text-secondary); margin-left: auto; }
 .role-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
 .badge-purple { background: color-mix(in srgb, var(--chart-5) 10%, transparent); color: var(--chart-5); }
-.badge-blue { background: var(--color-info-bg); color: var(--color-info-hover); }
+.badge-blue { background: var(--info-bg); color: var(--info-fg); }
 .badge-green { background: var(--color-success-bg); color: var(--color-success-hover); }
 .badge-gray { background: var(--bg-tertiary); color: var(--muted); }
 </style>

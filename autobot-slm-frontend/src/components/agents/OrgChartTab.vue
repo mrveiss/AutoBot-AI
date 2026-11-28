@@ -251,7 +251,7 @@ onMounted(fetchTree)
 .role-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
 .role-badge.small { font-size: 9px; padding: 1px 6px; }
 .badge-purple { background: color-mix(in srgb, var(--chart-5) 10%, transparent); color: var(--chart-5); }
-.badge-blue { background: var(--color-info-bg); color: var(--color-info-hover); }
+.badge-blue { background: var(--info-bg); color: var(--info-fg); }
 .badge-green { background: var(--color-success-bg); color: var(--color-success-hover); }
 .badge-gray { background: var(--bg-tertiary); color: var(--muted); }
 .badge-red { background: var(--color-error-bg); color: var(--color-error-hover); }

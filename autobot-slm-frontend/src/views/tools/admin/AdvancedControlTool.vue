@@ -203,7 +203,7 @@ onMounted(loadAll)
         data-test="refresh"
         @click="loadAll"
         :disabled="loading"
-        class="px-4 py-2 text-sm font-medium rounded-lg bg-autobot-primary-bg text-autobot-primary-hover hover:bg-autobot-primary-light disabled:opacity-50 transition-colors"
+        class="px-4 py-2 text-sm font-medium rounded-lg bg-autobot-primary-bg text-autobot-primary-hover hover:bg-(--color-primary-bg-hover) disabled:opacity-50 transition-colors"
       >
         {{ loading ? $t('tools.admin.advancedControlTool.refreshing') : $t('tools.admin.advancedControlTool.refresh') }}
       </button>

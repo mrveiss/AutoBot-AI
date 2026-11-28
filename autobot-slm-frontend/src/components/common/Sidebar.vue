@@ -44,9 +44,12 @@ const combinedUpdateCount = computed(() =>
 
 const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
-// Badge color: the bar accent when system updates present, warning when only code sync
-const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? 'var(--slm-bar-on)' : 'var(--color-warning)',
+// Badge fill and its paired ink: the bar accent with its dark badge ink when system
+// updates are present, warning with its dark ink when only code sync is pending
+const badgeStyle = computed(() =>
+  systemUpdates.updateCount.value > 0
+    ? { background: 'var(--slm-bar-on)', color: 'var(--slm-badge-fg)' }
+    : { background: 'var(--color-warning)', color: 'var(--text-on-warning)' },
 )
 
 interface NavItem {
@@ -314,7 +317,7 @@ onMounted(() => {
             <span
               v-if="item.showBadge && hasCombinedUpdates"
               class="nav-badge"
-              :style="{ background: badgeColor }"
+              :style="badgeStyle"
               :aria-label="$t('common.sidebar.updatesAvailableAria', { count: combinedUpdateCount })"
               role="status"
             >
@@ -346,7 +349,7 @@ onMounted(() => {
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <div
-            class="w-8 h-8 bg-autobot-primary rounded-full flex items-center justify-center text-sm font-medium"
+            class="w-8 h-8 bg-autobot-primary text-autobot-text-on-primary rounded-full flex items-center justify-center text-sm font-medium"
             aria-hidden="true"
           >
             {{ authStore.user?.username?.charAt(0).toUpperCase() || $t('common.sidebar.user').charAt(0) }}
@@ -377,7 +380,6 @@ onMounted(() => {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  color: white;
   border-radius: 9px;
   font-size: 11px;
   font-weight: 600;
