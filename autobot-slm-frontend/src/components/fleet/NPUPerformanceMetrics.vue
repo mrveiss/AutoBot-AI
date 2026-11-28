@@ -120,7 +120,7 @@ onMounted(() => metricsPoller.start(''))
         <div
           v-for="i in 4"
           :key="i"
-          class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
+          class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div class="flex items-center gap-3" role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')">
             <div class="w-10 shrink-0"><BaseSkeleton shape="block" height="2.5rem" /></div>
@@ -134,7 +134,7 @@ onMounted(() => metricsPoller.start(''))
         <div
           v-for="i in 3"
           :key="i"
-          class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
+          class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')"><BaseSkeleton :lines="3" /></div>
         </div>
@@ -146,7 +146,7 @@ onMounted(() => metricsPoller.start(''))
       <!-- Fleet Summary Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Total Inferences -->
-        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-autobot-pill-info-bg">
               <!-- Bolt / lightning icon -->
@@ -164,7 +164,7 @@ onMounted(() => metricsPoller.start(''))
         </div>
 
         <!-- Avg Latency -->
-        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-autobot-illus-2-tint">
               <!-- Clock icon -->
@@ -182,7 +182,7 @@ onMounted(() => metricsPoller.start(''))
         </div>
 
         <!-- Throughput -->
-        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-autobot-pill-ok-bg">
               <!-- Trending up icon -->
@@ -200,7 +200,7 @@ onMounted(() => metricsPoller.start(''))
         </div>
 
         <!-- Queue Depth -->
-        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-autobot-pill-warn-bg">
               <!-- Queue / list icon -->
@@ -228,13 +228,13 @@ onMounted(() => metricsPoller.start(''))
 
         <p
           v-if="nodeMetrics.length === 0"
-          class="text-sm text-autobot-text-tertiary bg-white rounded-lg shadow-xs border border-autobot-border p-6 text-center"
+          class="text-sm text-autobot-text-tertiary bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6 text-center"
         >{{ $t('fleet.nPUPerformanceMetrics.noNPUWorkerMetricsAvailable') }}</p>
 
         <div
           v-for="node in nodeMetrics"
           :key="node.node_id"
-          class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden"
+          class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border overflow-hidden"
         >
           <!-- Collapsed row header -->
           <button

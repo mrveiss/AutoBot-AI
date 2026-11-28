@@ -81,7 +81,7 @@ watch(
     <template #actions>
       <button
         @click="emit('close')"
-        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-secondary border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
       >
         {{ $t('fleet.serviceLogsModal.close') }}
       </button>
